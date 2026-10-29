@@ -941,3 +941,27 @@ def test_the_gate_does_not_prove_a_sheet_id_that_is_not_an_id(tmp_path: Path) ->
     board = _non_id_fixture(tmp_path, "root")
     result = verify_board(board, parity="required", drc=_FakeDrc(_report()))
     assert any("not proven" in r for r in _reasons(result)), _reasons(result)
+
+
+def test_report_without_unconnected_items_is_incomplete_not_clean() -> None:
+    report = _report()
+    del report["unconnected_items"]
+
+    result = verify_board(GOLDEN_PCB, parity="required", drc=_FakeDrc(report))
+
+    assert result["verdict"] == "INCOMPLETE"
+    assert any("unconnected_items" in reason for reason in result["incomplete_reasons"])
+
+
+def test_net_name_with_brackets_is_kept_whole() -> None:
+    entry = {
+        "type": "unconnected_items",
+        "severity": "error",
+        "description": "Missing connection",
+        "items": [{"uuid": "x", "description": "Pad 1 [DATA[0]] of U1", "pos": {"x": 1.0, "y": 0.0}}],
+    }
+
+    result = verify_board(GOLDEN_PCB, parity="required", drc=_FakeDrc(_report(unconnected=[entry])))
+
+    assert result["verdict"] == "FAIL"
+    assert [item["net"] for item in result["unconnected"]] == ["DATA[0]"]

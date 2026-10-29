@@ -35,7 +35,8 @@ _CAP_UNCONNECTED_AND_CLEARANCE = 499
 _MAX_COPY_BYTES = 300 * 1024 * 1024
 _SKIP_DIRS = {".git", "__pycache__", ".venv", "node_modules"}
 
-_NET_TOKEN = re.compile(r"\[([^\]]+)\]")
+# One level of nested brackets is part of the name (a bus net such as DATA[0]).
+_NET_TOKEN = re.compile(r"\[((?:[^\[\]]|\[[^\]]*\])+)\]")
 _DRU_SEVERITY = re.compile(r"\(\s*severity\s+\w+\s*\)")
 
 _Drc = Callable[..., dict]
@@ -692,9 +693,10 @@ def verify_board(
         with _graded_copy(pcb_path) as board:
             for _ in range(GATE_RUNS):
                 try:
-                    reports.append(
-                        run_drc(board, refill_zones=True, schematic_parity=check_parity)
-                    )
+                    report = run_drc(board, refill_zones=True, schematic_parity=check_parity)
+                    if "unconnected_items" not in report:
+                        raise ValueError("the DRC report has no 'unconnected_items' (not read as clean)")
+                    reports.append(report)
                 except (kicad_cli.KicadCliError, OSError, ValueError) as exc:
                     incomplete_reasons.append(f"kicad-cli could not complete a run: {exc}")
                     break
