@@ -1,0 +1,131 @@
+{
+  "_comment": "Shrink-only ruff baseline (build ticket 45): findings per file and rule code, counted with --ignore-noqa, that existed when ruff was adopted. Never raise a count or add an entry; fix new findings. Lower it with: python scripts/lint_gate.py --shrink",
+  "ruff": "0.17.1",
+  "findings": {
+    "evals/rung1/build_rung1.py": {
+      "E402": 2
+    },
+    "src/kicad_mcp/board_outline.py": {
+      "B023": 1,
+      "E731": 1
+    },
+    "src/kicad_mcp/board_rules.py": {
+      "B905": 1
+    },
+    "src/kicad_mcp/input_prep.py": {
+      "F401": 1
+    },
+    "src/kicad_mcp/pour_step.py": {
+      "B905": 4
+    },
+    "src/kicad_mcp/routers/kicad_placer_tools.py": {
+      "F401": 1
+    },
+    "src/kicad_mcp/routers/kicad_routing_tools.py": {
+      "F401": 1
+    },
+    "src/kicad_mcp/rung_runner.py": {
+      "E741": 9
+    },
+    "src/kicad_mcp/silk_minimums.py": {
+      "F401": 1
+    },
+    "src/kicad_mcp/toolsets/copilot.py": {
+      "B905": 1,
+      "F402": 1
+    },
+    "src/kicad_mcp/toolsets/placement.py": {
+      "B905": 1,
+      "F841": 1
+    },
+    "src/kicad_mcp/toolsets/sourcing.py": {
+      "F401": 1
+    },
+    "src/kicad_mcp/verify_board.py": {
+      "B905": 1
+    },
+    "tests/test_autonomy_run_policy.py": {
+      "F401": 4,
+      "F811": 7
+    },
+    "tests/test_board_outline.py": {
+      "E402": 1,
+      "E731": 1
+    },
+    "tests/test_board_rules.py": {
+      "B905": 1
+    },
+    "tests/test_cap_clocks.py": {
+      "F401": 2,
+      "F811": 5
+    },
+    "tests/test_golden_path_board.py": {
+      "F401": 1
+    },
+    "tests/test_ipc.py": {
+      "F401": 1,
+      "F841": 1
+    },
+    "tests/test_pcb_editing.py": {
+      "B017": 2
+    },
+    "tests/test_pour_step.py": {
+      "B905": 1,
+      "E402": 1
+    },
+    "tests/test_rung_backends_policy.py": {
+      "F401": 4,
+      "F811": 7
+    },
+    "tests/test_rung_backends_pour.py": {
+      "F401": 1
+    },
+    "tests/test_rung_backends_pour_review.py": {
+      "B905": 2,
+      "F401": 1
+    },
+    "tests/test_rung_backends_review.py": {
+      "F401": 2,
+      "F811": 11
+    },
+    "tests/test_rung_runner.py": {
+      "E741": 10
+    },
+    "tests/test_rung_runner_batch_order.py": {
+      "E731": 2,
+      "F401": 1,
+      "F811": 25
+    },
+    "tests/test_rung_runner_levers.py": {
+      "F401": 2,
+      "F811": 5
+    },
+    "tests/test_rung_runner_official_slot.py": {
+      "E731": 1,
+      "F401": 1,
+      "F811": 4
+    },
+    "tests/test_rung_runner_policy.py": {
+      "F401": 3,
+      "F811": 20
+    },
+    "tests/test_rung_runner_protocol.py": {
+      "B007": 1,
+      "F401": 4,
+      "F811": 2
+    },
+    "tests/test_rung_runner_review.py": {
+      "F401": 1,
+      "F811": 14
+    },
+    "tests/test_schematic_toolset.py": {
+      "B905": 2
+    },
+    "tests/test_simulation_toolset.py": {
+      "F841": 1
+    },
+    "tests/test_sourcing_lcsc.py": {
+      "F401": 1
+    }
+  }
+}

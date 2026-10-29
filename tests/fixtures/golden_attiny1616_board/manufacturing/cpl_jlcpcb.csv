@@ -1,0 +1,5 @@
+Designator,Val,Package,Mid X,Mid Y,Rotation,Layer
+C1,100nF,C_0402_1005Metric,10.0000mm,8.0000mm,0.0,Top
+D1,LED,LED_0603_1608Metric,40.0000mm,18.0000mm,180.0,Top
+R1,1k,R_0402_1005Metric,40.0000mm,10.0000mm,0.0,Top
+U1,ATtiny1616-M,VQFN-20-1EP_3x3mm_P0.4mm_EP1.7x1.7mm,25.0000mm,20.0000mm,270.0,Top

@@ -1,0 +1,105 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "kicad-mcp"
+version = "0.1.0"
+description = "MCP server for end-to-end KiCad PCB design automation: component sourcing, schematic/PCB tools, and copilot/autopilot orchestration"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11"
+authors = [
+    { name = "TotallyNotAHackerTrustMeIAmADolphin" }
+]
+dependencies = [
+    "mcp>=2.1.0",
+    # Always the newest release (docs/ARCHITECTURE.md decision 1, re-decided
+    # 2026-10-19), adopted together with our own write layer
+    # (kicad_mcp.write_layer, build ticket 42), because 0.22.0+'s own
+    # PCB.save fails on Windows (upstream #7478). 0.24.0 since build ticket
+    # 71 (all eight upstream issues of build ticket 48 fixed; facts pinned
+    # per version in tests/test_kicad_tools_facts.py). Capped below 0.25: a
+    # fresh install of 0.25.0 broke two tests of the write layer (a raw
+    # carriage return in a string no longer survives load; see the open issue
+    # on kicad-tools 0.25); lift the cap with that compatibility work. This
+    # project still reaches
+    # into kicad_tools internals that aren't a documented public API
+    # (sexp.parser.SExp's _original_str/_originally_quoted/_originally_bare
+    # flags, geometry.courtyard._courtyard_polygon, library.generators,
+    # footprints.fp_lib_table, export.ses._extract_balanced) on a
+    # single-maintainer 0.x package, so re-run the full suite on every
+    # upgrade; test_write_layer.py pins the serialiser's behaviour.
+    "kicad-tools>=0.24.0,<0.25",
+    "pydantic>=2.0",
+    "httpx>=0.27",
+    "pdfplumber>=0.11",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.24",
+    # Exact pin: the lint baseline (scripts/ruff-baseline.json) counts findings of this version's
+    # rules, and scripts/lint_gate.py refuses any other version (build ticket 45).
+    "ruff==0.17.1",
+]
+# easyeda2kicad is AGPL-3.0 (see src/kicad_mcp/sourcing/asset_fetch.py) --
+# invoked only as an arm's-length subprocess (`python -m easyeda2kicad`),
+# never imported, and kept as an optional extra rather than a core
+# dependency so installing this package doesn't pull in an AGPL tool by
+# default.
+assets = [
+    "easyeda2kicad>=1.0.1",
+]
+# kicad-python/kipy is MIT (verified from its own LICENSE file, see
+# src/kicad_mcp/ipc/connection.py) -- unlike easyeda2kicad above, it's not
+# excluded from core for licensing reasons. It's optional because it's
+# only useful when copilot (live IPC) mode is wanted; kicad_mcp/ipc/*.py
+# imports it lazily inside functions, so the `copilot` toolset registers
+# and fails closed with an actionable message even when this extra isn't
+# installed -- autopilot-only users pay nothing for it either way.
+copilot = [
+    "kicad-python>=0.8.0",
+]
+# KiCadRoutingTools (MIT) is not a package: it runs as a subprocess from its own
+# checkout (KICAD_ROUTING_TOOLS_PATH) under KICAD_ROUTING_TOOLS_PYTHON, which defaults
+# to this interpreter. These are its runtime dependencies, with the floors of KRT
+# v0.23.1's requirements.txt; scipy is the one nothing else here pulls in (a fresh
+# machine without it could not route, build ticket 33). The router binary comes from
+# `python build_router.py` in the checkout.
+krt = [
+    "numpy>=1.22.0",
+    "scipy>=1.7.0",
+    "shapely>=2.0",
+    "Pillow>=9.2.0",
+]
+
+[project.scripts]
+kicad-mcp = "kicad_mcp.server:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/kicad_mcp"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# The repository root on sys.path, so `from tests.test_ipc import ...` collects under the
+# `pytest` console script too, not only under `python -m pytest` (build ticket 33).
+pythonpath = ["."]
+markers = [
+    "network: hits a real external network endpoint -- excluded from the default run (`pytest -m 'not network'`), run deliberately via `pytest -m network`",
+]
+# An unknown marker is an error, not a warning: a typo such as `needs_krtt` would otherwise drop
+# the KRT gating silently (build ticket 53). Markers are registered here or in tests/conftest.py.
+filterwarnings = ["error::pytest.PytestUnknownMarkWarning"]
+
+[tool.ruff]
+target-version = "py311"
+# A git submodule is another project's code (publish-prep ticket 03b); its findings are not ours.
+extend-exclude = ["third_party"]
+
+[tool.ruff.lint]
+# An explicit rule set, so a ruff upgrade cannot widen it silently: pyflakes (F), the
+# error-level pycodestyle subset (E4, E7, E9) and bugbear (B). Existing findings are frozen
+# in scripts/ruff-baseline.json, shrink-only; scripts/lint_gate.py checks it (build ticket 45).
+select = ["E4", "E7", "E9", "F", "B"]

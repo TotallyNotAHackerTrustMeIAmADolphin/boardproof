@@ -1,0 +1,3 @@
+# Shell scripts run by git or bash must keep LF endings on Windows checkouts (build ticket 45).
+scripts/git-hooks/* text eol=lf
+*.sh text eol=lf

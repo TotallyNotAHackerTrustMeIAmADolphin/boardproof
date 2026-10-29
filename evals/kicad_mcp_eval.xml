@@ -1,0 +1,62 @@
+<evaluation>
+  <qa_pair>
+    <question>Run a design rule check on the KiCad board at tests/fixtures/simple_led.kicad_pcb. How many unconnected items does it report?</question>
+    <answer>3</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Run a design rule check on the KiCad board at tests/fixtures/simple_led.kicad_pcb. Ignoring the unconnected items, every remaining rule violation it reports shares a single severity level. What is it?</question>
+    <answer>warning</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Run a design rule check on tests/fixtures/simple_led.kicad_pcb. Which nets does it name in its unconnected items?</question>
+    <answer>VCC, GND and LED_ANODE (three nets, one unconnected item each).</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Run an electrical rule check on the schematic at tests/fixtures/simple_led.kicad_sch. How many violations does it report?</question>
+    <answer>0</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>How many footprints are placed on the board at tests/fixtures/simple_led.kicad_pcb?</question>
+    <answer>3</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>In the schematic at tests/fixtures/simple_led.kicad_sch, what value is assigned to the symbol with reference designator R1?</question>
+    <answer>330</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>How many distinct parametric footprint package types does kicad-mcp's footprint generator currently support, and does that set include both a QFN and a SOIC generator?</question>
+    <answer>At least 7 (7 as of the pinned kicad-tools 0.20.x: chip, dip, pin_header, qfn, qfp, soic, sot), and yes -- both qfn and soic are supported. The exact count is a property of the underlying kicad-tools generator set and may grow; what must hold is that the generator covers at least these seven families including qfn and soic.</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Generate a QFN footprint with 32 pins on a 0.5mm pin pitch using kicad-mcp's footprint generator (leaving body size and pad dimensions at their defaults). How many pads does the generated footprint have, and does the written .kicad_mod file parse back cleanly through kicad_tools' own footprint parser -- for example via the library toolset's validate_klc?</question>
+    <answer>32 pads, and yes: validate_klc parses the generated file and returns status ok with no failed checks (reference is the REF** placeholder, a value field is present, a component attribute is declared, and both a courtyard and a fab-layer outline exist). The generated footprint name encodes kicad-tools' default body size (currently QFN-32_4.0x4.0mm_P0.5mm) -- that name is a kicad-tools default, not a contract, so do not assert it exactly.</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Inspect the datasheet at tests/fixtures/datasheets/lm358_opamp.pdf. In the SOIC/SOT23-8/VSSOP/PDIP package column of its pinout table, which pin number is the OUT1 output assigned to?</question>
+    <answer>1</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Inspect the datasheet at tests/fixtures/datasheets/pmeg2005ej_diode.pdf. What marking code is printed on the PMEG2005EJ part per its type-number/marking-code table?</question>
+    <answer>CC</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>On the board at tests/fixtures/golden_attiny1616_board/golden_attiny1616_board.kicad_pcb, the component-vs-component collision check comes back clean. Run the broader placement-geometry check on the same board as well: how many violations does it report, of what type, and which component is implicated?</question>
+    <answer>1 violation: an edge_connector_placement warning on J1 (the off-board power connector sits about 3.2mm inside the board interior instead of at the perimeter). The collision check reports 0 because edge_connector_placement is a single-footprint-vs-board-edge placement constraint, not a component-vs-component collision, so it is deliberately excluded from the collision-scoped view -- a clean collision result is not a clean placement result.</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Is the board at tests/fixtures/golden_attiny1616_board/golden_attiny1616_board.kicad_pcb ready to send to a fab? Run the authoritative PCB design rule check, then ask what still needs routing, and answer from both results.</question>
+    <answer>No. The authoritative DRC reports violation_count 0 but 11 unconnected items in the same report, and the ratsnest query reports 5 unrouted nets (VCC, GND, Net-(D1-K), Net-(J2-Pin_2), Net-(U1-PA1)) with 0 track segments and 0 vias on the board. The board is placed but completely unrouted -- a zero violation count alone does not mean fab-ready.</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Confirm the schematic at tests/fixtures/golden_attiny1616_board/golden_attiny1616_board.kicad_sch is electrically clean, then export a SPICE netlist from it into a scratch directory. How many ERC violations were there, and which two nets does C1 sit between in the exported netlist?</question>
+    <answer>0 ERC violations, and C1 sits between VCC and GND in the exported SPICE netlist (the decoupling cap across the supply rails). The netlist also contains lines for R1, D1, U1, J1 and J2 -- six devices in total.</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Inspect the datasheet at tests/fixtures/datasheets/ncv7691_ldo.pdf to find its package and pin count, then generate a matching parametric footprint with kicad-mcp's footprint generator and validate the result with the library toolset's minimal-KLC check. What package/pin count does the datasheet give, how many pads does the generated footprint have, and does it pass the KLC subset check?</question>
+    <answer>The datasheet's pin table is for a SOIC8 package with 8 pins (pin 1 VS, 2 PWM, 3 FLTS, 4 NTC, 5 GND, 6 FB, 7 BASE, 8 SC). Generating the soic package type with pins=8 (pitch 1.27mm) produces a footprint with 8 pads, and validate_klc returns status ok with no failed checks on it.</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Open the KiCad project at tests/fixtures/golden_attiny1616_board/ and note how many footprints its board carries. Then, working on a scratch copy so the fixture is untouched, export a JLCPCB manufacturing package for that board into a temporary directory, supplying LCSC part numbers for C1, R1 and U1 only. How many footprints does the project have, what status does the export report, how many BOM rows get an LCSC part number filled in, which artifacts are produced, and how many components does the exported CPL actually list compared with the BOM?</question>
+    <answer>6 footprints (C1, D1, J1, J2, R1, U1). The export reports status ok and fills 3 BOM rows with LCSC part numbers (one per supplied override -- the BOM has one row per reference here). It produces three artifacts: a gerber archive (gerbers/gerbers.zip), bom_jlcpcb.csv and cpl_jlcpcb.csv. Note the CPL carries only 4 of the 6 components -- the two through-hole pin headers J1 and J2 are excluded as hand-solder parts -- so a successful export is not the same as a complete assembly package.</answer>
+  </qa_pair>
+</evaluation>

@@ -1,0 +1,55 @@
+# Skips the batch gate allows (build ticket 45; playbook fork P11). Any other skip turns it RED.
+# Each [[skip]]: `file` is the test file (posix path), `reason` a prefix of pytest's skip reason,
+# `max` the most skips allowed with that file and reason, `why` the reason it is acceptable.
+# Adding an entry or raising a max needs its own ticket and a review, like a known-red entry.
+# Measured 2026-10-20 on this machine (12 skips): no KiCad GUI running, no KiKit, no ngspice,
+# no symlink privilege, network tests off. ngspice has no entry any more: spice-simulation build
+# ticket 02 made its live tests required (NGSPICE_REQUIRED=1 in the gate, tests/_ngspice.py).
+
+[[skip]]
+file = "tests/test_copilot_toolset.py"
+reason = "no running KiCad instance with the IPC API enabled was reachable"
+max = 1
+why = "live IPC needs a running KiCad GUI with the API enabled (docs/TESTING.md, tool gating)"
+
+[[skip]]
+file = "tests/test_ipc.py"
+reason = "no running KiCad instance with the IPC API enabled was reachable"
+max = 3
+why = "live IPC needs a running KiCad GUI with the API enabled (docs/TESTING.md, tool gating)"
+
+[[skip]]
+file = "tests/test_datasheet.py"
+reason = "set NETWORK_TESTS=1 to run live-network fetch tests"
+max = 1
+why = "live network fetch, run deliberately (docs/TESTING.md)"
+
+[[skip]]
+file = "tests/test_sourcing_lcsc.py"
+reason = "Hits the real, live LCSC endpoint"
+max = 1
+why = "LCSC live search is permanently skipped: bot wall (docs/TESTING.md)"
+
+[[skip]]
+file = "tests/test_gate_field.py"
+reason = "cannot create directory symlinks without privilege here"
+max = 1
+why = "Windows needs developer mode or admin rights for directory symlinks"
+
+[[skip]]
+file = "tests/test_manufacturing_toolset.py"
+reason = "KiKit not installed."
+max = 4
+why = "KiKit lives in KiCad's bundled Python, not in this venv (docs/ARCHITECTURE.md decision 6)"
+
+[[skip]]
+file = "tests/test_jlcpcb_basic.py"
+reason = "JLCPCB library submodule not initialised"
+max = 2
+why = "the CDFER library is a shallow, opt-in git submodule (publish-prep ticket 03b); a fresh worktree has it empty, and the index-only tests do not need it"
+
+[[skip]]
+file = "tests/test_datasheet.py"
+reason = "the vendor datasheet PDFs are third-party files and are not in the public export"
+max = 4
+why = "public export (publish-prep ticket 03): the vendor datasheet PDFs are third-party files and were left out"

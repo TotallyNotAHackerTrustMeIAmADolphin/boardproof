@@ -1,0 +1,8 @@
+.title KiCad schematic
+R1 Net-_U1-PA1_ Net-_D1-K_ 1k
+D1 __D1
+U1 __U1
+J1 __J1
+J2 __J2
+C1 VCC GND 100n
+.end

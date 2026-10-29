@@ -1,0 +1,15 @@
+.title KiCad schematic
+R2 /CC2 GND 5.1k
+J1 __J1
+R1 /CC1 GND 5.1k
+F1 __F1
+D1 __D1
+C3 +3V3 GND 100nF/50V
+U1 __U1
+U2 __U2
+C2 +3V3 GND 1uF/50V
+R3 /LED_CTL /LED_A 1k
+D2 __D2
+J2 __J2
+C1 /VBUS_F GND 10uF/25V
+.end

@@ -1,0 +1,167 @@
+(kicad_symbol_lib
+	(version 20251024)
+	(generator "kicad_symbol_editor")
+	(generator_version "10.0")
+	(symbol "USB_C_Receptacle_Power_6P"
+		(pin_names (offset 1.016))
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(property "Reference" "J"
+			(at 0 10.16 0)
+			(effects
+				(font (size 1.27 1.27))
+			)
+		)
+		(property "Value" "USB_C_PWR"
+			(at 0 -10.16 0)
+			(effects
+				(font (size 1.27 1.27))
+			)
+		)
+		(property "Footprint" "Rung1_USBC:USB_C_Receptacle_Shouhan_TYPE-C-6P"
+			(at 0 -12.7 0)
+			(effects
+				(font (size 1.27 1.27))
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 0 -15.24 0)
+			(effects
+				(font (size 1.27 1.27))
+				(hide yes)
+			)
+		)
+		(property "Description" "USB Type-C receptacle, 6 pin power only (VBUS, GND, CC1, CC2), SMD contacts with four through-hole shield tabs. Source: dimensions of the manufacturer's drawing, SHOU HAN (Shenzhen Shouhan Technology Co., Ltd.) TYPE-C 6P, recommended P.C.B. layout; own drawing, no third-party library data. Pad table: rung-1 board contract (ticket 51)."
+			(at 0 -17.78 0)
+			(effects
+				(font (size 1.27 1.27))
+				(hide yes)
+			)
+		)
+		(property "Manufacturer" "SHOU HAN"
+			(at 0 -20.32 0)
+			(effects
+				(font (size 1.27 1.27))
+				(hide yes)
+			)
+		)
+		(property "MPN" "TYPE-C 6P"
+			(at 0 -22.86 0)
+			(effects
+				(font (size 1.27 1.27))
+				(hide yes)
+			)
+		)
+		(symbol "USB_C_Receptacle_Power_6P_0_1"
+			(rectangle
+				(start -7.62 8.89)
+				(end 7.62 -8.89)
+				(stroke (width 0) (type default))
+				(fill (type background))
+			)
+		)
+		(symbol "USB_C_Receptacle_Power_6P_1_1"
+			(pin passive line
+				(at -12.7 6.35 0)
+				(length 5.08)
+				(name "GND"
+					(effects
+						(font (size 1.27 1.27))
+					)
+				)
+				(number "B12"
+					(effects
+						(font (size 1.27 1.27))
+					)
+				)
+			)
+			(pin passive line
+				(at -12.7 3.81 0)
+				(length 5.08)
+				(name "VBUS"
+					(effects
+						(font (size 1.27 1.27))
+					)
+				)
+				(number "B9"
+					(effects
+						(font (size 1.27 1.27))
+					)
+				)
+			)
+			(pin bidirectional line
+				(at -12.7 1.27 0)
+				(length 5.08)
+				(name "CC1"
+					(effects
+						(font (size 1.27 1.27))
+					)
+				)
+				(number "A5"
+					(effects
+						(font (size 1.27 1.27))
+					)
+				)
+			)
+			(pin bidirectional line
+				(at -12.7 -1.27 0)
+				(length 5.08)
+				(name "CC2"
+					(effects
+						(font (size 1.27 1.27))
+					)
+				)
+				(number "B5"
+					(effects
+						(font (size 1.27 1.27))
+					)
+				)
+			)
+			(pin passive line
+				(at -12.7 -3.81 0)
+				(length 5.08)
+				(name "VBUS"
+					(effects
+						(font (size 1.27 1.27))
+					)
+				)
+				(number "A9"
+					(effects
+						(font (size 1.27 1.27))
+					)
+				)
+			)
+			(pin passive line
+				(at -12.7 -6.35 0)
+				(length 5.08)
+				(name "GND"
+					(effects
+						(font (size 1.27 1.27))
+					)
+				)
+				(number "A12"
+					(effects
+						(font (size 1.27 1.27))
+					)
+				)
+			)
+			(pin passive line
+				(at 12.7 1.27 180)
+				(length 5.08)
+				(name "SHIELD"
+					(effects
+						(font (size 1.27 1.27))
+					)
+				)
+				(number "7"
+					(effects
+						(font (size 1.27 1.27))
+					)
+				)
+			)
+		)
+		(embedded_fonts no)
+	)
+)

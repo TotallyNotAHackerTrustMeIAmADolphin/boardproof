@@ -1,0 +1,118 @@
+(version 1)
+# Custom Design Rules (DRC) for KiCad 10.0 — JLCPCB standard 2-layer FR4 tier.
+#
+# These are the fab's manufacturability floor: what JLCPCB can physically etch/drill on the
+# *standard* (no special-process surcharge) 2-layer service, at the board's chosen 2oz copper
+# and 1.6mm thickness. They apply board-wide regardless of net.
+#
+# Per-net current-carrying width/clearance (20A power path, aux supply rails) is owned by the
+# net classes in openMPPT_v1.3.kicad_pro (Board Setup -> Net Classes: Power_20A / AuxSupply /
+# Default) — not duplicated here, to avoid two sources of truth drifting apart (this file
+# previously had its own copy of the power-net rule, referencing a nonexistent "PHASE" net and
+# still including GND, both now stale — see STANDARDS.md "PCB Net Classes" section).
+#
+# Sources: https://jlcpcb.com/capabilities/pcb-capabilities (official capabilities table) and
+# community-verified guidance for the 2oz-copper case specifically, since the official table's
+# headline min track/space (0.10mm@1oz / 0.16mm@2oz) is the technical limit, not the safe
+# practical value — 2oz copper needs more etch margin than the bare minimum implies.
+
+# =============================================================================
+# Copper (track/pad) — 2oz copper, both layers
+# =============================================================================
+
+(rule "Track width (2oz copper floor)"
+	(condition "A.Type == 'track'")
+	(constraint track_width (min 0.2mm))
+)
+
+(rule "Track spacing (2oz copper floor)"
+	(condition "A.Type == 'track' && B.Type == A.Type")
+	(constraint clearance (min 0.2mm))
+)
+
+(rule "Clearance: pad/via to pad/via"
+	(layer outer)
+	(condition "A.isPlated() && B.isPlated() && A.Net != B.Net")
+	(constraint clearance (min 0.2mm))
+)
+
+(rule "Clearance: track to pad"
+	(condition "A.Type == 'pad' && B.Type == 'track' &&  A.Net != B.Net")
+	(constraint clearance (min 0.2mm))
+)
+
+# =============================================================================
+# Silkscreen
+# =============================================================================
+
+(rule "Silkscreen text"
+	(layer "*SilkS")
+	(condition "A.Type == 'Text' || A.Type == 'Text Box'")
+	(constraint text_thickness (min 0.15mm))
+	(constraint text_height (min 1mm))
+)
+
+(rule "Pad to Silkscreen"
+	(layer outer)
+	(condition "A.Type == 'pad' && B.Layer == '*SilkS'")
+	(constraint silk_clearance (min 0.15mm))
+)
+
+# =============================================================================
+# Board edge
+# =============================================================================
+
+(rule "Edge (routed) to track clearance"
+	(condition "A.Type == 'track'")
+	(constraint edge_clearance (min 0.3mm))
+)
+
+# =============================================================================
+# Holes and vias
+# =============================================================================
+# Drill floor lowered to 0.15mm deliberately (was 0.3mm): U1's STM32F072 is a 0.5mm-pitch
+# LQFP-64, and a 0.7mm-floor via cannot fit in a dogbone escape at that pitch -- 13+ pins were
+# structurally unroutable on 2 layers otherwise (confirmed directly: KRT's own BGA-grid escape
+# analysis reported a negative usable via size at the old floor). 0.15mm is JLCPCB's published
+# absolute technical minimum drill, so this steps OUT of their "stays in the cheap tier" 0.3mm
+# zone and into their small-hole surcharge tier -- a real, deliberate cost tradeoff, not an
+# oversight. Verified: full-board reroute at this floor produces zero shorting_items via real
+# kicad-cli DRC.
+
+(rule "Hole diameter"
+	(constraint hole_size (min 0.15mm) (max 6.3mm))
+)
+
+(rule "Hole (NPTH) diameter"
+	(layer outer)
+	(condition "!A.isPlated()")
+	(constraint hole_size (min 0.5mm))
+)
+
+(rule "Annular ring width (via and PTH)"
+	(layer outer)
+	(condition "A.isPlated()")
+	(constraint annular_width (min 0.1mm))
+)
+
+(rule "Clearance: hole to hole (perimeter), different nets"
+	(layer outer)
+	(condition "A.Net != B.Net")
+	(constraint hole_to_hole (min 0.5mm))
+)
+
+(rule "Clearance: hole to hole (perimeter), same net"
+	(layer outer)
+	(condition "A.Net == B.Net")
+	(constraint hole_to_hole (min 0.15mm))
+)
+
+(rule "Clearance: track to NPTH hole (perimeter)"
+	(condition "!A.isPlated() && B.Type == 'track' && A.Net != B.Net")
+	(constraint hole_clearance (min 0.254mm))
+)
+
+(rule "Clearance: track to PTH hole perimeter"
+	(condition "A.isPlated() && B.Type == 'track' && A.Net != B.Net")
+	(constraint hole_clearance (min 0.33mm))
+)

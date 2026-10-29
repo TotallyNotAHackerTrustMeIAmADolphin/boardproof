@@ -1,0 +1,931 @@
+{
+ "project_create": "created",
+ "register_library_asset": "ok",
+ "add_symbols": {
+  "status": "ok",
+  "placed": [
+   "J1",
+   "F1",
+   "D1",
+   "U2",
+   "U1",
+   "C1",
+   "C2",
+   "C3",
+   "R1",
+   "R2",
+   "R3",
+   "D2",
+   "J2"
+  ],
+  "count": 13
+ },
+ "add_wires": {
+  "status": "ok",
+  "count": 35,
+  "segments": 35
+ },
+ "add_labels": {
+  "status": "ok",
+  "placed": [
+   "power",
+   "power",
+   "power",
+   "power",
+   "label",
+   "label",
+   "power",
+   "power",
+   "power",
+   "label",
+   "power",
+   "label",
+   "power",
+   "power",
+   "label",
+   "power",
+   "label",
+   "power",
+   "label",
+   "power",
+   "power",
+   "label",
+   "power",
+   "power",
+   "power",
+   "power",
+   "power",
+   "label",
+   "label",
+   "power",
+   "power",
+   "power",
+   "label",
+   "power",
+   "label",
+   "label",
+   "power",
+   "label",
+   "no_connect",
+   "no_connect",
+   "no_connect",
+   "no_connect",
+   "no_connect",
+   "no_connect",
+   "no_connect",
+   "no_connect",
+   "no_connect",
+   "no_connect",
+   "no_connect",
+   "no_connect",
+   "no_connect",
+   "no_connect",
+   "no_connect",
+   "no_connect"
+  ],
+  "count": 54
+ },
+ "fix_annotation": {
+  "status": "ok",
+  "references_before": [
+   "#PWR01",
+   "#PWR02",
+   "#PWR03",
+   "#PWR04",
+   "#PWR05",
+   "#PWR06",
+   "#PWR07",
+   "#PWR08",
+   "#PWR09",
+   "#PWR10",
+   "#PWR11",
+   "#PWR12",
+   "#PWR13",
+   "#PWR14",
+   "#PWR15",
+   "#PWR16",
+   "#PWR17",
+   "#PWR18",
+   "#PWR19",
+   "#PWR20",
+   "#PWR21",
+   "#PWR22",
+   "#PWR23",
+   "#PWR24",
+   "C1",
+   "C2",
+   "C3",
+   "D1",
+   "D2",
+   "F1",
+   "J1",
+   "J2",
+   "R1",
+   "R2",
+   "R3",
+   "U1",
+   "U2"
+  ],
+  "references_after": [
+   "#FLG01",
+   "#FLG02",
+   "#FLG03",
+   "#PWR01",
+   "#PWR03",
+   "#PWR05",
+   "#PWR06",
+   "#PWR07",
+   "#PWR08",
+   "#PWR09",
+   "#PWR10",
+   "#PWR12",
+   "#PWR13",
+   "#PWR14",
+   "#PWR15",
+   "#PWR16",
+   "#PWR17",
+   "#PWR18",
+   "#PWR19",
+   "#PWR20",
+   "#PWR21",
+   "#PWR22",
+   "#PWR23",
+   "#PWR24",
+   "C1",
+   "C2",
+   "C3",
+   "D1",
+   "D2",
+   "F1",
+   "J1",
+   "J2",
+   "R1",
+   "R2",
+   "R3",
+   "U1",
+   "U2"
+  ],
+  "changed": true,
+  "sheets": [
+   "rung1_usbc_attiny1616.kicad_sch"
+  ],
+  "unreferenced_sheets": [],
+  "sheet_problems": []
+ },
+ "assign_footprints": {
+  "status": "ok",
+  "assigned": {
+   "J1": "Rung1_USBC:USB_C_Receptacle_Shouhan_TYPE-C-6P",
+   "F1": "Fuse:Fuse_0805_2012Metric",
+   "D1": "Diode_SMD:D_SMB",
+   "U2": "Package_TO_SOT_SMD:SOT-89-3",
+   "U1": "Package_DFN_QFN:VQFN-20-1EP_3x3mm_P0.4mm_EP1.7x1.7mm",
+   "C1": "Capacitor_SMD:C_0805_2012Metric",
+   "C2": "Capacitor_SMD:C_0603_1608Metric",
+   "C3": "Capacitor_SMD:C_0603_1608Metric",
+   "R1": "Resistor_SMD:R_0603_1608Metric",
+   "R2": "Resistor_SMD:R_0603_1608Metric",
+   "R3": "Resistor_SMD:R_0603_1608Metric",
+   "D2": "LED_SMD:LED_0603_1608Metric",
+   "J2": "Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical"
+  },
+  "not_assigned": [],
+  "sheets": [
+   "rung1_usbc_attiny1616.kicad_sch"
+  ],
+  "unreferenced_sheets": [],
+  "sheet_problems": []
+ },
+ "lcsc_properties_set": 13,
+ "check_connectivity": {
+  "sheets": [
+   "rung1_usbc_attiny1616.kicad_sch"
+  ],
+  "unreferenced_sheets": [],
+  "sheet_problems": [],
+  "analysed_sheets": [
+   "rung1_usbc_attiny1616.kicad_sch"
+  ],
+  "status": "ok",
+  "unconnected_pins": [
+   {
+    "reference": "U1",
+    "pin_number": "1",
+    "pin_name": "PA2",
+    "pin_type": "bidirectional",
+    "symbol_value": "ATtiny1616-M",
+    "lib_id": "MCU_Microchip_ATtiny:ATtiny1616-M",
+    "position": [
+     142.24,
+     139.70000000000002
+    ],
+    "sheet": ""
+   },
+   {
+    "reference": "U1",
+    "pin_number": "2",
+    "pin_name": "PA3",
+    "pin_type": "bidirectional",
+    "symbol_value": "ATtiny1616-M",
+    "lib_id": "MCU_Microchip_ATtiny:ATtiny1616-M",
+    "position": [
+     142.24,
+     142.24
+    ],
+    "sheet": ""
+   },
+   {
+    "reference": "U1",
+    "pin_number": "5",
+    "pin_name": "PA4",
+    "pin_type": "bidirectional",
+    "symbol_value": "ATtiny1616-M",
+    "lib_id": "MCU_Microchip_ATtiny:ATtiny1616-M",
+    "position": [
+     142.24,
+     144.78
+    ],
+    "sheet": ""
+   },
+   {
+    "reference": "U1",
+    "pin_number": "6",
+    "pin_name": "PA5",
+    "pin_type": "bidirectional",
+    "symbol_value": "ATtiny1616-M",
+    "lib_id": "MCU_Microchip_ATtiny:ATtiny1616-M",
+    "position": [
+     142.24,
+     147.32
+    ],
+    "sheet": ""
+   },
+   {
+    "reference": "U1",
+    "pin_number": "7",
+    "pin_name": "PA6",
+    "pin_type": "bidirectional",
+    "symbol_value": "ATtiny1616-M",
+    "lib_id": "MCU_Microchip_ATtiny:ATtiny1616-M",
+    "position": [
+     142.24,
+     149.86
+    ],
+    "sheet": ""
+   },
+   {
+    "reference": "U1",
+    "pin_number": "9",
+    "pin_name": "PB5",
+    "pin_type": "bidirectional",
+    "symbol_value": "ATtiny1616-M",
+    "lib_id": "MCU_Microchip_ATtiny:ATtiny1616-M",
+    "position": [
+     142.24,
+     170.18
+    ],
+    "sheet": ""
+   },
+   {
+    "reference": "U1",
+    "pin_number": "10",
+    "pin_name": "PB4",
+    "pin_type": "bidirectional",
+    "symbol_value": "ATtiny1616-M",
+    "lib_id": "MCU_Microchip_ATtiny:ATtiny1616-M",
+    "position": [
+     142.24,
+     167.64000000000001
+    ],
+    "sheet": ""
+   },
+   {
+    "reference": "U1",
+    "pin_number": "11",
+    "pin_name": "PB3",
+    "pin_type": "bidirectional",
+    "symbol_value": "ATtiny1616-M",
+    "lib_id": "MCU_Microchip_ATtiny:ATtiny1616-M",
+    "position": [
+     142.24,
+     165.1
+    ],
+    "sheet": ""
+   },
+   {
+    "reference": "U1",
+    "pin_number": "12",
+    "pin_name": "PB2",
+    "pin_type": "bidirectional",
+    "symbol_value": "ATtiny1616-M",
+    "lib_id": "MCU_Microchip_ATtiny:ATtiny1616-M",
+    "position": [
+     142.24,
+     162.56
+    ],
+    "sheet": ""
+   },
+   {
+    "reference": "U1",
+    "pin_number": "13",
+    "pin_name": "PB1",
+    "pin_type": "bidirectional",
+    "symbol_value": "ATtiny1616-M",
+    "lib_id": "MCU_Microchip_ATtiny:ATtiny1616-M",
+    "position": [
+     142.24,
+     160.02
+    ],
+    "sheet": ""
+   },
+   {
+    "reference": "U1",
+    "pin_number": "14",
+    "pin_name": "PB0",
+    "pin_type": "bidirectional",
+    "symbol_value": "ATtiny1616-M",
+    "lib_id": "MCU_Microchip_ATtiny:ATtiny1616-M",
+    "position": [
+     142.24,
+     157.48000000000002
+    ],
+    "sheet": ""
+   },
+   {
+    "reference": "U1",
+    "pin_number": "15",
+    "pin_name": "PC0",
+    "pin_type": "bidirectional",
+    "symbol_value": "ATtiny1616-M",
+    "lib_id": "MCU_Microchip_ATtiny:ATtiny1616-M",
+    "position": [
+     111.76,
+     157.48000000000002
+    ],
+    "sheet": ""
+   },
+   {
+    "reference": "U1",
+    "pin_number": "16",
+    "pin_name": "PC1",
+    "pin_type": "bidirectional",
+    "symbol_value": "ATtiny1616-M",
+    "lib_id": "MCU_Microchip_ATtiny:ATtiny1616-M",
+    "position": [
+     111.76,
+     160.02
+    ],
+    "sheet": ""
+   },
+   {
+    "reference": "U1",
+    "pin_number": "17",
+    "pin_name": "PC2",
+    "pin_type": "bidirectional",
+    "symbol_value": "ATtiny1616-M",
+    "lib_id": "MCU_Microchip_ATtiny:ATtiny1616-M",
+    "position": [
+     111.76,
+     162.56
+    ],
+    "sheet": ""
+   },
+   {
+    "reference": "U1",
+    "pin_number": "18",
+    "pin_name": "PC3",
+    "pin_type": "bidirectional",
+    "symbol_value": "ATtiny1616-M",
+    "lib_id": "MCU_Microchip_ATtiny:ATtiny1616-M",
+    "position": [
+     111.76,
+     165.1
+    ],
+    "sheet": ""
+   },
+   {
+    "reference": "U1",
+    "pin_number": "20",
+    "pin_name": "PA1",
+    "pin_type": "bidirectional",
+    "symbol_value": "ATtiny1616-M",
+    "lib_id": "MCU_Microchip_ATtiny:ATtiny1616-M",
+    "position": [
+     142.24,
+     137.16
+    ],
+    "sheet": ""
+   }
+  ],
+  "unconnected_count": 16,
+  "connection_issues": [
+   {
+    "type": "possible_floating_wire",
+    "description": "Wire endpoint may be floating",
+    "position": [
+     38.1,
+     69.85
+    ],
+    "sheet": ""
+   },
+   {
+    "type": "possible_floating_wire",
+    "description": "Wire endpoint may be floating",
+    "position": [
+     35.56,
+     69.85
+    ],
+    "sheet": ""
+   },
+   {
+    "type": "possible_floating_wire",
+    "description": "Wire endpoint may be floating",
+    "position": [
+     38.1,
+     67.31
+    ],
+    "sheet": ""
+   },
+   {
+    "type": "possible_floating_wire",
+    "description": "Wire endpoint may be floating",
+    "position": [
+     35.56,
+     67.31
+    ],
+    "sheet": ""
+   },
+   {
+    "type": "possible_floating_wire",
+    "description": "Wire endpoint may be floating",
+    "position": [
+     38.1,
+     62.23
+    ],
+    "sheet": ""
+   },
+   {
+    "type": "possible_floating_wire",
+    "description": "Wire endpoint may be floating",
+    "position": [
+     38.1,
+     64.77
+    ],
+    "sheet": ""
+   },
+   {
+    "type": "possible_floating_wire",
+    "description": "Wire endpoint may be floating",
+    "position": [
+     38.1,
+     59.69
+    ],
+    "sheet": ""
+   },
+   {
+    "type": "possible_floating_wire",
+    "description": "Wire endpoint may be floating",
+    "position": [
+     35.56,
+     59.69
+    ],
+    "sheet": ""
+   },
+   {
+    "type": "possible_floating_wire",
+    "description": "Wire endpoint may be floating",
+    "position": [
+     38.1,
+     57.15
+    ],
+    "sheet": ""
+   },
+   {
+    "type": "possible_floating_wire",
+    "description": "Wire endpoint may be floating",
+    "position": [
+     35.56,
+     57.15
+    ],
+    "sheet": ""
+   },
+   {
+    "type": "possible_floating_wire",
+    "description": "Wire endpoint may be floating",
+    "position": [
+     63.5,
+     62.23
+    ],
+    "sheet": ""
+   },
+   {
+    "type": "possible_floating_wire",
+    "description": "Wire endpoint may be floating",
+    "position": [
+     66.04,
+     62.23
+    ],
+    "sheet": ""
+   },
+   {
+    "type": "possible_floating_wire",
+    "description": "Wire endpoint may be floating",
+    "position": [
+     88.9,
+     46.99
+    ],
+    "sheet": ""
+   },
+   {
+    "type": "possible_floating_wire",
+    "description": "Wire endpoint may be floating",
+    "position": [
+     88.9,
+     54.61
+    ],
+    "sheet": ""
+   },
+   {
+    "type": "possible_floating_wire",
+    "description": "Wire endpoint may be floating",
+    "position": [
+     88.9,
+     57.15
+    ],
+    "sheet": ""
+   },
+   {
+    "type": "possible_floating_wire",
+    "description": "Wire endpoint may be floating",
+    "position": [
+     101.6,
+     46.99
+    ],
+    "sheet": ""
+   },
+   {
+    "type": "possible_floating_wire",
+    "description": "Wire endpoint may be floating",
+    "position": [
+     101.6,
+     54.61
+    ],
+    "sheet": ""
+   },
+   {
+    "type": "possible_floating_wire",
+    "description": "Wire endpoint may be floating",
+    "position": [
+     101.6,
+     57.15
+    ],
+    "sheet": ""
+   },
+   {
+    "type": "possible_floating_wire",
+    "description": "Wire endpoint may be floating",
+    "position": [
+     88.9,
+     85.09
+    ],
+    "sheet": ""
+   },
+   {
+    "type": "possible_floating_wire",
+    "description": "Wire endpoint may be floating",
+    "position": [
+     88.9,
+     82.55
+    ],
+    "sheet": ""
+   },
+   {
+    "type": "possible_floating_wire",
+    "description": "Wire endpoint may be floating",
+    "position": [
+     88.9,
+     92.71
+    ],
+    "sheet": ""
+   },
+   {
+    "type": "possible_floating_wire",
+    "description": "Wire endpoint may be floating",
+    "position": [
+     110.49,
+     88.9
+    ],
+    "sheet": ""
+   },
+   {
+    "type": "possible_floating_wire",
+    "description": "Wire endpoint may be floating",
+    "position": [
+     118.11,
+     88.9
+    ],
+    "sheet": ""
+   },
+   {
+    "type": "possible_floating_wire",
+    "description": "Wire endpoint may be floating",
+    "position": [
+     120.65,
+     88.9
+    ],
+    "sheet": ""
+   },
+   {
+    "type": "possible_floating_wire",
+    "description": "Wire endpoint may be floating",
+    "position": [
+     127.0,
+     85.09
+    ],
+    "sheet": ""
+   },
+   {
+    "type": "possible_floating_wire",
+    "description": "Wire endpoint may be floating",
+    "position": [
+     127.0,
+     92.71
+    ],
+    "sheet": ""
+   },
+   {
+    "type": "possible_floating_wire",
+    "description": "Wire endpoint may be floating",
+    "position": [
+     127.0,
+     95.25
+    ],
+    "sheet": ""
+   },
+   {
+    "type": "possible_floating_wire",
+    "description": "Wire endpoint may be floating",
+    "position": [
+     165.1,
+     93.98
+    ],
+    "sheet": ""
+   },
+   {
+    "type": "possible_floating_wire",
+    "description": "Wire endpoint may be floating",
+    "position": [
+     165.1,
+     96.52
+    ],
+    "sheet": ""
+   },
+   {
+    "type": "possible_floating_wire",
+    "description": "Wire endpoint may be floating",
+    "position": [
+     157.48,
+     86.36
+    ],
+    "sheet": ""
+   },
+   {
+    "type": "possible_floating_wire",
+    "description": "Wire endpoint may be floating",
+    "position": [
+     172.72,
+     86.36
+    ],
+    "sheet": ""
+   },
+   {
+    "type": "possible_floating_wire",
+    "description": "Wire endpoint may be floating",
+    "position": [
+     175.26,
+     86.36
+    ],
+    "sheet": ""
+   },
+   {
+    "type": "possible_floating_wire",
+    "description": "Wire endpoint may be floating",
+    "position": [
+     190.5,
+     85.09
+    ],
+    "sheet": ""
+   },
+   {
+    "type": "possible_floating_wire",
+    "description": "Wire endpoint may be floating",
+    "position": [
+     190.5,
+     82.55
+    ],
+    "sheet": ""
+   },
+   {
+    "type": "possible_floating_wire",
+    "description": "Wire endpoint may be floating",
+    "position": [
+     190.5,
+     92.71
+    ],
+    "sheet": ""
+   },
+   {
+    "type": "possible_floating_wire",
+    "description": "Wire endpoint may be floating",
+    "position": [
+     190.5,
+     95.25
+    ],
+    "sheet": ""
+   },
+   {
+    "type": "possible_floating_wire",
+    "description": "Wire endpoint may be floating",
+    "position": [
+     127.0,
+     129.54
+    ],
+    "sheet": ""
+   },
+   {
+    "type": "possible_floating_wire",
+    "description": "Wire endpoint may be floating",
+    "position": [
+     127.0,
+     127.0
+    ],
+    "sheet": ""
+   },
+   {
+    "type": "possible_floating_wire",
+    "description": "Wire endpoint may be floating",
+    "position": [
+     127.0,
+     175.26
+    ],
+    "sheet": ""
+   },
+   {
+    "type": "possible_floating_wire",
+    "description": "Wire endpoint may be floating",
+    "position": [
+     127.0,
+     177.8
+    ],
+    "sheet": ""
+   },
+   {
+    "type": "possible_floating_wire",
+    "description": "Wire endpoint may be floating",
+    "position": [
+     142.24,
+     134.62
+    ],
+    "sheet": ""
+   },
+   {
+    "type": "possible_floating_wire",
+    "description": "Wire endpoint may be floating",
+    "position": [
+     142.24,
+     152.4
+    ],
+    "sheet": ""
+   },
+   {
+    "type": "possible_floating_wire",
+    "description": "Wire endpoint may be floating",
+    "position": [
+     101.6,
+     135.89
+    ],
+    "sheet": ""
+   },
+   {
+    "type": "possible_floating_wire",
+    "description": "Wire endpoint may be floating",
+    "position": [
+     101.6,
+     133.35
+    ],
+    "sheet": ""
+   },
+   {
+    "type": "possible_floating_wire",
+    "description": "Wire endpoint may be floating",
+    "position": [
+     101.6,
+     143.51
+    ],
+    "sheet": ""
+   },
+   {
+    "type": "possible_floating_wire",
+    "description": "Wire endpoint may be floating",
+    "position": [
+     101.6,
+     146.05
+    ],
+    "sheet": ""
+   },
+   {
+    "type": "possible_floating_wire",
+    "description": "Wire endpoint may be floating",
+    "position": [
+     185.42,
+     137.16
+    ],
+    "sheet": ""
+   },
+   {
+    "type": "possible_floating_wire",
+    "description": "Wire endpoint may be floating",
+    "position": [
+     182.88,
+     137.16
+    ],
+    "sheet": ""
+   },
+   {
+    "type": "possible_floating_wire",
+    "description": "Wire endpoint may be floating",
+    "position": [
+     185.42,
+     139.7
+    ],
+    "sheet": ""
+   },
+   {
+    "type": "possible_floating_wire",
+    "description": "Wire endpoint may be floating",
+    "position": [
+     185.42,
+     142.24
+    ],
+    "sheet": ""
+   },
+   {
+    "type": "possible_floating_wire",
+    "description": "Wire endpoint may be floating",
+    "position": [
+     182.88,
+     142.24
+    ],
+    "sheet": ""
+   },
+   {
+    "type": "possible_floating_wire",
+    "description": "Wire endpoint may be floating",
+    "position": [
+     165.1,
+     148.59
+    ],
+    "sheet": ""
+   },
+   {
+    "type": "possible_floating_wire",
+    "description": "Wire endpoint may be floating",
+    "position": [
+     165.1,
+     156.21
+    ],
+    "sheet": ""
+   },
+   {
+    "type": "possible_floating_wire",
+    "description": "Wire endpoint may be floating",
+    "position": [
+     186.69,
+     165.1
+    ],
+    "sheet": ""
+   },
+   {
+    "type": "possible_floating_wire",
+    "description": "Wire endpoint may be floating",
+    "position": [
+     184.15,
+     165.1
+    ],
+    "sheet": ""
+   },
+   {
+    "type": "possible_floating_wire",
+    "description": "Wire endpoint may be floating",
+    "position": [
+     194.31,
+     165.1
+    ],
+    "sheet": ""
+   }
+  ],
+  "missing_from_netlist": []
+ },
+ "erc_violations": 0,
+ "spice": "ok"
+}

@@ -1,0 +1,8473 @@
+{
+ "source": {
+  "project": "KiCad",
+  "path": "demos/pic_programmer",
+  "commit": "6a26ce9df3067b2233b415ba2d4cbc3164272ccc",
+  "file_version": 20260206,
+  "licence": "KiCad LICENSE.README plus LICENSE.CC-BY-SA-4.0 (demos believed CC BY-SA 4.0)",
+  "attribution_confirmed": false,
+  "attribution_note": "OPEN OWNER ITEM: attribution/licence not confirmed; do not vendor or redistribute."
+ },
+ "fixture_untouched": true,
+ "fixture_pcb_sha256": "aba03b4359e8bf162fe00b27b0d3394f2141acfbd3d43d9cf8e05bf0845d9bd5",
+ "strip": {
+  "strip_traces": "{'segments': 370, 'vias': 6, 'zones': 1, 'segments_clipped': 0, 'segments_boundary_skipped': 0}",
+  "before": {
+   "footprint": 63,
+   "segment": 370,
+   "via": 6,
+   "zone": 1,
+   "gr_text": 19,
+   "gr_text_box": 0
+  },
+  "after": {
+   "footprint": 63,
+   "segment": 0,
+   "via": 0,
+   "zone": 0,
+   "gr_text": 19,
+   "gr_text_box": 0
+  }
+ },
+ "input_prep": {
+  "moved": [
+   {
+    "ordinal": 0,
+    "text": "+8/12V",
+    "uuid": "14a6c3ac-e639-40b6-838b-1677460b7b74",
+    "at": [
+     81.5,
+     55.5
+    ],
+    "layer_before": "F.Cu",
+    "layer_after": "F.SilkS"
+   },
+   {
+    "ordinal": 1,
+    "text": "JP-CHARRAS",
+    "uuid": "493444f9-6aa4-4160-84df-bc8395cc9f3d",
+    "at": [
+     94.615,
+     137.16
+    ],
+    "layer_before": "F.Cu",
+    "layer_after": "F.SilkS"
+   },
+   {
+    "ordinal": 2,
+    "text": "13V ADJUST",
+    "uuid": "ca73b4b4-9a51-46ca-a3dc-6983edb0c7bb",
+    "at": [
+     123.19,
+     95.25
+    ],
+    "layer_before": "F.Cu",
+    "layer_after": "F.SilkS"
+   },
+   {
+    "ordinal": 3,
+    "text": "PIC PROGRAMMER V03",
+    "uuid": "7693c17f-de0a-4efc-99cb-754b8112b536",
+    "at": [
+     125.095,
+     132.08
+    ],
+    "layer_before": "F.Cu",
+    "layer_after": "F.SilkS"
+   },
+   {
+    "ordinal": 4,
+    "text": "VCC ON",
+    "uuid": "16296d09-e894-45b0-8f80-b052a17e0a89",
+    "at": [
+     162.9,
+     99.1
+    ],
+    "layer_before": "F.Cu",
+    "layer_after": "F.SilkS"
+   },
+   {
+    "ordinal": 5,
+    "text": "VPP ON",
+    "uuid": "b5c2651d-f525-496b-93f4-c8561de6abf9",
+    "at": [
+     163.195,
+     80.645
+    ],
+    "layer_before": "F.Cu",
+    "layer_after": "F.SilkS"
+   },
+   {
+    "ordinal": 6,
+    "text": "PWR ON",
+    "uuid": "679a84dc-dbdf-4696-a1ce-48cf4d2f8219",
+    "at": [
+     163.83,
+     88.9
+    ],
+    "layer_before": "F.Cu",
+    "layer_after": "F.SilkS"
+   },
+   {
+    "ordinal": 7,
+    "text": "I2C PROM",
+    "uuid": "b1c941b2-6a75-4f7e-9171-85d36f289e1e",
+    "at": [
+     166.37,
+     114.3
+    ],
+    "layer_before": "F.Cu",
+    "layer_after": "F.SilkS"
+   },
+   {
+    "ordinal": 8,
+    "text": "1=>>",
+    "uuid": "5660a1e4-b746-4fdd-82e7-f676f575f9b5",
+    "at": [
+     167.64,
+     48.895
+    ],
+    "layer_before": "F.Cu",
+    "layer_after": "F.SilkS"
+   },
+   {
+    "ordinal": 9,
+    "text": "1=>>",
+    "uuid": "bff82a8a-5dc8-4455-8eb6-12bc70c80cf5",
+    "at": [
+     171.45,
+     109.22
+    ],
+    "layer_before": "F.Cu",
+    "layer_after": "F.SilkS"
+   },
+   {
+    "ordinal": 10,
+    "text": "1=>>",
+    "uuid": "d5ee9260-67d5-4917-8cdc-2be5ee371c89",
+    "at": [
+     171.45,
+     120.65
+    ],
+    "layer_before": "F.Cu",
+    "layer_after": "F.SilkS"
+   },
+   {
+    "ordinal": 11,
+    "text": "PIC 40 PINS",
+    "uuid": "da996b55-6835-4ad3-bf9f-8dc429e7144c",
+    "at": [
+     182.245,
+     45.085
+    ],
+    "layer_before": "F.Cu",
+    "layer_after": "F.SilkS"
+   },
+   {
+    "ordinal": 12,
+    "text": "PIC 8 PINS",
+    "uuid": "cc560fc9-619d-4986-9dda-024530bbf4a1",
+    "at": [
+     183.515,
+     132.08
+    ],
+    "layer_before": "F.Cu",
+    "layer_after": "F.SilkS"
+   },
+   {
+    "ordinal": 13,
+    "text": "1=>>",
+    "uuid": "97d620ef-6a16-4c81-b1a3-f66cdb84e3de",
+    "at": [
+     200.66,
+     107.95
+    ],
+    "layer_before": "F.Cu",
+    "layer_after": "F.SilkS"
+   },
+   {
+    "ordinal": 14,
+    "text": "1=>>",
+    "uuid": "e9165638-6b2b-4f04-9462-e4a5ff8ea34e",
+    "at": [
+     202.0,
+     48.7
+    ],
+    "layer_before": "F.Cu",
+    "layer_after": "F.SilkS"
+   },
+   {
+    "ordinal": 15,
+    "text": "PIC 18 PINS",
+    "uuid": "aad047ad-07ba-452a-bfe3-686cdc238651",
+    "at": [
+     211.455,
+     132.715
+    ],
+    "layer_before": "F.Cu",
+    "layer_after": "F.SilkS"
+   },
+   {
+    "ordinal": 16,
+    "text": "PIC 28 PINS",
+    "uuid": "d13ccf6f-5ca1-4475-a86c-aedffdbd6c1b",
+    "at": [
+     212.725,
+     45.085
+    ],
+    "layer_before": "F.Cu",
+    "layer_after": "F.SilkS"
+   },
+   {
+    "ordinal": 17,
+    "text": "J-P CHARRAS",
+    "uuid": "7de6a730-4d12-428a-b6a7-579f13f970e4",
+    "at": [
+     94.615,
+     137.16
+    ],
+    "layer_before": "B.Cu",
+    "layer_after": "B.SilkS"
+   },
+   {
+    "ordinal": 18,
+    "text": "PIC PROGRAMMER V03",
+    "uuid": "c6208add-4302-44fa-95a7-e73ecd9fc5cb",
+    "at": [
+     124.46,
+     134.62
+    ],
+    "layer_before": "B.Cu",
+    "layer_after": "B.SilkS"
+   }
+  ],
+  "unhandled": [],
+  "router_text_check_ok": true,
+  "prepared_pcb_sha256": "cffa16afdd89509f16be8be5512ff5a8d2cd5378f6c652085b70ff5163dde4c6"
+ },
+ "baseline_rules": {
+  "rule_severities": {
+   "annular_width": "error",
+   "assertion_failure": "error",
+   "clearance": "error",
+   "connection_width": "warning",
+   "copper_edge_clearance": "error",
+   "copper_sliver": "warning",
+   "courtyards_overlap": "error",
+   "creepage": "error",
+   "diff_pair_gap_out_of_range": "error",
+   "diff_pair_uncoupled_length_too_long": "error",
+   "drill_out_of_range": "error",
+   "duplicate_footprints": "warning",
+   "extra_footprint": "warning",
+   "footprint": "error",
+   "footprint_filters_mismatch": "ignore",
+   "footprint_scaled_with_pads": "warning",
+   "footprint_symbol_field_mismatch": "warning",
+   "footprint_symbol_mismatch": "warning",
+   "footprint_type_mismatch": "warning",
+   "hole_clearance": "error",
+   "hole_near_hole": "error",
+   "hole_to_hole": "error",
+   "holes_co_located": "warning",
+   "invalid_outline": "error",
+   "isolated_copper": "warning",
+   "item_on_disabled_layer": "error",
+   "items_not_allowed": "error",
+   "length_out_of_range": "error",
+   "lib_footprint_issues": "warning",
+   "lib_footprint_mismatch": "warning",
+   "malformed_courtyard": "error",
+   "malformed_microvia_stack_span": "error",
+   "microvia_aspect_ratio": "error",
+   "microvia_crosses_core": "warning",
+   "microvia_drill_out_of_range": "error",
+   "microvia_stack_depth": "error",
+   "microvia_stack_not_filled": "warning",
+   "mirrored_text_on_front_layer": "warning",
+   "missing_courtyard": "warning",
+   "missing_footprint": "warning",
+   "missing_tuning_profile": "warning",
+   "net_chain_return_path": "error",
+   "net_chain_stub_length": "error",
+   "net_chain_tuning_profiles": "error",
+   "net_conflict": "warning",
+   "nonmirrored_text_on_back_layer": "warning",
+   "npth_inside_courtyard": "warning",
+   "overlapping_pads": "warning",
+   "padstack": "error",
+   "pth_inside_courtyard": "warning",
+   "shorting_items": "error",
+   "silk_edge_clearance": "ignore",
+   "silk_over_copper": "error",
+   "silk_overlap": "error",
+   "skew_out_of_range": "error",
+   "solder_mask_bridge": "error",
+   "starved_thermal": "error",
+   "text_height": "warning",
+   "text_on_edge_cuts": "error",
+   "text_thickness": "warning",
+   "through_hole_pad_without_hole": "error",
+   "too_many_vias": "error",
+   "track_angle": "error",
+   "track_dangling": "warning",
+   "track_not_centered_on_via": "ignore",
+   "track_on_post_machined_layer": "error",
+   "track_segment_length": "error",
+   "track_width": "error",
+   "tracks_crossing": "error",
+   "tuning_profile_track_geometries": "ignore",
+   "unconnected_items": "error",
+   "unresolved_variable": "error",
+   "via_dangling": "warning",
+   "via_diameter": "error",
+   "via_stitch_overlap": "error",
+   "zones_intersect": "error"
+  },
+  "drc_exclusions": [],
+  "constraints": {
+   "allow_blind_buried_vias": false,
+   "allow_microvias": false,
+   "max_error": 0.01,
+   "min_clearance": 0.0,
+   "min_connection": 0.0,
+   "min_copper_edge_clearance": 0.01,
+   "min_groove_width": 0.0,
+   "min_hole_clearance": 0.0,
+   "min_hole_to_hole": 0.25,
+   "min_microvia_diameter": 0.508,
+   "min_microvia_drill": 0.127,
+   "min_resolved_spokes": 1,
+   "min_silk_clearance": 0.0,
+   "min_text_height": 0.8,
+   "min_text_thickness": 0.12,
+   "min_through_hole_diameter": 0.5,
+   "min_track_width": 0.25,
+   "min_via_annular_width": 0.05,
+   "min_via_diameter": 0.9,
+   "solder_mask_to_copper_clearance": 0.0,
+   "use_height_for_length_calcs": true
+  },
+  "net_settings": {
+   "classes": [
+    {
+     "bus_width": 12,
+     "clearance": 0.25,
+     "diff_pair_gap": 0.25,
+     "diff_pair_via_gap": 0.25,
+     "diff_pair_width": 0.25,
+     "line_style": 0,
+     "microvia_diameter": 0.508,
+     "microvia_drill": 0.127,
+     "name": "Default",
+     "priority": 2147483647,
+     "track_width": 0.5,
+     "tuning_profile": "",
+     "via_diameter": 1.6,
+     "via_drill": 0.6,
+     "wire_width": 6
+    },
+    {
+     "bus_width": 12,
+     "clearance": 0.28,
+     "diff_pair_gap": 0.28,
+     "diff_pair_via_gap": 0.25,
+     "diff_pair_width": 0.28,
+     "line_style": 0,
+     "microvia_diameter": 0.508,
+     "microvia_drill": 0.127,
+     "name": "POWER",
+     "priority": 0,
+     "track_width": 0.8,
+     "tuning_profile": "",
+     "via_diameter": 1.6,
+     "via_drill": 0.6,
+     "wire_width": 6
+    }
+   ],
+   "meta": {
+    "version": 5
+   },
+   "net_chain_classes": {},
+   "net_chain_netclasses": {},
+   "net_colors": {},
+   "netclass_assignments": {},
+   "netclass_patterns": [
+    {
+     "netclass": "POWER",
+     "pattern": "GND"
+    },
+    {
+     "netclass": "POWER",
+     "pattern": "VCC"
+    }
+   ]
+  },
+  "dru_severity_clauses": [],
+  "dru_sha256": null,
+  "ignored_checks": [
+   "footprint_filters_mismatch",
+   "silk_edge_clearance",
+   "track_not_centered_on_via",
+   "tuning_profile_track_geometries"
+  ]
+ },
+ "steps": [
+  {
+   "name": "stripped_prepared_baseline",
+   "gate": {
+    "verdict": "FAIL",
+    "unstable": false,
+    "list_complete": true,
+    "incomplete_reasons": [
+     "schematic not fully annotated: kicad-cli would skip parity silently"
+    ],
+    "runs": 3,
+    "violation_count": 6,
+    "violation_types": {
+     "silk_overlap": 6
+    },
+    "violations": [
+     {
+      "description": "Silkscreen clearance",
+      "items": [
+       {
+        "description": "Referenzfeld von RV1",
+        "pos": {
+         "x": 130.175,
+         "y": 95.885
+        },
+        "uuid": "63dc1ab5-ae87-4108-93d9-497d539614a0"
+       },
+       {
+        "description": "Platinen-Text \"13V ADJUST\" auf F.Silkscreen",
+        "pos": {
+         "x": 123.19,
+         "y": 95.25
+        },
+        "uuid": "ca73b4b4-9a51-46ca-a3dc-6983edb0c7bb"
+       }
+      ],
+      "severity": "error",
+      "type": "silk_overlap"
+     },
+     {
+      "description": "Silkscreen clearance",
+      "items": [
+       {
+        "description": "Platinen-Text \"VCC ON\" auf F.Silkscreen",
+        "pos": {
+         "x": 162.9,
+         "y": 99.1
+        },
+        "uuid": "16296d09-e894-45b0-8f80-b052a17e0a89"
+       },
+       {
+        "description": "Kreisbogen von P3 auf F.Silkscreen",
+        "pos": {
+         "x": 168.910001,
+         "y": 96.52
+        },
+        "uuid": "a357a0e1-bd20-4b19-8a46-4bc4858f7255"
+       }
+      ],
+      "severity": "error",
+      "type": "silk_overlap"
+     },
+     {
+      "description": "Silkscreen clearance",
+      "items": [
+       {
+        "description": "Abschnitt von P3 auf F.Silkscreen",
+        "pos": {
+         "x": 177.8,
+         "y": 101.6
+        },
+        "uuid": "a3026b66-173b-4fdb-95b0-6ae958ce65a5"
+       },
+       {
+        "description": "Platinen-Text \"PIC 40 PINS\" auf F.Silkscreen",
+        "pos": {
+         "x": 182.245,
+         "y": 45.085
+        },
+        "uuid": "da996b55-6835-4ad3-bf9f-8dc429e7144c"
+       }
+      ],
+      "severity": "error",
+      "type": "silk_overlap"
+     },
+     {
+      "description": "Silkscreen clearance",
+      "items": [
+       {
+        "description": "Abschnitt von P3 auf F.Silkscreen",
+        "pos": {
+         "x": 187.96,
+         "y": 45.72
+        },
+        "uuid": "504a8352-879a-4f2e-9148-d54b31136914"
+       },
+       {
+        "description": "Platinen-Text \"PIC 40 PINS\" auf F.Silkscreen",
+        "pos": {
+         "x": 182.245,
+         "y": 45.085
+        },
+        "uuid": "da996b55-6835-4ad3-bf9f-8dc429e7144c"
+       }
+      ],
+      "severity": "error",
+      "type": "silk_overlap"
+     },
+     {
+      "description": "Silkscreen clearance",
+      "items": [
+       {
+        "description": "Abschnitt von P3 auf F.Silkscreen",
+        "pos": {
+         "x": 177.8,
+         "y": 45.72
+        },
+        "uuid": "23bbc54b-caff-438c-a3cf-7c0f0c3b7fb4"
+       },
+       {
+        "description": "Platinen-Text \"PIC 40 PINS\" auf F.Silkscreen",
+        "pos": {
+         "x": 182.245,
+         "y": 45.085
+        },
+        "uuid": "da996b55-6835-4ad3-bf9f-8dc429e7144c"
+       }
+      ],
+      "severity": "error",
+      "type": "silk_overlap"
+     },
+     {
+      "description": "Silkscreen clearance",
+      "items": [
+       {
+        "description": "Kreisbogen von P3 auf F.Silkscreen",
+        "pos": {
+         "x": 196.85,
+         "y": 48.26
+        },
+        "uuid": "69b86254-fcbe-4e19-be86-efd440eb954b"
+       },
+       {
+        "description": "Platinen-Text \"1=>>\" auf F.Silkscreen",
+        "pos": {
+         "x": 202.0,
+         "y": 48.7
+        },
+        "uuid": "e9165638-6b2b-4f04-9462-e4a5ff8ea34e"
+       }
+      ],
+      "severity": "error",
+      "type": "silk_overlap"
+     }
+    ],
+    "warning_types": {},
+    "warnings": [],
+    "unconnected_edges": 125,
+    "unconnected_per_net": {
+     "/CLOCK-RB6": 5,
+     "/DATA-RB7": 6,
+     "/PC-CLOCK-OUT": 2,
+     "/PC-DATA-IN": 1,
+     "/PC-DATA-OUT": 2,
+     "/VPP/MCLR": 4,
+     "/VPP_ON": 2,
+     "/pic_sockets/VCC_PIC": 10,
+     "GND": 39,
+     "Net-(C5-Pad1)": 1,
+     "Net-(D1-A)": 1,
+     "Net-(D1-K)": 2,
+     "Net-(D10-A)": 2,
+     "Net-(D11-A)": 1,
+     "Net-(D11-K)": 2,
+     "Net-(D12-A)": 1,
+     "Net-(D2-A)": 3,
+     "Net-(D4-A)": 3,
+     "Net-(D6-A)": 3,
+     "Net-(D8-A)": 1,
+     "Net-(D9-A)": 1,
+     "Net-(Q1-B)": 1,
+     "Net-(Q2-B)": 3,
+     "Net-(Q2-C)": 3,
+     "Net-(Q3-B)": 2,
+     "Net-(R12-Pad1)": 1,
+     "Net-(R13-Pad1)": 1,
+     "Net-(R15-Pad1)": 1,
+     "Net-(R16-Pad1)": 1,
+     "Net-(R8-Pad1)": 1,
+     "Net-(U4-FB+)": 1,
+     "Net-(U4-Vc)": 2,
+     "VCC": 11,
+     "VPP": 5
+    },
+    "unconnected": [
+     {
+      "net": "VCC",
+      "items": [
+       {
+        "description": "Durchsteckpad 3 [VCC] von U3",
+        "pos": {
+         "x": 101.6,
+         "y": 71.12
+        },
+        "uuid": "59d3d5fb-39ca-4db0-a611-f1a4882be6fb"
+       },
+       {
+        "description": "Durchsteckpad 1 [VCC] von C1",
+        "pos": {
+         "x": 110.49,
+         "y": 78.867
+        },
+        "uuid": "bd4ffc38-83e7-4835-abdd-88b99ed1abd8"
+       }
+      ]
+     },
+     {
+      "net": "VCC",
+      "items": [
+       {
+        "description": "Durchsteckpad 1 [VCC] von D4",
+        "pos": {
+         "x": 107.95,
+         "y": 111.887
+        },
+        "uuid": "a3c0a6cf-0dd0-4e0e-a29d-75f4e0085c40"
+       },
+       {
+        "description": "Durchsteckpad 14 [VCC] von U2",
+        "pos": {
+         "x": 115.57,
+         "y": 111.76
+        },
+        "uuid": "aceff124-6a49-425d-a2c4-63fb7d76da9b"
+       }
+      ]
+     },
+     {
+      "net": "VCC",
+      "items": [
+       {
+        "description": "Durchsteckpad 1 [VCC] von D2",
+        "pos": {
+         "x": 107.95,
+         "y": 118.237
+        },
+        "uuid": "53dde18e-e1bd-452e-bbe3-4befd1af9d4f"
+       },
+       {
+        "description": "Durchsteckpad 1 [VCC] von D4",
+        "pos": {
+         "x": 107.95,
+         "y": 111.887
+        },
+        "uuid": "a3c0a6cf-0dd0-4e0e-a29d-75f4e0085c40"
+       }
+      ]
+     },
+     {
+      "net": "VCC",
+      "items": [
+       {
+        "description": "Durchsteckpad 1 [VCC] von D6",
+        "pos": {
+         "x": 107.95,
+         "y": 125.095
+        },
+        "uuid": "5271d1b3-2b1d-4d8a-a411-3bcbd898d101"
+       },
+       {
+        "description": "Durchsteckpad 1 [VCC] von D2",
+        "pos": {
+         "x": 107.95,
+         "y": 118.237
+        },
+        "uuid": "53dde18e-e1bd-452e-bbe3-4befd1af9d4f"
+       }
+      ]
+     },
+     {
+      "net": "VCC",
+      "items": [
+       {
+        "description": "Durchsteckpad 14 [VCC] von U2",
+        "pos": {
+         "x": 115.57,
+         "y": 111.76
+        },
+        "uuid": "aceff124-6a49-425d-a2c4-63fb7d76da9b"
+       },
+       {
+        "description": "Durchsteckpad 1 [VCC] von R20",
+        "pos": {
+         "x": 144.78,
+         "y": 102.235
+        },
+        "uuid": "a4129832-7ed3-4cfa-b576-149a2af86688"
+       }
+      ]
+     },
+     {
+      "net": "VCC",
+      "items": [
+       {
+        "description": "Durchsteckpad 5 [VCC] von U4",
+        "pos": {
+         "x": 118.11,
+         "y": 64.77
+        },
+        "uuid": "c4e105b2-1a1c-48bf-aee6-7969fa091e3c"
+       },
+       {
+        "description": "Durchsteckpad 1 [VCC] von C1",
+        "pos": {
+         "x": 110.49,
+         "y": 78.867
+        },
+        "uuid": "bd4ffc38-83e7-4835-abdd-88b99ed1abd8"
+       }
+      ]
+     },
+     {
+      "net": "VCC",
+      "items": [
+       {
+        "description": "Durchsteckpad 2 [VCC] von L1",
+        "pos": {
+         "x": 125.73,
+         "y": 67.23
+        },
+        "uuid": "bb4ac81e-79d5-428d-94f0-1f646b500081"
+       },
+       {
+        "description": "Durchsteckpad 5 [VCC] von U4",
+        "pos": {
+         "x": 118.11,
+         "y": 64.77
+        },
+        "uuid": "c4e105b2-1a1c-48bf-aee6-7969fa091e3c"
+       }
+      ]
+     },
+     {
+      "net": "VCC",
+      "items": [
+       {
+        "description": "Durchsteckpad 2 [VCC] von L1",
+        "pos": {
+         "x": 125.73,
+         "y": 67.23
+        },
+        "uuid": "bb4ac81e-79d5-428d-94f0-1f646b500081"
+       },
+       {
+        "description": "Durchsteckpad 1 [VCC] von R14",
+        "pos": {
+         "x": 139.065,
+         "y": 87.63
+        },
+        "uuid": "d39fad1c-34ae-4e8c-bf85-59d1cd790931"
+       }
+      ]
+     },
+     {
+      "net": "VCC",
+      "items": [
+       {
+        "description": "Durchsteckpad 1 [VCC] von R14",
+        "pos": {
+         "x": 139.065,
+         "y": 87.63
+        },
+        "uuid": "d39fad1c-34ae-4e8c-bf85-59d1cd790931"
+       },
+       {
+        "description": "Durchsteckpad 3 [VCC] von Q3",
+        "pos": {
+         "x": 144.78,
+         "y": 97.79
+        },
+        "uuid": "62b64405-aac2-4f3d-92df-52474ffef5f1"
+       }
+      ]
+     },
+     {
+      "net": "VCC",
+      "items": [
+       {
+        "description": "Durchsteckpad 3 [VCC] von Q3",
+        "pos": {
+         "x": 144.78,
+         "y": 97.79
+        },
+        "uuid": "62b64405-aac2-4f3d-92df-52474ffef5f1"
+       },
+       {
+        "description": "Pad 1 [VCC] von JP1 auf bottom_layer",
+        "pos": {
+         "x": 147.357,
+         "y": 97.79
+        },
+        "uuid": "3acb5a29-7227-4ce2-8aa0-d92094ccdfdc"
+       }
+      ]
+     },
+     {
+      "net": "VCC",
+      "items": [
+       {
+        "description": "Durchsteckpad 1 [VCC] von R20",
+        "pos": {
+         "x": 144.78,
+         "y": 102.235
+        },
+        "uuid": "a4129832-7ed3-4cfa-b576-149a2af86688"
+       },
+       {
+        "description": "Durchsteckpad 3 [VCC] von Q3",
+        "pos": {
+         "x": 144.78,
+         "y": 97.79
+        },
+        "uuid": "62b64405-aac2-4f3d-92df-52474ffef5f1"
+       }
+      ]
+     },
+     {
+      "net": "GND",
+      "items": [
+       {
+        "description": "Durchsteckpad 1 [GND] von P1",
+        "pos": {
+         "x": 81.8,
+         "y": 60.0
+        },
+        "uuid": "cca37e91-7f07-4328-aed3-2f42d3e49ecc"
+       },
+       {
+        "description": "Durchsteckpad 2 [GND] von C1",
+        "pos": {
+         "x": 85.49,
+         "y": 78.867
+        },
+        "uuid": "9a28a224-d529-43c3-a5a2-2254f4c1c34e"
+       }
+      ]
+     },
+     {
+      "net": "GND",
+      "items": [
+       {
+        "description": "Durchsteckpad 2 [GND] von C1",
+        "pos": {
+         "x": 85.49,
+         "y": 78.867
+        },
+        "uuid": "9a28a224-d529-43c3-a5a2-2254f4c1c34e"
+       },
+       {
+        "description": "Durchsteckpad 2 [GND] von U3",
+        "pos": {
+         "x": 99.06,
+         "y": 71.12
+        },
+        "uuid": "00bbbb0f-c898-49d4-9524-34f2608bdde3"
+       }
+      ]
+     },
+     {
+      "net": "GND",
+      "items": [
+       {
+        "description": "Durchsteckpad 2 [GND] von R4",
+        "pos": {
+         "x": 97.79,
+         "y": 107.823
+        },
+        "uuid": "e016e14a-eb39-457f-91ee-45e550175069"
+       },
+       {
+        "description": "Durchsteckpad 2 [GND] von D5",
+        "pos": {
+         "x": 100.33,
+         "y": 108.585
+        },
+        "uuid": "ec7a5a98-5ecd-406e-9f56-576f0b4d7e8f"
+       }
+      ]
+     },
+     {
+      "net": "GND",
+      "items": [
+       {
+        "description": "Durchsteckpad 2 [GND] von R4",
+        "pos": {
+         "x": 97.79,
+         "y": 107.823
+        },
+        "uuid": "e016e14a-eb39-457f-91ee-45e550175069"
+       },
+       {
+        "description": "Durchsteckpad 5 [GND] von J1",
+        "pos": {
+         "x": 82.6,
+         "y": 109.12
+        },
+        "uuid": "7fdfccdb-09bb-4994-98b8-9417776e4444"
+       }
+      ]
+     },
+     {
+      "net": "GND",
+      "items": [
+       {
+        "description": "Durchsteckpad 2 [GND] von R2",
+        "pos": {
+         "x": 97.79,
+         "y": 114.554
+        },
+        "uuid": "1313139e-cb32-4e2d-8543-a77542971765"
+       },
+       {
+        "description": "Durchsteckpad 2 [GND] von D5",
+        "pos": {
+         "x": 100.33,
+         "y": 108.585
+        },
+        "uuid": "ec7a5a98-5ecd-406e-9f56-576f0b4d7e8f"
+       }
+      ]
+     },
+     {
+      "net": "GND",
+      "items": [
+       {
+        "description": "Durchsteckpad 2 [GND] von R6",
+        "pos": {
+         "x": 97.917,
+         "y": 121.92
+        },
+        "uuid": "a2387a59-3664-4e32-a26e-0c5f00b73ca4"
+       },
+       {
+        "description": "Durchsteckpad 2 [GND] von D3",
+        "pos": {
+         "x": 100.33,
+         "y": 121.92
+        },
+        "uuid": "7e3d1eea-1cda-4ffa-a78e-0ee0266d3012"
+       }
+      ]
+     },
+     {
+      "net": "GND",
+      "items": [
+       {
+        "description": "Durchsteckpad 2 [GND] von U3",
+        "pos": {
+         "x": 99.06,
+         "y": 71.12
+        },
+        "uuid": "00bbbb0f-c898-49d4-9524-34f2608bdde3"
+       },
+       {
+        "description": "Durchsteckpad 2 [GND] von C2",
+        "pos": {
+         "x": 109.582,
+         "y": 90.17
+        },
+        "uuid": "b88a19d4-b7e9-4329-b928-a755e0fbcd12"
+       }
+      ]
+     },
+     {
+      "net": "GND",
+      "items": [
+       {
+        "description": "Durchsteckpad 2 [GND] von D5",
+        "pos": {
+         "x": 100.33,
+         "y": 108.585
+        },
+        "uuid": "ec7a5a98-5ecd-406e-9f56-576f0b4d7e8f"
+       },
+       {
+        "description": "Durchsteckpad 2 [GND] von C2",
+        "pos": {
+         "x": 109.582,
+         "y": 90.17
+        },
+        "uuid": "b88a19d4-b7e9-4329-b928-a755e0fbcd12"
+       }
+      ]
+     },
+     {
+      "net": "GND",
+      "items": [
+       {
+        "description": "Durchsteckpad 2 [GND] von D7",
+        "pos": {
+         "x": 100.33,
+         "y": 115.316
+        },
+        "uuid": "72e58fca-d01d-4de2-989b-a8d4496541e7"
+       },
+       {
+        "description": "Durchsteckpad 2 [GND] von R2",
+        "pos": {
+         "x": 97.79,
+         "y": 114.554
+        },
+        "uuid": "1313139e-cb32-4e2d-8543-a77542971765"
+       }
+      ]
+     },
+     {
+      "net": "GND",
+      "items": [
+       {
+        "description": "Durchsteckpad 2 [GND] von D3",
+        "pos": {
+         "x": 100.33,
+         "y": 121.92
+        },
+        "uuid": "7e3d1eea-1cda-4ffa-a78e-0ee0266d3012"
+       },
+       {
+        "description": "Durchsteckpad 2 [GND] von D7",
+        "pos": {
+         "x": 100.33,
+         "y": 115.316
+        },
+        "uuid": "72e58fca-d01d-4de2-989b-a8d4496541e7"
+       }
+      ]
+     },
+     {
+      "net": "GND",
+      "items": [
+       {
+        "description": "Durchsteckpad 2 [GND] von D3",
+        "pos": {
+         "x": 100.33,
+         "y": 121.92
+        },
+        "uuid": "7e3d1eea-1cda-4ffa-a78e-0ee0266d3012"
+       },
+       {
+        "description": "Durchsteckpad 1 [GND] von U2",
+        "pos": {
+         "x": 115.57,
+         "y": 119.38
+        },
+        "uuid": "01b9f838-6524-41ce-acc5-ed583d630f27"
+       }
+      ]
+     },
+     {
+      "net": "GND",
+      "items": [
+       {
+        "description": "Durchsteckpad 1 [GND] von U2",
+        "pos": {
+         "x": 115.57,
+         "y": 119.38
+        },
+        "uuid": "01b9f838-6524-41ce-acc5-ed583d630f27"
+       },
+       {
+        "description": "Durchsteckpad 4 [GND] von U2",
+        "pos": {
+         "x": 123.19,
+         "y": 119.38
+        },
+        "uuid": "9d7a5352-e15e-4bc7-be40-6a81969d99da"
+       }
+      ]
+     },
+     {
+      "net": "GND",
+      "items": [
+       {
+        "description": "Durchsteckpad 1 [GND] von U2",
+        "pos": {
+         "x": 115.57,
+         "y": 119.38
+        },
+        "uuid": "01b9f838-6524-41ce-acc5-ed583d630f27"
+       },
+       {
+        "description": "Durchsteckpad 13 [GND] von U2",
+        "pos": {
+         "x": 118.11,
+         "y": 111.76
+        },
+        "uuid": "50160666-9b65-4129-8e24-8a0e2c6ff9b7"
+       }
+      ]
+     },
+     {
+      "net": "GND",
+      "items": [
+       {
+        "description": "Durchsteckpad 7 [GND] von U4",
+        "pos": {
+         "x": 118.11,
+         "y": 59.69
+        },
+        "uuid": "ef300f5f-a698-465c-9c03-4dbe91ed4ab1"
+       },
+       {
+        "description": "Durchsteckpad 2 [GND] von C4",
+        "pos": {
+         "x": 119.3,
+         "y": 52.07
+        },
+        "uuid": "e0909086-44aa-4d3f-ad6b-3616163cca97"
+       }
+      ]
+     },
+     {
+      "net": "GND",
+      "items": [
+       {
+        "description": "Durchsteckpad 6 [GND] von U4",
+        "pos": {
+         "x": 118.11,
+         "y": 62.23
+        },
+        "uuid": "7b1f43f8-7abb-4d2a-b324-17afe0765e8e"
+       },
+       {
+        "description": "Durchsteckpad 7 [GND] von U4",
+        "pos": {
+         "x": 118.11,
+         "y": 59.69
+        },
+        "uuid": "ef300f5f-a698-465c-9c03-4dbe91ed4ab1"
+       }
+      ]
+     },
+     {
+      "net": "GND",
+      "items": [
+       {
+        "description": "Durchsteckpad 6 [GND] von U4",
+        "pos": {
+         "x": 118.11,
+         "y": 62.23
+        },
+        "uuid": "7b1f43f8-7abb-4d2a-b324-17afe0765e8e"
+       },
+       {
+        "description": "Durchsteckpad 2 [GND] von U3",
+        "pos": {
+         "x": 99.06,
+         "y": 71.12
+        },
+        "uuid": "00bbbb0f-c898-49d4-9524-34f2608bdde3"
+       }
+      ]
+     },
+     {
+      "net": "GND",
+      "items": [
+       {
+        "description": "Durchsteckpad 13 [GND] von U2",
+        "pos": {
+         "x": 118.11,
+         "y": 111.76
+        },
+        "uuid": "50160666-9b65-4129-8e24-8a0e2c6ff9b7"
+       },
+       {
+        "description": "Durchsteckpad 10 [GND] von U2",
+        "pos": {
+         "x": 125.73,
+         "y": 111.76
+        },
+        "uuid": "e87d765b-5b8c-4589-8d15-96246dc8529b"
+       }
+      ]
+     },
+     {
+      "net": "GND",
+      "items": [
+       {
+        "description": "Durchsteckpad 4 [GND] von U2",
+        "pos": {
+         "x": 123.19,
+         "y": 119.38
+        },
+        "uuid": "9d7a5352-e15e-4bc7-be40-6a81969d99da"
+       },
+       {
+        "description": "Durchsteckpad 7 [GND] von U2",
+        "pos": {
+         "x": 130.81,
+         "y": 119.38
+        },
+        "uuid": "ab171a6d-536d-4b9c-a449-5f3d865470d4"
+       }
+      ]
+     },
+     {
+      "net": "GND",
+      "items": [
+       {
+        "description": "Durchsteckpad 2 [GND] von R15",
+        "pos": {
+         "x": 128.27,
+         "y": 78.74
+        },
+        "uuid": "5b02d01d-2e85-4956-92d9-742764d5232a"
+       },
+       {
+        "description": "Durchsteckpad 6 [GND] von U4",
+        "pos": {
+         "x": 118.11,
+         "y": 62.23
+        },
+        "uuid": "7b1f43f8-7abb-4d2a-b324-17afe0765e8e"
+       }
+      ]
+     },
+     {
+      "net": "GND",
+      "items": [
+       {
+        "description": "Durchsteckpad 2 [GND] von C3",
+        "pos": {
+         "x": 134.112,
+         "y": 82.23
+        },
+        "uuid": "94ab5b1c-b51b-429f-a686-fba82acd9f06"
+       },
+       {
+        "description": "Durchsteckpad 2 [GND] von R15",
+        "pos": {
+         "x": 128.27,
+         "y": 78.74
+        },
+        "uuid": "5b02d01d-2e85-4956-92d9-742764d5232a"
+       }
+      ]
+     },
+     {
+      "net": "GND",
+      "items": [
+       {
+        "description": "Durchsteckpad 2 [GND] von C5",
+        "pos": {
+         "x": 134.54,
+         "y": 49.53
+        },
+        "uuid": "42c4b821-22b5-451f-9c76-31ccee646782"
+       },
+       {
+        "description": "Durchsteckpad 2 [GND] von C4",
+        "pos": {
+         "x": 119.3,
+         "y": 52.07
+        },
+        "uuid": "e0909086-44aa-4d3f-ad6b-3616163cca97"
+       }
+      ]
+     },
+     {
+      "net": "GND",
+      "items": [
+       {
+        "description": "Durchsteckpad 3 [GND] von Q1",
+        "pos": {
+         "x": 148.59,
+         "y": 69.85
+        },
+        "uuid": "564a05f5-bf9f-4a62-bfd1-ae30bd6354d1"
+       },
+       {
+        "description": "Durchsteckpad 2 [GND] von R17",
+        "pos": {
+         "x": 156.21,
+         "y": 58.42
+        },
+        "uuid": "4b9a41fa-aa96-4b1b-ad4b-207e36bb7a01"
+       }
+      ]
+     },
+     {
+      "net": "GND",
+      "items": [
+       {
+        "description": "Durchsteckpad 3 [GND] von Q1",
+        "pos": {
+         "x": 148.59,
+         "y": 69.85
+        },
+        "uuid": "564a05f5-bf9f-4a62-bfd1-ae30bd6354d1"
+       },
+       {
+        "description": "Durchsteckpad 2 [GND] von C3",
+        "pos": {
+         "x": 134.112,
+         "y": 82.23
+        },
+        "uuid": "94ab5b1c-b51b-429f-a686-fba82acd9f06"
+       }
+      ]
+     },
+     {
+      "net": "GND",
+      "items": [
+       {
+        "description": "Durchsteckpad 1 [GND] von D8",
+        "pos": {
+         "x": 156.21,
+         "y": 77.47
+        },
+        "uuid": "cab31471-1370-4da8-9f26-65e145ea6e49"
+       },
+       {
+        "description": "Durchsteckpad 1 [GND] von D9",
+        "pos": {
+         "x": 156.21,
+         "y": 87.63
+        },
+        "uuid": "8ceb963f-b9bb-4c1a-89a2-8526fdae77ee"
+       }
+      ]
+     },
+     {
+      "net": "GND",
+      "items": [
+       {
+        "description": "Durchsteckpad 1 [GND] von D8",
+        "pos": {
+         "x": 156.21,
+         "y": 77.47
+        },
+        "uuid": "cab31471-1370-4da8-9f26-65e145ea6e49"
+       },
+       {
+        "description": "Durchsteckpad 3 [GND] von Q1",
+        "pos": {
+         "x": 148.59,
+         "y": 69.85
+        },
+        "uuid": "564a05f5-bf9f-4a62-bfd1-ae30bd6354d1"
+       }
+      ]
+     },
+     {
+      "net": "GND",
+      "items": [
+       {
+        "description": "Durchsteckpad 1 [GND] von D8",
+        "pos": {
+         "x": 156.21,
+         "y": 77.47
+        },
+        "uuid": "cab31471-1370-4da8-9f26-65e145ea6e49"
+       },
+       {
+        "description": "Durchsteckpad 12 [GND] von P3",
+        "pos": {
+         "x": 175.26,
+         "y": 78.74
+        },
+        "uuid": "5eb878d4-a2e4-4053-ae89-800d17178eaa"
+       }
+      ]
+     },
+     {
+      "net": "GND",
+      "items": [
+       {
+        "description": "Durchsteckpad 1 [GND] von D9",
+        "pos": {
+         "x": 156.21,
+         "y": 87.63
+        },
+        "uuid": "8ceb963f-b9bb-4c1a-89a2-8526fdae77ee"
+       },
+       {
+        "description": "Durchsteckpad 1 [GND] von D12",
+        "pos": {
+         "x": 156.21,
+         "y": 97.155
+        },
+        "uuid": "c3b96f46-1ade-4511-87a0-7f4fb65fe6ff"
+       }
+      ]
+     },
+     {
+      "net": "GND",
+      "items": [
+       {
+        "description": "Durchsteckpad 8 [GND] von P3",
+        "pos": {
+         "x": 175.26,
+         "y": 68.58
+        },
+        "uuid": "767ba196-18d6-4400-9540-d6d5216a1db6"
+       },
+       {
+        "description": "Durchsteckpad 12 [GND] von P3",
+        "pos": {
+         "x": 175.26,
+         "y": 78.74
+        },
+        "uuid": "5eb878d4-a2e4-4053-ae89-800d17178eaa"
+       }
+      ]
+     },
+     {
+      "net": "GND",
+      "items": [
+       {
+        "description": "Durchsteckpad 1 [GND] von U1",
+        "pos": {
+         "x": 179.07,
+         "y": 109.22
+        },
+        "uuid": "a609ba21-4eba-4c52-8cad-e840ac81d83d"
+       },
+       {
+        "description": "Durchsteckpad 2 [GND] von U1",
+        "pos": {
+         "x": 179.07,
+         "y": 111.76
+        },
+        "uuid": "672c7e20-6dcd-4b1e-af74-c23ab734a2eb"
+       }
+      ]
+     },
+     {
+      "net": "GND",
+      "items": [
+       {
+        "description": "Durchsteckpad 1 [GND] von U1",
+        "pos": {
+         "x": 179.07,
+         "y": 109.22
+        },
+        "uuid": "a609ba21-4eba-4c52-8cad-e840ac81d83d"
+       },
+       {
+        "description": "Durchsteckpad 1 [GND] von D12",
+        "pos": {
+         "x": 156.21,
+         "y": 97.155
+        },
+        "uuid": "c3b96f46-1ade-4511-87a0-7f4fb65fe6ff"
+       }
+      ]
+     },
+     {
+      "net": "GND",
+      "items": [
+       {
+        "description": "Durchsteckpad 2 [GND] von U1",
+        "pos": {
+         "x": 179.07,
+         "y": 111.76
+        },
+        "uuid": "672c7e20-6dcd-4b1e-af74-c23ab734a2eb"
+       },
+       {
+        "description": "Durchsteckpad 3 [GND] von U1",
+        "pos": {
+         "x": 179.07,
+         "y": 114.3
+        },
+        "uuid": "d7c31a0a-3172-48b2-b7a7-103c25e9cc9f"
+       }
+      ]
+     },
+     {
+      "net": "GND",
+      "items": [
+       {
+        "description": "Durchsteckpad 4 [GND] von U1",
+        "pos": {
+         "x": 179.07,
+         "y": 116.84
+        },
+        "uuid": "64e7deff-e627-4964-9855-70f97f6e85df"
+       },
+       {
+        "description": "Durchsteckpad 3 [GND] von U1",
+        "pos": {
+         "x": 179.07,
+         "y": 114.3
+        },
+        "uuid": "d7c31a0a-3172-48b2-b7a7-103c25e9cc9f"
+       }
+      ]
+     },
+     {
+      "net": "GND",
+      "items": [
+       {
+        "description": "Durchsteckpad 8 [GND] von U6",
+        "pos": {
+         "x": 186.69,
+         "y": 120.65
+        },
+        "uuid": "e21f2df1-6823-457b-ba74-aca8b268c30a"
+       },
+       {
+        "description": "Durchsteckpad 4 [GND] von U1",
+        "pos": {
+         "x": 179.07,
+         "y": 116.84
+        },
+        "uuid": "64e7deff-e627-4964-9855-70f97f6e85df"
+       }
+      ]
+     },
+     {
+      "net": "GND",
+      "items": [
+       {
+        "description": "Durchsteckpad 8 [GND] von U6",
+        "pos": {
+         "x": 186.69,
+         "y": 120.65
+        },
+        "uuid": "e21f2df1-6823-457b-ba74-aca8b268c30a"
+       },
+       {
+        "description": "Durchsteckpad 2 [GND] von C6",
+        "pos": {
+         "x": 196.85,
+         "y": 117.395
+        },
+        "uuid": "0c020ba0-b6e7-4e20-8970-2a3d9eaa3c0d"
+       }
+      ]
+     },
+     {
+      "net": "GND",
+      "items": [
+       {
+        "description": "Durchsteckpad 31 [GND] von P3",
+        "pos": {
+         "x": 190.5,
+         "y": 73.66
+        },
+        "uuid": "5a0872ae-7d8f-43c9-9473-53b348854664"
+       },
+       {
+        "description": "Durchsteckpad 2 [GND] von C7",
+        "pos": {
+         "x": 198.755,
+         "y": 76.12
+        },
+        "uuid": "4f608163-05ac-4877-918b-f17411efde8d"
+       }
+      ]
+     },
+     {
+      "net": "GND",
+      "items": [
+       {
+        "description": "Durchsteckpad 31 [GND] von P3",
+        "pos": {
+         "x": 190.5,
+         "y": 73.66
+        },
+        "uuid": "5a0872ae-7d8f-43c9-9473-53b348854664"
+       },
+       {
+        "description": "Durchsteckpad 12 [GND] von P3",
+        "pos": {
+         "x": 175.26,
+         "y": 78.74
+        },
+        "uuid": "5eb878d4-a2e4-4053-ae89-800d17178eaa"
+       }
+      ]
+     },
+     {
+      "net": "GND",
+      "items": [
+       {
+        "description": "Durchsteckpad 2 [GND] von C6",
+        "pos": {
+         "x": 196.85,
+         "y": 117.395
+        },
+        "uuid": "0c020ba0-b6e7-4e20-8970-2a3d9eaa3c0d"
+       },
+       {
+        "description": "Durchsteckpad 5 [GND] von U5",
+        "pos": {
+         "x": 207.899,
+         "y": 118.11
+        },
+        "uuid": "a273b0cf-623c-4d6f-b31c-ff9897866902"
+       }
+      ]
+     },
+     {
+      "net": "GND",
+      "items": [
+       {
+        "description": "Durchsteckpad 8 [GND] von P2",
+        "pos": {
+         "x": 207.645,
+         "y": 68.58
+        },
+        "uuid": "090c2218-db7f-40c7-b56b-d819210558d8"
+       },
+       {
+        "description": "Durchsteckpad 2 [GND] von C7",
+        "pos": {
+         "x": 198.755,
+         "y": 76.12
+        },
+        "uuid": "4f608163-05ac-4877-918b-f17411efde8d"
+       }
+      ]
+     },
+     {
+      "net": "GND",
+      "items": [
+       {
+        "description": "Durchsteckpad 19 [GND] von P2",
+        "pos": {
+         "x": 215.265,
+         "y": 73.66
+        },
+        "uuid": "79e18e18-ca55-4c0f-8fb2-d1c6940ae01a"
+       },
+       {
+        "description": "Durchsteckpad 8 [GND] von P2",
+        "pos": {
+         "x": 207.645,
+         "y": 68.58
+        },
+        "uuid": "090c2218-db7f-40c7-b56b-d819210558d8"
+       }
+      ]
+     },
+     {
+      "net": "Net-(D1-K)",
+      "items": [
+       {
+        "description": "Durchsteckpad 1 [Net-(D1-K)] von D1",
+        "pos": {
+         "x": 78.3,
+         "y": 89.7
+        },
+        "uuid": "02d8db97-fd5a-4a74-8bfa-7aa85744965f"
+       },
+       {
+        "description": "Durchsteckpad 1 [Net-(D1-K)] von C2",
+        "pos": {
+         "x": 84.582,
+         "y": 90.17
+        },
+        "uuid": "bad06df8-0baa-4909-a369-beaeb7fe2d06"
+       }
+      ]
+     },
+     {
+      "net": "Net-(D1-K)",
+      "items": [
+       {
+        "description": "Durchsteckpad 1 [Net-(D1-K)] von C2",
+        "pos": {
+         "x": 84.582,
+         "y": 90.17
+        },
+        "uuid": "bad06df8-0baa-4909-a369-beaeb7fe2d06"
+       },
+       {
+        "description": "Durchsteckpad 1 [Net-(D1-K)] von U3",
+        "pos": {
+         "x": 96.52,
+         "y": 71.12
+        },
+        "uuid": "a9765069-b814-4db5-89b2-bb641bbd4b5f"
+       }
+      ]
+     },
+     {
+      "net": "/VPP/MCLR",
+      "items": [
+       {
+        "description": "Durchsteckpad 1 [/VPP/MCLR] von P3",
+        "pos": {
+         "x": 175.26,
+         "y": 50.8
+        },
+        "uuid": "25e2a52b-e031-4baf-beb6-a44d0daa61ac"
+       },
+       {
+        "description": "Durchsteckpad 2 [/VPP/MCLR] von R18",
+        "pos": {
+         "x": 152.4,
+         "y": 58.42
+        },
+        "uuid": "2caad203-cd8e-42c5-ab96-40f374ddd64c"
+       }
+      ]
+     },
+     {
+      "net": "/VPP/MCLR",
+      "items": [
+       {
+        "description": "Durchsteckpad 4 [/VPP/MCLR] von U6",
+        "pos": {
+         "x": 179.07,
+         "y": 128.27
+        },
+        "uuid": "bacdb158-b246-4842-8bdb-23affb5159c7"
+       },
+       {
+        "description": "Durchsteckpad 4 [/VPP/MCLR] von U5",
+        "pos": {
+         "x": 207.899,
+         "y": 115.57
+        },
+        "uuid": "780d53fc-b68f-462e-ba11-148014e25fab"
+       }
+      ]
+     },
+     {
+      "net": "/VPP/MCLR",
+      "items": [
+       {
+        "description": "Durchsteckpad 1 [/VPP/MCLR] von P2",
+        "pos": {
+         "x": 207.645,
+         "y": 50.8
+        },
+        "uuid": "7d664cb6-a9d5-4852-9576-0d909c8309ee"
+       },
+       {
+        "description": "Durchsteckpad 1 [/VPP/MCLR] von P3",
+        "pos": {
+         "x": 175.26,
+         "y": 50.8
+        },
+        "uuid": "25e2a52b-e031-4baf-beb6-a44d0daa61ac"
+       }
+      ]
+     },
+     {
+      "net": "/VPP/MCLR",
+      "items": [
+       {
+        "description": "Durchsteckpad 4 [/VPP/MCLR] von U5",
+        "pos": {
+         "x": 207.899,
+         "y": 115.57
+        },
+        "uuid": "780d53fc-b68f-462e-ba11-148014e25fab"
+       },
+       {
+        "description": "Durchsteckpad 1 [/VPP/MCLR] von P2",
+        "pos": {
+         "x": 207.645,
+         "y": 50.8
+        },
+        "uuid": "7d664cb6-a9d5-4852-9576-0d909c8309ee"
+       }
+      ]
+     },
+     {
+      "net": "/pic_sockets/VCC_PIC",
+      "items": [
+       {
+        "description": "Pad 2 [/pic_sockets/VCC_PIC] von JP1 auf bottom_layer",
+        "pos": {
+         "x": 148.807,
+         "y": 97.79
+        },
+        "uuid": "5b196d03-cd44-4c2b-9a91-fadc24ae5f4b"
+       },
+       {
+        "description": "Durchsteckpad 2 [/pic_sockets/VCC_PIC] von R21",
+        "pos": {
+         "x": 147.955,
+         "y": 102.235
+        },
+        "uuid": "70638727-0211-415c-a09c-a38686bde43a"
+       }
+      ]
+     },
+     {
+      "net": "/pic_sockets/VCC_PIC",
+      "items": [
+       {
+        "description": "Pad 2 [/pic_sockets/VCC_PIC] von JP1 auf bottom_layer",
+        "pos": {
+         "x": 148.807,
+         "y": 97.79
+        },
+        "uuid": "5b196d03-cd44-4c2b-9a91-fadc24ae5f4b"
+       },
+       {
+        "description": "Durchsteckpad 1 [/pic_sockets/VCC_PIC] von Q3",
+        "pos": {
+         "x": 142.24,
+         "y": 97.79
+        },
+        "uuid": "23fa1ecb-a602-4c2a-a858-bf3c5a25443c"
+       }
+      ]
+     },
+     {
+      "net": "/pic_sockets/VCC_PIC",
+      "items": [
+       {
+        "description": "Durchsteckpad 11 [/pic_sockets/VCC_PIC] von P3",
+        "pos": {
+         "x": 175.26,
+         "y": 76.2
+        },
+        "uuid": "90b0c75c-0cf4-4a7c-8038-56807808880e"
+       },
+       {
+        "description": "Pad 2 [/pic_sockets/VCC_PIC] von JP1 auf bottom_layer",
+        "pos": {
+         "x": 148.807,
+         "y": 97.79
+        },
+        "uuid": "5b196d03-cd44-4c2b-9a91-fadc24ae5f4b"
+       }
+      ]
+     },
+     {
+      "net": "/pic_sockets/VCC_PIC",
+      "items": [
+       {
+        "description": "Durchsteckpad 11 [/pic_sockets/VCC_PIC] von P3",
+        "pos": {
+         "x": 175.26,
+         "y": 76.2
+        },
+        "uuid": "90b0c75c-0cf4-4a7c-8038-56807808880e"
+       },
+       {
+        "description": "Durchsteckpad 8 [/pic_sockets/VCC_PIC] von U1",
+        "pos": {
+         "x": 186.69,
+         "y": 109.22
+        },
+        "uuid": "f5c238a8-32f5-452e-b9be-a084dd8a637e"
+       }
+      ]
+     },
+     {
+      "net": "/pic_sockets/VCC_PIC",
+      "items": [
+       {
+        "description": "Durchsteckpad 8 [/pic_sockets/VCC_PIC] von U1",
+        "pos": {
+         "x": 186.69,
+         "y": 109.22
+        },
+        "uuid": "f5c238a8-32f5-452e-b9be-a084dd8a637e"
+       },
+       {
+        "description": "Durchsteckpad 1 [/pic_sockets/VCC_PIC] von U6",
+        "pos": {
+         "x": 179.07,
+         "y": 120.65
+        },
+        "uuid": "04e5217d-a40a-4f71-81e2-838f8805992f"
+       }
+      ]
+     },
+     {
+      "net": "/pic_sockets/VCC_PIC",
+      "items": [
+       {
+        "description": "Durchsteckpad 32 [/pic_sockets/VCC_PIC] von P3",
+        "pos": {
+         "x": 190.5,
+         "y": 71.12
+        },
+        "uuid": "dcee9d7d-852b-40d4-bc8a-88841dcc3689"
+       },
+       {
+        "description": "Durchsteckpad 11 [/pic_sockets/VCC_PIC] von P3",
+        "pos": {
+         "x": 175.26,
+         "y": 76.2
+        },
+        "uuid": "90b0c75c-0cf4-4a7c-8038-56807808880e"
+       }
+      ]
+     },
+     {
+      "net": "/pic_sockets/VCC_PIC",
+      "items": [
+       {
+        "description": "Durchsteckpad 1 [/pic_sockets/VCC_PIC] von C6",
+        "pos": {
+         "x": 196.85,
+         "y": 112.395
+        },
+        "uuid": "cb9170b9-0a3a-4f85-a74d-3639ecb40222"
+       },
+       {
+        "description": "Durchsteckpad 8 [/pic_sockets/VCC_PIC] von U1",
+        "pos": {
+         "x": 186.69,
+         "y": 109.22
+        },
+        "uuid": "f5c238a8-32f5-452e-b9be-a084dd8a637e"
+       }
+      ]
+     },
+     {
+      "net": "/pic_sockets/VCC_PIC",
+      "items": [
+       {
+        "description": "Durchsteckpad 1 [/pic_sockets/VCC_PIC] von C7",
+        "pos": {
+         "x": 198.755,
+         "y": 71.12
+        },
+        "uuid": "c5ebe136-e1e5-44dc-ac99-7cf08c8776a4"
+       },
+       {
+        "description": "Durchsteckpad 32 [/pic_sockets/VCC_PIC] von P3",
+        "pos": {
+         "x": 190.5,
+         "y": 71.12
+        },
+        "uuid": "dcee9d7d-852b-40d4-bc8a-88841dcc3689"
+       }
+      ]
+     },
+     {
+      "net": "/pic_sockets/VCC_PIC",
+      "items": [
+       {
+        "description": "Durchsteckpad 20 [/pic_sockets/VCC_PIC] von P2",
+        "pos": {
+         "x": 215.265,
+         "y": 71.12
+        },
+        "uuid": "227965f7-c467-4166-8dbe-a03ba3a3e833"
+       },
+       {
+        "description": "Durchsteckpad 1 [/pic_sockets/VCC_PIC] von C7",
+        "pos": {
+         "x": 198.755,
+         "y": 71.12
+        },
+        "uuid": "c5ebe136-e1e5-44dc-ac99-7cf08c8776a4"
+       }
+      ]
+     },
+     {
+      "net": "/pic_sockets/VCC_PIC",
+      "items": [
+       {
+        "description": "Durchsteckpad 14 [/pic_sockets/VCC_PIC] von U5",
+        "pos": {
+         "x": 215.519,
+         "y": 118.11
+        },
+        "uuid": "ad7eb14f-6c5c-4996-a54a-7ce82fc42954"
+       },
+       {
+        "description": "Durchsteckpad 1 [/pic_sockets/VCC_PIC] von C6",
+        "pos": {
+         "x": 196.85,
+         "y": 112.395
+        },
+        "uuid": "cb9170b9-0a3a-4f85-a74d-3639ecb40222"
+       }
+      ]
+     },
+     {
+      "net": "/CLOCK-RB6",
+      "items": [
+       {
+        "description": "Durchsteckpad 2 [/CLOCK-RB6] von R13",
+        "pos": {
+         "x": 140.335,
+         "y": 121.92
+        },
+        "uuid": "5c911a2b-7346-48e0-a508-06c47ded0b0c"
+       },
+       {
+        "description": "Durchsteckpad 6 [/CLOCK-RB6] von U6",
+        "pos": {
+         "x": 186.69,
+         "y": 125.73
+        },
+        "uuid": "04770422-331a-44ba-8f59-3afdd65e94d9"
+       }
+      ]
+     },
+     {
+      "net": "/CLOCK-RB6",
+      "items": [
+       {
+        "description": "Durchsteckpad 6 [/CLOCK-RB6] von U1",
+        "pos": {
+         "x": 186.69,
+         "y": 114.3
+        },
+        "uuid": "b01e584f-236c-4a69-bbd5-747fb894c590"
+       },
+       {
+        "description": "Durchsteckpad 6 [/CLOCK-RB6] von U6",
+        "pos": {
+         "x": 186.69,
+         "y": 125.73
+        },
+        "uuid": "04770422-331a-44ba-8f59-3afdd65e94d9"
+       }
+      ]
+     },
+     {
+      "net": "/CLOCK-RB6",
+      "items": [
+       {
+        "description": "Durchsteckpad 6 [/CLOCK-RB6] von U6",
+        "pos": {
+         "x": 186.69,
+         "y": 125.73
+        },
+        "uuid": "04770422-331a-44ba-8f59-3afdd65e94d9"
+       },
+       {
+        "description": "Durchsteckpad 12 [/CLOCK-RB6] von U5",
+        "pos": {
+         "x": 215.519,
+         "y": 123.19
+        },
+        "uuid": "9c19e8e8-f25c-4f60-9a43-187ff08aa55b"
+       }
+      ]
+     },
+     {
+      "net": "/CLOCK-RB6",
+      "items": [
+       {
+        "description": "Durchsteckpad 39 [/CLOCK-RB6] von P3",
+        "pos": {
+         "x": 190.5,
+         "y": 53.34
+        },
+        "uuid": "7da4778c-d9f7-47df-92a4-7d1746d22d53"
+       },
+       {
+        "description": "Durchsteckpad 6 [/CLOCK-RB6] von U1",
+        "pos": {
+         "x": 186.69,
+         "y": 114.3
+        },
+        "uuid": "b01e584f-236c-4a69-bbd5-747fb894c590"
+       }
+      ]
+     },
+     {
+      "net": "/CLOCK-RB6",
+      "items": [
+       {
+        "description": "Durchsteckpad 27 [/CLOCK-RB6] von P2",
+        "pos": {
+         "x": 215.265,
+         "y": 53.34
+        },
+        "uuid": "e02039ec-7897-40ff-8736-be65dc3e9ff4"
+       },
+       {
+        "description": "Durchsteckpad 39 [/CLOCK-RB6] von P3",
+        "pos": {
+         "x": 190.5,
+         "y": 53.34
+        },
+        "uuid": "7da4778c-d9f7-47df-92a4-7d1746d22d53"
+       }
+      ]
+     },
+     {
+      "net": "/DATA-RB7",
+      "items": [
+       {
+        "description": "Durchsteckpad 2 [/DATA-RB7] von R12",
+        "pos": {
+         "x": 135.255,
+         "y": 111.76
+        },
+        "uuid": "9b30d3f3-4839-4cb4-99b6-d6cf7b1c6bb0"
+       },
+       {
+        "description": "Durchsteckpad 12 [/DATA-RB7] von U2",
+        "pos": {
+         "x": 120.65,
+         "y": 111.76
+        },
+        "uuid": "913c73bf-1e66-4447-99d3-5823ba989736"
+       }
+      ]
+     },
+     {
+      "net": "/DATA-RB7",
+      "items": [
+       {
+        "description": "Durchsteckpad 5 [/DATA-RB7] von U1",
+        "pos": {
+         "x": 186.69,
+         "y": 116.84
+        },
+        "uuid": "49f3d313-e984-4752-930b-e0a3da8832ea"
+       },
+       {
+        "description": "Durchsteckpad 7 [/DATA-RB7] von U6",
+        "pos": {
+         "x": 186.69,
+         "y": 123.19
+        },
+        "uuid": "22c650cd-7e77-4335-88b1-4135949c267e"
+       }
+      ]
+     },
+     {
+      "net": "/DATA-RB7",
+      "items": [
+       {
+        "description": "Durchsteckpad 5 [/DATA-RB7] von U1",
+        "pos": {
+         "x": 186.69,
+         "y": 116.84
+        },
+        "uuid": "49f3d313-e984-4752-930b-e0a3da8832ea"
+       },
+       {
+        "description": "Durchsteckpad 2 [/DATA-RB7] von R12",
+        "pos": {
+         "x": 135.255,
+         "y": 111.76
+        },
+        "uuid": "9b30d3f3-4839-4cb4-99b6-d6cf7b1c6bb0"
+       }
+      ]
+     },
+     {
+      "net": "/DATA-RB7",
+      "items": [
+       {
+        "description": "Durchsteckpad 7 [/DATA-RB7] von U6",
+        "pos": {
+         "x": 186.69,
+         "y": 123.19
+        },
+        "uuid": "22c650cd-7e77-4335-88b1-4135949c267e"
+       },
+       {
+        "description": "Durchsteckpad 13 [/DATA-RB7] von U5",
+        "pos": {
+         "x": 215.519,
+         "y": 120.65
+        },
+        "uuid": "2fffef2a-1856-48ee-814b-d6d4269a1824"
+       }
+      ]
+     },
+     {
+      "net": "/DATA-RB7",
+      "items": [
+       {
+        "description": "Durchsteckpad 40 [/DATA-RB7] von P3",
+        "pos": {
+         "x": 190.5,
+         "y": 50.8
+        },
+        "uuid": "e3625571-8dcc-4353-9a50-7e2901134d0d"
+       },
+       {
+        "description": "Durchsteckpad 5 [/DATA-RB7] von U1",
+        "pos": {
+         "x": 186.69,
+         "y": 116.84
+        },
+        "uuid": "49f3d313-e984-4752-930b-e0a3da8832ea"
+       }
+      ]
+     },
+     {
+      "net": "/DATA-RB7",
+      "items": [
+       {
+        "description": "Durchsteckpad 28 [/DATA-RB7] von P2",
+        "pos": {
+         "x": 215.265,
+         "y": 50.8
+        },
+        "uuid": "79ea2235-5918-4911-bd2e-a0c14a8cfb63"
+       },
+       {
+        "description": "Durchsteckpad 40 [/DATA-RB7] von P3",
+        "pos": {
+         "x": 190.5,
+         "y": 50.8
+        },
+        "uuid": "e3625571-8dcc-4353-9a50-7e2901134d0d"
+       }
+      ]
+     },
+     {
+      "net": "Net-(U4-Vc)",
+      "items": [
+       {
+        "description": "Durchsteckpad 1 [Net-(U4-Vc)] von U4",
+        "pos": {
+         "x": 110.49,
+         "y": 57.15
+        },
+        "uuid": "951f69aa-85a1-49a9-a712-cf96a1912237"
+       },
+       {
+        "description": "Durchsteckpad 1 [Net-(U4-Vc)] von C4",
+        "pos": {
+         "x": 114.3,
+         "y": 52.07
+        },
+        "uuid": "ea4138ad-e674-483c-b45b-160098381211"
+       }
+      ]
+     },
+     {
+      "net": "Net-(U4-Vc)",
+      "items": [
+       {
+        "description": "Durchsteckpad 1 [Net-(U4-Vc)] von C4",
+        "pos": {
+         "x": 114.3,
+         "y": 52.07
+        },
+        "uuid": "ea4138ad-e674-483c-b45b-160098381211"
+       },
+       {
+        "description": "Durchsteckpad 1 [Net-(U4-Vc)] von R10",
+        "pos": {
+         "x": 114.3,
+         "y": 48.26
+        },
+        "uuid": "f6c24668-69e6-443d-8c36-17ebba6a6669"
+       }
+      ]
+     },
+     {
+      "net": "Net-(U4-FB+)",
+      "items": [
+       {
+        "description": "Durchsteckpad 2 [Net-(U4-FB+)] von U4",
+        "pos": {
+         "x": 110.49,
+         "y": 59.69
+        },
+        "uuid": "3d131e60-8ea7-4d73-89b1-8ddfe601ceed"
+       },
+       {
+        "description": "Durchsteckpad 2 [Net-(U4-FB+)] von RV1",
+        "pos": {
+         "x": 117.475,
+         "y": 88.265
+        },
+        "uuid": "ca9b3857-2b85-4933-90f1-144e549ecbbc"
+       }
+      ]
+     },
+     {
+      "net": "Net-(D10-A)",
+      "items": [
+       {
+        "description": "Durchsteckpad 2 [Net-(D10-A)] von D10",
+        "pos": {
+         "x": 124.46,
+         "y": 57.15
+        },
+        "uuid": "525d9e32-f751-42b6-a2bf-fa76929ee50e"
+       },
+       {
+        "description": "Durchsteckpad 8 [Net-(D10-A)] von U4",
+        "pos": {
+         "x": 118.11,
+         "y": 57.15
+        },
+        "uuid": "0f473717-95ed-44f9-b4ae-fee0be696ecc"
+       }
+      ]
+     },
+     {
+      "net": "Net-(D10-A)",
+      "items": [
+       {
+        "description": "Durchsteckpad 1 [Net-(D10-A)] von L1",
+        "pos": {
+         "x": 125.73,
+         "y": 62.23
+        },
+        "uuid": "2ff154e5-1cbf-4802-863e-277b3a94d10e"
+       },
+       {
+        "description": "Durchsteckpad 2 [Net-(D10-A)] von D10",
+        "pos": {
+         "x": 124.46,
+         "y": 57.15
+        },
+        "uuid": "525d9e32-f751-42b6-a2bf-fa76929ee50e"
+       }
+      ]
+     },
+     {
+      "net": "Net-(D2-A)",
+      "items": [
+       {
+        "description": "Durchsteckpad 2 [Net-(D2-A)] von D2",
+        "pos": {
+         "x": 100.33,
+         "y": 118.237
+        },
+        "uuid": "609ab978-07f8-4f1a-8e8f-91019435e1e8"
+       },
+       {
+        "description": "Durchsteckpad 2 [Net-(D2-A)] von R1",
+        "pos": {
+         "x": 97.79,
+         "y": 118.11
+        },
+        "uuid": "9c8f8669-6709-4997-8aba-16286c667d68"
+       }
+      ]
+     },
+     {
+      "net": "Net-(D2-A)",
+      "items": [
+       {
+        "description": "Durchsteckpad 2 [Net-(D2-A)] von D2",
+        "pos": {
+         "x": 100.33,
+         "y": 118.237
+        },
+        "uuid": "609ab978-07f8-4f1a-8e8f-91019435e1e8"
+       },
+       {
+        "description": "Durchsteckpad 1 [Net-(D2-A)] von D3",
+        "pos": {
+         "x": 107.95,
+         "y": 121.92
+        },
+        "uuid": "08f79c44-5fd0-4da3-a61c-133c90d91bca"
+       }
+      ]
+     },
+     {
+      "net": "Net-(D2-A)",
+      "items": [
+       {
+        "description": "Durchsteckpad 1 [Net-(D2-A)] von D3",
+        "pos": {
+         "x": 107.95,
+         "y": 121.92
+        },
+        "uuid": "08f79c44-5fd0-4da3-a61c-133c90d91bca"
+       },
+       {
+        "description": "Durchsteckpad 2 [Net-(D2-A)] von U2",
+        "pos": {
+         "x": 118.11,
+         "y": 119.38
+        },
+        "uuid": "4f5f6ae9-0d2f-422e-9995-0ace54c97c0f"
+       }
+      ]
+     },
+     {
+      "net": "Net-(R8-Pad1)",
+      "items": [
+       {
+        "description": "Durchsteckpad 3 [Net-(R8-Pad1)] von U2",
+        "pos": {
+         "x": 120.65,
+         "y": 119.38
+        },
+        "uuid": "1481094c-b314-4e8e-829c-2959b87eccbe"
+       },
+       {
+        "description": "Durchsteckpad 1 [Net-(R8-Pad1)] von R8",
+        "pos": {
+         "x": 139.065,
+         "y": 91.059
+        },
+        "uuid": "03c7d770-e5cf-4635-8663-2b653d1b5abf"
+       }
+      ]
+     },
+     {
+      "net": "Net-(D4-A)",
+      "items": [
+       {
+        "description": "Durchsteckpad 2 [Net-(D4-A)] von R3",
+        "pos": {
+         "x": 97.79,
+         "y": 111.125
+        },
+        "uuid": "6f8b67d8-10a0-4993-a56a-2f539c6c4a8a"
+       },
+       {
+        "description": "Durchsteckpad 2 [Net-(D4-A)] von D4",
+        "pos": {
+         "x": 100.33,
+         "y": 111.887
+        },
+        "uuid": "8dab2bdc-98d6-4c86-b501-d984bbc0f405"
+       }
+      ]
+     },
+     {
+      "net": "Net-(D4-A)",
+      "items": [
+       {
+        "description": "Durchsteckpad 2 [Net-(D4-A)] von D4",
+        "pos": {
+         "x": 100.33,
+         "y": 111.887
+        },
+        "uuid": "8dab2bdc-98d6-4c86-b501-d984bbc0f405"
+       },
+       {
+        "description": "Durchsteckpad 1 [Net-(D4-A)] von D5",
+        "pos": {
+         "x": 107.95,
+         "y": 108.585
+        },
+        "uuid": "80efba19-ecf3-4984-8a03-1cfa0f1227d1"
+       }
+      ]
+     },
+     {
+      "net": "Net-(D4-A)",
+      "items": [
+       {
+        "description": "Durchsteckpad 5 [Net-(D4-A)] von U2",
+        "pos": {
+         "x": 125.73,
+         "y": 119.38
+        },
+        "uuid": "99ea95f2-2cc8-4eb1-85c9-b9af9e262846"
+       },
+       {
+        "description": "Durchsteckpad 1 [Net-(D4-A)] von D5",
+        "pos": {
+         "x": 107.95,
+         "y": 108.585
+        },
+        "uuid": "80efba19-ecf3-4984-8a03-1cfa0f1227d1"
+       }
+      ]
+     },
+     {
+      "net": "Net-(R12-Pad1)",
+      "items": [
+       {
+        "description": "Durchsteckpad 6 [Net-(R12-Pad1)] von U2",
+        "pos": {
+         "x": 128.27,
+         "y": 119.38
+        },
+        "uuid": "12a44b5f-e42c-4323-a0fd-63940e9a12f0"
+       },
+       {
+        "description": "Durchsteckpad 1 [Net-(R12-Pad1)] von R12",
+        "pos": {
+         "x": 135.255,
+         "y": 121.92
+        },
+        "uuid": "3d817d63-350d-4c42-b27d-8b132c139041"
+       }
+      ]
+     },
+     {
+      "net": "Net-(R13-Pad1)",
+      "items": [
+       {
+        "description": "Durchsteckpad 8 [Net-(R13-Pad1)] von U2",
+        "pos": {
+         "x": 130.81,
+         "y": 111.76
+        },
+        "uuid": "3104e9c7-1a0e-4ebe-8922-4d5662fbe432"
+       },
+       {
+        "description": "Durchsteckpad 1 [Net-(R13-Pad1)] von R13",
+        "pos": {
+         "x": 140.335,
+         "y": 111.76
+        },
+        "uuid": "e77ad107-5d0c-4b1b-9a32-2255ea408c98"
+       }
+      ]
+     },
+     {
+      "net": "Net-(D6-A)",
+      "items": [
+       {
+        "description": "Durchsteckpad 2 [Net-(D6-A)] von R5",
+        "pos": {
+         "x": 97.917,
+         "y": 125.476
+        },
+        "uuid": "c2c4fe7b-3856-4aa6-aa0f-b736460af0ea"
+       },
+       {
+        "description": "Durchsteckpad 2 [Net-(D6-A)] von D6",
+        "pos": {
+         "x": 100.33,
+         "y": 125.095
+        },
+        "uuid": "9ee8fed9-7d7b-40ae-bf7d-5449322247e1"
+       }
+      ]
+     },
+     {
+      "net": "Net-(D6-A)",
+      "items": [
+       {
+        "description": "Durchsteckpad 2 [Net-(D6-A)] von D6",
+        "pos": {
+         "x": 100.33,
+         "y": 125.095
+        },
+        "uuid": "9ee8fed9-7d7b-40ae-bf7d-5449322247e1"
+       },
+       {
+        "description": "Durchsteckpad 1 [Net-(D6-A)] von D7",
+        "pos": {
+         "x": 107.95,
+         "y": 115.316
+        },
+        "uuid": "c560360c-6a8d-4e7f-96ee-d8ef9ac525a1"
+       }
+      ]
+     },
+     {
+      "net": "Net-(D6-A)",
+      "items": [
+       {
+        "description": "Durchsteckpad 9 [Net-(D6-A)] von U2",
+        "pos": {
+         "x": 128.27,
+         "y": 111.76
+        },
+        "uuid": "5c1e6808-68a4-4863-8554-a3770db8e724"
+       },
+       {
+        "description": "Durchsteckpad 1 [Net-(D6-A)] von D7",
+        "pos": {
+         "x": 107.95,
+         "y": 115.316
+        },
+        "uuid": "c560360c-6a8d-4e7f-96ee-d8ef9ac525a1"
+       }
+      ]
+     },
+     {
+      "net": "/PC-DATA-IN",
+      "items": [
+       {
+        "description": "Durchsteckpad 8 [/PC-DATA-IN] von J1",
+        "pos": {
+         "x": 79.76,
+         "y": 113.275
+        },
+        "uuid": "93547e8f-d77b-4d97-9048-37f696ed9e44"
+       },
+       {
+        "description": "Durchsteckpad 11 [/PC-DATA-IN] von U2",
+        "pos": {
+         "x": 123.19,
+         "y": 111.76
+        },
+        "uuid": "c10fb590-c5c5-4b28-b69e-cb5935c19986"
+       }
+      ]
+     },
+     {
+      "net": "Net-(D11-K)",
+      "items": [
+       {
+        "description": "Durchsteckpad 1 [Net-(D11-K)] von R11",
+        "pos": {
+         "x": 140.081,
+         "y": 70.993
+        },
+        "uuid": "128cbd68-91ba-495a-a582-42974cd299f4"
+       },
+       {
+        "description": "Durchsteckpad 1 [Net-(D11-K)] von D11",
+        "pos": {
+         "x": 139.065,
+         "y": 80.645
+        },
+        "uuid": "cb07905e-580a-4dc2-be6b-6d6f16c14fea"
+       }
+      ]
+     },
+     {
+      "net": "Net-(D11-K)",
+      "items": [
+       {
+        "description": "Durchsteckpad 1 [Net-(D11-K)] von Q1",
+        "pos": {
+         "x": 146.05,
+         "y": 69.85
+        },
+        "uuid": "e7719da0-7af6-4a38-8a13-eb3cab7dff9e"
+       },
+       {
+        "description": "Durchsteckpad 1 [Net-(D11-K)] von R11",
+        "pos": {
+         "x": 140.081,
+         "y": 70.993
+        },
+        "uuid": "128cbd68-91ba-495a-a582-42974cd299f4"
+       }
+      ]
+     },
+     {
+      "net": "Net-(D11-A)",
+      "items": [
+       {
+        "description": "Durchsteckpad 2 [Net-(D11-A)] von D11",
+        "pos": {
+         "x": 146.685,
+         "y": 80.645
+        },
+        "uuid": "a39c840d-796a-4ca2-bf06-66612a1ffc69"
+       },
+       {
+        "description": "Durchsteckpad 1 [Net-(D11-A)] von R19",
+        "pos": {
+         "x": 149.225,
+         "y": 83.82
+        },
+        "uuid": "446a5d82-d056-4dea-9c08-9af4d4a6e5b9"
+       }
+      ]
+     },
+     {
+      "net": "/VPP_ON",
+      "items": [
+       {
+        "description": "Durchsteckpad 1 [/VPP_ON] von R2",
+        "pos": {
+         "x": 87.63,
+         "y": 114.554
+        },
+        "uuid": "cd298c18-ba9b-483c-b8ff-9ef688078764"
+       },
+       {
+        "description": "Durchsteckpad 3 [/VPP_ON] von J1",
+        "pos": {
+         "x": 82.6,
+         "y": 114.66
+        },
+        "uuid": "3293adba-2f29-4fc6-b933-d8d179591629"
+       }
+      ]
+     },
+     {
+      "net": "/VPP_ON",
+      "items": [
+       {
+        "description": "Durchsteckpad 1 [/VPP_ON] von R1",
+        "pos": {
+         "x": 87.63,
+         "y": 118.11
+        },
+        "uuid": "20c4fa71-fcc7-490d-a6b2-63eb34448e1c"
+       },
+       {
+        "description": "Durchsteckpad 1 [/VPP_ON] von R2",
+        "pos": {
+         "x": 87.63,
+         "y": 114.554
+        },
+        "uuid": "cd298c18-ba9b-483c-b8ff-9ef688078764"
+       }
+      ]
+     },
+     {
+      "net": "/PC-DATA-OUT",
+      "items": [
+       {
+        "description": "Durchsteckpad 4 [/PC-DATA-OUT] von J1",
+        "pos": {
+         "x": 82.6,
+         "y": 111.89
+        },
+        "uuid": "3316b391-66be-497c-8f2e-681907c19d99"
+       },
+       {
+        "description": "Durchsteckpad 1 [/PC-DATA-OUT] von R3",
+        "pos": {
+         "x": 87.63,
+         "y": 111.125
+        },
+        "uuid": "b09cad51-8121-4174-afde-25ea6b13bf1e"
+       }
+      ]
+     },
+     {
+      "net": "/PC-DATA-OUT",
+      "items": [
+       {
+        "description": "Durchsteckpad 1 [/PC-DATA-OUT] von R3",
+        "pos": {
+         "x": 87.63,
+         "y": 111.125
+        },
+        "uuid": "b09cad51-8121-4174-afde-25ea6b13bf1e"
+       },
+       {
+        "description": "Durchsteckpad 1 [/PC-DATA-OUT] von R4",
+        "pos": {
+         "x": 87.63,
+         "y": 107.823
+        },
+        "uuid": "8840f4d4-a2df-4160-8bfd-0265e13421e9"
+       }
+      ]
+     },
+     {
+      "net": "/PC-CLOCK-OUT",
+      "items": [
+       {
+        "description": "Durchsteckpad 1 [/PC-CLOCK-OUT] von R6",
+        "pos": {
+         "x": 87.757,
+         "y": 121.92
+        },
+        "uuid": "bb4832a6-a61a-406c-864d-10430b123031"
+       },
+       {
+        "description": "Durchsteckpad 7 [/PC-CLOCK-OUT] von J1",
+        "pos": {
+         "x": 79.76,
+         "y": 116.045
+        },
+        "uuid": "a838aafa-cdae-4835-8c0f-8ee319df5d45"
+       }
+      ]
+     },
+     {
+      "net": "/PC-CLOCK-OUT",
+      "items": [
+       {
+        "description": "Durchsteckpad 1 [/PC-CLOCK-OUT] von R5",
+        "pos": {
+         "x": 87.757,
+         "y": 125.476
+        },
+        "uuid": "7a0a8fa2-782a-445f-813e-1792b9aa4de9"
+       },
+       {
+        "description": "Durchsteckpad 1 [/PC-CLOCK-OUT] von R6",
+        "pos": {
+         "x": 87.757,
+         "y": 121.92
+        },
+        "uuid": "bb4832a6-a61a-406c-864d-10430b123031"
+       }
+      ]
+     },
+     {
+      "net": "Net-(Q3-B)",
+      "items": [
+       {
+        "description": "Durchsteckpad 2 [Net-(Q3-B)] von R20",
+        "pos": {
+         "x": 134.62,
+         "y": 102.235
+        },
+        "uuid": "17e9a9bb-4bcf-4fcf-ac34-fb4d2061be31"
+       },
+       {
+        "description": "Durchsteckpad 2 [Net-(Q3-B)] von Q3",
+        "pos": {
+         "x": 143.51,
+         "y": 96.52
+        },
+        "uuid": "72e59242-7253-4dc7-979b-d58c1fc1bab0"
+       }
+      ]
+     },
+     {
+      "net": "Net-(Q3-B)",
+      "items": [
+       {
+        "description": "Durchsteckpad 2 [Net-(Q3-B)] von Q3",
+        "pos": {
+         "x": 143.51,
+         "y": 96.52
+        },
+        "uuid": "72e59242-7253-4dc7-979b-d58c1fc1bab0"
+       },
+       {
+        "description": "Durchsteckpad 2 [Net-(Q3-B)] von R19",
+        "pos": {
+         "x": 139.065,
+         "y": 83.82
+        },
+        "uuid": "3687bcfd-c320-41ea-8852-8416e2957613"
+       }
+      ]
+     },
+     {
+      "net": "Net-(Q2-C)",
+      "items": [
+       {
+        "description": "Durchsteckpad 1 [Net-(Q2-C)] von Q2",
+        "pos": {
+         "x": 148.082,
+         "y": 60.706
+        },
+        "uuid": "1e2ebe96-68ed-40c2-96e3-9942a1f0c392"
+       },
+       {
+        "description": "Durchsteckpad 1 [Net-(Q2-C)] von R18",
+        "pos": {
+         "x": 152.4,
+         "y": 68.58
+        },
+        "uuid": "7b1534a3-e2b6-4853-ae35-b5fc665f6886"
+       }
+      ]
+     },
+     {
+      "net": "Net-(Q2-C)",
+      "items": [
+       {
+        "description": "Durchsteckpad 1 [Net-(Q2-C)] von R18",
+        "pos": {
+         "x": 152.4,
+         "y": 68.58
+        },
+        "uuid": "7b1534a3-e2b6-4853-ae35-b5fc665f6886"
+       },
+       {
+        "description": "Durchsteckpad 1 [Net-(Q2-C)] von R17",
+        "pos": {
+         "x": 156.21,
+         "y": 68.58
+        },
+        "uuid": "54db31a2-7e7b-4582-bd93-d7e3930c5814"
+       }
+      ]
+     },
+     {
+      "net": "Net-(Q2-C)",
+      "items": [
+       {
+        "description": "Durchsteckpad 1 [Net-(Q2-C)] von R18",
+        "pos": {
+         "x": 152.4,
+         "y": 68.58
+        },
+        "uuid": "7b1534a3-e2b6-4853-ae35-b5fc665f6886"
+       },
+       {
+        "description": "Durchsteckpad 1 [Net-(Q2-C)] von R9",
+        "pos": {
+         "x": 139.065,
+         "y": 77.47
+        },
+        "uuid": "081806af-9cda-4081-a15a-206026679bd5"
+       }
+      ]
+     },
+     {
+      "net": "Net-(Q2-B)",
+      "items": [
+       {
+        "description": "Durchsteckpad 2 [Net-(Q2-B)] von R11",
+        "pos": {
+         "x": 140.081,
+         "y": 60.833
+        },
+        "uuid": "0912be8d-c58b-41ee-8866-72390bfba589"
+       },
+       {
+        "description": "Durchsteckpad 2 [Net-(Q2-B)] von Q2",
+        "pos": {
+         "x": 146.812,
+         "y": 61.976
+        },
+        "uuid": "8c289fa7-a8df-4bed-98cb-75a80af6fa0f"
+       }
+      ]
+     },
+     {
+      "net": "Net-(Q2-B)",
+      "items": [
+       {
+        "description": "Durchsteckpad 2 [Net-(Q2-B)] von Q2",
+        "pos": {
+         "x": 146.812,
+         "y": 61.976
+        },
+        "uuid": "8c289fa7-a8df-4bed-98cb-75a80af6fa0f"
+       },
+       {
+        "description": "Durchsteckpad 2 [Net-(Q2-B)] von R7",
+        "pos": {
+         "x": 149.86,
+         "y": 54.61
+        },
+        "uuid": "dd3fa120-5291-4fdd-8e09-f94bff25c558"
+       }
+      ]
+     },
+     {
+      "net": "Net-(Q2-B)",
+      "items": [
+       {
+        "description": "Durchsteckpad 2 [Net-(Q2-B)] von R7",
+        "pos": {
+         "x": 149.86,
+         "y": 54.61
+        },
+        "uuid": "dd3fa120-5291-4fdd-8e09-f94bff25c558"
+       },
+       {
+        "description": "Durchsteckpad 2 [Net-(Q2-B)] von C9",
+        "pos": {
+         "x": 148.002,
+         "y": 49.784
+        },
+        "uuid": "e6a64fa2-f210-4851-9544-f5105dba7f81"
+       }
+      ]
+     },
+     {
+      "net": "VPP",
+      "items": [
+       {
+        "description": "Durchsteckpad 1 [VPP] von C3",
+        "pos": {
+         "x": 134.112,
+         "y": 62.23
+        },
+        "uuid": "7b25a167-1ec9-4e30-82cc-a6a01a98687c"
+       },
+       {
+        "description": "Durchsteckpad 2 [VPP] von R16",
+        "pos": {
+         "x": 128.27,
+         "y": 75.184
+        },
+        "uuid": "f2f3802c-e340-4501-86ce-4797c29184f9"
+       }
+      ]
+     },
+     {
+      "net": "VPP",
+      "items": [
+       {
+        "description": "Durchsteckpad 1 [VPP] von D10",
+        "pos": {
+         "x": 137.16,
+         "y": 57.15
+        },
+        "uuid": "e40c18fc-ac21-4051-b91f-7ebe7e73cc59"
+       },
+       {
+        "description": "Durchsteckpad 1 [VPP] von C3",
+        "pos": {
+         "x": 134.112,
+         "y": 62.23
+        },
+        "uuid": "7b25a167-1ec9-4e30-82cc-a6a01a98687c"
+       }
+      ]
+     },
+     {
+      "net": "VPP",
+      "items": [
+       {
+        "description": "Durchsteckpad 1 [VPP] von R7",
+        "pos": {
+         "x": 139.7,
+         "y": 54.61
+        },
+        "uuid": "8da0a0ef-6999-4384-98f0-54c034e21332"
+       },
+       {
+        "description": "Durchsteckpad 1 [VPP] von D10",
+        "pos": {
+         "x": 137.16,
+         "y": 57.15
+        },
+        "uuid": "e40c18fc-ac21-4051-b91f-7ebe7e73cc59"
+       }
+      ]
+     },
+     {
+      "net": "VPP",
+      "items": [
+       {
+        "description": "Durchsteckpad 1 [VPP] von C9",
+        "pos": {
+         "x": 143.002,
+         "y": 49.784
+        },
+        "uuid": "825cc0d4-934d-4733-9200-782a032041bd"
+       },
+       {
+        "description": "Durchsteckpad 1 [VPP] von R7",
+        "pos": {
+         "x": 139.7,
+         "y": 54.61
+        },
+        "uuid": "8da0a0ef-6999-4384-98f0-54c034e21332"
+       }
+      ]
+     },
+     {
+      "net": "VPP",
+      "items": [
+       {
+        "description": "Durchsteckpad 3 [VPP] von Q2",
+        "pos": {
+         "x": 145.542,
+         "y": 60.706
+        },
+        "uuid": "3ceb24fb-e449-4666-829e-1fe6f3c7e7cc"
+       },
+       {
+        "description": "Durchsteckpad 1 [VPP] von R7",
+        "pos": {
+         "x": 139.7,
+         "y": 54.61
+        },
+        "uuid": "8da0a0ef-6999-4384-98f0-54c034e21332"
+       }
+      ]
+     },
+     {
+      "net": "Net-(Q1-B)",
+      "items": [
+       {
+        "description": "Durchsteckpad 2 [Net-(Q1-B)] von Q1",
+        "pos": {
+         "x": 147.32,
+         "y": 68.58
+        },
+        "uuid": "1978d7aa-0bc2-43f5-8c63-7eb8617d9ae0"
+       },
+       {
+        "description": "Durchsteckpad 2 [Net-(Q1-B)] von R8",
+        "pos": {
+         "x": 149.225,
+         "y": 91.059
+        },
+        "uuid": "f27c2567-6afd-4171-9ea9-bc286c2684e7"
+       }
+      ]
+     },
+     {
+      "net": "Net-(C5-Pad1)",
+      "items": [
+       {
+        "description": "Durchsteckpad 2 [Net-(C5-Pad1)] von R10",
+        "pos": {
+         "x": 124.46,
+         "y": 48.26
+        },
+        "uuid": "0ccd58db-a1f1-4d40-b48e-d9bd46f59b5b"
+       },
+       {
+        "description": "Durchsteckpad 1 [Net-(C5-Pad1)] von C5",
+        "pos": {
+         "x": 129.54,
+         "y": 49.53
+        },
+        "uuid": "0a632d53-6371-4c98-ad68-14a4d1410391"
+       }
+      ]
+     },
+     {
+      "net": "Net-(D8-A)",
+      "items": [
+       {
+        "description": "Durchsteckpad 2 [Net-(D8-A)] von R9",
+        "pos": {
+         "x": 149.225,
+         "y": 77.47
+        },
+        "uuid": "d2370343-8d02-4525-8970-442e5c238e37"
+       },
+       {
+        "description": "Durchsteckpad 2 [Net-(D8-A)] von D8",
+        "pos": {
+         "x": 153.67,
+         "y": 77.47
+        },
+        "uuid": "547f9315-7ea4-4b05-8ffc-0c21d79ad933"
+       }
+      ]
+     },
+     {
+      "net": "Net-(D12-A)",
+      "items": [
+       {
+        "description": "Durchsteckpad 2 [Net-(D12-A)] von D12",
+        "pos": {
+         "x": 153.67,
+         "y": 97.155
+        },
+        "uuid": "e62d70a1-3b12-4413-9659-e2b7a0143d70"
+       },
+       {
+        "description": "Durchsteckpad 1 [Net-(D12-A)] von R21",
+        "pos": {
+         "x": 158.115,
+         "y": 102.235
+        },
+        "uuid": "ae1413fb-e798-409b-b198-eb729e55b6c4"
+       }
+      ]
+     },
+     {
+      "net": "Net-(R16-Pad1)",
+      "items": [
+       {
+        "description": "Durchsteckpad 1 [Net-(R16-Pad1)] von R16",
+        "pos": {
+         "x": 118.11,
+         "y": 75.184
+        },
+        "uuid": "08abef9e-ef20-4ffd-b1e2-a1c9bdc28856"
+       },
+       {
+        "description": "Durchsteckpad 3 [Net-(R16-Pad1)] von RV1",
+        "pos": {
+         "x": 127.635,
+         "y": 85.725
+        },
+        "uuid": "7b9188e1-554e-45d4-91f1-12b1713916dd"
+       }
+      ]
+     },
+     {
+      "net": "Net-(R15-Pad1)",
+      "items": [
+       {
+        "description": "Durchsteckpad 1 [Net-(R15-Pad1)] von R15",
+        "pos": {
+         "x": 118.11,
+         "y": 78.74
+        },
+        "uuid": "4dc6c85a-9f61-4aae-bae8-300398eddee9"
+       },
+       {
+        "description": "Durchsteckpad 1 [Net-(R15-Pad1)] von RV1",
+        "pos": {
+         "x": 127.635,
+         "y": 90.805
+        },
+        "uuid": "77493f88-bfde-41cf-9556-bcabc5dfd4ce"
+       }
+      ]
+     },
+     {
+      "net": "Net-(D9-A)",
+      "items": [
+       {
+        "description": "Durchsteckpad 2 [Net-(D9-A)] von R14",
+        "pos": {
+         "x": 149.225,
+         "y": 87.63
+        },
+        "uuid": "06cf429f-9638-417a-ab48-ba0a69df7dff"
+       },
+       {
+        "description": "Durchsteckpad 2 [Net-(D9-A)] von D9",
+        "pos": {
+         "x": 153.67,
+         "y": 87.63
+        },
+        "uuid": "5a3983a6-c9b6-472c-b322-4f7525c34b28"
+       }
+      ]
+     },
+     {
+      "net": "Net-(D1-A)",
+      "items": [
+       {
+        "description": "Durchsteckpad 2 [Net-(D1-A)] von D1",
+        "pos": {
+         "x": 78.3,
+         "y": 77.0
+        },
+        "uuid": "55ce8845-03f0-453b-b236-0e6e4d6d3cc0"
+       },
+       {
+        "description": "Durchsteckpad 2 [Net-(D1-A)] von P1",
+        "pos": {
+         "x": 81.8,
+         "y": 65.0
+        },
+        "uuid": "fbd341e0-4e4c-4026-8097-16680c0e9be4"
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "beautifier_after",
+   "gate": {
+    "verdict": "FAIL",
+    "unstable": false,
+    "list_complete": true,
+    "incomplete_reasons": [
+     "schematic not fully annotated: kicad-cli would skip parity silently"
+    ],
+    "runs": 3,
+    "violation_count": 13,
+    "violation_types": {
+     "silk_overlap": 13
+    },
+    "violations": [
+     {
+      "description": "Silkscreen clearance",
+      "items": [
+       {
+        "description": "Referenzfeld von P1",
+        "pos": {
+         "x": 81.55,
+         "y": 56.175
+        },
+        "uuid": "027aef5c-70a4-4d21-bf50-e10901d4d513"
+       },
+       {
+        "description": "Platinen-Text \"+8/12V\" auf F.Silkscreen",
+        "pos": {
+         "x": 81.5,
+         "y": 55.5
+        },
+        "uuid": "14a6c3ac-e639-40b6-838b-1677460b7b74"
+       }
+      ],
+      "severity": "error",
+      "type": "silk_overlap"
+     },
+     {
+      "description": "Silkscreen clearance",
+      "items": [
+       {
+        "description": "Platinen-Text \"VCC ON\" auf F.Silkscreen",
+        "pos": {
+         "x": 162.9,
+         "y": 99.1
+        },
+        "uuid": "16296d09-e894-45b0-8f80-b052a17e0a89"
+       },
+       {
+        "description": "Kreisbogen von P3 auf F.Silkscreen",
+        "pos": {
+         "x": 168.910001,
+         "y": 96.52
+        },
+        "uuid": "a357a0e1-bd20-4b19-8a46-4bc4858f7255"
+       }
+      ],
+      "severity": "error",
+      "type": "silk_overlap"
+     },
+     {
+      "description": "Silkscreen clearance",
+      "items": [
+       {
+        "description": "Referenzfeld von U6",
+        "pos": {
+         "x": 182.88,
+         "y": 130.675
+        },
+        "uuid": "00453cab-9af9-42ae-8b5e-90360356b337"
+       },
+       {
+        "description": "Platinen-Text \"PIC 8 PINS\" auf F.Silkscreen",
+        "pos": {
+         "x": 183.515,
+         "y": 132.08
+        },
+        "uuid": "cc560fc9-619d-4986-9dda-024530bbf4a1"
+       }
+      ],
+      "severity": "error",
+      "type": "silk_overlap"
+     },
+     {
+      "description": "Silkscreen clearance",
+      "items": [
+       {
+        "description": "Abschnitt von P3 auf F.Silkscreen",
+        "pos": {
+         "x": 177.8,
+         "y": 101.6
+        },
+        "uuid": "a3026b66-173b-4fdb-95b0-6ae958ce65a5"
+       },
+       {
+        "description": "Platinen-Text \"PIC 40 PINS\" auf F.Silkscreen",
+        "pos": {
+         "x": 182.245,
+         "y": 45.085
+        },
+        "uuid": "da996b55-6835-4ad3-bf9f-8dc429e7144c"
+       }
+      ],
+      "severity": "error",
+      "type": "silk_overlap"
+     },
+     {
+      "description": "Silkscreen clearance",
+      "items": [
+       {
+        "description": "Abschnitt von P3 auf F.Silkscreen",
+        "pos": {
+         "x": 187.96,
+         "y": 45.72
+        },
+        "uuid": "504a8352-879a-4f2e-9148-d54b31136914"
+       },
+       {
+        "description": "Platinen-Text \"PIC 40 PINS\" auf F.Silkscreen",
+        "pos": {
+         "x": 182.245,
+         "y": 45.085
+        },
+        "uuid": "da996b55-6835-4ad3-bf9f-8dc429e7144c"
+       }
+      ],
+      "severity": "error",
+      "type": "silk_overlap"
+     },
+     {
+      "description": "Silkscreen clearance",
+      "items": [
+       {
+        "description": "Abschnitt von P3 auf F.Silkscreen",
+        "pos": {
+         "x": 177.8,
+         "y": 45.72
+        },
+        "uuid": "23bbc54b-caff-438c-a3cf-7c0f0c3b7fb4"
+       },
+       {
+        "description": "Platinen-Text \"PIC 40 PINS\" auf F.Silkscreen",
+        "pos": {
+         "x": 182.245,
+         "y": 45.085
+        },
+        "uuid": "da996b55-6835-4ad3-bf9f-8dc429e7144c"
+       }
+      ],
+      "severity": "error",
+      "type": "silk_overlap"
+     },
+     {
+      "description": "Silkscreen clearance",
+      "items": [
+       {
+        "description": "Kreisbogen von P3 auf F.Silkscreen",
+        "pos": {
+         "x": 196.85,
+         "y": 48.26
+        },
+        "uuid": "69b86254-fcbe-4e19-be86-efd440eb954b"
+       },
+       {
+        "description": "Platinen-Text \"1=>>\" auf F.Silkscreen",
+        "pos": {
+         "x": 202.0,
+         "y": 48.7
+        },
+        "uuid": "e9165638-6b2b-4f04-9462-e4a5ff8ea34e"
+       }
+      ],
+      "severity": "error",
+      "type": "silk_overlap"
+     },
+     {
+      "description": "Silkscreen clearance",
+      "items": [
+       {
+        "description": "Referenzfeld von D2",
+        "pos": {
+         "x": 104.14,
+         "y": 120.312
+        },
+        "uuid": "0e370c73-6851-4a63-9115-20247a0aabb0"
+       },
+       {
+        "description": "Rechteck von D3 auf F.Silkscreen",
+        "pos": {
+         "x": 106.26,
+         "y": 123.04
+        },
+        "uuid": "11d8a77b-2a02-421f-ba38-e2c681ae4400"
+       }
+      ],
+      "severity": "error",
+      "type": "silk_overlap"
+     },
+     {
+      "description": "Silkscreen clearance",
+      "items": [
+       {
+        "description": "Rechteck von D4 auf F.Silkscreen",
+        "pos": {
+         "x": 106.26,
+         "y": 113.007
+        },
+        "uuid": "cc488722-8975-465e-b5ee-49b819ee8047"
+       },
+       {
+        "description": "Referenzfeld von D7",
+        "pos": {
+         "x": 104.14,
+         "y": 113.241
+        },
+        "uuid": "e43911c2-52b8-4953-96f0-ea66510924c4"
+       }
+      ],
+      "severity": "error",
+      "type": "silk_overlap"
+     },
+     {
+      "description": "Silkscreen clearance",
+      "items": [
+       {
+        "description": "Referenzfeld von R1",
+        "pos": {
+         "x": 92.71,
+         "y": 120.435
+        },
+        "uuid": "313de031-9878-49bb-801c-ca035f7c06bf"
+       },
+       {
+        "description": "Rechteck von R6 auf F.Silkscreen",
+        "pos": {
+         "x": 89.567,
+         "y": 120.55
+        },
+        "uuid": "e22b297c-6ea6-4e72-814f-44778f365b0e"
+       }
+      ],
+      "severity": "error",
+      "type": "silk_overlap"
+     },
+     {
+      "description": "Silkscreen clearance",
+      "items": [
+       {
+        "description": "Referenzfeld von R2",
+        "pos": {
+         "x": 85.105,
+         "y": 114.554
+        },
+        "uuid": "256c5e30-0dc8-48cf-97e6-aa429e960403"
+       },
+       {
+        "description": "Abschnitt von J1 auf F.Silkscreen",
+        "pos": {
+         "x": 84.46,
+         "y": 99.175
+        },
+        "uuid": "a2835d81-414f-4047-9e41-08428698c877"
+       }
+      ],
+      "severity": "error",
+      "type": "silk_overlap"
+     },
+     {
+      "description": "Silkscreen clearance",
+      "items": [
+       {
+        "description": "Referenzfeld von R3",
+        "pos": {
+         "x": 85.105,
+         "y": 111.125
+        },
+        "uuid": "18f9c064-d69c-4f12-aa91-b154b9211a08"
+       },
+       {
+        "description": "Abschnitt von J1 auf F.Silkscreen",
+        "pos": {
+         "x": 84.46,
+         "y": 99.175
+        },
+        "uuid": "a2835d81-414f-4047-9e41-08428698c877"
+       }
+      ],
+      "severity": "error",
+      "type": "silk_overlap"
+     },
+     {
+      "description": "Silkscreen clearance",
+      "items": [
+       {
+        "description": "Referenzfeld von R6",
+        "pos": {
+         "x": 85.232,
+         "y": 121.92
+        },
+        "uuid": "95514744-edde-40ea-913d-3d5f91cf1d76"
+       },
+       {
+        "description": "Abschnitt von J1 auf F.Silkscreen",
+        "pos": {
+         "x": 84.46,
+         "y": 99.175
+        },
+        "uuid": "a2835d81-414f-4047-9e41-08428698c877"
+       }
+      ],
+      "severity": "error",
+      "type": "silk_overlap"
+     }
+    ],
+    "warning_types": {},
+    "warnings": [],
+    "unconnected_edges": 125,
+    "unconnected_per_net": {
+     "/CLOCK-RB6": 5,
+     "/DATA-RB7": 6,
+     "/PC-CLOCK-OUT": 2,
+     "/PC-DATA-IN": 1,
+     "/PC-DATA-OUT": 2,
+     "/VPP/MCLR": 4,
+     "/VPP_ON": 2,
+     "/pic_sockets/VCC_PIC": 10,
+     "GND": 39,
+     "Net-(C5-Pad1)": 1,
+     "Net-(D1-A)": 1,
+     "Net-(D1-K)": 2,
+     "Net-(D10-A)": 2,
+     "Net-(D11-A)": 1,
+     "Net-(D11-K)": 2,
+     "Net-(D12-A)": 1,
+     "Net-(D2-A)": 3,
+     "Net-(D4-A)": 3,
+     "Net-(D6-A)": 3,
+     "Net-(D8-A)": 1,
+     "Net-(D9-A)": 1,
+     "Net-(Q1-B)": 1,
+     "Net-(Q2-B)": 3,
+     "Net-(Q2-C)": 3,
+     "Net-(Q3-B)": 2,
+     "Net-(R12-Pad1)": 1,
+     "Net-(R13-Pad1)": 1,
+     "Net-(R15-Pad1)": 1,
+     "Net-(R16-Pad1)": 1,
+     "Net-(R8-Pad1)": 1,
+     "Net-(U4-FB+)": 1,
+     "Net-(U4-Vc)": 2,
+     "VCC": 11,
+     "VPP": 5
+    },
+    "unconnected": [
+     {
+      "net": "VCC",
+      "items": [
+       {
+        "description": "Durchsteckpad 3 [VCC] von U3",
+        "pos": {
+         "x": 101.6,
+         "y": 71.12
+        },
+        "uuid": "59d3d5fb-39ca-4db0-a611-f1a4882be6fb"
+       },
+       {
+        "description": "Durchsteckpad 1 [VCC] von C1",
+        "pos": {
+         "x": 110.49,
+         "y": 78.867
+        },
+        "uuid": "bd4ffc38-83e7-4835-abdd-88b99ed1abd8"
+       }
+      ]
+     },
+     {
+      "net": "VCC",
+      "items": [
+       {
+        "description": "Durchsteckpad 1 [VCC] von D4",
+        "pos": {
+         "x": 107.95,
+         "y": 111.887
+        },
+        "uuid": "a3c0a6cf-0dd0-4e0e-a29d-75f4e0085c40"
+       },
+       {
+        "description": "Durchsteckpad 14 [VCC] von U2",
+        "pos": {
+         "x": 115.57,
+         "y": 111.76
+        },
+        "uuid": "aceff124-6a49-425d-a2c4-63fb7d76da9b"
+       }
+      ]
+     },
+     {
+      "net": "VCC",
+      "items": [
+       {
+        "description": "Durchsteckpad 1 [VCC] von D2",
+        "pos": {
+         "x": 107.95,
+         "y": 118.237
+        },
+        "uuid": "53dde18e-e1bd-452e-bbe3-4befd1af9d4f"
+       },
+       {
+        "description": "Durchsteckpad 1 [VCC] von D4",
+        "pos": {
+         "x": 107.95,
+         "y": 111.887
+        },
+        "uuid": "a3c0a6cf-0dd0-4e0e-a29d-75f4e0085c40"
+       }
+      ]
+     },
+     {
+      "net": "VCC",
+      "items": [
+       {
+        "description": "Durchsteckpad 1 [VCC] von D6",
+        "pos": {
+         "x": 107.95,
+         "y": 125.095
+        },
+        "uuid": "5271d1b3-2b1d-4d8a-a411-3bcbd898d101"
+       },
+       {
+        "description": "Durchsteckpad 1 [VCC] von D2",
+        "pos": {
+         "x": 107.95,
+         "y": 118.237
+        },
+        "uuid": "53dde18e-e1bd-452e-bbe3-4befd1af9d4f"
+       }
+      ]
+     },
+     {
+      "net": "VCC",
+      "items": [
+       {
+        "description": "Durchsteckpad 14 [VCC] von U2",
+        "pos": {
+         "x": 115.57,
+         "y": 111.76
+        },
+        "uuid": "aceff124-6a49-425d-a2c4-63fb7d76da9b"
+       },
+       {
+        "description": "Durchsteckpad 1 [VCC] von R20",
+        "pos": {
+         "x": 144.78,
+         "y": 102.235
+        },
+        "uuid": "a4129832-7ed3-4cfa-b576-149a2af86688"
+       }
+      ]
+     },
+     {
+      "net": "VCC",
+      "items": [
+       {
+        "description": "Durchsteckpad 5 [VCC] von U4",
+        "pos": {
+         "x": 118.11,
+         "y": 64.77
+        },
+        "uuid": "c4e105b2-1a1c-48bf-aee6-7969fa091e3c"
+       },
+       {
+        "description": "Durchsteckpad 1 [VCC] von C1",
+        "pos": {
+         "x": 110.49,
+         "y": 78.867
+        },
+        "uuid": "bd4ffc38-83e7-4835-abdd-88b99ed1abd8"
+       }
+      ]
+     },
+     {
+      "net": "VCC",
+      "items": [
+       {
+        "description": "Durchsteckpad 2 [VCC] von L1",
+        "pos": {
+         "x": 125.73,
+         "y": 67.23
+        },
+        "uuid": "bb4ac81e-79d5-428d-94f0-1f646b500081"
+       },
+       {
+        "description": "Durchsteckpad 5 [VCC] von U4",
+        "pos": {
+         "x": 118.11,
+         "y": 64.77
+        },
+        "uuid": "c4e105b2-1a1c-48bf-aee6-7969fa091e3c"
+       }
+      ]
+     },
+     {
+      "net": "VCC",
+      "items": [
+       {
+        "description": "Durchsteckpad 2 [VCC] von L1",
+        "pos": {
+         "x": 125.73,
+         "y": 67.23
+        },
+        "uuid": "bb4ac81e-79d5-428d-94f0-1f646b500081"
+       },
+       {
+        "description": "Durchsteckpad 1 [VCC] von R14",
+        "pos": {
+         "x": 139.065,
+         "y": 87.63
+        },
+        "uuid": "d39fad1c-34ae-4e8c-bf85-59d1cd790931"
+       }
+      ]
+     },
+     {
+      "net": "VCC",
+      "items": [
+       {
+        "description": "Durchsteckpad 1 [VCC] von R14",
+        "pos": {
+         "x": 139.065,
+         "y": 87.63
+        },
+        "uuid": "d39fad1c-34ae-4e8c-bf85-59d1cd790931"
+       },
+       {
+        "description": "Durchsteckpad 3 [VCC] von Q3",
+        "pos": {
+         "x": 144.78,
+         "y": 97.79
+        },
+        "uuid": "62b64405-aac2-4f3d-92df-52474ffef5f1"
+       }
+      ]
+     },
+     {
+      "net": "VCC",
+      "items": [
+       {
+        "description": "Durchsteckpad 3 [VCC] von Q3",
+        "pos": {
+         "x": 144.78,
+         "y": 97.79
+        },
+        "uuid": "62b64405-aac2-4f3d-92df-52474ffef5f1"
+       },
+       {
+        "description": "Pad 1 [VCC] von JP1 auf bottom_layer",
+        "pos": {
+         "x": 147.357,
+         "y": 97.79
+        },
+        "uuid": "3acb5a29-7227-4ce2-8aa0-d92094ccdfdc"
+       }
+      ]
+     },
+     {
+      "net": "VCC",
+      "items": [
+       {
+        "description": "Durchsteckpad 1 [VCC] von R20",
+        "pos": {
+         "x": 144.78,
+         "y": 102.235
+        },
+        "uuid": "a4129832-7ed3-4cfa-b576-149a2af86688"
+       },
+       {
+        "description": "Durchsteckpad 3 [VCC] von Q3",
+        "pos": {
+         "x": 144.78,
+         "y": 97.79
+        },
+        "uuid": "62b64405-aac2-4f3d-92df-52474ffef5f1"
+       }
+      ]
+     },
+     {
+      "net": "GND",
+      "items": [
+       {
+        "description": "Durchsteckpad 1 [GND] von P1",
+        "pos": {
+         "x": 81.8,
+         "y": 60.0
+        },
+        "uuid": "cca37e91-7f07-4328-aed3-2f42d3e49ecc"
+       },
+       {
+        "description": "Durchsteckpad 2 [GND] von C1",
+        "pos": {
+         "x": 85.49,
+         "y": 78.867
+        },
+        "uuid": "9a28a224-d529-43c3-a5a2-2254f4c1c34e"
+       }
+      ]
+     },
+     {
+      "net": "GND",
+      "items": [
+       {
+        "description": "Durchsteckpad 2 [GND] von C1",
+        "pos": {
+         "x": 85.49,
+         "y": 78.867
+        },
+        "uuid": "9a28a224-d529-43c3-a5a2-2254f4c1c34e"
+       },
+       {
+        "description": "Durchsteckpad 2 [GND] von U3",
+        "pos": {
+         "x": 99.06,
+         "y": 71.12
+        },
+        "uuid": "00bbbb0f-c898-49d4-9524-34f2608bdde3"
+       }
+      ]
+     },
+     {
+      "net": "GND",
+      "items": [
+       {
+        "description": "Durchsteckpad 2 [GND] von R4",
+        "pos": {
+         "x": 97.79,
+         "y": 107.823
+        },
+        "uuid": "e016e14a-eb39-457f-91ee-45e550175069"
+       },
+       {
+        "description": "Durchsteckpad 2 [GND] von D5",
+        "pos": {
+         "x": 100.33,
+         "y": 108.585
+        },
+        "uuid": "ec7a5a98-5ecd-406e-9f56-576f0b4d7e8f"
+       }
+      ]
+     },
+     {
+      "net": "GND",
+      "items": [
+       {
+        "description": "Durchsteckpad 2 [GND] von R4",
+        "pos": {
+         "x": 97.79,
+         "y": 107.823
+        },
+        "uuid": "e016e14a-eb39-457f-91ee-45e550175069"
+       },
+       {
+        "description": "Durchsteckpad 5 [GND] von J1",
+        "pos": {
+         "x": 82.6,
+         "y": 109.12
+        },
+        "uuid": "7fdfccdb-09bb-4994-98b8-9417776e4444"
+       }
+      ]
+     },
+     {
+      "net": "GND",
+      "items": [
+       {
+        "description": "Durchsteckpad 2 [GND] von R2",
+        "pos": {
+         "x": 97.79,
+         "y": 114.554
+        },
+        "uuid": "1313139e-cb32-4e2d-8543-a77542971765"
+       },
+       {
+        "description": "Durchsteckpad 2 [GND] von D5",
+        "pos": {
+         "x": 100.33,
+         "y": 108.585
+        },
+        "uuid": "ec7a5a98-5ecd-406e-9f56-576f0b4d7e8f"
+       }
+      ]
+     },
+     {
+      "net": "GND",
+      "items": [
+       {
+        "description": "Durchsteckpad 2 [GND] von R6",
+        "pos": {
+         "x": 97.917,
+         "y": 121.92
+        },
+        "uuid": "a2387a59-3664-4e32-a26e-0c5f00b73ca4"
+       },
+       {
+        "description": "Durchsteckpad 2 [GND] von D3",
+        "pos": {
+         "x": 100.33,
+         "y": 121.92
+        },
+        "uuid": "7e3d1eea-1cda-4ffa-a78e-0ee0266d3012"
+       }
+      ]
+     },
+     {
+      "net": "GND",
+      "items": [
+       {
+        "description": "Durchsteckpad 2 [GND] von U3",
+        "pos": {
+         "x": 99.06,
+         "y": 71.12
+        },
+        "uuid": "00bbbb0f-c898-49d4-9524-34f2608bdde3"
+       },
+       {
+        "description": "Durchsteckpad 2 [GND] von C2",
+        "pos": {
+         "x": 109.582,
+         "y": 90.17
+        },
+        "uuid": "b88a19d4-b7e9-4329-b928-a755e0fbcd12"
+       }
+      ]
+     },
+     {
+      "net": "GND",
+      "items": [
+       {
+        "description": "Durchsteckpad 2 [GND] von D5",
+        "pos": {
+         "x": 100.33,
+         "y": 108.585
+        },
+        "uuid": "ec7a5a98-5ecd-406e-9f56-576f0b4d7e8f"
+       },
+       {
+        "description": "Durchsteckpad 2 [GND] von C2",
+        "pos": {
+         "x": 109.582,
+         "y": 90.17
+        },
+        "uuid": "b88a19d4-b7e9-4329-b928-a755e0fbcd12"
+       }
+      ]
+     },
+     {
+      "net": "GND",
+      "items": [
+       {
+        "description": "Durchsteckpad 2 [GND] von D7",
+        "pos": {
+         "x": 100.33,
+         "y": 115.316
+        },
+        "uuid": "72e58fca-d01d-4de2-989b-a8d4496541e7"
+       },
+       {
+        "description": "Durchsteckpad 2 [GND] von R2",
+        "pos": {
+         "x": 97.79,
+         "y": 114.554
+        },
+        "uuid": "1313139e-cb32-4e2d-8543-a77542971765"
+       }
+      ]
+     },
+     {
+      "net": "GND",
+      "items": [
+       {
+        "description": "Durchsteckpad 2 [GND] von D3",
+        "pos": {
+         "x": 100.33,
+         "y": 121.92
+        },
+        "uuid": "7e3d1eea-1cda-4ffa-a78e-0ee0266d3012"
+       },
+       {
+        "description": "Durchsteckpad 2 [GND] von D7",
+        "pos": {
+         "x": 100.33,
+         "y": 115.316
+        },
+        "uuid": "72e58fca-d01d-4de2-989b-a8d4496541e7"
+       }
+      ]
+     },
+     {
+      "net": "GND",
+      "items": [
+       {
+        "description": "Durchsteckpad 2 [GND] von D3",
+        "pos": {
+         "x": 100.33,
+         "y": 121.92
+        },
+        "uuid": "7e3d1eea-1cda-4ffa-a78e-0ee0266d3012"
+       },
+       {
+        "description": "Durchsteckpad 1 [GND] von U2",
+        "pos": {
+         "x": 115.57,
+         "y": 119.38
+        },
+        "uuid": "01b9f838-6524-41ce-acc5-ed583d630f27"
+       }
+      ]
+     },
+     {
+      "net": "GND",
+      "items": [
+       {
+        "description": "Durchsteckpad 1 [GND] von U2",
+        "pos": {
+         "x": 115.57,
+         "y": 119.38
+        },
+        "uuid": "01b9f838-6524-41ce-acc5-ed583d630f27"
+       },
+       {
+        "description": "Durchsteckpad 4 [GND] von U2",
+        "pos": {
+         "x": 123.19,
+         "y": 119.38
+        },
+        "uuid": "9d7a5352-e15e-4bc7-be40-6a81969d99da"
+       }
+      ]
+     },
+     {
+      "net": "GND",
+      "items": [
+       {
+        "description": "Durchsteckpad 1 [GND] von U2",
+        "pos": {
+         "x": 115.57,
+         "y": 119.38
+        },
+        "uuid": "01b9f838-6524-41ce-acc5-ed583d630f27"
+       },
+       {
+        "description": "Durchsteckpad 13 [GND] von U2",
+        "pos": {
+         "x": 118.11,
+         "y": 111.76
+        },
+        "uuid": "50160666-9b65-4129-8e24-8a0e2c6ff9b7"
+       }
+      ]
+     },
+     {
+      "net": "GND",
+      "items": [
+       {
+        "description": "Durchsteckpad 7 [GND] von U4",
+        "pos": {
+         "x": 118.11,
+         "y": 59.69
+        },
+        "uuid": "ef300f5f-a698-465c-9c03-4dbe91ed4ab1"
+       },
+       {
+        "description": "Durchsteckpad 2 [GND] von C4",
+        "pos": {
+         "x": 119.3,
+         "y": 52.07
+        },
+        "uuid": "e0909086-44aa-4d3f-ad6b-3616163cca97"
+       }
+      ]
+     },
+     {
+      "net": "GND",
+      "items": [
+       {
+        "description": "Durchsteckpad 6 [GND] von U4",
+        "pos": {
+         "x": 118.11,
+         "y": 62.23
+        },
+        "uuid": "7b1f43f8-7abb-4d2a-b324-17afe0765e8e"
+       },
+       {
+        "description": "Durchsteckpad 7 [GND] von U4",
+        "pos": {
+         "x": 118.11,
+         "y": 59.69
+        },
+        "uuid": "ef300f5f-a698-465c-9c03-4dbe91ed4ab1"
+       }
+      ]
+     },
+     {
+      "net": "GND",
+      "items": [
+       {
+        "description": "Durchsteckpad 6 [GND] von U4",
+        "pos": {
+         "x": 118.11,
+         "y": 62.23
+        },
+        "uuid": "7b1f43f8-7abb-4d2a-b324-17afe0765e8e"
+       },
+       {
+        "description": "Durchsteckpad 2 [GND] von U3",
+        "pos": {
+         "x": 99.06,
+         "y": 71.12
+        },
+        "uuid": "00bbbb0f-c898-49d4-9524-34f2608bdde3"
+       }
+      ]
+     },
+     {
+      "net": "GND",
+      "items": [
+       {
+        "description": "Durchsteckpad 13 [GND] von U2",
+        "pos": {
+         "x": 118.11,
+         "y": 111.76
+        },
+        "uuid": "50160666-9b65-4129-8e24-8a0e2c6ff9b7"
+       },
+       {
+        "description": "Durchsteckpad 10 [GND] von U2",
+        "pos": {
+         "x": 125.73,
+         "y": 111.76
+        },
+        "uuid": "e87d765b-5b8c-4589-8d15-96246dc8529b"
+       }
+      ]
+     },
+     {
+      "net": "GND",
+      "items": [
+       {
+        "description": "Durchsteckpad 4 [GND] von U2",
+        "pos": {
+         "x": 123.19,
+         "y": 119.38
+        },
+        "uuid": "9d7a5352-e15e-4bc7-be40-6a81969d99da"
+       },
+       {
+        "description": "Durchsteckpad 7 [GND] von U2",
+        "pos": {
+         "x": 130.81,
+         "y": 119.38
+        },
+        "uuid": "ab171a6d-536d-4b9c-a449-5f3d865470d4"
+       }
+      ]
+     },
+     {
+      "net": "GND",
+      "items": [
+       {
+        "description": "Durchsteckpad 2 [GND] von R15",
+        "pos": {
+         "x": 128.27,
+         "y": 78.74
+        },
+        "uuid": "5b02d01d-2e85-4956-92d9-742764d5232a"
+       },
+       {
+        "description": "Durchsteckpad 6 [GND] von U4",
+        "pos": {
+         "x": 118.11,
+         "y": 62.23
+        },
+        "uuid": "7b1f43f8-7abb-4d2a-b324-17afe0765e8e"
+       }
+      ]
+     },
+     {
+      "net": "GND",
+      "items": [
+       {
+        "description": "Durchsteckpad 2 [GND] von C3",
+        "pos": {
+         "x": 134.112,
+         "y": 82.23
+        },
+        "uuid": "94ab5b1c-b51b-429f-a686-fba82acd9f06"
+       },
+       {
+        "description": "Durchsteckpad 2 [GND] von R15",
+        "pos": {
+         "x": 128.27,
+         "y": 78.74
+        },
+        "uuid": "5b02d01d-2e85-4956-92d9-742764d5232a"
+       }
+      ]
+     },
+     {
+      "net": "GND",
+      "items": [
+       {
+        "description": "Durchsteckpad 2 [GND] von C5",
+        "pos": {
+         "x": 134.54,
+         "y": 49.53
+        },
+        "uuid": "42c4b821-22b5-451f-9c76-31ccee646782"
+       },
+       {
+        "description": "Durchsteckpad 2 [GND] von C4",
+        "pos": {
+         "x": 119.3,
+         "y": 52.07
+        },
+        "uuid": "e0909086-44aa-4d3f-ad6b-3616163cca97"
+       }
+      ]
+     },
+     {
+      "net": "GND",
+      "items": [
+       {
+        "description": "Durchsteckpad 3 [GND] von Q1",
+        "pos": {
+         "x": 148.59,
+         "y": 69.85
+        },
+        "uuid": "564a05f5-bf9f-4a62-bfd1-ae30bd6354d1"
+       },
+       {
+        "description": "Durchsteckpad 2 [GND] von R17",
+        "pos": {
+         "x": 156.21,
+         "y": 58.42
+        },
+        "uuid": "4b9a41fa-aa96-4b1b-ad4b-207e36bb7a01"
+       }
+      ]
+     },
+     {
+      "net": "GND",
+      "items": [
+       {
+        "description": "Durchsteckpad 3 [GND] von Q1",
+        "pos": {
+         "x": 148.59,
+         "y": 69.85
+        },
+        "uuid": "564a05f5-bf9f-4a62-bfd1-ae30bd6354d1"
+       },
+       {
+        "description": "Durchsteckpad 2 [GND] von C3",
+        "pos": {
+         "x": 134.112,
+         "y": 82.23
+        },
+        "uuid": "94ab5b1c-b51b-429f-a686-fba82acd9f06"
+       }
+      ]
+     },
+     {
+      "net": "GND",
+      "items": [
+       {
+        "description": "Durchsteckpad 1 [GND] von D8",
+        "pos": {
+         "x": 156.21,
+         "y": 77.47
+        },
+        "uuid": "cab31471-1370-4da8-9f26-65e145ea6e49"
+       },
+       {
+        "description": "Durchsteckpad 1 [GND] von D9",
+        "pos": {
+         "x": 156.21,
+         "y": 87.63
+        },
+        "uuid": "8ceb963f-b9bb-4c1a-89a2-8526fdae77ee"
+       }
+      ]
+     },
+     {
+      "net": "GND",
+      "items": [
+       {
+        "description": "Durchsteckpad 1 [GND] von D8",
+        "pos": {
+         "x": 156.21,
+         "y": 77.47
+        },
+        "uuid": "cab31471-1370-4da8-9f26-65e145ea6e49"
+       },
+       {
+        "description": "Durchsteckpad 3 [GND] von Q1",
+        "pos": {
+         "x": 148.59,
+         "y": 69.85
+        },
+        "uuid": "564a05f5-bf9f-4a62-bfd1-ae30bd6354d1"
+       }
+      ]
+     },
+     {
+      "net": "GND",
+      "items": [
+       {
+        "description": "Durchsteckpad 1 [GND] von D8",
+        "pos": {
+         "x": 156.21,
+         "y": 77.47
+        },
+        "uuid": "cab31471-1370-4da8-9f26-65e145ea6e49"
+       },
+       {
+        "description": "Durchsteckpad 12 [GND] von P3",
+        "pos": {
+         "x": 175.26,
+         "y": 78.74
+        },
+        "uuid": "5eb878d4-a2e4-4053-ae89-800d17178eaa"
+       }
+      ]
+     },
+     {
+      "net": "GND",
+      "items": [
+       {
+        "description": "Durchsteckpad 1 [GND] von D9",
+        "pos": {
+         "x": 156.21,
+         "y": 87.63
+        },
+        "uuid": "8ceb963f-b9bb-4c1a-89a2-8526fdae77ee"
+       },
+       {
+        "description": "Durchsteckpad 1 [GND] von D12",
+        "pos": {
+         "x": 156.21,
+         "y": 97.155
+        },
+        "uuid": "c3b96f46-1ade-4511-87a0-7f4fb65fe6ff"
+       }
+      ]
+     },
+     {
+      "net": "GND",
+      "items": [
+       {
+        "description": "Durchsteckpad 8 [GND] von P3",
+        "pos": {
+         "x": 175.26,
+         "y": 68.58
+        },
+        "uuid": "767ba196-18d6-4400-9540-d6d5216a1db6"
+       },
+       {
+        "description": "Durchsteckpad 12 [GND] von P3",
+        "pos": {
+         "x": 175.26,
+         "y": 78.74
+        },
+        "uuid": "5eb878d4-a2e4-4053-ae89-800d17178eaa"
+       }
+      ]
+     },
+     {
+      "net": "GND",
+      "items": [
+       {
+        "description": "Durchsteckpad 1 [GND] von U1",
+        "pos": {
+         "x": 179.07,
+         "y": 109.22
+        },
+        "uuid": "a609ba21-4eba-4c52-8cad-e840ac81d83d"
+       },
+       {
+        "description": "Durchsteckpad 2 [GND] von U1",
+        "pos": {
+         "x": 179.07,
+         "y": 111.76
+        },
+        "uuid": "672c7e20-6dcd-4b1e-af74-c23ab734a2eb"
+       }
+      ]
+     },
+     {
+      "net": "GND",
+      "items": [
+       {
+        "description": "Durchsteckpad 1 [GND] von U1",
+        "pos": {
+         "x": 179.07,
+         "y": 109.22
+        },
+        "uuid": "a609ba21-4eba-4c52-8cad-e840ac81d83d"
+       },
+       {
+        "description": "Durchsteckpad 1 [GND] von D12",
+        "pos": {
+         "x": 156.21,
+         "y": 97.155
+        },
+        "uuid": "c3b96f46-1ade-4511-87a0-7f4fb65fe6ff"
+       }
+      ]
+     },
+     {
+      "net": "GND",
+      "items": [
+       {
+        "description": "Durchsteckpad 2 [GND] von U1",
+        "pos": {
+         "x": 179.07,
+         "y": 111.76
+        },
+        "uuid": "672c7e20-6dcd-4b1e-af74-c23ab734a2eb"
+       },
+       {
+        "description": "Durchsteckpad 3 [GND] von U1",
+        "pos": {
+         "x": 179.07,
+         "y": 114.3
+        },
+        "uuid": "d7c31a0a-3172-48b2-b7a7-103c25e9cc9f"
+       }
+      ]
+     },
+     {
+      "net": "GND",
+      "items": [
+       {
+        "description": "Durchsteckpad 4 [GND] von U1",
+        "pos": {
+         "x": 179.07,
+         "y": 116.84
+        },
+        "uuid": "64e7deff-e627-4964-9855-70f97f6e85df"
+       },
+       {
+        "description": "Durchsteckpad 3 [GND] von U1",
+        "pos": {
+         "x": 179.07,
+         "y": 114.3
+        },
+        "uuid": "d7c31a0a-3172-48b2-b7a7-103c25e9cc9f"
+       }
+      ]
+     },
+     {
+      "net": "GND",
+      "items": [
+       {
+        "description": "Durchsteckpad 8 [GND] von U6",
+        "pos": {
+         "x": 186.69,
+         "y": 120.65
+        },
+        "uuid": "e21f2df1-6823-457b-ba74-aca8b268c30a"
+       },
+       {
+        "description": "Durchsteckpad 4 [GND] von U1",
+        "pos": {
+         "x": 179.07,
+         "y": 116.84
+        },
+        "uuid": "64e7deff-e627-4964-9855-70f97f6e85df"
+       }
+      ]
+     },
+     {
+      "net": "GND",
+      "items": [
+       {
+        "description": "Durchsteckpad 8 [GND] von U6",
+        "pos": {
+         "x": 186.69,
+         "y": 120.65
+        },
+        "uuid": "e21f2df1-6823-457b-ba74-aca8b268c30a"
+       },
+       {
+        "description": "Durchsteckpad 2 [GND] von C6",
+        "pos": {
+         "x": 196.85,
+         "y": 117.395
+        },
+        "uuid": "0c020ba0-b6e7-4e20-8970-2a3d9eaa3c0d"
+       }
+      ]
+     },
+     {
+      "net": "GND",
+      "items": [
+       {
+        "description": "Durchsteckpad 31 [GND] von P3",
+        "pos": {
+         "x": 190.5,
+         "y": 73.66
+        },
+        "uuid": "5a0872ae-7d8f-43c9-9473-53b348854664"
+       },
+       {
+        "description": "Durchsteckpad 2 [GND] von C7",
+        "pos": {
+         "x": 198.755,
+         "y": 76.12
+        },
+        "uuid": "4f608163-05ac-4877-918b-f17411efde8d"
+       }
+      ]
+     },
+     {
+      "net": "GND",
+      "items": [
+       {
+        "description": "Durchsteckpad 31 [GND] von P3",
+        "pos": {
+         "x": 190.5,
+         "y": 73.66
+        },
+        "uuid": "5a0872ae-7d8f-43c9-9473-53b348854664"
+       },
+       {
+        "description": "Durchsteckpad 12 [GND] von P3",
+        "pos": {
+         "x": 175.26,
+         "y": 78.74
+        },
+        "uuid": "5eb878d4-a2e4-4053-ae89-800d17178eaa"
+       }
+      ]
+     },
+     {
+      "net": "GND",
+      "items": [
+       {
+        "description": "Durchsteckpad 2 [GND] von C6",
+        "pos": {
+         "x": 196.85,
+         "y": 117.395
+        },
+        "uuid": "0c020ba0-b6e7-4e20-8970-2a3d9eaa3c0d"
+       },
+       {
+        "description": "Durchsteckpad 5 [GND] von U5",
+        "pos": {
+         "x": 207.899,
+         "y": 118.11
+        },
+        "uuid": "a273b0cf-623c-4d6f-b31c-ff9897866902"
+       }
+      ]
+     },
+     {
+      "net": "GND",
+      "items": [
+       {
+        "description": "Durchsteckpad 8 [GND] von P2",
+        "pos": {
+         "x": 207.645,
+         "y": 68.58
+        },
+        "uuid": "090c2218-db7f-40c7-b56b-d819210558d8"
+       },
+       {
+        "description": "Durchsteckpad 2 [GND] von C7",
+        "pos": {
+         "x": 198.755,
+         "y": 76.12
+        },
+        "uuid": "4f608163-05ac-4877-918b-f17411efde8d"
+       }
+      ]
+     },
+     {
+      "net": "GND",
+      "items": [
+       {
+        "description": "Durchsteckpad 19 [GND] von P2",
+        "pos": {
+         "x": 215.265,
+         "y": 73.66
+        },
+        "uuid": "79e18e18-ca55-4c0f-8fb2-d1c6940ae01a"
+       },
+       {
+        "description": "Durchsteckpad 8 [GND] von P2",
+        "pos": {
+         "x": 207.645,
+         "y": 68.58
+        },
+        "uuid": "090c2218-db7f-40c7-b56b-d819210558d8"
+       }
+      ]
+     },
+     {
+      "net": "Net-(D1-K)",
+      "items": [
+       {
+        "description": "Durchsteckpad 1 [Net-(D1-K)] von D1",
+        "pos": {
+         "x": 78.3,
+         "y": 89.7
+        },
+        "uuid": "02d8db97-fd5a-4a74-8bfa-7aa85744965f"
+       },
+       {
+        "description": "Durchsteckpad 1 [Net-(D1-K)] von C2",
+        "pos": {
+         "x": 84.582,
+         "y": 90.17
+        },
+        "uuid": "bad06df8-0baa-4909-a369-beaeb7fe2d06"
+       }
+      ]
+     },
+     {
+      "net": "Net-(D1-K)",
+      "items": [
+       {
+        "description": "Durchsteckpad 1 [Net-(D1-K)] von C2",
+        "pos": {
+         "x": 84.582,
+         "y": 90.17
+        },
+        "uuid": "bad06df8-0baa-4909-a369-beaeb7fe2d06"
+       },
+       {
+        "description": "Durchsteckpad 1 [Net-(D1-K)] von U3",
+        "pos": {
+         "x": 96.52,
+         "y": 71.12
+        },
+        "uuid": "a9765069-b814-4db5-89b2-bb641bbd4b5f"
+       }
+      ]
+     },
+     {
+      "net": "/VPP/MCLR",
+      "items": [
+       {
+        "description": "Durchsteckpad 1 [/VPP/MCLR] von P3",
+        "pos": {
+         "x": 175.26,
+         "y": 50.8
+        },
+        "uuid": "25e2a52b-e031-4baf-beb6-a44d0daa61ac"
+       },
+       {
+        "description": "Durchsteckpad 2 [/VPP/MCLR] von R18",
+        "pos": {
+         "x": 152.4,
+         "y": 58.42
+        },
+        "uuid": "2caad203-cd8e-42c5-ab96-40f374ddd64c"
+       }
+      ]
+     },
+     {
+      "net": "/VPP/MCLR",
+      "items": [
+       {
+        "description": "Durchsteckpad 4 [/VPP/MCLR] von U6",
+        "pos": {
+         "x": 179.07,
+         "y": 128.27
+        },
+        "uuid": "bacdb158-b246-4842-8bdb-23affb5159c7"
+       },
+       {
+        "description": "Durchsteckpad 4 [/VPP/MCLR] von U5",
+        "pos": {
+         "x": 207.899,
+         "y": 115.57
+        },
+        "uuid": "780d53fc-b68f-462e-ba11-148014e25fab"
+       }
+      ]
+     },
+     {
+      "net": "/VPP/MCLR",
+      "items": [
+       {
+        "description": "Durchsteckpad 1 [/VPP/MCLR] von P2",
+        "pos": {
+         "x": 207.645,
+         "y": 50.8
+        },
+        "uuid": "7d664cb6-a9d5-4852-9576-0d909c8309ee"
+       },
+       {
+        "description": "Durchsteckpad 1 [/VPP/MCLR] von P3",
+        "pos": {
+         "x": 175.26,
+         "y": 50.8
+        },
+        "uuid": "25e2a52b-e031-4baf-beb6-a44d0daa61ac"
+       }
+      ]
+     },
+     {
+      "net": "/VPP/MCLR",
+      "items": [
+       {
+        "description": "Durchsteckpad 4 [/VPP/MCLR] von U5",
+        "pos": {
+         "x": 207.899,
+         "y": 115.57
+        },
+        "uuid": "780d53fc-b68f-462e-ba11-148014e25fab"
+       },
+       {
+        "description": "Durchsteckpad 1 [/VPP/MCLR] von P2",
+        "pos": {
+         "x": 207.645,
+         "y": 50.8
+        },
+        "uuid": "7d664cb6-a9d5-4852-9576-0d909c8309ee"
+       }
+      ]
+     },
+     {
+      "net": "/pic_sockets/VCC_PIC",
+      "items": [
+       {
+        "description": "Pad 2 [/pic_sockets/VCC_PIC] von JP1 auf bottom_layer",
+        "pos": {
+         "x": 148.807,
+         "y": 97.79
+        },
+        "uuid": "5b196d03-cd44-4c2b-9a91-fadc24ae5f4b"
+       },
+       {
+        "description": "Durchsteckpad 2 [/pic_sockets/VCC_PIC] von R21",
+        "pos": {
+         "x": 147.955,
+         "y": 102.235
+        },
+        "uuid": "70638727-0211-415c-a09c-a38686bde43a"
+       }
+      ]
+     },
+     {
+      "net": "/pic_sockets/VCC_PIC",
+      "items": [
+       {
+        "description": "Pad 2 [/pic_sockets/VCC_PIC] von JP1 auf bottom_layer",
+        "pos": {
+         "x": 148.807,
+         "y": 97.79
+        },
+        "uuid": "5b196d03-cd44-4c2b-9a91-fadc24ae5f4b"
+       },
+       {
+        "description": "Durchsteckpad 1 [/pic_sockets/VCC_PIC] von Q3",
+        "pos": {
+         "x": 142.24,
+         "y": 97.79
+        },
+        "uuid": "23fa1ecb-a602-4c2a-a858-bf3c5a25443c"
+       }
+      ]
+     },
+     {
+      "net": "/pic_sockets/VCC_PIC",
+      "items": [
+       {
+        "description": "Durchsteckpad 11 [/pic_sockets/VCC_PIC] von P3",
+        "pos": {
+         "x": 175.26,
+         "y": 76.2
+        },
+        "uuid": "90b0c75c-0cf4-4a7c-8038-56807808880e"
+       },
+       {
+        "description": "Pad 2 [/pic_sockets/VCC_PIC] von JP1 auf bottom_layer",
+        "pos": {
+         "x": 148.807,
+         "y": 97.79
+        },
+        "uuid": "5b196d03-cd44-4c2b-9a91-fadc24ae5f4b"
+       }
+      ]
+     },
+     {
+      "net": "/pic_sockets/VCC_PIC",
+      "items": [
+       {
+        "description": "Durchsteckpad 11 [/pic_sockets/VCC_PIC] von P3",
+        "pos": {
+         "x": 175.26,
+         "y": 76.2
+        },
+        "uuid": "90b0c75c-0cf4-4a7c-8038-56807808880e"
+       },
+       {
+        "description": "Durchsteckpad 8 [/pic_sockets/VCC_PIC] von U1",
+        "pos": {
+         "x": 186.69,
+         "y": 109.22
+        },
+        "uuid": "f5c238a8-32f5-452e-b9be-a084dd8a637e"
+       }
+      ]
+     },
+     {
+      "net": "/pic_sockets/VCC_PIC",
+      "items": [
+       {
+        "description": "Durchsteckpad 8 [/pic_sockets/VCC_PIC] von U1",
+        "pos": {
+         "x": 186.69,
+         "y": 109.22
+        },
+        "uuid": "f5c238a8-32f5-452e-b9be-a084dd8a637e"
+       },
+       {
+        "description": "Durchsteckpad 1 [/pic_sockets/VCC_PIC] von U6",
+        "pos": {
+         "x": 179.07,
+         "y": 120.65
+        },
+        "uuid": "04e5217d-a40a-4f71-81e2-838f8805992f"
+       }
+      ]
+     },
+     {
+      "net": "/pic_sockets/VCC_PIC",
+      "items": [
+       {
+        "description": "Durchsteckpad 32 [/pic_sockets/VCC_PIC] von P3",
+        "pos": {
+         "x": 190.5,
+         "y": 71.12
+        },
+        "uuid": "dcee9d7d-852b-40d4-bc8a-88841dcc3689"
+       },
+       {
+        "description": "Durchsteckpad 11 [/pic_sockets/VCC_PIC] von P3",
+        "pos": {
+         "x": 175.26,
+         "y": 76.2
+        },
+        "uuid": "90b0c75c-0cf4-4a7c-8038-56807808880e"
+       }
+      ]
+     },
+     {
+      "net": "/pic_sockets/VCC_PIC",
+      "items": [
+       {
+        "description": "Durchsteckpad 1 [/pic_sockets/VCC_PIC] von C6",
+        "pos": {
+         "x": 196.85,
+         "y": 112.395
+        },
+        "uuid": "cb9170b9-0a3a-4f85-a74d-3639ecb40222"
+       },
+       {
+        "description": "Durchsteckpad 8 [/pic_sockets/VCC_PIC] von U1",
+        "pos": {
+         "x": 186.69,
+         "y": 109.22
+        },
+        "uuid": "f5c238a8-32f5-452e-b9be-a084dd8a637e"
+       }
+      ]
+     },
+     {
+      "net": "/pic_sockets/VCC_PIC",
+      "items": [
+       {
+        "description": "Durchsteckpad 1 [/pic_sockets/VCC_PIC] von C7",
+        "pos": {
+         "x": 198.755,
+         "y": 71.12
+        },
+        "uuid": "c5ebe136-e1e5-44dc-ac99-7cf08c8776a4"
+       },
+       {
+        "description": "Durchsteckpad 32 [/pic_sockets/VCC_PIC] von P3",
+        "pos": {
+         "x": 190.5,
+         "y": 71.12
+        },
+        "uuid": "dcee9d7d-852b-40d4-bc8a-88841dcc3689"
+       }
+      ]
+     },
+     {
+      "net": "/pic_sockets/VCC_PIC",
+      "items": [
+       {
+        "description": "Durchsteckpad 20 [/pic_sockets/VCC_PIC] von P2",
+        "pos": {
+         "x": 215.265,
+         "y": 71.12
+        },
+        "uuid": "227965f7-c467-4166-8dbe-a03ba3a3e833"
+       },
+       {
+        "description": "Durchsteckpad 1 [/pic_sockets/VCC_PIC] von C7",
+        "pos": {
+         "x": 198.755,
+         "y": 71.12
+        },
+        "uuid": "c5ebe136-e1e5-44dc-ac99-7cf08c8776a4"
+       }
+      ]
+     },
+     {
+      "net": "/pic_sockets/VCC_PIC",
+      "items": [
+       {
+        "description": "Durchsteckpad 14 [/pic_sockets/VCC_PIC] von U5",
+        "pos": {
+         "x": 215.519,
+         "y": 118.11
+        },
+        "uuid": "ad7eb14f-6c5c-4996-a54a-7ce82fc42954"
+       },
+       {
+        "description": "Durchsteckpad 1 [/pic_sockets/VCC_PIC] von C6",
+        "pos": {
+         "x": 196.85,
+         "y": 112.395
+        },
+        "uuid": "cb9170b9-0a3a-4f85-a74d-3639ecb40222"
+       }
+      ]
+     },
+     {
+      "net": "/CLOCK-RB6",
+      "items": [
+       {
+        "description": "Durchsteckpad 2 [/CLOCK-RB6] von R13",
+        "pos": {
+         "x": 140.335,
+         "y": 121.92
+        },
+        "uuid": "5c911a2b-7346-48e0-a508-06c47ded0b0c"
+       },
+       {
+        "description": "Durchsteckpad 6 [/CLOCK-RB6] von U6",
+        "pos": {
+         "x": 186.69,
+         "y": 125.73
+        },
+        "uuid": "04770422-331a-44ba-8f59-3afdd65e94d9"
+       }
+      ]
+     },
+     {
+      "net": "/CLOCK-RB6",
+      "items": [
+       {
+        "description": "Durchsteckpad 6 [/CLOCK-RB6] von U1",
+        "pos": {
+         "x": 186.69,
+         "y": 114.3
+        },
+        "uuid": "b01e584f-236c-4a69-bbd5-747fb894c590"
+       },
+       {
+        "description": "Durchsteckpad 6 [/CLOCK-RB6] von U6",
+        "pos": {
+         "x": 186.69,
+         "y": 125.73
+        },
+        "uuid": "04770422-331a-44ba-8f59-3afdd65e94d9"
+       }
+      ]
+     },
+     {
+      "net": "/CLOCK-RB6",
+      "items": [
+       {
+        "description": "Durchsteckpad 6 [/CLOCK-RB6] von U6",
+        "pos": {
+         "x": 186.69,
+         "y": 125.73
+        },
+        "uuid": "04770422-331a-44ba-8f59-3afdd65e94d9"
+       },
+       {
+        "description": "Durchsteckpad 12 [/CLOCK-RB6] von U5",
+        "pos": {
+         "x": 215.519,
+         "y": 123.19
+        },
+        "uuid": "9c19e8e8-f25c-4f60-9a43-187ff08aa55b"
+       }
+      ]
+     },
+     {
+      "net": "/CLOCK-RB6",
+      "items": [
+       {
+        "description": "Durchsteckpad 39 [/CLOCK-RB6] von P3",
+        "pos": {
+         "x": 190.5,
+         "y": 53.34
+        },
+        "uuid": "7da4778c-d9f7-47df-92a4-7d1746d22d53"
+       },
+       {
+        "description": "Durchsteckpad 6 [/CLOCK-RB6] von U1",
+        "pos": {
+         "x": 186.69,
+         "y": 114.3
+        },
+        "uuid": "b01e584f-236c-4a69-bbd5-747fb894c590"
+       }
+      ]
+     },
+     {
+      "net": "/CLOCK-RB6",
+      "items": [
+       {
+        "description": "Durchsteckpad 27 [/CLOCK-RB6] von P2",
+        "pos": {
+         "x": 215.265,
+         "y": 53.34
+        },
+        "uuid": "e02039ec-7897-40ff-8736-be65dc3e9ff4"
+       },
+       {
+        "description": "Durchsteckpad 39 [/CLOCK-RB6] von P3",
+        "pos": {
+         "x": 190.5,
+         "y": 53.34
+        },
+        "uuid": "7da4778c-d9f7-47df-92a4-7d1746d22d53"
+       }
+      ]
+     },
+     {
+      "net": "/DATA-RB7",
+      "items": [
+       {
+        "description": "Durchsteckpad 2 [/DATA-RB7] von R12",
+        "pos": {
+         "x": 135.255,
+         "y": 111.76
+        },
+        "uuid": "9b30d3f3-4839-4cb4-99b6-d6cf7b1c6bb0"
+       },
+       {
+        "description": "Durchsteckpad 12 [/DATA-RB7] von U2",
+        "pos": {
+         "x": 120.65,
+         "y": 111.76
+        },
+        "uuid": "913c73bf-1e66-4447-99d3-5823ba989736"
+       }
+      ]
+     },
+     {
+      "net": "/DATA-RB7",
+      "items": [
+       {
+        "description": "Durchsteckpad 5 [/DATA-RB7] von U1",
+        "pos": {
+         "x": 186.69,
+         "y": 116.84
+        },
+        "uuid": "49f3d313-e984-4752-930b-e0a3da8832ea"
+       },
+       {
+        "description": "Durchsteckpad 7 [/DATA-RB7] von U6",
+        "pos": {
+         "x": 186.69,
+         "y": 123.19
+        },
+        "uuid": "22c650cd-7e77-4335-88b1-4135949c267e"
+       }
+      ]
+     },
+     {
+      "net": "/DATA-RB7",
+      "items": [
+       {
+        "description": "Durchsteckpad 5 [/DATA-RB7] von U1",
+        "pos": {
+         "x": 186.69,
+         "y": 116.84
+        },
+        "uuid": "49f3d313-e984-4752-930b-e0a3da8832ea"
+       },
+       {
+        "description": "Durchsteckpad 2 [/DATA-RB7] von R12",
+        "pos": {
+         "x": 135.255,
+         "y": 111.76
+        },
+        "uuid": "9b30d3f3-4839-4cb4-99b6-d6cf7b1c6bb0"
+       }
+      ]
+     },
+     {
+      "net": "/DATA-RB7",
+      "items": [
+       {
+        "description": "Durchsteckpad 7 [/DATA-RB7] von U6",
+        "pos": {
+         "x": 186.69,
+         "y": 123.19
+        },
+        "uuid": "22c650cd-7e77-4335-88b1-4135949c267e"
+       },
+       {
+        "description": "Durchsteckpad 13 [/DATA-RB7] von U5",
+        "pos": {
+         "x": 215.519,
+         "y": 120.65
+        },
+        "uuid": "2fffef2a-1856-48ee-814b-d6d4269a1824"
+       }
+      ]
+     },
+     {
+      "net": "/DATA-RB7",
+      "items": [
+       {
+        "description": "Durchsteckpad 40 [/DATA-RB7] von P3",
+        "pos": {
+         "x": 190.5,
+         "y": 50.8
+        },
+        "uuid": "e3625571-8dcc-4353-9a50-7e2901134d0d"
+       },
+       {
+        "description": "Durchsteckpad 5 [/DATA-RB7] von U1",
+        "pos": {
+         "x": 186.69,
+         "y": 116.84
+        },
+        "uuid": "49f3d313-e984-4752-930b-e0a3da8832ea"
+       }
+      ]
+     },
+     {
+      "net": "/DATA-RB7",
+      "items": [
+       {
+        "description": "Durchsteckpad 28 [/DATA-RB7] von P2",
+        "pos": {
+         "x": 215.265,
+         "y": 50.8
+        },
+        "uuid": "79ea2235-5918-4911-bd2e-a0c14a8cfb63"
+       },
+       {
+        "description": "Durchsteckpad 40 [/DATA-RB7] von P3",
+        "pos": {
+         "x": 190.5,
+         "y": 50.8
+        },
+        "uuid": "e3625571-8dcc-4353-9a50-7e2901134d0d"
+       }
+      ]
+     },
+     {
+      "net": "Net-(U4-Vc)",
+      "items": [
+       {
+        "description": "Durchsteckpad 1 [Net-(U4-Vc)] von U4",
+        "pos": {
+         "x": 110.49,
+         "y": 57.15
+        },
+        "uuid": "951f69aa-85a1-49a9-a712-cf96a1912237"
+       },
+       {
+        "description": "Durchsteckpad 1 [Net-(U4-Vc)] von C4",
+        "pos": {
+         "x": 114.3,
+         "y": 52.07
+        },
+        "uuid": "ea4138ad-e674-483c-b45b-160098381211"
+       }
+      ]
+     },
+     {
+      "net": "Net-(U4-Vc)",
+      "items": [
+       {
+        "description": "Durchsteckpad 1 [Net-(U4-Vc)] von C4",
+        "pos": {
+         "x": 114.3,
+         "y": 52.07
+        },
+        "uuid": "ea4138ad-e674-483c-b45b-160098381211"
+       },
+       {
+        "description": "Durchsteckpad 1 [Net-(U4-Vc)] von R10",
+        "pos": {
+         "x": 114.3,
+         "y": 48.26
+        },
+        "uuid": "f6c24668-69e6-443d-8c36-17ebba6a6669"
+       }
+      ]
+     },
+     {
+      "net": "Net-(U4-FB+)",
+      "items": [
+       {
+        "description": "Durchsteckpad 2 [Net-(U4-FB+)] von U4",
+        "pos": {
+         "x": 110.49,
+         "y": 59.69
+        },
+        "uuid": "3d131e60-8ea7-4d73-89b1-8ddfe601ceed"
+       },
+       {
+        "description": "Durchsteckpad 2 [Net-(U4-FB+)] von RV1",
+        "pos": {
+         "x": 117.475,
+         "y": 88.265
+        },
+        "uuid": "ca9b3857-2b85-4933-90f1-144e549ecbbc"
+       }
+      ]
+     },
+     {
+      "net": "Net-(D10-A)",
+      "items": [
+       {
+        "description": "Durchsteckpad 2 [Net-(D10-A)] von D10",
+        "pos": {
+         "x": 124.46,
+         "y": 57.15
+        },
+        "uuid": "525d9e32-f751-42b6-a2bf-fa76929ee50e"
+       },
+       {
+        "description": "Durchsteckpad 8 [Net-(D10-A)] von U4",
+        "pos": {
+         "x": 118.11,
+         "y": 57.15
+        },
+        "uuid": "0f473717-95ed-44f9-b4ae-fee0be696ecc"
+       }
+      ]
+     },
+     {
+      "net": "Net-(D10-A)",
+      "items": [
+       {
+        "description": "Durchsteckpad 1 [Net-(D10-A)] von L1",
+        "pos": {
+         "x": 125.73,
+         "y": 62.23
+        },
+        "uuid": "2ff154e5-1cbf-4802-863e-277b3a94d10e"
+       },
+       {
+        "description": "Durchsteckpad 2 [Net-(D10-A)] von D10",
+        "pos": {
+         "x": 124.46,
+         "y": 57.15
+        },
+        "uuid": "525d9e32-f751-42b6-a2bf-fa76929ee50e"
+       }
+      ]
+     },
+     {
+      "net": "Net-(D2-A)",
+      "items": [
+       {
+        "description": "Durchsteckpad 2 [Net-(D2-A)] von D2",
+        "pos": {
+         "x": 100.33,
+         "y": 118.237
+        },
+        "uuid": "609ab978-07f8-4f1a-8e8f-91019435e1e8"
+       },
+       {
+        "description": "Durchsteckpad 2 [Net-(D2-A)] von R1",
+        "pos": {
+         "x": 97.79,
+         "y": 118.11
+        },
+        "uuid": "9c8f8669-6709-4997-8aba-16286c667d68"
+       }
+      ]
+     },
+     {
+      "net": "Net-(D2-A)",
+      "items": [
+       {
+        "description": "Durchsteckpad 2 [Net-(D2-A)] von D2",
+        "pos": {
+         "x": 100.33,
+         "y": 118.237
+        },
+        "uuid": "609ab978-07f8-4f1a-8e8f-91019435e1e8"
+       },
+       {
+        "description": "Durchsteckpad 1 [Net-(D2-A)] von D3",
+        "pos": {
+         "x": 107.95,
+         "y": 121.92
+        },
+        "uuid": "08f79c44-5fd0-4da3-a61c-133c90d91bca"
+       }
+      ]
+     },
+     {
+      "net": "Net-(D2-A)",
+      "items": [
+       {
+        "description": "Durchsteckpad 1 [Net-(D2-A)] von D3",
+        "pos": {
+         "x": 107.95,
+         "y": 121.92
+        },
+        "uuid": "08f79c44-5fd0-4da3-a61c-133c90d91bca"
+       },
+       {
+        "description": "Durchsteckpad 2 [Net-(D2-A)] von U2",
+        "pos": {
+         "x": 118.11,
+         "y": 119.38
+        },
+        "uuid": "4f5f6ae9-0d2f-422e-9995-0ace54c97c0f"
+       }
+      ]
+     },
+     {
+      "net": "Net-(R8-Pad1)",
+      "items": [
+       {
+        "description": "Durchsteckpad 3 [Net-(R8-Pad1)] von U2",
+        "pos": {
+         "x": 120.65,
+         "y": 119.38
+        },
+        "uuid": "1481094c-b314-4e8e-829c-2959b87eccbe"
+       },
+       {
+        "description": "Durchsteckpad 1 [Net-(R8-Pad1)] von R8",
+        "pos": {
+         "x": 139.065,
+         "y": 91.059
+        },
+        "uuid": "03c7d770-e5cf-4635-8663-2b653d1b5abf"
+       }
+      ]
+     },
+     {
+      "net": "Net-(D4-A)",
+      "items": [
+       {
+        "description": "Durchsteckpad 2 [Net-(D4-A)] von R3",
+        "pos": {
+         "x": 97.79,
+         "y": 111.125
+        },
+        "uuid": "6f8b67d8-10a0-4993-a56a-2f539c6c4a8a"
+       },
+       {
+        "description": "Durchsteckpad 2 [Net-(D4-A)] von D4",
+        "pos": {
+         "x": 100.33,
+         "y": 111.887
+        },
+        "uuid": "8dab2bdc-98d6-4c86-b501-d984bbc0f405"
+       }
+      ]
+     },
+     {
+      "net": "Net-(D4-A)",
+      "items": [
+       {
+        "description": "Durchsteckpad 2 [Net-(D4-A)] von D4",
+        "pos": {
+         "x": 100.33,
+         "y": 111.887
+        },
+        "uuid": "8dab2bdc-98d6-4c86-b501-d984bbc0f405"
+       },
+       {
+        "description": "Durchsteckpad 1 [Net-(D4-A)] von D5",
+        "pos": {
+         "x": 107.95,
+         "y": 108.585
+        },
+        "uuid": "80efba19-ecf3-4984-8a03-1cfa0f1227d1"
+       }
+      ]
+     },
+     {
+      "net": "Net-(D4-A)",
+      "items": [
+       {
+        "description": "Durchsteckpad 5 [Net-(D4-A)] von U2",
+        "pos": {
+         "x": 125.73,
+         "y": 119.38
+        },
+        "uuid": "99ea95f2-2cc8-4eb1-85c9-b9af9e262846"
+       },
+       {
+        "description": "Durchsteckpad 1 [Net-(D4-A)] von D5",
+        "pos": {
+         "x": 107.95,
+         "y": 108.585
+        },
+        "uuid": "80efba19-ecf3-4984-8a03-1cfa0f1227d1"
+       }
+      ]
+     },
+     {
+      "net": "Net-(R12-Pad1)",
+      "items": [
+       {
+        "description": "Durchsteckpad 6 [Net-(R12-Pad1)] von U2",
+        "pos": {
+         "x": 128.27,
+         "y": 119.38
+        },
+        "uuid": "12a44b5f-e42c-4323-a0fd-63940e9a12f0"
+       },
+       {
+        "description": "Durchsteckpad 1 [Net-(R12-Pad1)] von R12",
+        "pos": {
+         "x": 135.255,
+         "y": 121.92
+        },
+        "uuid": "3d817d63-350d-4c42-b27d-8b132c139041"
+       }
+      ]
+     },
+     {
+      "net": "Net-(R13-Pad1)",
+      "items": [
+       {
+        "description": "Durchsteckpad 8 [Net-(R13-Pad1)] von U2",
+        "pos": {
+         "x": 130.81,
+         "y": 111.76
+        },
+        "uuid": "3104e9c7-1a0e-4ebe-8922-4d5662fbe432"
+       },
+       {
+        "description": "Durchsteckpad 1 [Net-(R13-Pad1)] von R13",
+        "pos": {
+         "x": 140.335,
+         "y": 111.76
+        },
+        "uuid": "e77ad107-5d0c-4b1b-9a32-2255ea408c98"
+       }
+      ]
+     },
+     {
+      "net": "Net-(D6-A)",
+      "items": [
+       {
+        "description": "Durchsteckpad 2 [Net-(D6-A)] von R5",
+        "pos": {
+         "x": 97.917,
+         "y": 125.476
+        },
+        "uuid": "c2c4fe7b-3856-4aa6-aa0f-b736460af0ea"
+       },
+       {
+        "description": "Durchsteckpad 2 [Net-(D6-A)] von D6",
+        "pos": {
+         "x": 100.33,
+         "y": 125.095
+        },
+        "uuid": "9ee8fed9-7d7b-40ae-bf7d-5449322247e1"
+       }
+      ]
+     },
+     {
+      "net": "Net-(D6-A)",
+      "items": [
+       {
+        "description": "Durchsteckpad 2 [Net-(D6-A)] von D6",
+        "pos": {
+         "x": 100.33,
+         "y": 125.095
+        },
+        "uuid": "9ee8fed9-7d7b-40ae-bf7d-5449322247e1"
+       },
+       {
+        "description": "Durchsteckpad 1 [Net-(D6-A)] von D7",
+        "pos": {
+         "x": 107.95,
+         "y": 115.316
+        },
+        "uuid": "c560360c-6a8d-4e7f-96ee-d8ef9ac525a1"
+       }
+      ]
+     },
+     {
+      "net": "Net-(D6-A)",
+      "items": [
+       {
+        "description": "Durchsteckpad 9 [Net-(D6-A)] von U2",
+        "pos": {
+         "x": 128.27,
+         "y": 111.76
+        },
+        "uuid": "5c1e6808-68a4-4863-8554-a3770db8e724"
+       },
+       {
+        "description": "Durchsteckpad 1 [Net-(D6-A)] von D7",
+        "pos": {
+         "x": 107.95,
+         "y": 115.316
+        },
+        "uuid": "c560360c-6a8d-4e7f-96ee-d8ef9ac525a1"
+       }
+      ]
+     },
+     {
+      "net": "/PC-DATA-IN",
+      "items": [
+       {
+        "description": "Durchsteckpad 8 [/PC-DATA-IN] von J1",
+        "pos": {
+         "x": 79.76,
+         "y": 113.275
+        },
+        "uuid": "93547e8f-d77b-4d97-9048-37f696ed9e44"
+       },
+       {
+        "description": "Durchsteckpad 11 [/PC-DATA-IN] von U2",
+        "pos": {
+         "x": 123.19,
+         "y": 111.76
+        },
+        "uuid": "c10fb590-c5c5-4b28-b69e-cb5935c19986"
+       }
+      ]
+     },
+     {
+      "net": "Net-(D11-K)",
+      "items": [
+       {
+        "description": "Durchsteckpad 1 [Net-(D11-K)] von R11",
+        "pos": {
+         "x": 140.081,
+         "y": 70.993
+        },
+        "uuid": "128cbd68-91ba-495a-a582-42974cd299f4"
+       },
+       {
+        "description": "Durchsteckpad 1 [Net-(D11-K)] von D11",
+        "pos": {
+         "x": 139.065,
+         "y": 80.645
+        },
+        "uuid": "cb07905e-580a-4dc2-be6b-6d6f16c14fea"
+       }
+      ]
+     },
+     {
+      "net": "Net-(D11-K)",
+      "items": [
+       {
+        "description": "Durchsteckpad 1 [Net-(D11-K)] von Q1",
+        "pos": {
+         "x": 146.05,
+         "y": 69.85
+        },
+        "uuid": "e7719da0-7af6-4a38-8a13-eb3cab7dff9e"
+       },
+       {
+        "description": "Durchsteckpad 1 [Net-(D11-K)] von R11",
+        "pos": {
+         "x": 140.081,
+         "y": 70.993
+        },
+        "uuid": "128cbd68-91ba-495a-a582-42974cd299f4"
+       }
+      ]
+     },
+     {
+      "net": "Net-(D11-A)",
+      "items": [
+       {
+        "description": "Durchsteckpad 2 [Net-(D11-A)] von D11",
+        "pos": {
+         "x": 146.685,
+         "y": 80.645
+        },
+        "uuid": "a39c840d-796a-4ca2-bf06-66612a1ffc69"
+       },
+       {
+        "description": "Durchsteckpad 1 [Net-(D11-A)] von R19",
+        "pos": {
+         "x": 149.225,
+         "y": 83.82
+        },
+        "uuid": "446a5d82-d056-4dea-9c08-9af4d4a6e5b9"
+       }
+      ]
+     },
+     {
+      "net": "/VPP_ON",
+      "items": [
+       {
+        "description": "Durchsteckpad 1 [/VPP_ON] von R2",
+        "pos": {
+         "x": 87.63,
+         "y": 114.554
+        },
+        "uuid": "cd298c18-ba9b-483c-b8ff-9ef688078764"
+       },
+       {
+        "description": "Durchsteckpad 3 [/VPP_ON] von J1",
+        "pos": {
+         "x": 82.6,
+         "y": 114.66
+        },
+        "uuid": "3293adba-2f29-4fc6-b933-d8d179591629"
+       }
+      ]
+     },
+     {
+      "net": "/VPP_ON",
+      "items": [
+       {
+        "description": "Durchsteckpad 1 [/VPP_ON] von R1",
+        "pos": {
+         "x": 87.63,
+         "y": 118.11
+        },
+        "uuid": "20c4fa71-fcc7-490d-a6b2-63eb34448e1c"
+       },
+       {
+        "description": "Durchsteckpad 1 [/VPP_ON] von R2",
+        "pos": {
+         "x": 87.63,
+         "y": 114.554
+        },
+        "uuid": "cd298c18-ba9b-483c-b8ff-9ef688078764"
+       }
+      ]
+     },
+     {
+      "net": "/PC-DATA-OUT",
+      "items": [
+       {
+        "description": "Durchsteckpad 4 [/PC-DATA-OUT] von J1",
+        "pos": {
+         "x": 82.6,
+         "y": 111.89
+        },
+        "uuid": "3316b391-66be-497c-8f2e-681907c19d99"
+       },
+       {
+        "description": "Durchsteckpad 1 [/PC-DATA-OUT] von R3",
+        "pos": {
+         "x": 87.63,
+         "y": 111.125
+        },
+        "uuid": "b09cad51-8121-4174-afde-25ea6b13bf1e"
+       }
+      ]
+     },
+     {
+      "net": "/PC-DATA-OUT",
+      "items": [
+       {
+        "description": "Durchsteckpad 1 [/PC-DATA-OUT] von R3",
+        "pos": {
+         "x": 87.63,
+         "y": 111.125
+        },
+        "uuid": "b09cad51-8121-4174-afde-25ea6b13bf1e"
+       },
+       {
+        "description": "Durchsteckpad 1 [/PC-DATA-OUT] von R4",
+        "pos": {
+         "x": 87.63,
+         "y": 107.823
+        },
+        "uuid": "8840f4d4-a2df-4160-8bfd-0265e13421e9"
+       }
+      ]
+     },
+     {
+      "net": "/PC-CLOCK-OUT",
+      "items": [
+       {
+        "description": "Durchsteckpad 1 [/PC-CLOCK-OUT] von R6",
+        "pos": {
+         "x": 87.757,
+         "y": 121.92
+        },
+        "uuid": "bb4832a6-a61a-406c-864d-10430b123031"
+       },
+       {
+        "description": "Durchsteckpad 7 [/PC-CLOCK-OUT] von J1",
+        "pos": {
+         "x": 79.76,
+         "y": 116.045
+        },
+        "uuid": "a838aafa-cdae-4835-8c0f-8ee319df5d45"
+       }
+      ]
+     },
+     {
+      "net": "/PC-CLOCK-OUT",
+      "items": [
+       {
+        "description": "Durchsteckpad 1 [/PC-CLOCK-OUT] von R5",
+        "pos": {
+         "x": 87.757,
+         "y": 125.476
+        },
+        "uuid": "7a0a8fa2-782a-445f-813e-1792b9aa4de9"
+       },
+       {
+        "description": "Durchsteckpad 1 [/PC-CLOCK-OUT] von R6",
+        "pos": {
+         "x": 87.757,
+         "y": 121.92
+        },
+        "uuid": "bb4832a6-a61a-406c-864d-10430b123031"
+       }
+      ]
+     },
+     {
+      "net": "Net-(Q3-B)",
+      "items": [
+       {
+        "description": "Durchsteckpad 2 [Net-(Q3-B)] von R20",
+        "pos": {
+         "x": 134.62,
+         "y": 102.235
+        },
+        "uuid": "17e9a9bb-4bcf-4fcf-ac34-fb4d2061be31"
+       },
+       {
+        "description": "Durchsteckpad 2 [Net-(Q3-B)] von Q3",
+        "pos": {
+         "x": 143.51,
+         "y": 96.52
+        },
+        "uuid": "72e59242-7253-4dc7-979b-d58c1fc1bab0"
+       }
+      ]
+     },
+     {
+      "net": "Net-(Q3-B)",
+      "items": [
+       {
+        "description": "Durchsteckpad 2 [Net-(Q3-B)] von Q3",
+        "pos": {
+         "x": 143.51,
+         "y": 96.52
+        },
+        "uuid": "72e59242-7253-4dc7-979b-d58c1fc1bab0"
+       },
+       {
+        "description": "Durchsteckpad 2 [Net-(Q3-B)] von R19",
+        "pos": {
+         "x": 139.065,
+         "y": 83.82
+        },
+        "uuid": "3687bcfd-c320-41ea-8852-8416e2957613"
+       }
+      ]
+     },
+     {
+      "net": "Net-(Q2-C)",
+      "items": [
+       {
+        "description": "Durchsteckpad 1 [Net-(Q2-C)] von Q2",
+        "pos": {
+         "x": 148.082,
+         "y": 60.706
+        },
+        "uuid": "1e2ebe96-68ed-40c2-96e3-9942a1f0c392"
+       },
+       {
+        "description": "Durchsteckpad 1 [Net-(Q2-C)] von R18",
+        "pos": {
+         "x": 152.4,
+         "y": 68.58
+        },
+        "uuid": "7b1534a3-e2b6-4853-ae35-b5fc665f6886"
+       }
+      ]
+     },
+     {
+      "net": "Net-(Q2-C)",
+      "items": [
+       {
+        "description": "Durchsteckpad 1 [Net-(Q2-C)] von R18",
+        "pos": {
+         "x": 152.4,
+         "y": 68.58
+        },
+        "uuid": "7b1534a3-e2b6-4853-ae35-b5fc665f6886"
+       },
+       {
+        "description": "Durchsteckpad 1 [Net-(Q2-C)] von R17",
+        "pos": {
+         "x": 156.21,
+         "y": 68.58
+        },
+        "uuid": "54db31a2-7e7b-4582-bd93-d7e3930c5814"
+       }
+      ]
+     },
+     {
+      "net": "Net-(Q2-C)",
+      "items": [
+       {
+        "description": "Durchsteckpad 1 [Net-(Q2-C)] von R18",
+        "pos": {
+         "x": 152.4,
+         "y": 68.58
+        },
+        "uuid": "7b1534a3-e2b6-4853-ae35-b5fc665f6886"
+       },
+       {
+        "description": "Durchsteckpad 1 [Net-(Q2-C)] von R9",
+        "pos": {
+         "x": 139.065,
+         "y": 77.47
+        },
+        "uuid": "081806af-9cda-4081-a15a-206026679bd5"
+       }
+      ]
+     },
+     {
+      "net": "Net-(Q2-B)",
+      "items": [
+       {
+        "description": "Durchsteckpad 2 [Net-(Q2-B)] von R11",
+        "pos": {
+         "x": 140.081,
+         "y": 60.833
+        },
+        "uuid": "0912be8d-c58b-41ee-8866-72390bfba589"
+       },
+       {
+        "description": "Durchsteckpad 2 [Net-(Q2-B)] von Q2",
+        "pos": {
+         "x": 146.812,
+         "y": 61.976
+        },
+        "uuid": "8c289fa7-a8df-4bed-98cb-75a80af6fa0f"
+       }
+      ]
+     },
+     {
+      "net": "Net-(Q2-B)",
+      "items": [
+       {
+        "description": "Durchsteckpad 2 [Net-(Q2-B)] von Q2",
+        "pos": {
+         "x": 146.812,
+         "y": 61.976
+        },
+        "uuid": "8c289fa7-a8df-4bed-98cb-75a80af6fa0f"
+       },
+       {
+        "description": "Durchsteckpad 2 [Net-(Q2-B)] von R7",
+        "pos": {
+         "x": 149.86,
+         "y": 54.61
+        },
+        "uuid": "dd3fa120-5291-4fdd-8e09-f94bff25c558"
+       }
+      ]
+     },
+     {
+      "net": "Net-(Q2-B)",
+      "items": [
+       {
+        "description": "Durchsteckpad 2 [Net-(Q2-B)] von R7",
+        "pos": {
+         "x": 149.86,
+         "y": 54.61
+        },
+        "uuid": "dd3fa120-5291-4fdd-8e09-f94bff25c558"
+       },
+       {
+        "description": "Durchsteckpad 2 [Net-(Q2-B)] von C9",
+        "pos": {
+         "x": 148.002,
+         "y": 49.784
+        },
+        "uuid": "e6a64fa2-f210-4851-9544-f5105dba7f81"
+       }
+      ]
+     },
+     {
+      "net": "VPP",
+      "items": [
+       {
+        "description": "Durchsteckpad 1 [VPP] von C3",
+        "pos": {
+         "x": 134.112,
+         "y": 62.23
+        },
+        "uuid": "7b25a167-1ec9-4e30-82cc-a6a01a98687c"
+       },
+       {
+        "description": "Durchsteckpad 2 [VPP] von R16",
+        "pos": {
+         "x": 128.27,
+         "y": 75.184
+        },
+        "uuid": "f2f3802c-e340-4501-86ce-4797c29184f9"
+       }
+      ]
+     },
+     {
+      "net": "VPP",
+      "items": [
+       {
+        "description": "Durchsteckpad 1 [VPP] von D10",
+        "pos": {
+         "x": 137.16,
+         "y": 57.15
+        },
+        "uuid": "e40c18fc-ac21-4051-b91f-7ebe7e73cc59"
+       },
+       {
+        "description": "Durchsteckpad 1 [VPP] von C3",
+        "pos": {
+         "x": 134.112,
+         "y": 62.23
+        },
+        "uuid": "7b25a167-1ec9-4e30-82cc-a6a01a98687c"
+       }
+      ]
+     },
+     {
+      "net": "VPP",
+      "items": [
+       {
+        "description": "Durchsteckpad 1 [VPP] von R7",
+        "pos": {
+         "x": 139.7,
+         "y": 54.61
+        },
+        "uuid": "8da0a0ef-6999-4384-98f0-54c034e21332"
+       },
+       {
+        "description": "Durchsteckpad 1 [VPP] von D10",
+        "pos": {
+         "x": 137.16,
+         "y": 57.15
+        },
+        "uuid": "e40c18fc-ac21-4051-b91f-7ebe7e73cc59"
+       }
+      ]
+     },
+     {
+      "net": "VPP",
+      "items": [
+       {
+        "description": "Durchsteckpad 1 [VPP] von C9",
+        "pos": {
+         "x": 143.002,
+         "y": 49.784
+        },
+        "uuid": "825cc0d4-934d-4733-9200-782a032041bd"
+       },
+       {
+        "description": "Durchsteckpad 1 [VPP] von R7",
+        "pos": {
+         "x": 139.7,
+         "y": 54.61
+        },
+        "uuid": "8da0a0ef-6999-4384-98f0-54c034e21332"
+       }
+      ]
+     },
+     {
+      "net": "VPP",
+      "items": [
+       {
+        "description": "Durchsteckpad 3 [VPP] von Q2",
+        "pos": {
+         "x": 145.542,
+         "y": 60.706
+        },
+        "uuid": "3ceb24fb-e449-4666-829e-1fe6f3c7e7cc"
+       },
+       {
+        "description": "Durchsteckpad 1 [VPP] von R7",
+        "pos": {
+         "x": 139.7,
+         "y": 54.61
+        },
+        "uuid": "8da0a0ef-6999-4384-98f0-54c034e21332"
+       }
+      ]
+     },
+     {
+      "net": "Net-(Q1-B)",
+      "items": [
+       {
+        "description": "Durchsteckpad 2 [Net-(Q1-B)] von Q1",
+        "pos": {
+         "x": 147.32,
+         "y": 68.58
+        },
+        "uuid": "1978d7aa-0bc2-43f5-8c63-7eb8617d9ae0"
+       },
+       {
+        "description": "Durchsteckpad 2 [Net-(Q1-B)] von R8",
+        "pos": {
+         "x": 149.225,
+         "y": 91.059
+        },
+        "uuid": "f27c2567-6afd-4171-9ea9-bc286c2684e7"
+       }
+      ]
+     },
+     {
+      "net": "Net-(C5-Pad1)",
+      "items": [
+       {
+        "description": "Durchsteckpad 2 [Net-(C5-Pad1)] von R10",
+        "pos": {
+         "x": 124.46,
+         "y": 48.26
+        },
+        "uuid": "0ccd58db-a1f1-4d40-b48e-d9bd46f59b5b"
+       },
+       {
+        "description": "Durchsteckpad 1 [Net-(C5-Pad1)] von C5",
+        "pos": {
+         "x": 129.54,
+         "y": 49.53
+        },
+        "uuid": "0a632d53-6371-4c98-ad68-14a4d1410391"
+       }
+      ]
+     },
+     {
+      "net": "Net-(D8-A)",
+      "items": [
+       {
+        "description": "Durchsteckpad 2 [Net-(D8-A)] von R9",
+        "pos": {
+         "x": 149.225,
+         "y": 77.47
+        },
+        "uuid": "d2370343-8d02-4525-8970-442e5c238e37"
+       },
+       {
+        "description": "Durchsteckpad 2 [Net-(D8-A)] von D8",
+        "pos": {
+         "x": 153.67,
+         "y": 77.47
+        },
+        "uuid": "547f9315-7ea4-4b05-8ffc-0c21d79ad933"
+       }
+      ]
+     },
+     {
+      "net": "Net-(D12-A)",
+      "items": [
+       {
+        "description": "Durchsteckpad 2 [Net-(D12-A)] von D12",
+        "pos": {
+         "x": 153.67,
+         "y": 97.155
+        },
+        "uuid": "e62d70a1-3b12-4413-9659-e2b7a0143d70"
+       },
+       {
+        "description": "Durchsteckpad 1 [Net-(D12-A)] von R21",
+        "pos": {
+         "x": 158.115,
+         "y": 102.235
+        },
+        "uuid": "ae1413fb-e798-409b-b198-eb729e55b6c4"
+       }
+      ]
+     },
+     {
+      "net": "Net-(R16-Pad1)",
+      "items": [
+       {
+        "description": "Durchsteckpad 1 [Net-(R16-Pad1)] von R16",
+        "pos": {
+         "x": 118.11,
+         "y": 75.184
+        },
+        "uuid": "08abef9e-ef20-4ffd-b1e2-a1c9bdc28856"
+       },
+       {
+        "description": "Durchsteckpad 3 [Net-(R16-Pad1)] von RV1",
+        "pos": {
+         "x": 127.635,
+         "y": 85.725
+        },
+        "uuid": "7b9188e1-554e-45d4-91f1-12b1713916dd"
+       }
+      ]
+     },
+     {
+      "net": "Net-(R15-Pad1)",
+      "items": [
+       {
+        "description": "Durchsteckpad 1 [Net-(R15-Pad1)] von R15",
+        "pos": {
+         "x": 118.11,
+         "y": 78.74
+        },
+        "uuid": "4dc6c85a-9f61-4aae-bae8-300398eddee9"
+       },
+       {
+        "description": "Durchsteckpad 1 [Net-(R15-Pad1)] von RV1",
+        "pos": {
+         "x": 127.635,
+         "y": 90.805
+        },
+        "uuid": "77493f88-bfde-41cf-9556-bcabc5dfd4ce"
+       }
+      ]
+     },
+     {
+      "net": "Net-(D9-A)",
+      "items": [
+       {
+        "description": "Durchsteckpad 2 [Net-(D9-A)] von R14",
+        "pos": {
+         "x": 149.225,
+         "y": 87.63
+        },
+        "uuid": "06cf429f-9638-417a-ab48-ba0a69df7dff"
+       },
+       {
+        "description": "Durchsteckpad 2 [Net-(D9-A)] von D9",
+        "pos": {
+         "x": 153.67,
+         "y": 87.63
+        },
+        "uuid": "5a3983a6-c9b6-472c-b322-4f7525c34b28"
+       }
+      ]
+     },
+     {
+      "net": "Net-(D1-A)",
+      "items": [
+       {
+        "description": "Durchsteckpad 2 [Net-(D1-A)] von D1",
+        "pos": {
+         "x": 78.3,
+         "y": 77.0
+        },
+        "uuid": "55ce8845-03f0-453b-b236-0e6e4d6d3cc0"
+       },
+       {
+        "description": "Durchsteckpad 2 [Net-(D1-A)] von P1",
+        "pos": {
+         "x": 81.8,
+         "y": 65.0
+        },
+        "uuid": "fbd341e0-4e4c-4026-8097-16680c0e9be4"
+       }
+      ]
+     }
+    ]
+   },
+   "beautifier": {
+    "command": [
+     "python.exe",
+     "beautify_labels.py",
+     "<home>\\AppData\\Local\\Temp\\claude\\<claude-project-dir>\\b412134d-8a72-4647-afbe-34280705f904\\scratchpad\\work\\beaut_in\\pic_programmer.kicad_pcb",
+     "<home>\\AppData\\Local\\Temp\\claude\\<claude-project-dir>\\b412134d-8a72-4647-afbe-34280705f904\\scratchpad\\work\\beaut_out\\pic_programmer.kicad_pcb",
+     "--report-json",
+     "<home>\\AppData\\Local\\Temp\\claude\\<claude-project-dir>\\b412134d-8a72-4647-afbe-34280705f904\\scratchpad\\work\\beautifier_report.json"
+    ],
+    "krt_version": "0.22.0",
+    "returncode": 0,
+    "timed_out": false,
+    "seconds": 2.3,
+    "stdout_tail": "CMD: python.exe <home>\\Documents\\KiCad\\10.0\\3rdparty\\plugins\\KiCadRoutingTools\\py_placer\\beautify_labels.py <home>\\AppData\\Local\\Temp\\claude\\<claude-project-dir>\\b412134d-8a72-4647-afbe-34280705f904\\scratchpad\\work\\beaut_in\\pic_programmer.kicad_pcb <home>\\AppData\\Local\\Temp\\claude\\<claude-project-dir>\\b412134d-8a72-4647-afbe-34280705f904\\scratchpad\\work\\beaut_out\\pic_programmer.kicad_pcb --report-json <home>\\AppData\\Local\\Temp\\claude\\<claude-project-dir>\\b412134d-8a72-4647-afbe-34280705f904\\scratchpad\\work\\beautifier_report.json\nENV KNOBS: none\nLoading <home>\\AppData\\Local\\Temp\\claude\\<claude-project-dir>\\b412134d-8a72-4647-afbe-34280705f904\\scratchpad\\work\\beaut_in\\pic_programmer.kicad_pcb...\nOutput file: <home>\\AppData\\Local\\Temp\\claude\\<claude-project-dir>\\b412134d-8a72-4647-afbe-34280705f904\\scratchpad\\work\\beaut_out\\pic_programmer.kicad_pcb\nModified 63 reference label(s)\nSuccessfully wrote <home>\\AppData\\Local\\Temp\\claude\\<claude-project-dir>\\b412134d-8a72-4647-afbe-34280705f904\\scratchpad\\work\\beaut_out\\pic_programmer.kicad_pcb\nWrote <home>\\AppData\\Local\\Temp\\claude\\<claude-project-dir>\\b412134d-8a72-4647-afbe-34280705f904\\scratchpad\\work\\beautifier_report.json\nJSON_SUMMARY: {\"canceled\": false, \"labels_total\": 63, \"orientation\": \"horizontal\", \"placed\": 63, \"rotated\": 0, \"shrunk\": 0, \"shrunk_rotated\": 0, \"size\": 1.0, \"skipped_hidden\": 0, \"skipped_locked\": 0, \"skipped_multiline\": 0, \"thickness\": 0.15, \"unchanged\": 0, \"unchanged_refs\": []}\nEXIT=0\n",
+    "stderr_tail": ""
+   },
+   "files_changed": [
+    "pic_programmer.kicad_pcb"
+   ],
+   "raw_counts_before": {
+    "footprint": 63,
+    "segment": 0,
+    "via": 0,
+    "zone": 0,
+    "gr_text": 19,
+    "gr_text_box": 0
+   },
+   "raw_counts_after": {
+    "footprint": 63,
+    "segment": 0,
+    "via": 0,
+    "zone": 0,
+    "gr_text": 19,
+    "gr_text_box": 0
+   },
+   "label_report": [
+    {
+     "action": "placed",
+     "at_x": 12.5,
+     "at_y": 4.325,
+     "file_rotation": 0.0,
+     "old": {
+      "at_x": 12.5,
+      "at_y": -4.37,
+      "hidden": false,
+      "is_property_node": true,
+      "justify": "",
+      "layer": "F.SilkS",
+      "rotation": 180.0,
+      "size_h": 1.0,
+      "size_w": 1.0,
+      "thickness": 0.15
+     },
+     "reason": "",
+     "reference": "C1",
+     "size": 1.0,
+     "thickness": 0.15,
+     "world_angle": 0.0,
+     "world_x": 97.99,
+     "world_y": 74.542
+    },
+    {
+     "action": "placed",
+     "at_x": 12.5,
+     "at_y": -4.325,
+     "file_rotation": 0.0,
+     "old": {
+      "at_x": 12.5,
+      "at_y": -4.37,
+      "hidden": false,
+      "is_property_node": true,
+      "justify": "",
+      "layer": "F.SilkS",
+      "rotation": 0.0,
+      "size_h": 1.0,
+      "size_w": 1.0,
+      "thickness": 0.15
+     },
+     "reason": "",
+     "reference": "C2",
+     "size": 1.0,
+     "thickness": 0.15,
+     "world_angle": 0.0,
+     "world_x": 97.082,
+     "world_y": 85.845
+    },
+    {
+     "action": "placed",
+     "at_x": -1.875,
+     "at_y": -0.0,
+     "file_rotation": 0.0,
+     "old": {
+      "at_x": 10.0,
+      "at_y": -4.37,
+      "hidden": false,
+      "is_property_node": true,
+      "justify": "",
+      "layer": "F.SilkS",
+      "rotation": 270.0,
+      "size_h": 1.0,
+      "size_w": 1.0,
+      "thickness": 0.15
+     },
+     "reason": "",
+     "reference": "C3",
+     "size": 1.0,
+     "thickness": 0.15,
+     "world_angle": 0.0,
+     "world_x": 134.112,
+     "world_y": 60.35499999999999
+    },
+    {
+     "action": "placed",
+     "at_x": 2.5,
+     "at_y": 2.675,
+     "file_rotation": 0.0,
+     "old": {
+      "at_x": 7.5,
+      "at_y": 0.05,
+      "hidden": false,
+      "is_property_node": true,
+      "justify": "",
+      "layer": "F.SilkS",
+      "rotation": 0.0,
+      "size_h": 1.0,
+      "size_w": 1.0,
+      "thickness": 0.15
+     },
+     "reason": "",
+     "reference": "C4",
+     "size": 1.0,
+     "thickness": 0.15,
+     "world_angle": 0.0,
+     "world_x": 116.8,
+     "world_y": 54.745000000000005
+    },
+    {
+     "action": "placed",
+     "at_x": 2.5,
+     "at_y": -2.675,
+     "file_rotation": 0.0,
+     "old": {
+      "at_x": 2.5,
+      "at_y": -2.85,
+      "hidden": false,
+      "is_property_node": true,
+      "justify": "",
+      "layer": "F.SilkS",
+      "rotation": 0.0,
+      "size_h": 1.0,
+      "size_w": 1.0,
+      "thickness": 0.15
+     },
+     "reason": "",
+     "reference": "C5",
+     "size": 1.0,
+     "thickness": 0.15,
+     "world_angle": 0.0,
+     "world_x": 132.04,
+     "world_y": 46.855
+    },
+    {
+     "action": "placed",
+     "at_x": -1.875,
+     "at_y": -0.0,
+     "file_rotation": 0.0,
+     "old": {
+      "at_x": 2.5,
+      "at_y": -2.85,
+      "hidden": false,
+      "is_property_node": true,
+      "justify": "",
+      "layer": "F.SilkS",
+      "rotation": 270.0,
+      "size_h": 1.0,
+      "size_w": 1.0,
+      "thickness": 0.15
+     },
+     "reason": "",
+     "reference": "C6",
+     "size": 1.0,
+     "thickness": 0.15,
+     "world_angle": 0.0,
+     "world_x": 196.85,
+     "world_y": 110.52
+    },
+    {
+     "action": "placed",
+     "at_x": -1.875,
+     "at_y": -2.5,
+     "file_rotation": 0.0,
+     "old": {
+      "at_x": 2.5,
+      "at_y": -2.85,
+      "hidden": false,
+      "is_property_node": true,
+      "justify": "",
+      "layer": "F.SilkS",
+      "rotation": 270.0,
+      "size_h": 1.0,
+      "size_w": 1.0,
+      "thickness": 0.15
+     },
+     "reason": "",
+     "reference": "C7",
+     "size": 1.0,
+     "thickness": 0.15,
+     "world_angle": 0.0,
+     "world_x": 201.255,
+     "world_y": 69.245
+    },
+    {
+     "action": "placed",
+     "at_x": 2.5,
+     "at_y": -2.675,
+     "file_rotation": 0.0,
+     "old": {
+      "at_x": 2.5,
+      "at_y": -2.85,
+      "hidden": false,
+      "is_property_node": true,
+      "justify": "",
+      "layer": "F.SilkS",
+      "rotation": 0.0,
+      "size_h": 1.0,
+      "size_w": 1.0,
+      "thickness": 0.15
+     },
+     "reason": "",
+     "reference": "C9",
+     "size": 1.0,
+     "thickness": 0.15,
+     "world_angle": 0.0,
+     "world_x": 145.502,
+     "world_y": 47.108999999999995
+    },
+    {
+     "action": "placed",
+     "at_x": 14.575,
+     "at_y": -0.0,
+     "file_rotation": 0.0,
+     "old": {
+      "at_x": 6.35,
+      "at_y": -2.12,
+      "hidden": false,
+      "is_property_node": true,
+      "justify": "",
+      "layer": "F.SilkS",
+      "rotation": 90.0,
+      "size_h": 1.0,
+      "size_w": 1.0,
+      "thickness": 0.15
+     },
+     "reason": "",
+     "reference": "D1",
+     "size": 1.0,
+     "thickness": 0.15,
+     "world_angle": 0.0,
+     "world_x": 78.3,
+     "world_y": 75.125
+    },
+    {
+     "action": "placed",
+     "at_x": 6.35,
+     "at_y": 2.075,
+     "file_rotation": 0.0,
+     "old": {
+      "at_x": 6.35,
+      "at_y": -2.12,
+      "hidden": false,
+      "is_property_node": true,
+      "justify": "",
+      "layer": "F.SilkS",
+      "rotation": 180.0,
+      "size_h": 1.0,
+      "size_w": 1.0,
+      "thickness": 0.15
+     },
+     "reason": "",
+     "reference": "D10",
+     "size": 1.0,
+     "thickness": 0.15,
+     "world_angle": 0.0,
+     "world_x": 130.81,
+     "world_y": 55.074999999999996
+    },
+    {
+     "action": "placed",
+     "at_x": 10.745,
+     "at_y": 0.0,
+     "file_rotation": 0.0,
+     "old": {
+      "at_x": 4.41,
+      "at_y": -0.02,
+      "hidden": false,
+      "is_property_node": true,
+      "justify": "",
+      "layer": "F.SilkS",
+      "rotation": 0.0,
+      "size_h": 1.0,
+      "size_w": 1.0,
+      "thickness": 0.15
+     },
+     "reason": "",
+     "reference": "D11",
+     "size": 1.0,
+     "thickness": 0.15,
+     "world_angle": 0.0,
+     "world_x": 149.80999999999997,
+     "world_y": 80.645
+    },
+    {
+     "action": "placed",
+     "at_x": 1.275,
+     "at_y": 4.035,
+     "file_rotation": 0.0,
+     "old": {
+      "at_x": -4.23,
+      "at_y": 1.04,
+      "hidden": false,
+      "is_property_node": true,
+      "justify": "",
+      "layer": "F.SilkS",
+      "rotation": 180.0,
+      "size_h": 1.0,
+      "size_w": 1.0,
+      "thickness": 0.15
+     },
+     "reason": "",
+     "reference": "D12",
+     "size": 1.0,
+     "thickness": 0.15,
+     "world_angle": 0.0,
+     "world_x": 154.935,
+     "world_y": 93.12
+    },
+    {
+     "action": "placed",
+     "at_x": 3.81,
+     "at_y": -2.075,
+     "file_rotation": 0.0,
+     "old": {
+      "at_x": -2.49,
+      "at_y": 0.08,
+      "hidden": false,
+      "is_property_node": true,
+      "justify": "",
+      "layer": "F.SilkS",
+      "rotation": 180.0,
+      "size_h": 1.0,
+      "size_w": 1.0,
+      "thickness": 0.15
+     },
+     "reason": "",
+     "reference": "D2",
+     "size": 1.0,
+     "thickness": 0.15,
+     "world_angle": 0.0,
+     "world_x": 104.14,
+     "world_y": 120.312
+    },
+    {
+     "action": "placed",
+     "at_x": -2.525,
+     "at_y": 0.0,
+     "file_rotation": 0.0,
+     "old": {
+      "at_x": -2.39,
+      "at_y": 0.28,
+      "hidden": false,
+      "is_property_node": true,
+      "justify": "",
+      "layer": "F.SilkS",
+      "rotation": 180.0,
+      "size_h": 1.0,
+      "size_w": 1.0,
+      "thickness": 0.15
+     },
+     "reason": "",
+     "reference": "D3",
+     "size": 1.0,
+     "thickness": 0.15,
+     "world_angle": 0.0,
+     "world_x": 110.47500000000001,
+     "world_y": 121.92
+    },
+    {
+     "action": "placed",
+     "at_x": -2.525,
+     "at_y": 0.0,
+     "file_rotation": 0.0,
+     "old": {
+      "at_x": -2.39,
+      "at_y": -0.02,
+      "hidden": false,
+      "is_property_node": true,
+      "justify": "",
+      "layer": "F.SilkS",
+      "rotation": 180.0,
+      "size_h": 1.0,
+      "size_w": 1.0,
+      "thickness": 0.15
+     },
+     "reason": "",
+     "reference": "D4",
+     "size": 1.0,
+     "thickness": 0.15,
+     "world_angle": 0.0,
+     "world_x": 110.47500000000001,
+     "world_y": 111.887
+    },
+    {
+     "action": "placed",
+     "at_x": 3.81,
+     "at_y": 2.075,
+     "file_rotation": 0.0,
+     "old": {
+      "at_x": -2.29,
+      "at_y": 0.28,
+      "hidden": false,
+      "is_property_node": true,
+      "justify": "",
+      "layer": "F.SilkS",
+      "rotation": 180.0,
+      "size_h": 1.0,
+      "size_w": 1.0,
+      "thickness": 0.15
+     },
+     "reason": "",
+     "reference": "D5",
+     "size": 1.0,
+     "thickness": 0.15,
+     "world_angle": 0.0,
+     "world_x": 104.14,
+     "world_y": 106.50999999999999
+    },
+    {
+     "action": "placed",
+     "at_x": 3.81,
+     "at_y": -2.075,
+     "file_rotation": 0.0,
+     "old": {
+      "at_x": -2.39,
+      "at_y": -0.02,
+      "hidden": false,
+      "is_property_node": true,
+      "justify": "",
+      "layer": "F.SilkS",
+      "rotation": 180.0,
+      "size_h": 1.0,
+      "size_w": 1.0,
+      "thickness": 0.15
+     },
+     "reason": "",
+     "reference": "D6",
+     "size": 1.0,
+     "thickness": 0.15,
+     "world_angle": 0.0,
+     "world_x": 104.14,
+     "world_y": 127.17
+    },
+    {
+     "action": "placed",
+     "at_x": 3.81,
+     "at_y": 2.075,
+     "file_rotation": 0.0,
+     "old": {
+      "at_x": -2.49,
+      "at_y": -0.12,
+      "hidden": false,
+      "is_property_node": true,
+      "justify": "",
+      "layer": "F.SilkS",
+      "rotation": 180.0,
+      "size_h": 1.0,
+      "size_w": 1.0,
+      "thickness": 0.15
+     },
+     "reason": "",
+     "reference": "D7",
+     "size": 1.0,
+     "thickness": 0.15,
+     "world_angle": 0.0,
+     "world_x": 104.14,
+     "world_y": 113.241
+    },
+    {
+     "action": "placed",
+     "at_x": 1.275,
+     "at_y": 4.035,
+     "file_rotation": 0.0,
+     "old": {
+      "at_x": 1.27,
+      "at_y": -3.96,
+      "hidden": false,
+      "is_property_node": true,
+      "justify": "",
+      "layer": "F.SilkS",
+      "rotation": 180.0,
+      "size_h": 1.0,
+      "size_w": 1.0,
+      "thickness": 0.15
+     },
+     "reason": "",
+     "reference": "D8",
+     "size": 1.0,
+     "thickness": 0.15,
+     "world_angle": 0.0,
+     "world_x": 154.935,
+     "world_y": 73.435
+    },
+    {
+     "action": "placed",
+     "at_x": 1.275,
+     "at_y": 4.035,
+     "file_rotation": 0.0,
+     "old": {
+      "at_x": 1.27,
+      "at_y": -3.96,
+      "hidden": false,
+      "is_property_node": true,
+      "justify": "",
+      "layer": "F.SilkS",
+      "rotation": 180.0,
+      "size_h": 1.0,
+      "size_w": 1.0,
+      "thickness": 0.15
+     },
+     "reason": "",
+     "reference": "D9",
+     "size": 1.0,
+     "thickness": 0.15,
+     "world_angle": 0.0,
+     "world_x": 154.935,
+     "world_y": 83.595
+    },
+    {
+     "action": "placed",
+     "at_x": -22.295,
+     "at_y": 7.65,
+     "file_rotation": 0.0,
+     "old": {
+      "at_x": -5.54,
+      "at_y": -2.8,
+      "hidden": false,
+      "is_property_node": true,
+      "justify": "",
+      "layer": "F.SilkS",
+      "rotation": 270.0,
+      "size_h": 1.0,
+      "size_w": 1.0,
+      "thickness": 0.15
+     },
+     "reason": "",
+     "reference": "J1",
+     "size": 1.0,
+     "thickness": 0.15,
+     "world_angle": 0.0,
+     "world_x": 74.94999999999999,
+     "world_y": 97.905
+    },
+    {
+     "action": "placed",
+     "at_x": 0.0,
+     "at_y": -2.075,
+     "file_rotation": 0.0,
+     "old": {
+      "at_x": 0.0,
+      "at_y": 1.8,
+      "hidden": false,
+      "is_property_node": true,
+      "justify": "mirror",
+      "layer": "B.SilkS",
+      "rotation": 180.0,
+      "size_h": 1.0,
+      "size_w": 1.0,
+      "thickness": 0.15
+     },
+     "reason": "",
+     "reference": "JP1",
+     "size": 1.0,
+     "thickness": 0.15,
+     "world_angle": 0.0,
+     "world_x": 148.082,
+     "world_y": 95.715
+    },
+    {
+     "action": "placed",
+     "at_x": -2.675,
+     "at_y": -0.0,
+     "file_rotation": 0.0,
+     "old": {
+      "at_x": 2.5,
+      "at_y": -5.15,
+      "hidden": false,
+      "is_property_node": true,
+      "justify": "",
+      "layer": "F.SilkS",
+      "rotation": 270.0,
+      "size_h": 1.0,
+      "size_w": 1.0,
+      "thickness": 0.15
+     },
+     "reason": "",
+     "reference": "L1",
+     "size": 1.0,
+     "thickness": 0.15,
+     "world_angle": 0.0,
+     "world_x": 125.73000000000002,
+     "world_y": 59.55499999999999
+    },
+    {
+     "action": "placed",
+     "at_x": -3.825,
+     "at_y": 0.25,
+     "file_rotation": 0.0,
+     "old": {
+      "at_x": 2.5,
+      "at_y": -7.12,
+      "hidden": false,
+      "is_property_node": true,
+      "justify": "",
+      "layer": "F.SilkS",
+      "rotation": 270.0,
+      "size_h": 1.0,
+      "size_w": 1.0,
+      "thickness": 0.15
+     },
+     "reason": "",
+     "reference": "P1",
+     "size": 1.0,
+     "thickness": 0.15,
+     "world_angle": 0.0,
+     "world_x": 81.55,
+     "world_y": 56.175
+    },
+    {
+     "action": "placed",
+     "at_x": 7.225,
+     "at_y": 0.0,
+     "file_rotation": 0.0,
+     "old": {
+      "at_x": 5.2,
+      "at_y": -4.25,
+      "hidden": false,
+      "is_property_node": true,
+      "justify": "",
+      "layer": "F.SilkS",
+      "rotation": 0.0,
+      "size_h": 1.0,
+      "size_w": 1.0,
+      "thickness": 0.15
+     },
+     "reason": "",
+     "reference": "P101",
+     "size": 1.0,
+     "thickness": 0.15,
+     "world_angle": 0.0,
+     "world_x": 84.695,
+     "world_y": 135.89
+    },
+    {
+     "action": "placed",
+     "at_x": 0.0,
+     "at_y": -5.375,
+     "file_rotation": 0.0,
+     "old": {
+      "at_x": 0.0,
+      "at_y": -5.25,
+      "hidden": false,
+      "is_property_node": true,
+      "justify": "",
+      "layer": "F.SilkS",
+      "rotation": 0.0,
+      "size_h": 1.0,
+      "size_w": 1.0,
+      "thickness": 0.15
+     },
+     "reason": "",
+     "reference": "P102",
+     "size": 1.0,
+     "thickness": 0.15,
+     "world_angle": 0.0,
+     "world_x": 158.75,
+     "world_y": 130.515
+    },
+    {
+     "action": "placed",
+     "at_x": 0.0,
+     "at_y": -5.375,
+     "file_rotation": 0.0,
+     "old": {
+      "at_x": 0.0,
+      "at_y": -5.25,
+      "hidden": false,
+      "is_property_node": true,
+      "justify": "",
+      "layer": "F.SilkS",
+      "rotation": 0.0,
+      "size_h": 1.0,
+      "size_w": 1.0,
+      "thickness": 0.15
+     },
+     "reason": "",
+     "reference": "P103",
+     "size": 1.0,
+     "thickness": 0.15,
+     "world_angle": 0.0,
+     "world_x": 229.87,
+     "world_y": 130.515
+    },
+    {
+     "action": "placed",
+     "at_x": 0.0,
+     "at_y": 5.375,
+     "file_rotation": 0.0,
+     "old": {
+      "at_x": 0.0,
+      "at_y": -5.25,
+      "hidden": false,
+      "is_property_node": true,
+      "justify": "",
+      "layer": "F.SilkS",
+      "rotation": 0.0,
+      "size_h": 1.0,
+      "size_w": 1.0,
+      "thickness": 0.15
+     },
+     "reason": "",
+     "reference": "P104",
+     "size": 1.0,
+     "thickness": 0.15,
+     "world_angle": 0.0,
+     "world_x": 229.87,
+     "world_y": 49.825
+    },
+    {
+     "action": "placed",
+     "at_x": 0.0,
+     "at_y": 5.375,
+     "file_rotation": 0.0,
+     "old": {
+      "at_x": 0.0,
+      "at_y": -5.25,
+      "hidden": false,
+      "is_property_node": true,
+      "justify": "",
+      "layer": "F.SilkS",
+      "rotation": 0.0,
+      "size_h": 1.0,
+      "size_w": 1.0,
+      "thickness": 0.15
+     },
+     "reason": "",
+     "reference": "P105",
+     "size": 1.0,
+     "thickness": 0.15,
+     "world_angle": 0.0,
+     "world_x": 158.75,
+     "world_y": 49.825
+    },
+    {
+     "action": "placed",
+     "at_x": 0.0,
+     "at_y": 5.375,
+     "file_rotation": 0.0,
+     "old": {
+      "at_x": 0.0,
+      "at_y": -5.25,
+      "hidden": false,
+      "is_property_node": true,
+      "justify": "",
+      "layer": "F.SilkS",
+      "rotation": 0.0,
+      "size_h": 1.0,
+      "size_w": 1.0,
+      "thickness": 0.15
+     },
+     "reason": "",
+     "reference": "P106",
+     "size": 1.0,
+     "thickness": 0.15,
+     "world_angle": 0.0,
+     "world_x": 77.47,
+     "world_y": 49.825
+    },
+    {
+     "action": "placed",
+     "at_x": 3.81,
+     "at_y": -2.415,
+     "file_rotation": 0.0,
+     "old": {
+      "at_x": 3.81,
+      "at_y": -2.33,
+      "hidden": false,
+      "is_property_node": true,
+      "justify": "",
+      "layer": "F.SilkS",
+      "rotation": 0.0,
+      "size_h": 1.0,
+      "size_w": 1.0,
+      "thickness": 0.15
+     },
+     "reason": "",
+     "reference": "P2",
+     "size": 1.0,
+     "thickness": 0.15,
+     "world_angle": 0.0,
+     "world_x": 211.455,
+     "world_y": 48.38499999999999
+    },
+    {
+     "action": "placed",
+     "at_x": -10.855,
+     "at_y": 15.38,
+     "file_rotation": 0.0,
+     "old": {
+      "at_x": -6.66,
+      "at_y": -3.6,
+      "hidden": false,
+      "is_property_node": true,
+      "justify": "",
+      "layer": "F.SilkS",
+      "rotation": 180.0,
+      "size_h": 2.032,
+      "size_w": 1.27,
+      "thickness": 0.3048
+     },
+     "reason": "",
+     "reference": "P3",
+     "size": 1.0,
+     "thickness": 0.15,
+     "world_angle": 0.0,
+     "world_x": 164.405,
+     "world_y": 66.18
+    },
+    {
+     "action": "placed",
+     "at_x": 1.27,
+     "at_y": -3.555,
+     "file_rotation": 0.0,
+     "old": {
+      "at_x": 1.27,
+      "at_y": -3.56,
+      "hidden": false,
+      "is_property_node": true,
+      "justify": "",
+      "layer": "F.SilkS",
+      "rotation": 0.0,
+      "size_h": 1.0,
+      "size_w": 1.0,
+      "thickness": 0.15
+     },
+     "reason": "",
+     "reference": "Q1",
+     "size": 1.0,
+     "thickness": 0.15,
+     "world_angle": 0.0,
+     "world_x": 147.32,
+     "world_y": 66.29499999999999
+    },
+    {
+     "action": "placed",
+     "at_x": 1.27,
+     "at_y": 2.835,
+     "file_rotation": 0.0,
+     "old": {
+      "at_x": 1.27,
+      "at_y": -3.56,
+      "hidden": false,
+      "is_property_node": true,
+      "justify": "",
+      "layer": "F.SilkS",
+      "rotation": 180.0,
+      "size_h": 1.0,
+      "size_w": 1.0,
+      "thickness": 0.15
+     },
+     "reason": "",
+     "reference": "Q2",
+     "size": 1.0,
+     "thickness": 0.15,
+     "world_angle": 0.0,
+     "world_x": 146.812,
+     "world_y": 57.871
+    },
+    {
+     "action": "placed",
+     "at_x": 1.27,
+     "at_y": -3.555,
+     "file_rotation": 0.0,
+     "old": {
+      "at_x": 1.27,
+      "at_y": -3.56,
+      "hidden": false,
+      "is_property_node": true,
+      "justify": "",
+      "layer": "F.SilkS",
+      "rotation": 0.0,
+      "size_h": 1.0,
+      "size_w": 1.0,
+      "thickness": 0.15
+     },
+     "reason": "",
+     "reference": "Q3",
+     "size": 1.0,
+     "thickness": 0.15,
+     "world_angle": 0.0,
+     "world_x": 143.51,
+     "world_y": 94.235
+    },
+    {
+     "action": "placed",
+     "at_x": 5.08,
+     "at_y": 2.325,
+     "file_rotation": 0.0,
+     "old": {
+      "at_x": 2.98,
+      "at_y": -0.33,
+      "hidden": false,
+      "is_property_node": true,
+      "justify": "",
+      "layer": "F.SilkS",
+      "rotation": 0.0,
+      "size_h": 1.0,
+      "size_w": 1.0,
+      "thickness": 0.15
+     },
+     "reason": "",
+     "reference": "R1",
+     "size": 1.0,
+     "thickness": 0.15,
+     "world_angle": 0.0,
+     "world_x": 92.71000000000001,
+     "world_y": 120.435
+    },
+    {
+     "action": "placed",
+     "at_x": 5.08,
+     "at_y": -2.325,
+     "file_rotation": 0.0,
+     "old": {
+      "at_x": 5.08,
+      "at_y": -2.37,
+      "hidden": false,
+      "is_property_node": true,
+      "justify": "",
+      "layer": "F.SilkS",
+      "rotation": 0.0,
+      "size_h": 1.0,
+      "size_w": 1.0,
+      "thickness": 0.15
+     },
+     "reason": "",
+     "reference": "R10",
+     "size": 1.0,
+     "thickness": 0.15,
+     "world_angle": 0.0,
+     "world_x": 119.38,
+     "world_y": 45.934999999999995
+    },
+    {
+     "action": "placed",
+     "at_x": 12.035,
+     "at_y": -0.0,
+     "file_rotation": 0.0,
+     "old": {
+      "at_x": 3.48,
+      "at_y": 2.33,
+      "hidden": false,
+      "is_property_node": true,
+      "justify": "",
+      "layer": "F.SilkS",
+      "rotation": 90.0,
+      "size_h": 1.0,
+      "size_w": 1.0,
+      "thickness": 0.15
+     },
+     "reason": "",
+     "reference": "R11",
+     "size": 1.0,
+     "thickness": 0.15,
+     "world_angle": 0.0,
+     "world_x": 140.081,
+     "world_y": 58.95799999999999
+    },
+    {
+     "action": "placed",
+     "at_x": 12.035,
+     "at_y": -0.0,
+     "file_rotation": 0.0,
+     "old": {
+      "at_x": 5.08,
+      "at_y": -2.37,
+      "hidden": false,
+      "is_property_node": true,
+      "justify": "",
+      "layer": "F.SilkS",
+      "rotation": 90.0,
+      "size_h": 1.0,
+      "size_w": 1.0,
+      "thickness": 0.15
+     },
+     "reason": "",
+     "reference": "R12",
+     "size": 1.0,
+     "thickness": 0.15,
+     "world_angle": 0.0,
+     "world_x": 135.255,
+     "world_y": 109.885
+    },
+    {
+     "action": "placed",
+     "at_x": -1.875,
+     "at_y": -0.0,
+     "file_rotation": 0.0,
+     "old": {
+      "at_x": 5.08,
+      "at_y": -2.37,
+      "hidden": false,
+      "is_property_node": true,
+      "justify": "",
+      "layer": "F.SilkS",
+      "rotation": 270.0,
+      "size_h": 1.0,
+      "size_w": 1.0,
+      "thickness": 0.15
+     },
+     "reason": "",
+     "reference": "R13",
+     "size": 1.0,
+     "thickness": 0.15,
+     "world_angle": 0.0,
+     "world_x": 140.335,
+     "world_y": 109.885
+    },
+    {
+     "action": "placed",
+     "at_x": -3.125,
+     "at_y": 0.0,
+     "file_rotation": 0.0,
+     "old": {
+      "at_x": -2.92,
+      "at_y": -0.07,
+      "hidden": false,
+      "is_property_node": true,
+      "justify": "",
+      "layer": "F.SilkS",
+      "rotation": 0.0,
+      "size_h": 1.0,
+      "size_w": 1.0,
+      "thickness": 0.15
+     },
+     "reason": "",
+     "reference": "R14",
+     "size": 1.0,
+     "thickness": 0.15,
+     "world_angle": 0.0,
+     "world_x": 135.94,
+     "world_y": 87.63
+    },
+    {
+     "action": "placed",
+     "at_x": 5.08,
+     "at_y": 2.325,
+     "file_rotation": 0.0,
+     "old": {
+      "at_x": -2.92,
+      "at_y": 0.13,
+      "hidden": false,
+      "is_property_node": true,
+      "justify": "",
+      "layer": "F.SilkS",
+      "rotation": 0.0,
+      "size_h": 1.0,
+      "size_w": 1.0,
+      "thickness": 0.15
+     },
+     "reason": "",
+     "reference": "R15",
+     "size": 1.0,
+     "thickness": 0.15,
+     "world_angle": 0.0,
+     "world_x": 123.19,
+     "world_y": 81.065
+    },
+    {
+     "action": "placed",
+     "at_x": 5.08,
+     "at_y": -2.325,
+     "file_rotation": 0.0,
+     "old": {
+      "at_x": 5.08,
+      "at_y": -2.37,
+      "hidden": false,
+      "is_property_node": true,
+      "justify": "",
+      "layer": "F.SilkS",
+      "rotation": 0.0,
+      "size_h": 1.0,
+      "size_w": 1.0,
+      "thickness": 0.15
+     },
+     "reason": "",
+     "reference": "R16",
+     "size": 1.0,
+     "thickness": 0.15,
+     "world_angle": 0.0,
+     "world_x": 123.19,
+     "world_y": 72.859
+    },
+    {
+     "action": "placed",
+     "at_x": 12.035,
+     "at_y": -0.0,
+     "file_rotation": 0.0,
+     "old": {
+      "at_x": 13.78,
+      "at_y": 0.13,
+      "hidden": false,
+      "is_property_node": true,
+      "justify": "",
+      "layer": "F.SilkS",
+      "rotation": 90.0,
+      "size_h": 1.0,
+      "size_w": 1.0,
+      "thickness": 0.15
+     },
+     "reason": "",
+     "reference": "R17",
+     "size": 1.0,
+     "thickness": 0.15,
+     "world_angle": 0.0,
+     "world_x": 156.21,
+     "world_y": 56.544999999999995
+    },
+    {
+     "action": "placed",
+     "at_x": 12.035,
+     "at_y": -0.25,
+     "file_rotation": 0.0,
+     "old": {
+      "at_x": 13.18,
+      "at_y": 0.13,
+      "hidden": false,
+      "is_property_node": true,
+      "justify": "",
+      "layer": "F.SilkS",
+      "rotation": 90.0,
+      "size_h": 1.0,
+      "size_w": 1.0,
+      "thickness": 0.15
+     },
+     "reason": "",
+     "reference": "R18",
+     "size": 1.0,
+     "thickness": 0.15,
+     "world_angle": 0.0,
+     "world_x": 152.15,
+     "world_y": 56.544999999999995
+    },
+    {
+     "action": "placed",
+     "at_x": 13.285,
+     "at_y": -0.25,
+     "file_rotation": 0.0,
+     "old": {
+      "at_x": 12.88,
+      "at_y": -0.77,
+      "hidden": false,
+      "is_property_node": true,
+      "justify": "",
+      "layer": "F.SilkS",
+      "rotation": 180.0,
+      "size_h": 1.0,
+      "size_w": 1.0,
+      "thickness": 0.15
+     },
+     "reason": "",
+     "reference": "R19",
+     "size": 1.0,
+     "thickness": 0.15,
+     "world_angle": 0.0,
+     "world_x": 135.94,
+     "world_y": 84.07
+    },
+    {
+     "action": "placed",
+     "at_x": -2.525,
+     "at_y": 0.0,
+     "file_rotation": 0.0,
+     "old": {
+      "at_x": 2.98,
+      "at_y": 0.03,
+      "hidden": false,
+      "is_property_node": true,
+      "justify": "",
+      "layer": "F.SilkS",
+      "rotation": 0.0,
+      "size_h": 1.0,
+      "size_w": 1.0,
+      "thickness": 0.15
+     },
+     "reason": "",
+     "reference": "R2",
+     "size": 1.0,
+     "thickness": 0.15,
+     "world_angle": 0.0,
+     "world_x": 85.10499999999999,
+     "world_y": 114.554
+    },
+    {
+     "action": "placed",
+     "at_x": 5.83,
+     "at_y": 2.325,
+     "file_rotation": 0.0,
+     "old": {
+      "at_x": 5.08,
+      "at_y": -2.37,
+      "hidden": false,
+      "is_property_node": true,
+      "justify": "",
+      "layer": "F.SilkS",
+      "rotation": 180.0,
+      "size_h": 1.0,
+      "size_w": 1.0,
+      "thickness": 0.15
+     },
+     "reason": "",
+     "reference": "R20",
+     "size": 1.0,
+     "thickness": 0.15,
+     "world_angle": 0.0,
+     "world_x": 138.95,
+     "world_y": 99.91
+    },
+    {
+     "action": "placed",
+     "at_x": 5.08,
+     "at_y": -2.325,
+     "file_rotation": 0.0,
+     "old": {
+      "at_x": 5.08,
+      "at_y": -2.37,
+      "hidden": false,
+      "is_property_node": true,
+      "justify": "",
+      "layer": "F.SilkS",
+      "rotation": 180.0,
+      "size_h": 1.0,
+      "size_w": 1.0,
+      "thickness": 0.15
+     },
+     "reason": "",
+     "reference": "R21",
+     "size": 1.0,
+     "thickness": 0.15,
+     "world_angle": 0.0,
+     "world_x": 153.03500000000003,
+     "world_y": 104.56
+    },
+    {
+     "action": "placed",
+     "at_x": -2.525,
+     "at_y": 0.0,
+     "file_rotation": 0.0,
+     "old": {
+      "at_x": 2.98,
+      "at_y": -0.07,
+      "hidden": false,
+      "is_property_node": true,
+      "justify": "",
+      "layer": "F.SilkS",
+      "rotation": 0.0,
+      "size_h": 1.0,
+      "size_w": 1.0,
+      "thickness": 0.15
+     },
+     "reason": "",
+     "reference": "R3",
+     "size": 1.0,
+     "thickness": 0.15,
+     "world_angle": 0.0,
+     "world_x": 85.10499999999999,
+     "world_y": 111.125
+    },
+    {
+     "action": "placed",
+     "at_x": 5.08,
+     "at_y": -2.325,
+     "file_rotation": 0.0,
+     "old": {
+      "at_x": 5.08,
+      "at_y": -2.37,
+      "hidden": false,
+      "is_property_node": true,
+      "justify": "",
+      "layer": "F.SilkS",
+      "rotation": 0.0,
+      "size_h": 1.0,
+      "size_w": 1.0,
+      "thickness": 0.15
+     },
+     "reason": "",
+     "reference": "R4",
+     "size": 1.0,
+     "thickness": 0.15,
+     "world_angle": 0.0,
+     "world_x": 92.71000000000001,
+     "world_y": 105.49799999999999
+    },
+    {
+     "action": "placed",
+     "at_x": 5.08,
+     "at_y": 2.325,
+     "file_rotation": 0.0,
+     "old": {
+      "at_x": 3.08,
+      "at_y": -0.17,
+      "hidden": false,
+      "is_property_node": true,
+      "justify": "",
+      "layer": "F.SilkS",
+      "rotation": 0.0,
+      "size_h": 1.0,
+      "size_w": 1.0,
+      "thickness": 0.15
+     },
+     "reason": "",
+     "reference": "R5",
+     "size": 1.0,
+     "thickness": 0.15,
+     "world_angle": 0.0,
+     "world_x": 92.83700000000002,
+     "world_y": 127.801
+    },
+    {
+     "action": "placed",
+     "at_x": -2.525,
+     "at_y": 0.0,
+     "file_rotation": 0.0,
+     "old": {
+      "at_x": 2.98,
+      "at_y": -0.07,
+      "hidden": false,
+      "is_property_node": true,
+      "justify": "",
+      "layer": "F.SilkS",
+      "rotation": 0.0,
+      "size_h": 1.0,
+      "size_w": 1.0,
+      "thickness": 0.15
+     },
+     "reason": "",
+     "reference": "R6",
+     "size": 1.0,
+     "thickness": 0.15,
+     "world_angle": 0.0,
+     "world_x": 85.232,
+     "world_y": 121.92
+    },
+    {
+     "action": "placed",
+     "at_x": 5.08,
+     "at_y": -2.325,
+     "file_rotation": 0.0,
+     "old": {
+      "at_x": 3.08,
+      "at_y": 0.03,
+      "hidden": false,
+      "is_property_node": true,
+      "justify": "",
+      "layer": "F.SilkS",
+      "rotation": 0.0,
+      "size_h": 1.0,
+      "size_w": 1.0,
+      "thickness": 0.15
+     },
+     "reason": "",
+     "reference": "R7",
+     "size": 1.0,
+     "thickness": 0.15,
+     "world_angle": 0.0,
+     "world_x": 144.77999999999997,
+     "world_y": 52.285
+    },
+    {
+     "action": "placed",
+     "at_x": -2.525,
+     "at_y": 0.0,
+     "file_rotation": 0.0,
+     "old": {
+      "at_x": -2.22,
+      "at_y": 0.03,
+      "hidden": false,
+      "is_property_node": true,
+      "justify": "",
+      "layer": "F.SilkS",
+      "rotation": 0.0,
+      "size_h": 1.0,
+      "size_w": 1.0,
+      "thickness": 0.15
+     },
+     "reason": "",
+     "reference": "R8",
+     "size": 1.0,
+     "thickness": 0.15,
+     "world_angle": 0.0,
+     "world_x": 136.54,
+     "world_y": 91.059
+    },
+    {
+     "action": "placed",
+     "at_x": 5.08,
+     "at_y": -2.325,
+     "file_rotation": 0.0,
+     "old": {
+      "at_x": 5.08,
+      "at_y": -2.37,
+      "hidden": false,
+      "is_property_node": true,
+      "justify": "",
+      "layer": "F.SilkS",
+      "rotation": 0.0,
+      "size_h": 1.0,
+      "size_w": 1.0,
+      "thickness": 0.15
+     },
+     "reason": "",
+     "reference": "R9",
+     "size": 1.0,
+     "thickness": 0.15,
+     "world_angle": 0.0,
+     "world_x": 144.14499999999998,
+     "world_y": 75.145
+    },
+    {
+     "action": "placed",
+     "at_x": 4.58,
+     "at_y": 7.615,
+     "file_rotation": 0.0,
+     "old": {
+      "at_x": -2.54,
+      "at_y": -5.08,
+      "hidden": false,
+      "is_property_node": true,
+      "justify": "",
+      "layer": "F.SilkS",
+      "rotation": 180.0,
+      "size_h": 1.397,
+      "size_w": 1.27,
+      "thickness": 0.2032
+     },
+     "reason": "",
+     "reference": "RV1",
+     "size": 1.0,
+     "thickness": 0.15,
+     "world_angle": 0.0,
+     "world_x": 123.055,
+     "world_y": 83.19
+    },
+    {
+     "action": "placed",
+     "at_x": -2.995,
+     "at_y": 3.81,
+     "file_rotation": 0.0,
+     "old": {
+      "at_x": -3.69,
+      "at_y": 2.87,
+      "hidden": false,
+      "is_property_node": true,
+      "justify": "",
+      "layer": "F.SilkS",
+      "rotation": 0.0,
+      "size_h": 1.0,
+      "size_w": 1.0,
+      "thickness": 0.15
+     },
+     "reason": "",
+     "reference": "U1",
+     "size": 1.0,
+     "thickness": 0.15,
+     "world_angle": 0.0,
+     "world_x": 176.075,
+     "world_y": 113.03
+    },
+    {
+     "action": "placed",
+     "at_x": 9.895,
+     "at_y": 7.62,
+     "file_rotation": 0.0,
+     "old": {
+      "at_x": 3.81,
+      "at_y": -2.33,
+      "hidden": false,
+      "is_property_node": true,
+      "justify": "",
+      "layer": "F.SilkS",
+      "rotation": 90.0,
+      "size_h": 1.0,
+      "size_w": 1.0,
+      "thickness": 0.15
+     },
+     "reason": "",
+     "reference": "U2",
+     "size": 1.0,
+     "thickness": 0.15,
+     "world_angle": 0.0,
+     "world_x": 123.19,
+     "world_y": 109.485
+    },
+    {
+     "action": "placed",
+     "at_x": 2.54,
+     "at_y": -20.535,
+     "file_rotation": 0.0,
+     "old": {
+      "at_x": 2.54,
+      "at_y": -20.41,
+      "hidden": false,
+      "is_property_node": true,
+      "justify": "",
+      "layer": "F.SilkS",
+      "rotation": 0.0,
+      "size_h": 1.0,
+      "size_w": 1.0,
+      "thickness": 0.15
+     },
+     "reason": "",
+     "reference": "U3",
+     "size": 1.0,
+     "thickness": 0.15,
+     "world_angle": 0.0,
+     "world_x": 99.06,
+     "world_y": 50.585
+    },
+    {
+     "action": "placed",
+     "at_x": 3.56,
+     "at_y": -2.345,
+     "file_rotation": 0.0,
+     "old": {
+      "at_x": 3.81,
+      "at_y": -2.33,
+      "hidden": false,
+      "is_property_node": true,
+      "justify": "",
+      "layer": "F.SilkS",
+      "rotation": 0.0,
+      "size_h": 1.0,
+      "size_w": 1.0,
+      "thickness": 0.15
+     },
+     "reason": "",
+     "reference": "U4",
+     "size": 1.0,
+     "thickness": 0.15,
+     "world_angle": 0.0,
+     "world_x": 114.05,
+     "world_y": 54.80499999999999
+    },
+    {
+     "action": "placed",
+     "at_x": 3.81,
+     "at_y": -2.405,
+     "file_rotation": 0.0,
+     "old": {
+      "at_x": 3.81,
+      "at_y": -2.33,
+      "hidden": false,
+      "is_property_node": true,
+      "justify": "",
+      "layer": "F.SilkS",
+      "rotation": 0.0,
+      "size_h": 1.0,
+      "size_w": 1.0,
+      "thickness": 0.15
+     },
+     "reason": "",
+     "reference": "U5",
+     "size": 1.0,
+     "thickness": 0.15,
+     "world_angle": 0.0,
+     "world_x": 211.709,
+     "world_y": 105.545
+    },
+    {
+     "action": "placed",
+     "at_x": 3.81,
+     "at_y": 10.025,
+     "file_rotation": 0.0,
+     "old": {
+      "at_x": -4.09,
+      "at_y": 1.87,
+      "hidden": false,
+      "is_property_node": true,
+      "justify": "",
+      "layer": "F.SilkS",
+      "rotation": 0.0,
+      "size_h": 1.0,
+      "size_w": 1.0,
+      "thickness": 0.15
+     },
+     "reason": "",
+     "reference": "U6",
+     "size": 1.0,
+     "thickness": 0.15,
+     "world_angle": 0.0,
+     "world_x": 182.88,
+     "world_y": 130.67499999999998
+    }
+   ]
+  }
+ ],
+ "beautifier_diff": {
+  "cleared": [
+   {
+    "description": "Silkscreen clearance",
+    "items": [
+     {
+      "description": "Referenzfeld von RV1",
+      "pos": {
+       "x": 130.175,
+       "y": 95.885
+      },
+      "uuid": "63dc1ab5-ae87-4108-93d9-497d539614a0"
+     },
+     {
+      "description": "Platinen-Text \"13V ADJUST\" auf F.Silkscreen",
+      "pos": {
+       "x": 123.19,
+       "y": 95.25
+      },
+      "uuid": "ca73b4b4-9a51-46ca-a3dc-6983edb0c7bb"
+     }
+    ],
+    "severity": "error",
+    "type": "silk_overlap"
+   }
+  ],
+  "created": [
+   {
+    "description": "Silkscreen clearance",
+    "items": [
+     {
+      "description": "Referenzfeld von P1",
+      "pos": {
+       "x": 81.55,
+       "y": 56.175
+      },
+      "uuid": "027aef5c-70a4-4d21-bf50-e10901d4d513"
+     },
+     {
+      "description": "Platinen-Text \"+8/12V\" auf F.Silkscreen",
+      "pos": {
+       "x": 81.5,
+       "y": 55.5
+      },
+      "uuid": "14a6c3ac-e639-40b6-838b-1677460b7b74"
+     }
+    ],
+    "severity": "error",
+    "type": "silk_overlap"
+   },
+   {
+    "description": "Silkscreen clearance",
+    "items": [
+     {
+      "description": "Referenzfeld von U6",
+      "pos": {
+       "x": 182.88,
+       "y": 130.675
+      },
+      "uuid": "00453cab-9af9-42ae-8b5e-90360356b337"
+     },
+     {
+      "description": "Platinen-Text \"PIC 8 PINS\" auf F.Silkscreen",
+      "pos": {
+       "x": 183.515,
+       "y": 132.08
+      },
+      "uuid": "cc560fc9-619d-4986-9dda-024530bbf4a1"
+     }
+    ],
+    "severity": "error",
+    "type": "silk_overlap"
+   },
+   {
+    "description": "Silkscreen clearance",
+    "items": [
+     {
+      "description": "Referenzfeld von D2",
+      "pos": {
+       "x": 104.14,
+       "y": 120.312
+      },
+      "uuid": "0e370c73-6851-4a63-9115-20247a0aabb0"
+     },
+     {
+      "description": "Rechteck von D3 auf F.Silkscreen",
+      "pos": {
+       "x": 106.26,
+       "y": 123.04
+      },
+      "uuid": "11d8a77b-2a02-421f-ba38-e2c681ae4400"
+     }
+    ],
+    "severity": "error",
+    "type": "silk_overlap"
+   },
+   {
+    "description": "Silkscreen clearance",
+    "items": [
+     {
+      "description": "Rechteck von D4 auf F.Silkscreen",
+      "pos": {
+       "x": 106.26,
+       "y": 113.007
+      },
+      "uuid": "cc488722-8975-465e-b5ee-49b819ee8047"
+     },
+     {
+      "description": "Referenzfeld von D7",
+      "pos": {
+       "x": 104.14,
+       "y": 113.241
+      },
+      "uuid": "e43911c2-52b8-4953-96f0-ea66510924c4"
+     }
+    ],
+    "severity": "error",
+    "type": "silk_overlap"
+   },
+   {
+    "description": "Silkscreen clearance",
+    "items": [
+     {
+      "description": "Referenzfeld von R1",
+      "pos": {
+       "x": 92.71,
+       "y": 120.435
+      },
+      "uuid": "313de031-9878-49bb-801c-ca035f7c06bf"
+     },
+     {
+      "description": "Rechteck von R6 auf F.Silkscreen",
+      "pos": {
+       "x": 89.567,
+       "y": 120.55
+      },
+      "uuid": "e22b297c-6ea6-4e72-814f-44778f365b0e"
+     }
+    ],
+    "severity": "error",
+    "type": "silk_overlap"
+   },
+   {
+    "description": "Silkscreen clearance",
+    "items": [
+     {
+      "description": "Referenzfeld von R2",
+      "pos": {
+       "x": 85.105,
+       "y": 114.554
+      },
+      "uuid": "256c5e30-0dc8-48cf-97e6-aa429e960403"
+     },
+     {
+      "description": "Abschnitt von J1 auf F.Silkscreen",
+      "pos": {
+       "x": 84.46,
+       "y": 99.175
+      },
+      "uuid": "a2835d81-414f-4047-9e41-08428698c877"
+     }
+    ],
+    "severity": "error",
+    "type": "silk_overlap"
+   },
+   {
+    "description": "Silkscreen clearance",
+    "items": [
+     {
+      "description": "Referenzfeld von R3",
+      "pos": {
+       "x": 85.105,
+       "y": 111.125
+      },
+      "uuid": "18f9c064-d69c-4f12-aa91-b154b9211a08"
+     },
+     {
+      "description": "Abschnitt von J1 auf F.Silkscreen",
+      "pos": {
+       "x": 84.46,
+       "y": 99.175
+      },
+      "uuid": "a2835d81-414f-4047-9e41-08428698c877"
+     }
+    ],
+    "severity": "error",
+    "type": "silk_overlap"
+   },
+   {
+    "description": "Silkscreen clearance",
+    "items": [
+     {
+      "description": "Referenzfeld von R6",
+      "pos": {
+       "x": 85.232,
+       "y": 121.92
+      },
+      "uuid": "95514744-edde-40ea-913d-3d5f91cf1d76"
+     },
+     {
+      "description": "Abschnitt von J1 auf F.Silkscreen",
+      "pos": {
+       "x": 84.46,
+       "y": 99.175
+      },
+      "uuid": "a2835d81-414f-4047-9e41-08428698c877"
+     }
+    ],
+    "severity": "error",
+    "type": "silk_overlap"
+   }
+  ],
+  "persisting": [
+   {
+    "description": "Silkscreen clearance",
+    "items": [
+     {
+      "description": "Platinen-Text \"VCC ON\" auf F.Silkscreen",
+      "pos": {
+       "x": 162.9,
+       "y": 99.1
+      },
+      "uuid": "16296d09-e894-45b0-8f80-b052a17e0a89"
+     },
+     {
+      "description": "Kreisbogen von P3 auf F.Silkscreen",
+      "pos": {
+       "x": 168.910001,
+       "y": 96.52
+      },
+      "uuid": "a357a0e1-bd20-4b19-8a46-4bc4858f7255"
+     }
+    ],
+    "severity": "error",
+    "type": "silk_overlap"
+   },
+   {
+    "description": "Silkscreen clearance",
+    "items": [
+     {
+      "description": "Abschnitt von P3 auf F.Silkscreen",
+      "pos": {
+       "x": 177.8,
+       "y": 101.6
+      },
+      "uuid": "a3026b66-173b-4fdb-95b0-6ae958ce65a5"
+     },
+     {
+      "description": "Platinen-Text \"PIC 40 PINS\" auf F.Silkscreen",
+      "pos": {
+       "x": 182.245,
+       "y": 45.085
+      },
+      "uuid": "da996b55-6835-4ad3-bf9f-8dc429e7144c"
+     }
+    ],
+    "severity": "error",
+    "type": "silk_overlap"
+   },
+   {
+    "description": "Silkscreen clearance",
+    "items": [
+     {
+      "description": "Abschnitt von P3 auf F.Silkscreen",
+      "pos": {
+       "x": 187.96,
+       "y": 45.72
+      },
+      "uuid": "504a8352-879a-4f2e-9148-d54b31136914"
+     },
+     {
+      "description": "Platinen-Text \"PIC 40 PINS\" auf F.Silkscreen",
+      "pos": {
+       "x": 182.245,
+       "y": 45.085
+      },
+      "uuid": "da996b55-6835-4ad3-bf9f-8dc429e7144c"
+     }
+    ],
+    "severity": "error",
+    "type": "silk_overlap"
+   },
+   {
+    "description": "Silkscreen clearance",
+    "items": [
+     {
+      "description": "Abschnitt von P3 auf F.Silkscreen",
+      "pos": {
+       "x": 177.8,
+       "y": 45.72
+      },
+      "uuid": "23bbc54b-caff-438c-a3cf-7c0f0c3b7fb4"
+     },
+     {
+      "description": "Platinen-Text \"PIC 40 PINS\" auf F.Silkscreen",
+      "pos": {
+       "x": 182.245,
+       "y": 45.085
+      },
+      "uuid": "da996b55-6835-4ad3-bf9f-8dc429e7144c"
+     }
+    ],
+    "severity": "error",
+    "type": "silk_overlap"
+   },
+   {
+    "description": "Silkscreen clearance",
+    "items": [
+     {
+      "description": "Kreisbogen von P3 auf F.Silkscreen",
+      "pos": {
+       "x": 196.85,
+       "y": 48.26
+      },
+      "uuid": "69b86254-fcbe-4e19-be86-efd440eb954b"
+     },
+     {
+      "description": "Platinen-Text \"1=>>\" auf F.Silkscreen",
+      "pos": {
+       "x": 202.0,
+       "y": 48.7
+      },
+      "uuid": "e9165638-6b2b-4f04-9462-e4a5ff8ea34e"
+     }
+    ],
+    "severity": "error",
+    "type": "silk_overlap"
+   }
+  ]
+ },
+ "decision": {
+  "input_fail_floor": true,
+  "floor_board": "prepared",
+  "reason": "beautifier did not clear the floor (6 errors before, 13 after): the unmodified prepared board is the floor",
+  "floor_violations": [
+   {
+    "description": "Silkscreen clearance",
+    "items": [
+     {
+      "description": "Referenzfeld von RV1",
+      "pos": {
+       "x": 130.175,
+       "y": 95.885
+      },
+      "uuid": "63dc1ab5-ae87-4108-93d9-497d539614a0"
+     },
+     {
+      "description": "Platinen-Text \"13V ADJUST\" auf F.Silkscreen",
+      "pos": {
+       "x": 123.19,
+       "y": 95.25
+      },
+      "uuid": "ca73b4b4-9a51-46ca-a3dc-6983edb0c7bb"
+     }
+    ],
+    "severity": "error",
+    "type": "silk_overlap"
+   },
+   {
+    "description": "Silkscreen clearance",
+    "items": [
+     {
+      "description": "Platinen-Text \"VCC ON\" auf F.Silkscreen",
+      "pos": {
+       "x": 162.9,
+       "y": 99.1
+      },
+      "uuid": "16296d09-e894-45b0-8f80-b052a17e0a89"
+     },
+     {
+      "description": "Kreisbogen von P3 auf F.Silkscreen",
+      "pos": {
+       "x": 168.910001,
+       "y": 96.52
+      },
+      "uuid": "a357a0e1-bd20-4b19-8a46-4bc4858f7255"
+     }
+    ],
+    "severity": "error",
+    "type": "silk_overlap"
+   },
+   {
+    "description": "Silkscreen clearance",
+    "items": [
+     {
+      "description": "Abschnitt von P3 auf F.Silkscreen",
+      "pos": {
+       "x": 177.8,
+       "y": 101.6
+      },
+      "uuid": "a3026b66-173b-4fdb-95b0-6ae958ce65a5"
+     },
+     {
+      "description": "Platinen-Text \"PIC 40 PINS\" auf F.Silkscreen",
+      "pos": {
+       "x": 182.245,
+       "y": 45.085
+      },
+      "uuid": "da996b55-6835-4ad3-bf9f-8dc429e7144c"
+     }
+    ],
+    "severity": "error",
+    "type": "silk_overlap"
+   },
+   {
+    "description": "Silkscreen clearance",
+    "items": [
+     {
+      "description": "Abschnitt von P3 auf F.Silkscreen",
+      "pos": {
+       "x": 187.96,
+       "y": 45.72
+      },
+      "uuid": "504a8352-879a-4f2e-9148-d54b31136914"
+     },
+     {
+      "description": "Platinen-Text \"PIC 40 PINS\" auf F.Silkscreen",
+      "pos": {
+       "x": 182.245,
+       "y": 45.085
+      },
+      "uuid": "da996b55-6835-4ad3-bf9f-8dc429e7144c"
+     }
+    ],
+    "severity": "error",
+    "type": "silk_overlap"
+   },
+   {
+    "description": "Silkscreen clearance",
+    "items": [
+     {
+      "description": "Abschnitt von P3 auf F.Silkscreen",
+      "pos": {
+       "x": 177.8,
+       "y": 45.72
+      },
+      "uuid": "23bbc54b-caff-438c-a3cf-7c0f0c3b7fb4"
+     },
+     {
+      "description": "Platinen-Text \"PIC 40 PINS\" auf F.Silkscreen",
+      "pos": {
+       "x": 182.245,
+       "y": 45.085
+      },
+      "uuid": "da996b55-6835-4ad3-bf9f-8dc429e7144c"
+     }
+    ],
+    "severity": "error",
+    "type": "silk_overlap"
+   },
+   {
+    "description": "Silkscreen clearance",
+    "items": [
+     {
+      "description": "Kreisbogen von P3 auf F.Silkscreen",
+      "pos": {
+       "x": 196.85,
+       "y": 48.26
+      },
+      "uuid": "69b86254-fcbe-4e19-be86-efd440eb954b"
+     },
+     {
+      "description": "Platinen-Text \"1=>>\" auf F.Silkscreen",
+      "pos": {
+       "x": 202.0,
+       "y": 48.7
+      },
+      "uuid": "e9165638-6b2b-4f04-9462-e4a5ff8ea34e"
+     }
+    ],
+    "severity": "error",
+    "type": "silk_overlap"
+   }
+  ],
+  "rules_changed": false,
+  "re_pin_needed": false
+ },
+ "declaration": {
+  "input_fail_floor": true,
+  "rung": 2,
+  "source": {
+   "project": "KiCad",
+   "path": "demos/pic_programmer",
+   "commit": "6a26ce9df3067b2233b415ba2d4cbc3164272ccc",
+   "file_version": 20260206,
+   "licence": "KiCad LICENSE.README plus LICENSE.CC-BY-SA-4.0 (demos believed CC BY-SA 4.0)",
+   "attribution_confirmed": false,
+   "attribution_note": "OPEN OWNER ITEM: attribution/licence not confirmed; do not vendor or redistribute."
+  },
+  "reason": "beautifier did not clear the floor (6 errors before, 13 after): the unmodified prepared board is the floor",
+  "violations": [
+   {
+    "description": "Silkscreen clearance",
+    "items": [
+     {
+      "description": "Referenzfeld von RV1",
+      "pos": {
+       "x": 130.175,
+       "y": 95.885
+      },
+      "uuid": "63dc1ab5-ae87-4108-93d9-497d539614a0"
+     },
+     {
+      "description": "Platinen-Text \"13V ADJUST\" auf F.Silkscreen",
+      "pos": {
+       "x": 123.19,
+       "y": 95.25
+      },
+      "uuid": "ca73b4b4-9a51-46ca-a3dc-6983edb0c7bb"
+     }
+    ],
+    "severity": "error",
+    "type": "silk_overlap"
+   },
+   {
+    "description": "Silkscreen clearance",
+    "items": [
+     {
+      "description": "Platinen-Text \"VCC ON\" auf F.Silkscreen",
+      "pos": {
+       "x": 162.9,
+       "y": 99.1
+      },
+      "uuid": "16296d09-e894-45b0-8f80-b052a17e0a89"
+     },
+     {
+      "description": "Kreisbogen von P3 auf F.Silkscreen",
+      "pos": {
+       "x": 168.910001,
+       "y": 96.52
+      },
+      "uuid": "a357a0e1-bd20-4b19-8a46-4bc4858f7255"
+     }
+    ],
+    "severity": "error",
+    "type": "silk_overlap"
+   },
+   {
+    "description": "Silkscreen clearance",
+    "items": [
+     {
+      "description": "Abschnitt von P3 auf F.Silkscreen",
+      "pos": {
+       "x": 177.8,
+       "y": 101.6
+      },
+      "uuid": "a3026b66-173b-4fdb-95b0-6ae958ce65a5"
+     },
+     {
+      "description": "Platinen-Text \"PIC 40 PINS\" auf F.Silkscreen",
+      "pos": {
+       "x": 182.245,
+       "y": 45.085
+      },
+      "uuid": "da996b55-6835-4ad3-bf9f-8dc429e7144c"
+     }
+    ],
+    "severity": "error",
+    "type": "silk_overlap"
+   },
+   {
+    "description": "Silkscreen clearance",
+    "items": [
+     {
+      "description": "Abschnitt von P3 auf F.Silkscreen",
+      "pos": {
+       "x": 187.96,
+       "y": 45.72
+      },
+      "uuid": "504a8352-879a-4f2e-9148-d54b31136914"
+     },
+     {
+      "description": "Platinen-Text \"PIC 40 PINS\" auf F.Silkscreen",
+      "pos": {
+       "x": 182.245,
+       "y": 45.085
+      },
+      "uuid": "da996b55-6835-4ad3-bf9f-8dc429e7144c"
+     }
+    ],
+    "severity": "error",
+    "type": "silk_overlap"
+   },
+   {
+    "description": "Silkscreen clearance",
+    "items": [
+     {
+      "description": "Abschnitt von P3 auf F.Silkscreen",
+      "pos": {
+       "x": 177.8,
+       "y": 45.72
+      },
+      "uuid": "23bbc54b-caff-438c-a3cf-7c0f0c3b7fb4"
+     },
+     {
+      "description": "Platinen-Text \"PIC 40 PINS\" auf F.Silkscreen",
+      "pos": {
+       "x": 182.245,
+       "y": 45.085
+      },
+      "uuid": "da996b55-6835-4ad3-bf9f-8dc429e7144c"
+     }
+    ],
+    "severity": "error",
+    "type": "silk_overlap"
+   },
+   {
+    "description": "Silkscreen clearance",
+    "items": [
+     {
+      "description": "Kreisbogen von P3 auf F.Silkscreen",
+      "pos": {
+       "x": 196.85,
+       "y": 48.26
+      },
+      "uuid": "69b86254-fcbe-4e19-be86-efd440eb954b"
+     },
+     {
+      "description": "Platinen-Text \"1=>>\" auf F.Silkscreen",
+      "pos": {
+       "x": 202.0,
+       "y": 48.7
+      },
+      "uuid": "e9165638-6b2b-4f04-9462-e4a5ff8ea34e"
+     }
+    ],
+    "severity": "error",
+    "type": "silk_overlap"
+   }
+  ],
+  "violation_types": {
+   "silk_overlap": 6
+  },
+  "unconnected_nets_before_routing": 125,
+  "waived": [],
+  "rules_changed": false,
+  "report_label": "rung 2 (input_fail_floor: errors present before routing; not attributable to any router)",
+  "floor_board": "prepared"
+ }
+}

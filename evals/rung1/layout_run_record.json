@@ -1,0 +1,5182 @@
+{
+ "steps": [
+  {
+   "step": "import_from_schematic",
+   "tool": "propose_schematic_import / confirm_schematic_import",
+   "ok": true,
+   "args": {},
+   "proposal": {
+    "status": "proposed",
+    "revision_token": "9a942fdaa00469575cfb00e3658a1c6658d391fc50f988b5df244cd24392f8c3-a4e410d74245ee3a",
+    "output_pcb": "<repo>\\evals\\rung1\\layout_run\\01_import\\rung1_usbc_attiny1616.kicad_pcb",
+    "note": "creates a new board revision; the original is untouched. Footprints are staged on a grid (not placed). Call confirm_schematic_import with this revision_token to apply.",
+    "unresolved": [],
+    "already_present": [],
+    "footprint_mismatches": [],
+    "orphans": [],
+    "renetted": [],
+    "staging": {
+     "origin": [
+      178.5,
+      90.0
+     ],
+     "declared": false,
+     "columns": 5,
+     "spacing_mm": 10.0,
+     "order": "natural reference order, row-major, cells near existing footprints skipped",
+     "cells_skipped": 0
+    },
+    "net_count": 25,
+    "unreferenced_sheets": [],
+    "gate": {
+     "verdict": "NOT_RUN",
+     "board_sha": "e2cda6f0052d50888a1a6a7460fa5f2169cfb29c1966e055847445b256aa94f8",
+     "project_sha": "9a942fdaa00469575cfb00e3658a1c6658d391fc50f988b5df244cd24392f8c3",
+     "verdict_board_sha": null,
+     "age_s": null,
+     "stale": true,
+     "note": "Only a verify_board PASS certifies this board; call verify_board for a current verdict."
+    }
+   },
+   "result": {
+    "status": "imported",
+    "output_pcb": "<repo>\\evals\\rung1\\layout_run\\01_import\\rung1_usbc_attiny1616.kicad_pcb",
+    "footprints_added": [
+     {
+      "reference": "C1",
+      "library_id": "Capacitor_SMD:C_0805_2012Metric",
+      "source": "installed",
+      "staging_at": [
+       178.5,
+       90.0
+      ]
+     },
+     {
+      "reference": "C2",
+      "library_id": "Capacitor_SMD:C_0603_1608Metric",
+      "source": "installed",
+      "staging_at": [
+       188.5,
+       90.0
+      ]
+     },
+     {
+      "reference": "C3",
+      "library_id": "Capacitor_SMD:C_0603_1608Metric",
+      "source": "installed",
+      "staging_at": [
+       198.5,
+       90.0
+      ]
+     },
+     {
+      "reference": "D1",
+      "library_id": "Diode_SMD:D_SMB",
+      "source": "installed",
+      "staging_at": [
+       208.5,
+       90.0
+      ]
+     },
+     {
+      "reference": "D2",
+      "library_id": "LED_SMD:LED_0603_1608Metric",
+      "source": "installed",
+      "staging_at": [
+       218.5,
+       90.0
+      ]
+     },
+     {
+      "reference": "F1",
+      "library_id": "Fuse:Fuse_0805_2012Metric",
+      "source": "installed",
+      "staging_at": [
+       178.5,
+       100.0
+      ]
+     },
+     {
+      "reference": "J1",
+      "library_id": "Rung1_USBC:USB_C_Receptacle_Shouhan_TYPE-C-6P",
+      "source": "project",
+      "staging_at": [
+       188.5,
+       100.0
+      ]
+     },
+     {
+      "reference": "J2",
+      "library_id": "Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical",
+      "source": "installed",
+      "staging_at": [
+       198.5,
+       100.0
+      ]
+     },
+     {
+      "reference": "R1",
+      "library_id": "Resistor_SMD:R_0603_1608Metric",
+      "source": "installed",
+      "staging_at": [
+       208.5,
+       100.0
+      ]
+     },
+     {
+      "reference": "R2",
+      "library_id": "Resistor_SMD:R_0603_1608Metric",
+      "source": "installed",
+      "staging_at": [
+       218.5,
+       100.0
+      ]
+     },
+     {
+      "reference": "R3",
+      "library_id": "Resistor_SMD:R_0603_1608Metric",
+      "source": "installed",
+      "staging_at": [
+       178.5,
+       110.0
+      ]
+     },
+     {
+      "reference": "U1",
+      "library_id": "Package_DFN_QFN:VQFN-20-1EP_3x3mm_P0.4mm_EP1.7x1.7mm",
+      "source": "installed",
+      "staging_at": [
+       188.5,
+       110.0
+      ]
+     },
+     {
+      "reference": "U2",
+      "library_id": "Package_TO_SOT_SMD:SOT-89-3",
+      "source": "installed",
+      "staging_at": [
+       198.5,
+       110.0
+      ]
+     }
+    ],
+    "already_present": [],
+    "footprint_mismatches": [],
+    "orphans": [],
+    "renetted": [],
+    "staging": {
+     "origin": [
+      178.5,
+      90.0
+     ],
+     "declared": false,
+     "columns": 5,
+     "spacing_mm": 10.0,
+     "order": "natural reference order, row-major, cells near existing footprints skipped",
+     "cells_skipped": 0
+    },
+    "net_count": 25,
+    "verified": "reloaded from disk: footprint set, raw positions, every pad net equals the kicad-cli netlist",
+    "note": "footprints are staged, not placed; placement, rules and outline are separate steps. This is not a routing or done claim: only verify_board produces one.",
+    "pcb_path": "<repo>\\evals\\rung1\\layout_run\\01_import\\rung1_usbc_attiny1616.kicad_pcb",
+    "source_pcb": "<repo>\\evals\\rung1\\layout_run\\src\\rung1_usbc_attiny1616.kicad_pcb",
+    "gates": {
+     "<repo>\\evals\\rung1\\layout_run\\src\\rung1_usbc_attiny1616.kicad_pcb": {
+      "verdict": "NOT_RUN",
+      "board_sha": "e2cda6f0052d50888a1a6a7460fa5f2169cfb29c1966e055847445b256aa94f8",
+      "project_sha": "9a942fdaa00469575cfb00e3658a1c6658d391fc50f988b5df244cd24392f8c3",
+      "verdict_board_sha": null,
+      "age_s": null,
+      "stale": true,
+      "note": "Only a verify_board PASS certifies this board; call verify_board for a current verdict."
+     },
+     "<repo>\\evals\\rung1\\layout_run\\01_import\\rung1_usbc_attiny1616.kicad_pcb": {
+      "verdict": "NOT_RUN",
+      "board_sha": "83cb2cf168ce24d82bc98c43d2b4ae7223388e5b11cbf6be37ded4fcf81bd3d7",
+      "project_sha": "f59af2056ec2f31f0f2e50fbc5458c10e265b0d1f54d7146268e88bdaa996086",
+      "verdict_board_sha": null,
+      "age_s": null,
+      "stale": true,
+      "note": "Only a verify_board PASS certifies this board; call verify_board for a current verdict."
+     }
+    }
+   }
+  },
+  {
+   "step": "board_outline",
+   "tool": "propose_board_outline / confirm_board_outline",
+   "ok": true,
+   "args": {
+    "outline": {
+     "x": 128.5,
+     "y": 90.0,
+     "width": 34.0,
+     "height": 23.0
+    },
+    "mounting_holes": [
+     {
+      "reference": "H1",
+      "x": 131.2,
+      "y": 92.7,
+      "keepout_radius_mm": 2.0,
+      "footprint": "MountingHole:MountingHole_2.2mm_M2"
+     },
+     {
+      "reference": "H2",
+      "x": 159.8,
+      "y": 92.7,
+      "keepout_radius_mm": 2.0,
+      "footprint": "MountingHole:MountingHole_2.2mm_M2"
+     },
+     {
+      "reference": "H3",
+      "x": 131.2,
+      "y": 110.3,
+      "keepout_radius_mm": 2.0,
+      "footprint": "MountingHole:MountingHole_2.2mm_M2"
+     },
+     {
+      "reference": "H4",
+      "x": 159.8,
+      "y": 110.3,
+      "keepout_radius_mm": 2.0,
+      "footprint": "MountingHole:MountingHole_2.2mm_M2"
+     }
+    ]
+   },
+   "proposal": {
+    "status": "proposed",
+    "revision_token": "f59af2056ec2f31f0f2e50fbc5458c10e265b0d1f54d7146268e88bdaa996086-fb5ad5bbe4c3165f",
+    "output_pcb": "<repo>\\evals\\rung1\\layout_run\\02_outline\\rung1_usbc_attiny1616.kicad_pcb",
+    "outline": {
+     "x": 128.5,
+     "y": 90.0,
+     "width": 34.0,
+     "height": 23.0,
+     "corner_radius": 0.0
+    },
+    "origin": {
+     "frame": "page",
+     "offset": [
+      0.0,
+      0.0
+     ]
+    },
+    "replaces": {
+     "gr_line": 4
+    },
+    "holes": [
+     {
+      "reference": "H1",
+      "footprint": "MountingHole:MountingHole_2.2mm_M2",
+      "footprint_file": "C:\\Program Files\\KiCad\\10.0\\share\\kicad\\footprints\\MountingHole.pretty\\MountingHole_2.2mm_M2.kicad_mod",
+      "at": [
+       131.2,
+       92.7
+      ],
+      "keepout_radius_mm": 2.0
+     },
+     {
+      "reference": "H2",
+      "footprint": "MountingHole:MountingHole_2.2mm_M2",
+      "footprint_file": "C:\\Program Files\\KiCad\\10.0\\share\\kicad\\footprints\\MountingHole.pretty\\MountingHole_2.2mm_M2.kicad_mod",
+      "at": [
+       159.8,
+       92.7
+      ],
+      "keepout_radius_mm": 2.0
+     },
+     {
+      "reference": "H3",
+      "footprint": "MountingHole:MountingHole_2.2mm_M2",
+      "footprint_file": "C:\\Program Files\\KiCad\\10.0\\share\\kicad\\footprints\\MountingHole.pretty\\MountingHole_2.2mm_M2.kicad_mod",
+      "at": [
+       131.2,
+       110.3
+      ],
+      "keepout_radius_mm": 2.0
+     },
+     {
+      "reference": "H4",
+      "footprint": "MountingHole:MountingHole_2.2mm_M2",
+      "footprint_file": "C:\\Program Files\\KiCad\\10.0\\share\\kicad\\footprints\\MountingHole.pretty\\MountingHole_2.2mm_M2.kicad_mod",
+      "at": [
+       159.8,
+       110.3
+      ],
+      "keepout_radius_mm": 2.0
+     }
+    ],
+    "outside_outline": [
+     {
+      "reference": "C1",
+      "at": [
+       178.5,
+       90.0
+      ],
+      "origin_outside": true,
+      "points_outside": 9
+     },
+     {
+      "reference": "C2",
+      "at": [
+       188.5,
+       90.0
+      ],
+      "origin_outside": true,
+      "points_outside": 9
+     },
+     {
+      "reference": "C3",
+      "at": [
+       198.5,
+       90.0
+      ],
+      "origin_outside": true,
+      "points_outside": 9
+     },
+     {
+      "reference": "D1",
+      "at": [
+       208.5,
+       90.0
+      ],
+      "origin_outside": true,
+      "points_outside": 9
+     },
+     {
+      "reference": "D2",
+      "at": [
+       218.5,
+       90.0
+      ],
+      "origin_outside": true,
+      "points_outside": 9
+     },
+     {
+      "reference": "F1",
+      "at": [
+       178.5,
+       100.0
+      ],
+      "origin_outside": true,
+      "points_outside": 9
+     },
+     {
+      "reference": "J1",
+      "at": [
+       188.5,
+       100.0
+      ],
+      "origin_outside": true,
+      "points_outside": 41
+     },
+     {
+      "reference": "J2",
+      "at": [
+       198.5,
+       100.0
+      ],
+      "origin_outside": true,
+      "points_outside": 13
+     },
+     {
+      "reference": "R1",
+      "at": [
+       208.5,
+       100.0
+      ],
+      "origin_outside": true,
+      "points_outside": 9
+     },
+     {
+      "reference": "R2",
+      "at": [
+       218.5,
+       100.0
+      ],
+      "origin_outside": true,
+      "points_outside": 9
+     },
+     {
+      "reference": "R3",
+      "at": [
+       178.5,
+       110.0
+      ],
+      "origin_outside": true,
+      "points_outside": 9
+     },
+     {
+      "reference": "U1",
+      "at": [
+       188.5,
+       110.0
+      ],
+      "origin_outside": true,
+      "points_outside": 101
+     },
+     {
+      "reference": "U2",
+      "at": [
+       198.5,
+       110.0
+      ],
+      "origin_outside": true,
+      "points_outside": 13
+     }
+    ],
+    "overlaps": [],
+    "zone_overlaps": [],
+    "note": "creates a new board revision; the original is untouched. Footprints listed under outside_outline are reported, not moved. Call confirm_board_outline with this revision_token to apply.",
+    "gate": {
+     "verdict": "NOT_RUN",
+     "board_sha": "83cb2cf168ce24d82bc98c43d2b4ae7223388e5b11cbf6be37ded4fcf81bd3d7",
+     "project_sha": "f59af2056ec2f31f0f2e50fbc5458c10e265b0d1f54d7146268e88bdaa996086",
+     "verdict_board_sha": null,
+     "age_s": null,
+     "stale": true,
+     "note": "Only a verify_board PASS certifies this board; call verify_board for a current verdict."
+    }
+   },
+   "result": {
+    "status": "built",
+    "output_pcb": "<repo>\\evals\\rung1\\layout_run\\02_outline\\rung1_usbc_attiny1616.kicad_pcb",
+    "outline": {
+     "x": 128.5,
+     "y": 90.0,
+     "width": 34.0,
+     "height": 23.0,
+     "corner_radius": 0.0
+    },
+    "origin": {
+     "frame": "page",
+     "offset": [
+      0.0,
+      0.0
+     ]
+    },
+    "replaced": {
+     "gr_line": 4
+    },
+    "holes": [
+     {
+      "reference": "H1",
+      "footprint": "MountingHole:MountingHole_2.2mm_M2",
+      "footprint_file": "C:\\Program Files\\KiCad\\10.0\\share\\kicad\\footprints\\MountingHole.pretty\\MountingHole_2.2mm_M2.kicad_mod",
+      "at": [
+       131.2,
+       92.7
+      ],
+      "keepout_radius_mm": 2.0
+     },
+     {
+      "reference": "H2",
+      "footprint": "MountingHole:MountingHole_2.2mm_M2",
+      "footprint_file": "C:\\Program Files\\KiCad\\10.0\\share\\kicad\\footprints\\MountingHole.pretty\\MountingHole_2.2mm_M2.kicad_mod",
+      "at": [
+       159.8,
+       92.7
+      ],
+      "keepout_radius_mm": 2.0
+     },
+     {
+      "reference": "H3",
+      "footprint": "MountingHole:MountingHole_2.2mm_M2",
+      "footprint_file": "C:\\Program Files\\KiCad\\10.0\\share\\kicad\\footprints\\MountingHole.pretty\\MountingHole_2.2mm_M2.kicad_mod",
+      "at": [
+       131.2,
+       110.3
+      ],
+      "keepout_radius_mm": 2.0
+     },
+     {
+      "reference": "H4",
+      "footprint": "MountingHole:MountingHole_2.2mm_M2",
+      "footprint_file": "C:\\Program Files\\KiCad\\10.0\\share\\kicad\\footprints\\MountingHole.pretty\\MountingHole_2.2mm_M2.kicad_mod",
+      "at": [
+       159.8,
+       110.3
+      ],
+      "keepout_radius_mm": 2.0
+     }
+    ],
+    "outside_outline": [
+     {
+      "reference": "C1",
+      "at": [
+       178.5,
+       90.0
+      ],
+      "origin_outside": true,
+      "points_outside": 9
+     },
+     {
+      "reference": "C2",
+      "at": [
+       188.5,
+       90.0
+      ],
+      "origin_outside": true,
+      "points_outside": 9
+     },
+     {
+      "reference": "C3",
+      "at": [
+       198.5,
+       90.0
+      ],
+      "origin_outside": true,
+      "points_outside": 9
+     },
+     {
+      "reference": "D1",
+      "at": [
+       208.5,
+       90.0
+      ],
+      "origin_outside": true,
+      "points_outside": 9
+     },
+     {
+      "reference": "D2",
+      "at": [
+       218.5,
+       90.0
+      ],
+      "origin_outside": true,
+      "points_outside": 9
+     },
+     {
+      "reference": "F1",
+      "at": [
+       178.5,
+       100.0
+      ],
+      "origin_outside": true,
+      "points_outside": 9
+     },
+     {
+      "reference": "J1",
+      "at": [
+       188.5,
+       100.0
+      ],
+      "origin_outside": true,
+      "points_outside": 41
+     },
+     {
+      "reference": "J2",
+      "at": [
+       198.5,
+       100.0
+      ],
+      "origin_outside": true,
+      "points_outside": 13
+     },
+     {
+      "reference": "R1",
+      "at": [
+       208.5,
+       100.0
+      ],
+      "origin_outside": true,
+      "points_outside": 9
+     },
+     {
+      "reference": "R2",
+      "at": [
+       218.5,
+       100.0
+      ],
+      "origin_outside": true,
+      "points_outside": 9
+     },
+     {
+      "reference": "R3",
+      "at": [
+       178.5,
+       110.0
+      ],
+      "origin_outside": true,
+      "points_outside": 9
+     },
+     {
+      "reference": "U1",
+      "at": [
+       188.5,
+       110.0
+      ],
+      "origin_outside": true,
+      "points_outside": 101
+     },
+     {
+      "reference": "U2",
+      "at": [
+       198.5,
+       110.0
+      ],
+      "origin_outside": true,
+      "points_outside": 13
+     }
+    ],
+    "overlaps": [],
+    "zone_overlaps": [],
+    "outline_drc": {
+     "status": "clean",
+     "violations": []
+    },
+    "write_check": {
+     "missing": {
+      "count": 0,
+      "items": []
+     },
+     "unexpected": {
+      "count": 0,
+      "items": []
+     },
+     "tolerated": {
+      "count": 0,
+      "items": []
+     }
+    },
+    "note": "outline errors only; run verify_board for the verdict. Footprints in outside_outline were not moved.",
+    "pcb_path": "<repo>\\evals\\rung1\\layout_run\\02_outline\\rung1_usbc_attiny1616.kicad_pcb",
+    "source_pcb": "<repo>\\evals\\rung1\\layout_run\\01_import\\rung1_usbc_attiny1616.kicad_pcb",
+    "gates": {
+     "<repo>\\evals\\rung1\\layout_run\\01_import\\rung1_usbc_attiny1616.kicad_pcb": {
+      "verdict": "NOT_RUN",
+      "board_sha": "83cb2cf168ce24d82bc98c43d2b4ae7223388e5b11cbf6be37ded4fcf81bd3d7",
+      "project_sha": "f59af2056ec2f31f0f2e50fbc5458c10e265b0d1f54d7146268e88bdaa996086",
+      "verdict_board_sha": null,
+      "age_s": null,
+      "stale": true,
+      "note": "Only a verify_board PASS certifies this board; call verify_board for a current verdict."
+     },
+     "<repo>\\evals\\rung1\\layout_run\\02_outline\\rung1_usbc_attiny1616.kicad_pcb": {
+      "verdict": "NOT_RUN",
+      "board_sha": "73207384b6a922993c07a1bfb91a76c52caddd888d4c3375e7aaafd9b68b6a9f",
+      "project_sha": "89a00676e4fbf430700299158b297042a6cbabe663d05a23452aa7d5d2f175b2",
+      "verdict_board_sha": null,
+      "age_s": null,
+      "stale": true,
+      "note": "Only a verify_board PASS certifies this board; call verify_board for a current verdict."
+     }
+    }
+   }
+  },
+  {
+   "step": "autoplacement_proposal_only",
+   "tool": "propose_autoplacement",
+   "ok": true,
+   "result": {
+    "status": "pending_confirmation",
+    "proposed_positions": {
+     "C1": {
+      "x": 1.7000000000000028,
+      "y": 0.98,
+      "rotation": 0.0
+     },
+     "C2": {
+      "x": 6.880000000000003,
+      "y": 0.73,
+      "rotation": 0.0
+     },
+     "C3": {
+      "x": 11.840000000000003,
+      "y": 0.73,
+      "rotation": 0.0
+     },
+     "D1": {
+      "x": 18.970000000000013,
+      "y": 2.25,
+      "rotation": 0.0
+     },
+     "D2": {
+      "x": 26.100000000000023,
+      "y": 0.73,
+      "rotation": 0.0
+     },
+     "F1": {
+      "x": 31.260000000000026,
+      "y": 0.9499999999999993,
+      "rotation": 0.0
+     },
+     "J1": {
+      "x": 39.410000000000025,
+      "y": 3.6549999999999994,
+      "rotation": 0.0
+     },
+     "J2": {
+      "x": 47.65000000000002,
+      "y": 4.3100000000000005,
+      "rotation": 0.0
+     },
+     "R1": {
+      "x": 1.480000000000004,
+      "y": 11.350000000000001,
+      "rotation": 0.0
+     },
+     "R2": {
+      "x": 6.440000000000012,
+      "y": 11.350000000000001,
+      "rotation": 0.0
+     },
+     "R3": {
+      "x": 11.400000000000013,
+      "y": 11.350000000000001,
+      "rotation": 0.0
+     },
+     "U1": {
+      "x": 16.98000000000001,
+      "y": 12.720000000000002,
+      "rotation": 0.0
+     },
+     "U2": {
+      "x": 23.63000000000001,
+      "y": 13.120000000000001,
+      "rotation": 0.0
+     },
+     "H1": {
+      "x": 28.180000000000007,
+      "y": 10.620000000000001,
+      "rotation": 0.0
+     },
+     "H2": {
+      "x": 30.180000000000007,
+      "y": 10.620000000000001,
+      "rotation": 0.0
+     },
+     "H3": {
+      "x": 32.18000000000001,
+      "y": 10.620000000000001,
+      "rotation": 0.0
+     },
+     "H4": {
+      "x": 34.18000000000001,
+      "y": 10.620000000000001,
+      "rotation": 0.0
+     }
+    },
+    "note": "not confirmed: heuristic rows start at (0,0) and ignore the outline"
+   }
+  },
+  {
+   "step": "placement",
+   "tool": "place_footprints",
+   "ok": true,
+   "args": {
+    "layout_board_local_mm": {
+     "J1": [
+      10,
+      18.0
+     ],
+     "F1": [
+      10,
+      13
+     ],
+     "D1": [
+      10,
+      8.5
+     ],
+     "R1": [
+      17.6,
+      15.8
+     ],
+     "R2": [
+      17.6,
+      18.6
+     ],
+     "C1": [
+      17.6,
+      12.5
+     ],
+     "U2": [
+      21,
+      8
+     ],
+     "C2": [
+      27,
+      8
+     ],
+     "U1": [
+      24.5,
+      17.5
+     ],
+     "R3": [
+      21.5,
+      13.5
+     ],
+     "D2": [
+      29.6,
+      16.2
+     ],
+     "J2": [
+      30.6,
+      7.5
+     ],
+     "C3": [
+      20.793,
+      18.239
+     ]
+    },
+    "rotation_deg": {
+     "C3": 180.0
+    },
+    "c3_plan": {
+     "x": 20.793,
+     "y": 18.239,
+     "rotation": 180.0,
+     "rule": {
+      "max_pad_gap_mm": 1.5,
+      "courtyard_gap_mm": 0.127,
+      "pin3_axis_clearance_mm": 0.2635
+     }
+    }
+   },
+   "result": {
+    "status": "ok",
+    "placed": [],
+    "moved": [
+     "J1",
+     "F1",
+     "D1",
+     "R1",
+     "R2",
+     "C1",
+     "U2",
+     "C2",
+     "U1",
+     "R3",
+     "D2",
+     "J2",
+     "C3"
+    ],
+    "errors": [],
+    "rotation_kept": [],
+    "origin_mm": [
+     128.5,
+     90.0
+    ],
+    "origin_rule": "min corner of the Edge.Cuts bounding box (arc bulges and circles included)",
+    "frame": "board-local (origin = Edge.Cuts bounding-box top-left = (128.5, 90) in page mm; rule: min corner of the Edge.Cuts bounding box (arc bulges and circles included))",
+    "gate": {
+     "verdict": "NOT_RUN",
+     "board_sha": "ba46d3f5c1f5f0cd66f15c7717c039c74ec0f7d335a51b59e2401cedc3bc5889",
+     "project_sha": "313269ed39171cb6769c506becef827d66dfefb6a1432fff8708fb97aad2e1d7",
+     "verdict_board_sha": null,
+     "age_s": null,
+     "stale": true,
+     "note": "Only a verify_board PASS certifies this board; call verify_board for a current verdict."
+    },
+    "raw_position_mismatches": {},
+    "raw_rotation_mismatches": {},
+    "decoupling_rule_findings": [],
+    "decoupling_facts": {
+     "c3_at": [
+      149.293,
+      108.239,
+      180.0
+     ],
+     "u1_pin4_edge_to_c3_pad1_edge_mm": 0.632,
+     "c3_pad1_top_minus_pin3_axis_mm": 0.264,
+     "pin3_axis_y": 107.5,
+     "pin4_y": 107.9,
+     "c3_pad1_y_range": [
+      107.76400000000001,
+      108.714
+     ],
+     "courtyard_gap_to_u1_mm": 0.127,
+     "plus_pad_is_nearer": true,
+     "c3_gnd_pad_to_u1_pin3_edge_mm": 2.1882,
+     "c3_gnd_pad_to_u1_exposed_pad_edge_mm": 3.182
+    },
+    "supply_capacitor_distances": {
+     "C1": {
+      "ic": "U2",
+      "net": "/VBUS_F",
+      "gap_mm": 3.552
+     },
+     "C2": {
+      "ic": "U2",
+      "net": "+3V3",
+      "gap_mm": 6.102
+     },
+     "C3": {
+      "ic": "U1",
+      "net": "+3V3",
+      "gap_mm": 0.632
+     }
+    }
+   }
+  },
+  {
+   "step": "board_rules",
+   "tool": "propose_board_rules / confirm_board_rules",
+   "ok": true,
+   "args": {
+    "min_clearance": 0.127,
+    "min_track_width": 0.127,
+    "via_diameter": 0.45,
+    "min_through_hole_diameter": 0.2,
+    "netclasses": [
+     {
+      "name": "Default",
+      "clearance": 0.127,
+      "track_width": 0.127,
+      "via_diameter": 0.45,
+      "via_drill": 0.2
+     },
+     {
+      "name": "Power",
+      "clearance": 0.2,
+      "track_width": 0.4,
+      "via_diameter": 0.6,
+      "via_drill": 0.3,
+      "priority": 0,
+      "nets": [
+       "VBUS",
+       "/VBUS_F",
+       "+3V3"
+      ]
+     }
+    ]
+   },
+   "proposal": {
+    "status": "proposed",
+    "changes": [
+     {
+      "where": "constraints",
+      "key": "min_clearance",
+      "before": 0.0,
+      "after": 0.127,
+      "before_source": "kicad_default"
+     },
+     {
+      "where": "constraints",
+      "key": "min_track_width",
+      "before": 0.2,
+      "after": 0.127,
+      "before_source": "kicad_default"
+     },
+     {
+      "where": "constraints",
+      "key": "min_via_diameter",
+      "before": 0.5,
+      "after": 0.45,
+      "before_source": "kicad_default"
+     },
+     {
+      "where": "constraints",
+      "key": "min_through_hole_diameter",
+      "before": 0.3,
+      "after": 0.2,
+      "before_source": "kicad_default"
+     },
+     {
+      "where": "netclass:Default",
+      "key": "clearance",
+      "before": 0.15,
+      "after": 0.127
+     },
+     {
+      "where": "netclass:Default",
+      "key": "track_width",
+      "before": 0.25,
+      "after": 0.127
+     },
+     {
+      "where": "netclass:Default",
+      "key": "via_diameter",
+      "before": 0.6,
+      "after": 0.45
+     },
+     {
+      "where": "netclass:Default",
+      "key": "via_drill",
+      "before": 0.3,
+      "after": 0.2
+     },
+     {
+      "where": "netclass:Power",
+      "key": "(new class)",
+      "before": null,
+      "after": {
+       "clearance": 0.2,
+       "track_width": 0.4,
+       "via_diameter": 0.6,
+       "via_drill": 0.3
+      }
+     },
+     {
+      "where": "assignment",
+      "key": "+3V3",
+      "before": "Default",
+      "after": "Power"
+     },
+     {
+      "where": "assignment",
+      "key": "/VBUS_F",
+      "before": "Default",
+      "after": "Power"
+     },
+     {
+      "where": "assignment",
+      "key": "VBUS",
+      "before": "Default",
+      "after": "Power"
+     }
+    ],
+    "loosened": [
+     {
+      "where": "constraints",
+      "key": "min_track_width",
+      "before": 0.2,
+      "after": 0.127,
+      "before_source": "kicad_default"
+     },
+     {
+      "where": "constraints",
+      "key": "min_via_diameter",
+      "before": 0.5,
+      "after": 0.45,
+      "before_source": "kicad_default"
+     },
+     {
+      "where": "constraints",
+      "key": "min_through_hole_diameter",
+      "before": 0.3,
+      "after": 0.2,
+      "before_source": "kicad_default"
+     },
+     {
+      "where": "netclass:Default",
+      "key": "clearance",
+      "before": 0.15,
+      "after": 0.127
+     },
+     {
+      "where": "netclass:Default",
+      "key": "track_width",
+      "before": 0.25,
+      "after": 0.127
+     },
+     {
+      "where": "netclass:Default",
+      "key": "via_diameter",
+      "before": 0.6,
+      "after": 0.45
+     },
+     {
+      "where": "netclass:Default",
+      "key": "via_drill",
+      "before": 0.3,
+      "after": 0.2
+     }
+    ],
+    "incoherent": [],
+    "incoherent_existing": [],
+    "moot": [],
+    "kicad_cli_version": "10.0.7",
+    "defaults_unverified": false,
+    "custom_rules_file": null,
+    "custom_rules": [],
+    "warnings": [],
+    "revision_token": "313269ed39171cb6769c506becef827d66dfefb6a1432fff8708fb97aad2e1d7-43b7d547fda5c12f",
+    "output_pcb": "<repo>\\evals\\rung1\\layout_run\\04_rules\\rung1_usbc_attiny1616.kicad_pcb",
+    "note": "creates a new project revision; the original is untouched. Call confirm_board_rules with this revision_token to apply.",
+    "gate": {
+     "verdict": "NOT_RUN",
+     "board_sha": "ba46d3f5c1f5f0cd66f15c7717c039c74ec0f7d335a51b59e2401cedc3bc5889",
+     "project_sha": "313269ed39171cb6769c506becef827d66dfefb6a1432fff8708fb97aad2e1d7",
+     "verdict_board_sha": null,
+     "age_s": null,
+     "stale": true,
+     "note": "Only a verify_board PASS certifies this board; call verify_board for a current verdict."
+    }
+   },
+   "approval": {
+    "approved_by": "owner, 2026-10-11, in session",
+    "approved_list": [
+     "('constraints', 'min_through_hole_diameter', 0.3, 0.2)",
+     "('constraints', 'min_track_width', 0.2, 0.127)",
+     "('constraints', 'min_via_diameter', 0.5, 0.45)",
+     "('netclass:Default', 'clearance', 0.15, 0.127)",
+     "('netclass:Default', 'clearance', 0.2, 0.127)",
+     "('netclass:Default', 'track_width', 0.25, 0.127)",
+     "('netclass:Default', 'via_diameter', 0.6, 0.45)",
+     "('netclass:Default', 'via_drill', 0.3, 0.2)"
+    ],
+    "loosened_seen": [
+     "('constraints', 'min_through_hole_diameter', 0.3, 0.2)",
+     "('constraints', 'min_track_width', 0.2, 0.127)",
+     "('constraints', 'min_via_diameter', 0.5, 0.45)",
+     "('netclass:Default', 'clearance', 0.15, 0.127)",
+     "('netclass:Default', 'track_width', 0.25, 0.127)",
+     "('netclass:Default', 'via_diameter', 0.6, 0.45)",
+     "('netclass:Default', 'via_drill', 0.3, 0.2)"
+    ],
+    "outside_approval": [],
+    "incoherent": [],
+    "incoherent_existing": [],
+    "allow_loosen_passed": true
+   },
+   "result": {
+    "status": "applied",
+    "output_pcb": "<repo>\\evals\\rung1\\layout_run\\04_rules\\rung1_usbc_attiny1616.kicad_pcb",
+    "changes": [
+     {
+      "where": "constraints",
+      "key": "min_clearance",
+      "before": 0.0,
+      "after": 0.127,
+      "before_source": "kicad_default"
+     },
+     {
+      "where": "constraints",
+      "key": "min_track_width",
+      "before": 0.2,
+      "after": 0.127,
+      "before_source": "kicad_default"
+     },
+     {
+      "where": "constraints",
+      "key": "min_via_diameter",
+      "before": 0.5,
+      "after": 0.45,
+      "before_source": "kicad_default"
+     },
+     {
+      "where": "constraints",
+      "key": "min_through_hole_diameter",
+      "before": 0.3,
+      "after": 0.2,
+      "before_source": "kicad_default"
+     },
+     {
+      "where": "netclass:Default",
+      "key": "clearance",
+      "before": 0.15,
+      "after": 0.127
+     },
+     {
+      "where": "netclass:Default",
+      "key": "track_width",
+      "before": 0.25,
+      "after": 0.127
+     },
+     {
+      "where": "netclass:Default",
+      "key": "via_diameter",
+      "before": 0.6,
+      "after": 0.45
+     },
+     {
+      "where": "netclass:Default",
+      "key": "via_drill",
+      "before": 0.3,
+      "after": 0.2
+     },
+     {
+      "where": "netclass:Power",
+      "key": "(new class)",
+      "before": null,
+      "after": {
+       "clearance": 0.2,
+       "track_width": 0.4,
+       "via_diameter": 0.6,
+       "via_drill": 0.3
+      }
+     },
+     {
+      "where": "assignment",
+      "key": "+3V3",
+      "before": "Default",
+      "after": "Power"
+     },
+     {
+      "where": "assignment",
+      "key": "/VBUS_F",
+      "before": "Default",
+      "after": "Power"
+     },
+     {
+      "where": "assignment",
+      "key": "VBUS",
+      "before": "Default",
+      "after": "Power"
+     }
+    ],
+    "loosened": [
+     {
+      "where": "constraints",
+      "key": "min_track_width",
+      "before": 0.2,
+      "after": 0.127,
+      "before_source": "kicad_default"
+     },
+     {
+      "where": "constraints",
+      "key": "min_via_diameter",
+      "before": 0.5,
+      "after": 0.45,
+      "before_source": "kicad_default"
+     },
+     {
+      "where": "constraints",
+      "key": "min_through_hole_diameter",
+      "before": 0.3,
+      "after": 0.2,
+      "before_source": "kicad_default"
+     },
+     {
+      "where": "netclass:Default",
+      "key": "clearance",
+      "before": 0.15,
+      "after": 0.127
+     },
+     {
+      "where": "netclass:Default",
+      "key": "track_width",
+      "before": 0.25,
+      "after": 0.127
+     },
+     {
+      "where": "netclass:Default",
+      "key": "via_diameter",
+      "before": 0.6,
+      "after": 0.45
+     },
+     {
+      "where": "netclass:Default",
+      "key": "via_drill",
+      "before": 0.3,
+      "after": 0.2
+     }
+    ],
+    "readback": {
+     "constraints": {
+      "min_clearance": 0.127,
+      "min_track_width": 0.127,
+      "min_via_diameter": 0.45,
+      "min_through_hole_diameter": 0.2
+     },
+     "netclasses": {
+      "Default": {
+       "clearance": 0.127,
+       "track_width": 0.127,
+       "via_diameter": 0.45,
+       "via_drill": 0.2,
+       "present": true
+      },
+      "Power": {
+       "clearance": 0.2,
+       "track_width": 0.4,
+       "via_diameter": 0.6,
+       "via_drill": 0.3,
+       "present": true
+      }
+     },
+     "assignments": {
+      "VBUS": "Power",
+      "/VBUS_F": "Power",
+      "+3V3": "Power"
+     }
+    },
+    "custom_rules_file": null,
+    "custom_rules": [],
+    "warnings": [],
+    "file_format_note": "the .kicad_pro revision is written by the write layer's save_project (json.dumps, indent 2): it has no trailing newline (KiCad writes one) and escapes non-ASCII characters as \\uXXXX (KiCad writes them raw); the parsed content is identical and KiCad reads both. Source file: trailing newline no, non-ASCII characters no. Expect a text diff on those two points only.",
+    "baseline_before": {
+     "rule_severities": {},
+     "drc_exclusions": [],
+     "constraints": {
+      "min_copper_edge_clearance": 0.0,
+      "solder_mask_clearance": 0.0,
+      "solder_mask_min_width": 0.0
+     },
+     "net_settings": {
+      "classes": [
+       {
+        "bus_width": 12,
+        "clearance": 0.15,
+        "diff_pair_gap": 0.25,
+        "diff_pair_via_gap": 0.25,
+        "diff_pair_width": 0.2,
+        "line_style": 0,
+        "microvia_diameter": 0.3,
+        "microvia_drill": 0.1,
+        "name": "Default",
+        "track_width": 0.25,
+        "via_diameter": 0.6,
+        "via_drill": 0.3,
+        "wire_width": 6
+       }
+      ],
+      "meta": {
+       "version": 3
+      },
+      "net_colors": null,
+      "netclass_assignments": null,
+      "netclass_patterns": []
+     },
+     "dru_severity_clauses": [],
+     "dru_sha256": null,
+     "ignored_checks": [
+      "footprint_filters_mismatch",
+      "footprint_type_mismatch",
+      "missing_courtyard",
+      "track_not_centered_on_via",
+      "tuning_profile_track_geometries"
+     ]
+    },
+    "baseline_changed": true,
+    "baseline_diff": {
+     "constraints": [
+      "/min_clearance",
+      "/min_through_hole_diameter",
+      "/min_track_width",
+      "/min_via_diameter"
+     ],
+     "net_settings": [
+      "/classes",
+      "/netclass_patterns"
+     ]
+    },
+    "grading": {
+     "status": "FAIL",
+     "certified": false,
+     "violations": [],
+     "unconnected": [
+      {
+       "net": "+3V3",
+       "items": [
+        {
+         "description": "Pad 3 [+3V3] von U2 auf F.Cu",
+         "pos": {
+          "x": 147.55,
+          "y": 99.5
+         },
+         "uuid": "aaf9bcde-6a46-514e-977d-65a0b94991fe"
+        },
+        {
+         "description": "Pad 1 [+3V3] von C3 auf F.Cu",
+         "pos": {
+          "x": 150.068,
+          "y": 108.239
+         },
+         "uuid": "6514b122-9f33-598b-adb6-ea52f85a5c64"
+        }
+       ]
+      },
+      {
+       "net": "+3V3",
+       "items": [
+        {
+         "description": "Pad 1 [+3V3] von C3 auf F.Cu",
+         "pos": {
+          "x": 150.068,
+          "y": 108.239
+         },
+         "uuid": "6514b122-9f33-598b-adb6-ea52f85a5c64"
+        },
+        {
+         "description": "Pad 4 [+3V3] von U1 auf F.Cu",
+         "pos": {
+          "x": 151.55,
+          "y": 107.9
+         },
+         "uuid": "07764231-ea99-5a52-9c79-e2351d3b9e85"
+        }
+       ]
+      },
+      {
+       "net": "+3V3",
+       "items": [
+        {
+         "description": "Pad 1 [+3V3] von C2 auf F.Cu",
+         "pos": {
+          "x": 154.725,
+          "y": 98.0
+         },
+         "uuid": "c4fc60dc-3e7c-51c4-be35-f6fbacd8e76a"
+        },
+        {
+         "description": "Pad 3 [+3V3] von U2 auf F.Cu",
+         "pos": {
+          "x": 147.55,
+          "y": 99.5
+         },
+         "uuid": "aaf9bcde-6a46-514e-977d-65a0b94991fe"
+        }
+       ]
+      },
+      {
+       "net": "+3V3",
+       "items": [
+        {
+         "description": "Durchsteckpad 1 [+3V3] von J2",
+         "pos": {
+          "x": 159.1,
+          "y": 97.5
+         },
+         "uuid": "0b3c534c-1f2d-5b0d-8fe4-b41156d63d4c"
+        },
+        {
+         "description": "Pad 1 [+3V3] von C2 auf F.Cu",
+         "pos": {
+          "x": 154.725,
+          "y": 98.0
+         },
+         "uuid": "c4fc60dc-3e7c-51c4-be35-f6fbacd8e76a"
+        }
+       ]
+      },
+      {
+       "net": "/CC1",
+       "items": [
+        {
+         "description": "Pad A5 [/CC1] von J1 auf F.Cu",
+         "pos": {
+          "x": 138.0,
+          "y": 105.97
+         },
+         "uuid": "2a63dad4-75d7-59f6-a143-c29058f56b7f"
+        },
+        {
+         "description": "Pad 1 [/CC1] von R1 auf F.Cu",
+         "pos": {
+          "x": 145.275,
+          "y": 105.8
+         },
+         "uuid": "32b013a7-d176-5471-82ad-d77ec4209ad4"
+        }
+       ]
+      },
+      {
+       "net": "/CC2",
+       "items": [
+        {
+         "description": "Pad B5 [/CC2] von J1 auf F.Cu",
+         "pos": {
+          "x": 139.0,
+          "y": 105.97
+         },
+         "uuid": "cd735ebd-4704-5659-8a34-43a34fe80024"
+        },
+        {
+         "description": "Pad 1 [/CC2] von R2 auf F.Cu",
+         "pos": {
+          "x": 145.275,
+          "y": 108.6
+         },
+         "uuid": "f3ae0f72-e26c-5696-bc9d-616847fdd019"
+        }
+       ]
+      },
+      {
+       "net": "/LED_A",
+       "items": [
+        {
+         "description": "Pad 2 [/LED_A] von R3 auf F.Cu",
+         "pos": {
+          "x": 150.825,
+          "y": 103.5
+         },
+         "uuid": "d1f6a4c4-7fc5-59f5-b26c-0837d28088b6"
+        },
+        {
+         "description": "Pad 2 [/LED_A] von D2 auf F.Cu",
+         "pos": {
+          "x": 158.8875,
+          "y": 106.2
+         },
+         "uuid": "fbbef25b-12c8-53cd-abad-515ade2f69d5"
+        }
+       ]
+      },
+      {
+       "net": "/LED_CTL",
+       "items": [
+        {
+         "description": "Pad 1 [/LED_CTL] von R3 auf F.Cu",
+         "pos": {
+          "x": 149.175,
+          "y": 103.5
+         },
+         "uuid": "e768f9ee-93b2-5c2b-b5b2-494ed1916f0d"
+        },
+        {
+         "description": "Pad 8 [/LED_CTL] von U1 auf F.Cu",
+         "pos": {
+          "x": 153.0,
+          "y": 108.95
+         },
+         "uuid": "f9b6bcae-1fe3-55d1-85d4-09153b46cf48"
+        }
+       ]
+      },
+      {
+       "net": "/UPDI",
+       "items": [
+        {
+         "description": "Pad 19 [/UPDI] von U1 auf F.Cu",
+         "pos": {
+          "x": 152.6,
+          "y": 106.05
+         },
+         "uuid": "e3ed9027-36aa-5c1e-9ef1-b9a3a02f66cd"
+        },
+        {
+         "description": "Durchsteckpad 2 [/UPDI] von J2",
+         "pos": {
+          "x": 159.1,
+          "y": 100.04
+         },
+         "uuid": "ea042a8c-0621-5c32-80cd-5313979bda45"
+        }
+       ]
+      },
+      {
+       "net": "/VBUS_F",
+       "items": [
+        {
+         "description": "Pad 1 [/VBUS_F] von D1 auf F.Cu",
+         "pos": {
+          "x": 136.35,
+          "y": 98.5
+         },
+         "uuid": "a0f3c045-e089-51f9-b13f-68cf801a3eaf"
+        },
+        {
+         "description": "Pad 2 [/VBUS_F] von F1 auf F.Cu",
+         "pos": {
+          "x": 139.4375,
+          "y": 103.0
+         },
+         "uuid": "61988e9e-e492-54c9-bb03-abb3f7dac23d"
+        }
+       ]
+      },
+      {
+       "net": "/VBUS_F",
+       "items": [
+        {
+         "description": "Pad 2 [/VBUS_F] von F1 auf F.Cu",
+         "pos": {
+          "x": 139.4375,
+          "y": 103.0
+         },
+         "uuid": "61988e9e-e492-54c9-bb03-abb3f7dac23d"
+        },
+        {
+         "description": "Pad 1 [/VBUS_F] von C1 auf F.Cu",
+         "pos": {
+          "x": 145.15,
+          "y": 102.5
+         },
+         "uuid": "6deeaad5-f53d-5bc8-809f-f593f402076d"
+        }
+       ]
+      },
+      {
+       "net": "/VBUS_F",
+       "items": [
+        {
+         "description": "Pad 1 [/VBUS_F] von C1 auf F.Cu",
+         "pos": {
+          "x": 145.15,
+          "y": 102.5
+         },
+         "uuid": "6deeaad5-f53d-5bc8-809f-f593f402076d"
+        },
+        {
+         "description": "Pad 2 [/VBUS_F] von U2 auf F.Cu",
+         "pos": {
+          "x": 147.6375,
+          "y": 98.0
+         },
+         "uuid": "80c9264b-4055-5e6c-82df-2a35e696f089"
+        }
+       ]
+      },
+      {
+       "net": "GND",
+       "items": [
+        {
+         "description": "Durchsteckpad 7 [GND] von J1",
+         "pos": {
+          "x": 134.18,
+          "y": 106.22
+         },
+         "uuid": "5ab468ff-b5d4-5cb7-b6b7-ad1a62b545d1"
+        },
+        {
+         "description": "Pad B12 [GND] von J1 auf F.Cu",
+         "pos": {
+          "x": 135.8,
+          "y": 105.97
+         },
+         "uuid": "dc12a54b-9052-5fd6-b711-5e41a747faef"
+        }
+       ]
+      },
+      {
+       "net": "GND",
+       "items": [
+        {
+         "description": "Durchsteckpad 7 [GND] von J1",
+         "pos": {
+          "x": 134.18,
+          "y": 106.22
+         },
+         "uuid": "5ab468ff-b5d4-5cb7-b6b7-ad1a62b545d1"
+        },
+        {
+         "description": "Durchsteckpad 7 [GND] von J1",
+         "pos": {
+          "x": 134.18,
+          "y": 110.03
+         },
+         "uuid": "16a02e4c-0acb-521c-9e5c-86dd3fbbe24e"
+        }
+       ]
+      },
+      {
+       "net": "GND",
+       "items": [
+        {
+         "description": "Pad B12 [GND] von J1 auf F.Cu",
+         "pos": {
+          "x": 135.8,
+          "y": 105.97
+         },
+         "uuid": "dc12a54b-9052-5fd6-b711-5e41a747faef"
+        },
+        {
+         "description": "Pad A12 [GND] von J1 auf F.Cu",
+         "pos": {
+          "x": 141.2,
+          "y": 105.97
+         },
+         "uuid": "dab191ab-26bf-5649-a7b0-d4e30c3050c0"
+        }
+       ]
+      },
+      {
+       "net": "GND",
+       "items": [
+        {
+         "description": "Durchsteckpad 7 [GND] von J1",
+         "pos": {
+          "x": 142.82,
+          "y": 106.22
+         },
+         "uuid": "38a1b4e3-1d20-502d-ba4d-5418992b2504"
+        },
+        {
+         "description": "Pad A12 [GND] von J1 auf F.Cu",
+         "pos": {
+          "x": 141.2,
+          "y": 105.97
+         },
+         "uuid": "dab191ab-26bf-5649-a7b0-d4e30c3050c0"
+        }
+       ]
+      },
+      {
+       "net": "GND",
+       "items": [
+        {
+         "description": "Durchsteckpad 7 [GND] von J1",
+         "pos": {
+          "x": 142.82,
+          "y": 106.22
+         },
+         "uuid": "38a1b4e3-1d20-502d-ba4d-5418992b2504"
+        },
+        {
+         "description": "Pad 2 [GND] von R1 auf F.Cu",
+         "pos": {
+          "x": 146.925,
+          "y": 105.8
+         },
+         "uuid": "fb8f4186-48e2-54ab-913b-5bd4c4f33800"
+        }
+       ]
+      },
+      {
+       "net": "GND",
+       "items": [
+        {
+         "description": "Durchsteckpad 7 [GND] von J1",
+         "pos": {
+          "x": 142.82,
+          "y": 110.03
+         },
+         "uuid": "ac58d1a7-a5b6-5a2a-ace2-43fb2b66f72a"
+        },
+        {
+         "description": "Durchsteckpad 7 [GND] von J1",
+         "pos": {
+          "x": 142.82,
+          "y": 106.22
+         },
+         "uuid": "38a1b4e3-1d20-502d-ba4d-5418992b2504"
+        }
+       ]
+      },
+      {
+       "net": "GND",
+       "items": [
+        {
+         "description": "Pad 2 [GND] von R1 auf F.Cu",
+         "pos": {
+          "x": 146.925,
+          "y": 105.8
+         },
+         "uuid": "fb8f4186-48e2-54ab-913b-5bd4c4f33800"
+        },
+        {
+         "description": "Pad 2 [GND] von C1 auf F.Cu",
+         "pos": {
+          "x": 147.05,
+          "y": 102.5
+         },
+         "uuid": "fb838c12-9937-5db5-90f3-13688a50ef88"
+        }
+       ]
+      },
+      {
+       "net": "GND",
+       "items": [
+        {
+         "description": "Pad 2 [GND] von R2 auf F.Cu",
+         "pos": {
+          "x": 146.925,
+          "y": 108.6
+         },
+         "uuid": "07f59884-b19c-5778-959c-aaaf5df2cd1f"
+        },
+        {
+         "description": "Pad 2 [GND] von R1 auf F.Cu",
+         "pos": {
+          "x": 146.925,
+          "y": 105.8
+         },
+         "uuid": "fb8f4186-48e2-54ab-913b-5bd4c4f33800"
+        }
+       ]
+      },
+      {
+       "net": "GND",
+       "items": [
+        {
+         "description": "Pad 2 [GND] von C1 auf F.Cu",
+         "pos": {
+          "x": 147.05,
+          "y": 102.5
+         },
+         "uuid": "fb838c12-9937-5db5-90f3-13688a50ef88"
+        },
+        {
+         "description": "Pad 1 [GND] von U2 auf F.Cu",
+         "pos": {
+          "x": 147.55,
+          "y": 96.5
+         },
+         "uuid": "c325a801-fb9b-5e1f-9e58-bd5bed56dd7b"
+        }
+       ]
+      },
+      {
+       "net": "GND",
+       "items": [
+        {
+         "description": "Pad 1 [GND] von U2 auf F.Cu",
+         "pos": {
+          "x": 147.55,
+          "y": 96.5
+         },
+         "uuid": "c325a801-fb9b-5e1f-9e58-bd5bed56dd7b"
+        },
+        {
+         "description": "Pad 2 [GND] von D1 auf F.Cu",
+         "pos": {
+          "x": 140.65,
+          "y": 98.5
+         },
+         "uuid": "c56ebf97-468e-55da-b4c2-6193bbb67b97"
+        }
+       ]
+      },
+      {
+       "net": "GND",
+       "items": [
+        {
+         "description": "Pad 2 [GND] von C3 auf F.Cu",
+         "pos": {
+          "x": 148.518,
+          "y": 108.239
+         },
+         "uuid": "ff947947-587c-513d-818f-163d66c946dd"
+        },
+        {
+         "description": "Pad 2 [GND] von R2 auf F.Cu",
+         "pos": {
+          "x": 146.925,
+          "y": 108.6
+         },
+         "uuid": "07f59884-b19c-5778-959c-aaaf5df2cd1f"
+        }
+       ]
+      },
+      {
+       "net": "GND",
+       "items": [
+        {
+         "description": "Pad 2 [GND] von C3 auf F.Cu",
+         "pos": {
+          "x": 148.518,
+          "y": 108.239
+         },
+         "uuid": "ff947947-587c-513d-818f-163d66c946dd"
+        },
+        {
+         "description": "Pad 3 [GND] von U1 auf F.Cu",
+         "pos": {
+          "x": 151.55,
+          "y": 107.5
+         },
+         "uuid": "7c588059-ca2a-5166-a4aa-6239a67ab585"
+        }
+       ]
+      },
+      {
+       "net": "GND",
+       "items": [
+        {
+         "description": "Pad 21 [GND] von U1 auf F.Cu",
+         "pos": {
+          "x": 153.0,
+          "y": 107.5
+         },
+         "uuid": "a8cceb13-a5d4-5e17-8384-8c903789f1a7"
+        },
+        {
+         "description": "Pad 3 [GND] von U1 auf F.Cu",
+         "pos": {
+          "x": 151.55,
+          "y": 107.5
+         },
+         "uuid": "7c588059-ca2a-5166-a4aa-6239a67ab585"
+        }
+       ]
+      },
+      {
+       "net": "GND",
+       "items": [
+        {
+         "description": "Pad 21 [GND] von U1 auf F.Cu",
+         "pos": {
+          "x": 153.0,
+          "y": 107.5
+         },
+         "uuid": "a8cceb13-a5d4-5e17-8384-8c903789f1a7"
+        },
+        {
+         "description": "Pad 1 [GND] von D2 auf F.Cu",
+         "pos": {
+          "x": 157.3125,
+          "y": 106.2
+         },
+         "uuid": "55e5b222-f6fe-5c7e-bee6-7fe56479e528"
+        }
+       ]
+      },
+      {
+       "net": "GND",
+       "items": [
+        {
+         "description": "Pad 1 [GND] von D2 auf F.Cu",
+         "pos": {
+          "x": 157.3125,
+          "y": 106.2
+         },
+         "uuid": "55e5b222-f6fe-5c7e-bee6-7fe56479e528"
+        },
+        {
+         "description": "Durchsteckpad 3 [GND] von J2",
+         "pos": {
+          "x": 159.1,
+          "y": 102.58
+         },
+         "uuid": "1241efa0-ba5d-525c-9c5b-dde6fa2889c9"
+        }
+       ]
+      },
+      {
+       "net": "GND",
+       "items": [
+        {
+         "description": "Durchsteckpad 3 [GND] von J2",
+         "pos": {
+          "x": 159.1,
+          "y": 102.58
+         },
+         "uuid": "1241efa0-ba5d-525c-9c5b-dde6fa2889c9"
+        },
+        {
+         "description": "Pad 2 [GND] von C2 auf F.Cu",
+         "pos": {
+          "x": 156.275,
+          "y": 98.0
+         },
+         "uuid": "3d5ea52b-72e2-5305-9420-7ed1519870b3"
+        }
+       ]
+      },
+      {
+       "net": "VBUS",
+       "items": [
+        {
+         "description": "Pad B9 [VBUS] von J1 auf F.Cu",
+         "pos": {
+          "x": 137.0,
+          "y": 105.97
+         },
+         "uuid": "e99fed5b-2519-52a7-bf89-475e164960e0"
+        },
+        {
+         "description": "Pad A9 [VBUS] von J1 auf F.Cu",
+         "pos": {
+          "x": 140.0,
+          "y": 105.97
+         },
+         "uuid": "1ddbb0e3-aab1-5bf5-95ae-a728aea203ea"
+        }
+       ]
+      },
+      {
+       "net": "VBUS",
+       "items": [
+        {
+         "description": "Pad 1 [VBUS] von F1 auf F.Cu",
+         "pos": {
+          "x": 137.5625,
+          "y": 103.0
+         },
+         "uuid": "0a07d715-e3e9-5aff-97e0-7de8d83e6994"
+        },
+        {
+         "description": "Pad B9 [VBUS] von J1 auf F.Cu",
+         "pos": {
+          "x": 137.0,
+          "y": 105.97
+         },
+         "uuid": "e99fed5b-2519-52a7-bf89-475e164960e0"
+        }
+       ]
+      }
+     ],
+     "unstable": false,
+     "list_complete": true,
+     "incomplete_reasons": [],
+     "notes": []
+    },
+    "note": "the rules changed, so every earlier verdict and baseline pin is void: re-grade this revision and re-baseline before relying on it",
+    "pcb_path": "<repo>\\evals\\rung1\\layout_run\\04_rules\\rung1_usbc_attiny1616.kicad_pcb",
+    "source_pcb": "<repo>\\evals\\rung1\\layout_run\\03_placed\\rung1_usbc_attiny1616.kicad_pcb",
+    "gates": {
+     "<repo>\\evals\\rung1\\layout_run\\03_placed\\rung1_usbc_attiny1616.kicad_pcb": {
+      "verdict": "NOT_RUN",
+      "board_sha": "ba46d3f5c1f5f0cd66f15c7717c039c74ec0f7d335a51b59e2401cedc3bc5889",
+      "project_sha": "313269ed39171cb6769c506becef827d66dfefb6a1432fff8708fb97aad2e1d7",
+      "verdict_board_sha": null,
+      "age_s": null,
+      "stale": true,
+      "note": "Only a verify_board PASS certifies this board; call verify_board for a current verdict."
+     },
+     "<repo>\\evals\\rung1\\layout_run\\04_rules\\rung1_usbc_attiny1616.kicad_pcb": {
+      "verdict": "NOT_RUN",
+      "board_sha": "ba46d3f5c1f5f0cd66f15c7717c039c74ec0f7d335a51b59e2401cedc3bc5889",
+      "project_sha": "d2475bdcd853b400a164f90b5a3e88534b9162a8f2f95cf85aeb1e04cf42c7c5",
+      "verdict_board_sha": null,
+      "age_s": null,
+      "stale": true,
+      "note": "Only a verify_board PASS certifies this board; call verify_board for a current verdict."
+     }
+    }
+   }
+  },
+  {
+   "step": "input_preparation",
+   "tool": "propose_input_preparation",
+   "ok": true,
+   "args": {},
+   "note": "nothing_to_do: board unchanged",
+   "result": {
+    "status": "nothing_to_do",
+    "moves": [],
+    "unhandled": [],
+    "revision_token": null,
+    "router_text_check_ok": true,
+    "gate": {
+     "verdict": "NOT_RUN",
+     "board_sha": "ba46d3f5c1f5f0cd66f15c7717c039c74ec0f7d335a51b59e2401cedc3bc5889",
+     "project_sha": "d2475bdcd853b400a164f90b5a3e88534b9162a8f2f95cf85aeb1e04cf42c7c5",
+     "verdict_board_sha": null,
+     "age_s": null,
+     "stale": true,
+     "note": "Only a verify_board PASS certifies this board; call verify_board for a current verdict."
+    }
+   }
+  },
+  {
+   "step": "silkscreen_minimums",
+   "tool": "propose_silkscreen_minimums",
+   "ok": true,
+   "args": {},
+   "note": "nothing_to_do: board unchanged",
+   "result": {
+    "status": "nothing_to_do",
+    "minimums": {
+     "height_mm": 1.0,
+     "thickness_mm": 0.15
+    },
+    "changes": [],
+    "unhandled": [],
+    "summary": {
+     "changed": 0,
+     "large_scale": [],
+     "box_may_clip": [],
+     "render_cache_removed": [],
+     "anchor_shift": []
+    },
+    "revision_token": null,
+    "gate": {
+     "verdict": "NOT_RUN",
+     "board_sha": "ba46d3f5c1f5f0cd66f15c7717c039c74ec0f7d335a51b59e2401cedc3bc5889",
+     "project_sha": "d2475bdcd853b400a164f90b5a3e88534b9162a8f2f95cf85aeb1e04cf42c7c5",
+     "verdict_board_sha": null,
+     "age_s": null,
+     "stale": true,
+     "note": "Only a verify_board PASS certifies this board; call verify_board for a current verdict."
+    }
+   }
+  },
+  {
+   "step": "pin_rule_baseline",
+   "tool": "pin_rule_baseline",
+   "ok": true,
+   "result": {
+    "rule_severities": {},
+    "drc_exclusions": [],
+    "constraints": {
+     "min_copper_edge_clearance": 0.0,
+     "solder_mask_clearance": 0.0,
+     "solder_mask_min_width": 0.0,
+     "min_clearance": 0.127,
+     "min_track_width": 0.127,
+     "min_via_diameter": 0.45,
+     "min_through_hole_diameter": 0.2
+    },
+    "net_settings": {
+     "classes": [
+      {
+       "bus_width": 12,
+       "clearance": 0.127,
+       "diff_pair_gap": 0.25,
+       "diff_pair_via_gap": 0.25,
+       "diff_pair_width": 0.2,
+       "line_style": 0,
+       "microvia_diameter": 0.3,
+       "microvia_drill": 0.1,
+       "name": "Default",
+       "track_width": 0.127,
+       "via_diameter": 0.45,
+       "via_drill": 0.2,
+       "wire_width": 6
+      },
+      {
+       "bus_width": 12,
+       "clearance": 0.2,
+       "diff_pair_gap": 0.25,
+       "diff_pair_via_gap": 0.25,
+       "diff_pair_width": 0.2,
+       "line_style": 0,
+       "microvia_diameter": 0.3,
+       "microvia_drill": 0.1,
+       "name": "Power",
+       "track_width": 0.4,
+       "via_diameter": 0.6,
+       "via_drill": 0.3,
+       "wire_width": 6,
+       "priority": 0
+      }
+     ],
+     "meta": {
+      "version": 3
+     },
+     "net_colors": null,
+     "netclass_assignments": null,
+     "netclass_patterns": [
+      {
+       "netclass": "Power",
+       "pattern": "VBUS"
+      },
+      {
+       "netclass": "Power",
+       "pattern": "/VBUS_F"
+      },
+      {
+       "netclass": "Power",
+       "pattern": "+3V3"
+      }
+     ]
+    },
+    "dru_severity_clauses": [],
+    "dru_sha256": null,
+    "ignored_checks": [
+     "footprint_filters_mismatch",
+     "footprint_type_mismatch",
+     "missing_courtyard",
+     "track_not_centered_on_via",
+     "tuning_profile_track_geometries"
+    ]
+   }
+  },
+  {
+   "step": "pour_step",
+   "tool": "propose_pour_step / confirm_pour_step",
+   "ok": true,
+   "args": {
+    "pours": {
+     "GND": "B.Cu"
+    }
+   },
+   "proposal": {
+    "status": "proposed",
+    "pours": [
+     {
+      "net": "GND",
+      "layer": "B.Cu"
+     }
+    ],
+    "already_poured": [],
+    "output_pcb": "<repo>\\evals\\rung1\\layout_run\\07_poured\\rung1_usbc_attiny1616.kicad_pcb",
+    "revision_token": "c71648cb403d8808",
+    "note": "creates a new board revision only if the router's candidate is graded and accepted; the original is untouched. Call confirm_pour_step with this revision_token and a pinned rule baseline to run it.",
+    "gate": {
+     "verdict": "NOT_RUN",
+     "board_sha": "ba46d3f5c1f5f0cd66f15c7717c039c74ec0f7d335a51b59e2401cedc3bc5889",
+     "project_sha": "d2475bdcd853b400a164f90b5a3e88534b9162a8f2f95cf85aeb1e04cf42c7c5",
+     "verdict_board_sha": null,
+     "age_s": null,
+     "stale": true,
+     "note": "Only a verify_board PASS certifies this board; call verify_board for a current verdict."
+    }
+   },
+   "result": {
+    "status": "poured",
+    "output_pcb": "<repo>\\evals\\rung1\\layout_run\\07_poured\\rung1_usbc_attiny1616.kicad_pcb",
+    "revision_sha256": "f027fc2c80b3304d04121fa55987f8950fb587b5c879d70dda638db767efb82b",
+    "zones": [
+     {
+      "net": "GND",
+      "layer": "B.Cu",
+      "layers": [
+       "B.Cu"
+      ],
+      "uuid": "54b6af56-3d5c-460f-ae51-2abdb1650831",
+      "polygon": [
+       [
+        129.0,
+        90.5
+       ],
+       [
+        162.0,
+        90.5
+       ],
+       [
+        162.0,
+        112.5
+       ],
+       [
+        129.0,
+        112.5
+       ]
+      ],
+      "filled_in_file": false,
+      "refilled_by_kicad_cli": true,
+      "filled_area_mm2": 668.177,
+      "outline_area_mm2": 726.0,
+      "fill_fraction": 0.92,
+      "fill_polygons": 1
+     }
+    ],
+    "carried": {
+     "zone": 1,
+     "via": 0,
+     "segment": 0,
+     "arc": 0
+    },
+    "gate": {
+     "verdict": "FAIL",
+     "unconnected": [
+      {
+       "net": "+3V3",
+       "items": [
+        {
+         "description": "Pad 3 [+3V3] von U2 auf F.Cu",
+         "pos": {
+          "x": 147.55,
+          "y": 99.5
+         },
+         "uuid": "aaf9bcde-6a46-514e-977d-65a0b94991fe"
+        },
+        {
+         "description": "Pad 1 [+3V3] von C3 auf F.Cu",
+         "pos": {
+          "x": 150.068,
+          "y": 108.239
+         },
+         "uuid": "6514b122-9f33-598b-adb6-ea52f85a5c64"
+        }
+       ]
+      },
+      {
+       "net": "+3V3",
+       "items": [
+        {
+         "description": "Pad 1 [+3V3] von C3 auf F.Cu",
+         "pos": {
+          "x": 150.068,
+          "y": 108.239
+         },
+         "uuid": "6514b122-9f33-598b-adb6-ea52f85a5c64"
+        },
+        {
+         "description": "Pad 4 [+3V3] von U1 auf F.Cu",
+         "pos": {
+          "x": 151.55,
+          "y": 107.9
+         },
+         "uuid": "07764231-ea99-5a52-9c79-e2351d3b9e85"
+        }
+       ]
+      },
+      {
+       "net": "+3V3",
+       "items": [
+        {
+         "description": "Pad 1 [+3V3] von C2 auf F.Cu",
+         "pos": {
+          "x": 154.725,
+          "y": 98.0
+         },
+         "uuid": "c4fc60dc-3e7c-51c4-be35-f6fbacd8e76a"
+        },
+        {
+         "description": "Pad 3 [+3V3] von U2 auf F.Cu",
+         "pos": {
+          "x": 147.55,
+          "y": 99.5
+         },
+         "uuid": "aaf9bcde-6a46-514e-977d-65a0b94991fe"
+        }
+       ]
+      },
+      {
+       "net": "+3V3",
+       "items": [
+        {
+         "description": "Durchsteckpad 1 [+3V3] von J2",
+         "pos": {
+          "x": 159.1,
+          "y": 97.5
+         },
+         "uuid": "0b3c534c-1f2d-5b0d-8fe4-b41156d63d4c"
+        },
+        {
+         "description": "Pad 1 [+3V3] von C2 auf F.Cu",
+         "pos": {
+          "x": 154.725,
+          "y": 98.0
+         },
+         "uuid": "c4fc60dc-3e7c-51c4-be35-f6fbacd8e76a"
+        }
+       ]
+      },
+      {
+       "net": "/CC1",
+       "items": [
+        {
+         "description": "Pad A5 [/CC1] von J1 auf F.Cu",
+         "pos": {
+          "x": 138.0,
+          "y": 105.97
+         },
+         "uuid": "2a63dad4-75d7-59f6-a143-c29058f56b7f"
+        },
+        {
+         "description": "Pad 1 [/CC1] von R1 auf F.Cu",
+         "pos": {
+          "x": 145.275,
+          "y": 105.8
+         },
+         "uuid": "32b013a7-d176-5471-82ad-d77ec4209ad4"
+        }
+       ]
+      },
+      {
+       "net": "/CC2",
+       "items": [
+        {
+         "description": "Pad B5 [/CC2] von J1 auf F.Cu",
+         "pos": {
+          "x": 139.0,
+          "y": 105.97
+         },
+         "uuid": "cd735ebd-4704-5659-8a34-43a34fe80024"
+        },
+        {
+         "description": "Pad 1 [/CC2] von R2 auf F.Cu",
+         "pos": {
+          "x": 145.275,
+          "y": 108.6
+         },
+         "uuid": "f3ae0f72-e26c-5696-bc9d-616847fdd019"
+        }
+       ]
+      },
+      {
+       "net": "/LED_A",
+       "items": [
+        {
+         "description": "Pad 2 [/LED_A] von R3 auf F.Cu",
+         "pos": {
+          "x": 150.825,
+          "y": 103.5
+         },
+         "uuid": "d1f6a4c4-7fc5-59f5-b26c-0837d28088b6"
+        },
+        {
+         "description": "Pad 2 [/LED_A] von D2 auf F.Cu",
+         "pos": {
+          "x": 158.8875,
+          "y": 106.2
+         },
+         "uuid": "fbbef25b-12c8-53cd-abad-515ade2f69d5"
+        }
+       ]
+      },
+      {
+       "net": "/LED_CTL",
+       "items": [
+        {
+         "description": "Pad 1 [/LED_CTL] von R3 auf F.Cu",
+         "pos": {
+          "x": 149.175,
+          "y": 103.5
+         },
+         "uuid": "e768f9ee-93b2-5c2b-b5b2-494ed1916f0d"
+        },
+        {
+         "description": "Pad 8 [/LED_CTL] von U1 auf F.Cu",
+         "pos": {
+          "x": 153.0,
+          "y": 108.95
+         },
+         "uuid": "f9b6bcae-1fe3-55d1-85d4-09153b46cf48"
+        }
+       ]
+      },
+      {
+       "net": "/UPDI",
+       "items": [
+        {
+         "description": "Pad 19 [/UPDI] von U1 auf F.Cu",
+         "pos": {
+          "x": 152.6,
+          "y": 106.05
+         },
+         "uuid": "e3ed9027-36aa-5c1e-9ef1-b9a3a02f66cd"
+        },
+        {
+         "description": "Durchsteckpad 2 [/UPDI] von J2",
+         "pos": {
+          "x": 159.1,
+          "y": 100.04
+         },
+         "uuid": "ea042a8c-0621-5c32-80cd-5313979bda45"
+        }
+       ]
+      },
+      {
+       "net": "/VBUS_F",
+       "items": [
+        {
+         "description": "Pad 1 [/VBUS_F] von D1 auf F.Cu",
+         "pos": {
+          "x": 136.35,
+          "y": 98.5
+         },
+         "uuid": "a0f3c045-e089-51f9-b13f-68cf801a3eaf"
+        },
+        {
+         "description": "Pad 2 [/VBUS_F] von F1 auf F.Cu",
+         "pos": {
+          "x": 139.4375,
+          "y": 103.0
+         },
+         "uuid": "61988e9e-e492-54c9-bb03-abb3f7dac23d"
+        }
+       ]
+      },
+      {
+       "net": "/VBUS_F",
+       "items": [
+        {
+         "description": "Pad 2 [/VBUS_F] von F1 auf F.Cu",
+         "pos": {
+          "x": 139.4375,
+          "y": 103.0
+         },
+         "uuid": "61988e9e-e492-54c9-bb03-abb3f7dac23d"
+        },
+        {
+         "description": "Pad 1 [/VBUS_F] von C1 auf F.Cu",
+         "pos": {
+          "x": 145.15,
+          "y": 102.5
+         },
+         "uuid": "6deeaad5-f53d-5bc8-809f-f593f402076d"
+        }
+       ]
+      },
+      {
+       "net": "/VBUS_F",
+       "items": [
+        {
+         "description": "Pad 1 [/VBUS_F] von C1 auf F.Cu",
+         "pos": {
+          "x": 145.15,
+          "y": 102.5
+         },
+         "uuid": "6deeaad5-f53d-5bc8-809f-f593f402076d"
+        },
+        {
+         "description": "Pad 2 [/VBUS_F] von U2 auf F.Cu",
+         "pos": {
+          "x": 147.6375,
+          "y": 98.0
+         },
+         "uuid": "80c9264b-4055-5e6c-82df-2a35e696f089"
+        }
+       ]
+      },
+      {
+       "net": "GND",
+       "items": [
+        {
+         "description": "Durchsteckpad 7 [GND] von J1",
+         "pos": {
+          "x": 134.18,
+          "y": 106.22
+         },
+         "uuid": "5ab468ff-b5d4-5cb7-b6b7-ad1a62b545d1"
+        },
+        {
+         "description": "Pad B12 [GND] von J1 auf F.Cu",
+         "pos": {
+          "x": 135.8,
+          "y": 105.97
+         },
+         "uuid": "dc12a54b-9052-5fd6-b711-5e41a747faef"
+        }
+       ]
+      },
+      {
+       "net": "GND",
+       "items": [
+        {
+         "description": "Pad A12 [GND] von J1 auf F.Cu",
+         "pos": {
+          "x": 141.2,
+          "y": 105.97
+         },
+         "uuid": "dab191ab-26bf-5649-a7b0-d4e30c3050c0"
+        },
+        {
+         "description": "Durchsteckpad 7 [GND] von J1",
+         "pos": {
+          "x": 142.82,
+          "y": 106.22
+         },
+         "uuid": "38a1b4e3-1d20-502d-ba4d-5418992b2504"
+        }
+       ]
+      },
+      {
+       "net": "GND",
+       "items": [
+        {
+         "description": "Durchsteckpad 7 [GND] von J1",
+         "pos": {
+          "x": 142.82,
+          "y": 106.22
+         },
+         "uuid": "38a1b4e3-1d20-502d-ba4d-5418992b2504"
+        },
+        {
+         "description": "Pad 2 [GND] von R1 auf F.Cu",
+         "pos": {
+          "x": 146.925,
+          "y": 105.8
+         },
+         "uuid": "fb8f4186-48e2-54ab-913b-5bd4c4f33800"
+        }
+       ]
+      },
+      {
+       "net": "GND",
+       "items": [
+        {
+         "description": "Pad 2 [GND] von R1 auf F.Cu",
+         "pos": {
+          "x": 146.925,
+          "y": 105.8
+         },
+         "uuid": "fb8f4186-48e2-54ab-913b-5bd4c4f33800"
+        },
+        {
+         "description": "Pad 2 [GND] von C1 auf F.Cu",
+         "pos": {
+          "x": 147.05,
+          "y": 102.5
+         },
+         "uuid": "fb838c12-9937-5db5-90f3-13688a50ef88"
+        }
+       ]
+      },
+      {
+       "net": "GND",
+       "items": [
+        {
+         "description": "Pad 2 [GND] von R2 auf F.Cu",
+         "pos": {
+          "x": 146.925,
+          "y": 108.6
+         },
+         "uuid": "07f59884-b19c-5778-959c-aaaf5df2cd1f"
+        },
+        {
+         "description": "Pad 2 [GND] von R1 auf F.Cu",
+         "pos": {
+          "x": 146.925,
+          "y": 105.8
+         },
+         "uuid": "fb8f4186-48e2-54ab-913b-5bd4c4f33800"
+        }
+       ]
+      },
+      {
+       "net": "GND",
+       "items": [
+        {
+         "description": "Pad 2 [GND] von C1 auf F.Cu",
+         "pos": {
+          "x": 147.05,
+          "y": 102.5
+         },
+         "uuid": "fb838c12-9937-5db5-90f3-13688a50ef88"
+        },
+        {
+         "description": "Pad 1 [GND] von U2 auf F.Cu",
+         "pos": {
+          "x": 147.55,
+          "y": 96.5
+         },
+         "uuid": "c325a801-fb9b-5e1f-9e58-bd5bed56dd7b"
+        }
+       ]
+      },
+      {
+       "net": "GND",
+       "items": [
+        {
+         "description": "Pad 1 [GND] von U2 auf F.Cu",
+         "pos": {
+          "x": 147.55,
+          "y": 96.5
+         },
+         "uuid": "c325a801-fb9b-5e1f-9e58-bd5bed56dd7b"
+        },
+        {
+         "description": "Pad 2 [GND] von D1 auf F.Cu",
+         "pos": {
+          "x": 140.65,
+          "y": 98.5
+         },
+         "uuid": "c56ebf97-468e-55da-b4c2-6193bbb67b97"
+        }
+       ]
+      },
+      {
+       "net": "GND",
+       "items": [
+        {
+         "description": "Pad 2 [GND] von C3 auf F.Cu",
+         "pos": {
+          "x": 148.518,
+          "y": 108.239
+         },
+         "uuid": "ff947947-587c-513d-818f-163d66c946dd"
+        },
+        {
+         "description": "Pad 2 [GND] von R2 auf F.Cu",
+         "pos": {
+          "x": 146.925,
+          "y": 108.6
+         },
+         "uuid": "07f59884-b19c-5778-959c-aaaf5df2cd1f"
+        }
+       ]
+      },
+      {
+       "net": "GND",
+       "items": [
+        {
+         "description": "Pad 3 [GND] von U1 auf F.Cu",
+         "pos": {
+          "x": 151.55,
+          "y": 107.5
+         },
+         "uuid": "7c588059-ca2a-5166-a4aa-6239a67ab585"
+        },
+        {
+         "description": "Pad 2 [GND] von C3 auf F.Cu",
+         "pos": {
+          "x": 148.518,
+          "y": 108.239
+         },
+         "uuid": "ff947947-587c-513d-818f-163d66c946dd"
+        }
+       ]
+      },
+      {
+       "net": "GND",
+       "items": [
+        {
+         "description": "Pad 21 [GND] von U1 auf F.Cu",
+         "pos": {
+          "x": 153.0,
+          "y": 107.5
+         },
+         "uuid": "a8cceb13-a5d4-5e17-8384-8c903789f1a7"
+        },
+        {
+         "description": "Pad 3 [GND] von U1 auf F.Cu",
+         "pos": {
+          "x": 151.55,
+          "y": 107.5
+         },
+         "uuid": "7c588059-ca2a-5166-a4aa-6239a67ab585"
+        }
+       ]
+      },
+      {
+       "net": "GND",
+       "items": [
+        {
+         "description": "Pad 1 [GND] von D2 auf F.Cu",
+         "pos": {
+          "x": 157.3125,
+          "y": 106.2
+         },
+         "uuid": "55e5b222-f6fe-5c7e-bee6-7fe56479e528"
+        },
+        {
+         "description": "Durchsteckpad 3 [GND] von J2",
+         "pos": {
+          "x": 159.1,
+          "y": 102.58
+         },
+         "uuid": "1241efa0-ba5d-525c-9c5b-dde6fa2889c9"
+        }
+       ]
+      },
+      {
+       "net": "GND",
+       "items": [
+        {
+         "description": "Durchsteckpad 3 [GND] von J2",
+         "pos": {
+          "x": 159.1,
+          "y": 102.58
+         },
+         "uuid": "1241efa0-ba5d-525c-9c5b-dde6fa2889c9"
+        },
+        {
+         "description": "Pad 2 [GND] von C2 auf F.Cu",
+         "pos": {
+          "x": 156.275,
+          "y": 98.0
+         },
+         "uuid": "3d5ea52b-72e2-5305-9420-7ed1519870b3"
+        }
+       ]
+      },
+      {
+       "net": "VBUS",
+       "items": [
+        {
+         "description": "Pad B9 [VBUS] von J1 auf F.Cu",
+         "pos": {
+          "x": 137.0,
+          "y": 105.97
+         },
+         "uuid": "e99fed5b-2519-52a7-bf89-475e164960e0"
+        },
+        {
+         "description": "Pad A9 [VBUS] von J1 auf F.Cu",
+         "pos": {
+          "x": 140.0,
+          "y": 105.97
+         },
+         "uuid": "1ddbb0e3-aab1-5bf5-95ae-a728aea203ea"
+        }
+       ]
+      },
+      {
+       "net": "VBUS",
+       "items": [
+        {
+         "description": "Pad 1 [VBUS] von F1 auf F.Cu",
+         "pos": {
+          "x": 137.5625,
+          "y": 103.0
+         },
+         "uuid": "0a07d715-e3e9-5aff-97e0-7de8d83e6994"
+        },
+        {
+         "description": "Pad B9 [VBUS] von J1 auf F.Cu",
+         "pos": {
+          "x": 137.0,
+          "y": 105.97
+         },
+         "uuid": "e99fed5b-2519-52a7-bf89-475e164960e0"
+        }
+       ]
+      }
+     ],
+     "violations": [],
+     "warnings": [
+      {
+       "description": "Silkscreen clipped by board edge",
+       "items": [
+        {
+         "description": "Abschnitt auf Edge.Cuts",
+         "pos": {
+          "x": 128.5,
+          "y": 90.0
+         },
+         "uuid": "9d5b16fe-5cd9-42e2-924b-37253d556954"
+        },
+        {
+         "description": "Referenzfeld von H1",
+         "pos": {
+          "x": 131.2,
+          "y": 89.55
+         },
+         "uuid": "39c2d0d9-2276-4272-ac04-7d92307e09c8"
+        }
+       ],
+       "severity": "warning",
+       "type": "silk_edge_clearance"
+      },
+      {
+       "description": "Silkscreen clipped by board edge",
+       "items": [
+        {
+         "description": "Abschnitt auf Edge.Cuts",
+         "pos": {
+          "x": 128.5,
+          "y": 90.0
+         },
+         "uuid": "9d5b16fe-5cd9-42e2-924b-37253d556954"
+        },
+        {
+         "description": "Referenzfeld von H2",
+         "pos": {
+          "x": 159.8,
+          "y": 89.55
+         },
+         "uuid": "b22f2932-6168-4ed4-b701-3da5a0b7a72d"
+        }
+       ],
+       "severity": "warning",
+       "type": "silk_edge_clearance"
+      },
+      {
+       "description": "Silkscreen clearance",
+       "items": [
+        {
+         "description": "Referenzfeld von J1",
+         "pos": {
+          "x": 138.5,
+          "y": 103.6
+         },
+         "uuid": "a742a4be-1554-40fe-90ee-3b4b3605c153"
+        },
+        {
+         "description": "Abschnitt von F1 auf F.Silkscreen",
+         "pos": {
+          "x": 138.241422,
+          "y": 103.71
+         },
+         "uuid": "ea1c0a89-d9d5-4394-9a3b-2346689babb4"
+        }
+       ],
+       "severity": "warning",
+       "type": "silk_overlap"
+      },
+      {
+       "description": "Silkscreen clipped by solder mask",
+       "items": [
+        {
+         "description": "Referenzfeld von H4",
+         "pos": {
+          "x": 159.8,
+          "y": 107.15
+         },
+         "uuid": "fc20856d-8613-458d-826c-5df0151bc4e0"
+        },
+        {
+         "description": "Pad 2 [/LED_A] von D2 auf F.Cu",
+         "pos": {
+          "x": 158.8875,
+          "y": 106.2
+         },
+         "uuid": "fbbef25b-12c8-53cd-abad-515ade2f69d5"
+        }
+       ],
+       "severity": "warning",
+       "type": "silk_over_copper"
+      },
+      {
+       "description": "Silkscreen clipped by solder mask",
+       "items": [
+        {
+         "description": "Referenzfeld von J1",
+         "pos": {
+          "x": 138.5,
+          "y": 103.6
+         },
+         "uuid": "a742a4be-1554-40fe-90ee-3b4b3605c153"
+        },
+        {
+         "description": "Pad 2 [/VBUS_F] von F1 auf F.Cu",
+         "pos": {
+          "x": 139.4375,
+          "y": 103.0
+         },
+         "uuid": "61988e9e-e492-54c9-bb03-abb3f7dac23d"
+        }
+       ],
+       "severity": "warning",
+       "type": "silk_over_copper"
+      },
+      {
+       "description": "Fehlendes Symbolfeld \"LCSC\" in Footprint",
+       "items": [
+        {
+         "description": "Footprint C1",
+         "pos": {
+          "x": 146.1,
+          "y": 102.5
+         },
+         "uuid": "af5e36b1-4b19-5149-aa45-ec7c71d1b98b"
+        }
+       ],
+       "severity": "warning",
+       "type": "footprint_symbol_field_mismatch"
+      },
+      {
+       "description": "Fehlendes Symbolfeld \"LCSC\" in Footprint",
+       "items": [
+        {
+         "description": "Footprint C2",
+         "pos": {
+          "x": 155.5,
+          "y": 98.0
+         },
+         "uuid": "0723eba4-7bb2-5606-a15a-6b7465b2a387"
+        }
+       ],
+       "severity": "warning",
+       "type": "footprint_symbol_field_mismatch"
+      },
+      {
+       "description": "Fehlendes Symbolfeld \"LCSC\" in Footprint",
+       "items": [
+        {
+         "description": "Footprint C3",
+         "pos": {
+          "x": 149.293,
+          "y": 108.239
+         },
+         "uuid": "a087709a-1935-5891-8af1-88c4a11eff9f"
+        }
+       ],
+       "severity": "warning",
+       "type": "footprint_symbol_field_mismatch"
+      },
+      {
+       "description": "Fehlendes Symbolfeld \"LCSC\" in Footprint",
+       "items": [
+        {
+         "description": "Footprint D1",
+         "pos": {
+          "x": 138.5,
+          "y": 98.5
+         },
+         "uuid": "65a27777-b5aa-552f-9212-92f3104fd131"
+        }
+       ],
+       "severity": "warning",
+       "type": "footprint_symbol_field_mismatch"
+      },
+      {
+       "description": "Fehlendes Symbolfeld \"LCSC\" in Footprint",
+       "items": [
+        {
+         "description": "Footprint D2",
+         "pos": {
+          "x": 158.1,
+          "y": 106.2
+         },
+         "uuid": "44317463-4d59-5b96-97df-d783ab075dcb"
+        }
+       ],
+       "severity": "warning",
+       "type": "footprint_symbol_field_mismatch"
+      },
+      {
+       "description": "Fehlendes Symbolfeld \"LCSC\" in Footprint",
+       "items": [
+        {
+         "description": "Footprint F1",
+         "pos": {
+          "x": 138.5,
+          "y": 103.0
+         },
+         "uuid": "e9a47d49-f498-5fd8-b1d2-40f9c1ed76d2"
+        }
+       ],
+       "severity": "warning",
+       "type": "footprint_symbol_field_mismatch"
+      },
+      {
+       "description": "Fehlendes Symbolfeld \"LCSC\" in Footprint",
+       "items": [
+        {
+         "description": "Footprint J1",
+         "pos": {
+          "x": 138.5,
+          "y": 108.0
+         },
+         "uuid": "4f6e2517-b11d-5603-8918-767e44aa03af"
+        }
+       ],
+       "severity": "warning",
+       "type": "footprint_symbol_field_mismatch"
+      },
+      {
+       "description": "Fehlendes Symbolfeld \"LCSC\" in Footprint",
+       "items": [
+        {
+         "description": "Footprint J2",
+         "pos": {
+          "x": 159.1,
+          "y": 97.5
+         },
+         "uuid": "e33ed40c-07e5-5635-9733-36461edb8fb7"
+        }
+       ],
+       "severity": "warning",
+       "type": "footprint_symbol_field_mismatch"
+      },
+      {
+       "description": "Fehlendes Symbolfeld \"LCSC\" in Footprint",
+       "items": [
+        {
+         "description": "Footprint R1",
+         "pos": {
+          "x": 146.1,
+          "y": 105.8
+         },
+         "uuid": "5ff5b5db-575c-585b-996c-cdbcdc917a10"
+        }
+       ],
+       "severity": "warning",
+       "type": "footprint_symbol_field_mismatch"
+      },
+      {
+       "description": "Fehlendes Symbolfeld \"LCSC\" in Footprint",
+       "items": [
+        {
+         "description": "Footprint R2",
+         "pos": {
+          "x": 146.1,
+          "y": 108.6
+         },
+         "uuid": "79972742-08a5-513f-a41e-8200b970b43b"
+        }
+       ],
+       "severity": "warning",
+       "type": "footprint_symbol_field_mismatch"
+      },
+      {
+       "description": "Fehlendes Symbolfeld \"LCSC\" in Footprint",
+       "items": [
+        {
+         "description": "Footprint R3",
+         "pos": {
+          "x": 150.0,
+          "y": 103.5
+         },
+         "uuid": "187716ec-b234-56b5-8037-0d85aa776056"
+        }
+       ],
+       "severity": "warning",
+       "type": "footprint_symbol_field_mismatch"
+      },
+      {
+       "description": "Fehlendes Symbolfeld \"LCSC\" in Footprint",
+       "items": [
+        {
+         "description": "Footprint U1",
+         "pos": {
+          "x": 153.0,
+          "y": 107.5
+         },
+         "uuid": "9e59ccc1-4281-503d-8dbb-2867e6a304e1"
+        }
+       ],
+       "severity": "warning",
+       "type": "footprint_symbol_field_mismatch"
+      },
+      {
+       "description": "Fehlendes Symbolfeld \"LCSC\" in Footprint",
+       "items": [
+        {
+         "description": "Footprint U2",
+         "pos": {
+          "x": 149.5,
+          "y": 98.0
+         },
+         "uuid": "19836ba3-6694-5f19-959f-112c5adf2c9e"
+        }
+       ],
+       "severity": "warning",
+       "type": "footprint_symbol_field_mismatch"
+      }
+     ],
+     "unstable": false,
+     "runs": 3,
+     "list_complete": true,
+     "incomplete_reasons": [],
+     "notes": [],
+     "parity": {
+      "status": "required",
+      "reason": null
+     }
+    },
+    "pending_pads": [
+     {
+      "ref": "C1",
+      "pad": "2",
+      "net": "GND",
+      "pos": [
+       147.04999999999998,
+       102.5
+      ]
+     },
+     {
+      "ref": "C2",
+      "pad": "2",
+      "net": "GND",
+      "pos": [
+       156.275,
+       98.0
+      ]
+     },
+     {
+      "ref": "C3",
+      "pad": "2",
+      "net": "GND",
+      "pos": [
+       148.518,
+       108.239
+      ]
+     },
+     {
+      "ref": "D1",
+      "pad": "2",
+      "net": "GND",
+      "pos": [
+       140.65,
+       98.5
+      ]
+     },
+     {
+      "ref": "D2",
+      "pad": "1",
+      "net": "GND",
+      "pos": [
+       157.3125,
+       106.2
+      ]
+     },
+     {
+      "ref": "J1",
+      "pad": "B12",
+      "net": "GND",
+      "pos": [
+       135.8,
+       105.97
+      ]
+     },
+     {
+      "ref": "J1",
+      "pad": "A12",
+      "net": "GND",
+      "pos": [
+       141.2,
+       105.97
+      ]
+     },
+     {
+      "ref": "R1",
+      "pad": "2",
+      "net": "GND",
+      "pos": [
+       146.92499999999998,
+       105.8
+      ]
+     },
+     {
+      "ref": "R2",
+      "pad": "2",
+      "net": "GND",
+      "pos": [
+       146.92499999999998,
+       108.6
+      ]
+     },
+     {
+      "ref": "U1",
+      "pad": "3",
+      "net": "GND",
+      "pos": [
+       151.55,
+       107.5
+      ]
+     },
+     {
+      "ref": "U1",
+      "pad": "21",
+      "net": "GND",
+      "pos": [
+       153.0,
+       107.5
+      ]
+     },
+     {
+      "ref": "U2",
+      "pad": "1",
+      "net": "GND",
+      "pos": [
+       147.55,
+       96.5
+      ]
+     }
+    ],
+    "original_grade": {
+     "verdict": "FAIL",
+     "unconnected": [
+      {
+       "net": "+3V3",
+       "items": [
+        {
+         "description": "Pad 3 [+3V3] von U2 auf F.Cu",
+         "pos": {
+          "x": 147.55,
+          "y": 99.5
+         },
+         "uuid": "aaf9bcde-6a46-514e-977d-65a0b94991fe"
+        },
+        {
+         "description": "Pad 1 [+3V3] von C3 auf F.Cu",
+         "pos": {
+          "x": 150.068,
+          "y": 108.239
+         },
+         "uuid": "6514b122-9f33-598b-adb6-ea52f85a5c64"
+        }
+       ]
+      },
+      {
+       "net": "+3V3",
+       "items": [
+        {
+         "description": "Pad 1 [+3V3] von C3 auf F.Cu",
+         "pos": {
+          "x": 150.068,
+          "y": 108.239
+         },
+         "uuid": "6514b122-9f33-598b-adb6-ea52f85a5c64"
+        },
+        {
+         "description": "Pad 4 [+3V3] von U1 auf F.Cu",
+         "pos": {
+          "x": 151.55,
+          "y": 107.9
+         },
+         "uuid": "07764231-ea99-5a52-9c79-e2351d3b9e85"
+        }
+       ]
+      },
+      {
+       "net": "+3V3",
+       "items": [
+        {
+         "description": "Pad 1 [+3V3] von C2 auf F.Cu",
+         "pos": {
+          "x": 154.725,
+          "y": 98.0
+         },
+         "uuid": "c4fc60dc-3e7c-51c4-be35-f6fbacd8e76a"
+        },
+        {
+         "description": "Pad 3 [+3V3] von U2 auf F.Cu",
+         "pos": {
+          "x": 147.55,
+          "y": 99.5
+         },
+         "uuid": "aaf9bcde-6a46-514e-977d-65a0b94991fe"
+        }
+       ]
+      },
+      {
+       "net": "+3V3",
+       "items": [
+        {
+         "description": "Durchsteckpad 1 [+3V3] von J2",
+         "pos": {
+          "x": 159.1,
+          "y": 97.5
+         },
+         "uuid": "0b3c534c-1f2d-5b0d-8fe4-b41156d63d4c"
+        },
+        {
+         "description": "Pad 1 [+3V3] von C2 auf F.Cu",
+         "pos": {
+          "x": 154.725,
+          "y": 98.0
+         },
+         "uuid": "c4fc60dc-3e7c-51c4-be35-f6fbacd8e76a"
+        }
+       ]
+      },
+      {
+       "net": "/CC1",
+       "items": [
+        {
+         "description": "Pad A5 [/CC1] von J1 auf F.Cu",
+         "pos": {
+          "x": 138.0,
+          "y": 105.97
+         },
+         "uuid": "2a63dad4-75d7-59f6-a143-c29058f56b7f"
+        },
+        {
+         "description": "Pad 1 [/CC1] von R1 auf F.Cu",
+         "pos": {
+          "x": 145.275,
+          "y": 105.8
+         },
+         "uuid": "32b013a7-d176-5471-82ad-d77ec4209ad4"
+        }
+       ]
+      },
+      {
+       "net": "/CC2",
+       "items": [
+        {
+         "description": "Pad B5 [/CC2] von J1 auf F.Cu",
+         "pos": {
+          "x": 139.0,
+          "y": 105.97
+         },
+         "uuid": "cd735ebd-4704-5659-8a34-43a34fe80024"
+        },
+        {
+         "description": "Pad 1 [/CC2] von R2 auf F.Cu",
+         "pos": {
+          "x": 145.275,
+          "y": 108.6
+         },
+         "uuid": "f3ae0f72-e26c-5696-bc9d-616847fdd019"
+        }
+       ]
+      },
+      {
+       "net": "/LED_A",
+       "items": [
+        {
+         "description": "Pad 2 [/LED_A] von R3 auf F.Cu",
+         "pos": {
+          "x": 150.825,
+          "y": 103.5
+         },
+         "uuid": "d1f6a4c4-7fc5-59f5-b26c-0837d28088b6"
+        },
+        {
+         "description": "Pad 2 [/LED_A] von D2 auf F.Cu",
+         "pos": {
+          "x": 158.8875,
+          "y": 106.2
+         },
+         "uuid": "fbbef25b-12c8-53cd-abad-515ade2f69d5"
+        }
+       ]
+      },
+      {
+       "net": "/LED_CTL",
+       "items": [
+        {
+         "description": "Pad 1 [/LED_CTL] von R3 auf F.Cu",
+         "pos": {
+          "x": 149.175,
+          "y": 103.5
+         },
+         "uuid": "e768f9ee-93b2-5c2b-b5b2-494ed1916f0d"
+        },
+        {
+         "description": "Pad 8 [/LED_CTL] von U1 auf F.Cu",
+         "pos": {
+          "x": 153.0,
+          "y": 108.95
+         },
+         "uuid": "f9b6bcae-1fe3-55d1-85d4-09153b46cf48"
+        }
+       ]
+      },
+      {
+       "net": "/UPDI",
+       "items": [
+        {
+         "description": "Pad 19 [/UPDI] von U1 auf F.Cu",
+         "pos": {
+          "x": 152.6,
+          "y": 106.05
+         },
+         "uuid": "e3ed9027-36aa-5c1e-9ef1-b9a3a02f66cd"
+        },
+        {
+         "description": "Durchsteckpad 2 [/UPDI] von J2",
+         "pos": {
+          "x": 159.1,
+          "y": 100.04
+         },
+         "uuid": "ea042a8c-0621-5c32-80cd-5313979bda45"
+        }
+       ]
+      },
+      {
+       "net": "/VBUS_F",
+       "items": [
+        {
+         "description": "Pad 1 [/VBUS_F] von D1 auf F.Cu",
+         "pos": {
+          "x": 136.35,
+          "y": 98.5
+         },
+         "uuid": "a0f3c045-e089-51f9-b13f-68cf801a3eaf"
+        },
+        {
+         "description": "Pad 2 [/VBUS_F] von F1 auf F.Cu",
+         "pos": {
+          "x": 139.4375,
+          "y": 103.0
+         },
+         "uuid": "61988e9e-e492-54c9-bb03-abb3f7dac23d"
+        }
+       ]
+      },
+      {
+       "net": "/VBUS_F",
+       "items": [
+        {
+         "description": "Pad 2 [/VBUS_F] von F1 auf F.Cu",
+         "pos": {
+          "x": 139.4375,
+          "y": 103.0
+         },
+         "uuid": "61988e9e-e492-54c9-bb03-abb3f7dac23d"
+        },
+        {
+         "description": "Pad 1 [/VBUS_F] von C1 auf F.Cu",
+         "pos": {
+          "x": 145.15,
+          "y": 102.5
+         },
+         "uuid": "6deeaad5-f53d-5bc8-809f-f593f402076d"
+        }
+       ]
+      },
+      {
+       "net": "/VBUS_F",
+       "items": [
+        {
+         "description": "Pad 1 [/VBUS_F] von C1 auf F.Cu",
+         "pos": {
+          "x": 145.15,
+          "y": 102.5
+         },
+         "uuid": "6deeaad5-f53d-5bc8-809f-f593f402076d"
+        },
+        {
+         "description": "Pad 2 [/VBUS_F] von U2 auf F.Cu",
+         "pos": {
+          "x": 147.6375,
+          "y": 98.0
+         },
+         "uuid": "80c9264b-4055-5e6c-82df-2a35e696f089"
+        }
+       ]
+      },
+      {
+       "net": "GND",
+       "items": [
+        {
+         "description": "Durchsteckpad 7 [GND] von J1",
+         "pos": {
+          "x": 134.18,
+          "y": 106.22
+         },
+         "uuid": "5ab468ff-b5d4-5cb7-b6b7-ad1a62b545d1"
+        },
+        {
+         "description": "Pad B12 [GND] von J1 auf F.Cu",
+         "pos": {
+          "x": 135.8,
+          "y": 105.97
+         },
+         "uuid": "dc12a54b-9052-5fd6-b711-5e41a747faef"
+        }
+       ]
+      },
+      {
+       "net": "GND",
+       "items": [
+        {
+         "description": "Durchsteckpad 7 [GND] von J1",
+         "pos": {
+          "x": 134.18,
+          "y": 106.22
+         },
+         "uuid": "5ab468ff-b5d4-5cb7-b6b7-ad1a62b545d1"
+        },
+        {
+         "description": "Durchsteckpad 7 [GND] von J1",
+         "pos": {
+          "x": 134.18,
+          "y": 110.03
+         },
+         "uuid": "16a02e4c-0acb-521c-9e5c-86dd3fbbe24e"
+        }
+       ]
+      },
+      {
+       "net": "GND",
+       "items": [
+        {
+         "description": "Pad B12 [GND] von J1 auf F.Cu",
+         "pos": {
+          "x": 135.8,
+          "y": 105.97
+         },
+         "uuid": "dc12a54b-9052-5fd6-b711-5e41a747faef"
+        },
+        {
+         "description": "Pad A12 [GND] von J1 auf F.Cu",
+         "pos": {
+          "x": 141.2,
+          "y": 105.97
+         },
+         "uuid": "dab191ab-26bf-5649-a7b0-d4e30c3050c0"
+        }
+       ]
+      },
+      {
+       "net": "GND",
+       "items": [
+        {
+         "description": "Durchsteckpad 7 [GND] von J1",
+         "pos": {
+          "x": 142.82,
+          "y": 106.22
+         },
+         "uuid": "38a1b4e3-1d20-502d-ba4d-5418992b2504"
+        },
+        {
+         "description": "Pad A12 [GND] von J1 auf F.Cu",
+         "pos": {
+          "x": 141.2,
+          "y": 105.97
+         },
+         "uuid": "dab191ab-26bf-5649-a7b0-d4e30c3050c0"
+        }
+       ]
+      },
+      {
+       "net": "GND",
+       "items": [
+        {
+         "description": "Durchsteckpad 7 [GND] von J1",
+         "pos": {
+          "x": 142.82,
+          "y": 106.22
+         },
+         "uuid": "38a1b4e3-1d20-502d-ba4d-5418992b2504"
+        },
+        {
+         "description": "Pad 2 [GND] von R1 auf F.Cu",
+         "pos": {
+          "x": 146.925,
+          "y": 105.8
+         },
+         "uuid": "fb8f4186-48e2-54ab-913b-5bd4c4f33800"
+        }
+       ]
+      },
+      {
+       "net": "GND",
+       "items": [
+        {
+         "description": "Durchsteckpad 7 [GND] von J1",
+         "pos": {
+          "x": 142.82,
+          "y": 110.03
+         },
+         "uuid": "ac58d1a7-a5b6-5a2a-ace2-43fb2b66f72a"
+        },
+        {
+         "description": "Durchsteckpad 7 [GND] von J1",
+         "pos": {
+          "x": 142.82,
+          "y": 106.22
+         },
+         "uuid": "38a1b4e3-1d20-502d-ba4d-5418992b2504"
+        }
+       ]
+      },
+      {
+       "net": "GND",
+       "items": [
+        {
+         "description": "Pad 2 [GND] von R1 auf F.Cu",
+         "pos": {
+          "x": 146.925,
+          "y": 105.8
+         },
+         "uuid": "fb8f4186-48e2-54ab-913b-5bd4c4f33800"
+        },
+        {
+         "description": "Pad 2 [GND] von C1 auf F.Cu",
+         "pos": {
+          "x": 147.05,
+          "y": 102.5
+         },
+         "uuid": "fb838c12-9937-5db5-90f3-13688a50ef88"
+        }
+       ]
+      },
+      {
+       "net": "GND",
+       "items": [
+        {
+         "description": "Pad 2 [GND] von R2 auf F.Cu",
+         "pos": {
+          "x": 146.925,
+          "y": 108.6
+         },
+         "uuid": "07f59884-b19c-5778-959c-aaaf5df2cd1f"
+        },
+        {
+         "description": "Pad 2 [GND] von R1 auf F.Cu",
+         "pos": {
+          "x": 146.925,
+          "y": 105.8
+         },
+         "uuid": "fb8f4186-48e2-54ab-913b-5bd4c4f33800"
+        }
+       ]
+      },
+      {
+       "net": "GND",
+       "items": [
+        {
+         "description": "Pad 2 [GND] von C1 auf F.Cu",
+         "pos": {
+          "x": 147.05,
+          "y": 102.5
+         },
+         "uuid": "fb838c12-9937-5db5-90f3-13688a50ef88"
+        },
+        {
+         "description": "Pad 1 [GND] von U2 auf F.Cu",
+         "pos": {
+          "x": 147.55,
+          "y": 96.5
+         },
+         "uuid": "c325a801-fb9b-5e1f-9e58-bd5bed56dd7b"
+        }
+       ]
+      },
+      {
+       "net": "GND",
+       "items": [
+        {
+         "description": "Pad 1 [GND] von U2 auf F.Cu",
+         "pos": {
+          "x": 147.55,
+          "y": 96.5
+         },
+         "uuid": "c325a801-fb9b-5e1f-9e58-bd5bed56dd7b"
+        },
+        {
+         "description": "Pad 2 [GND] von D1 auf F.Cu",
+         "pos": {
+          "x": 140.65,
+          "y": 98.5
+         },
+         "uuid": "c56ebf97-468e-55da-b4c2-6193bbb67b97"
+        }
+       ]
+      },
+      {
+       "net": "GND",
+       "items": [
+        {
+         "description": "Pad 2 [GND] von C3 auf F.Cu",
+         "pos": {
+          "x": 148.518,
+          "y": 108.239
+         },
+         "uuid": "ff947947-587c-513d-818f-163d66c946dd"
+        },
+        {
+         "description": "Pad 2 [GND] von R2 auf F.Cu",
+         "pos": {
+          "x": 146.925,
+          "y": 108.6
+         },
+         "uuid": "07f59884-b19c-5778-959c-aaaf5df2cd1f"
+        }
+       ]
+      },
+      {
+       "net": "GND",
+       "items": [
+        {
+         "description": "Pad 2 [GND] von C3 auf F.Cu",
+         "pos": {
+          "x": 148.518,
+          "y": 108.239
+         },
+         "uuid": "ff947947-587c-513d-818f-163d66c946dd"
+        },
+        {
+         "description": "Pad 3 [GND] von U1 auf F.Cu",
+         "pos": {
+          "x": 151.55,
+          "y": 107.5
+         },
+         "uuid": "7c588059-ca2a-5166-a4aa-6239a67ab585"
+        }
+       ]
+      },
+      {
+       "net": "GND",
+       "items": [
+        {
+         "description": "Pad 21 [GND] von U1 auf F.Cu",
+         "pos": {
+          "x": 153.0,
+          "y": 107.5
+         },
+         "uuid": "a8cceb13-a5d4-5e17-8384-8c903789f1a7"
+        },
+        {
+         "description": "Pad 3 [GND] von U1 auf F.Cu",
+         "pos": {
+          "x": 151.55,
+          "y": 107.5
+         },
+         "uuid": "7c588059-ca2a-5166-a4aa-6239a67ab585"
+        }
+       ]
+      },
+      {
+       "net": "GND",
+       "items": [
+        {
+         "description": "Pad 21 [GND] von U1 auf F.Cu",
+         "pos": {
+          "x": 153.0,
+          "y": 107.5
+         },
+         "uuid": "a8cceb13-a5d4-5e17-8384-8c903789f1a7"
+        },
+        {
+         "description": "Pad 1 [GND] von D2 auf F.Cu",
+         "pos": {
+          "x": 157.3125,
+          "y": 106.2
+         },
+         "uuid": "55e5b222-f6fe-5c7e-bee6-7fe56479e528"
+        }
+       ]
+      },
+      {
+       "net": "GND",
+       "items": [
+        {
+         "description": "Pad 1 [GND] von D2 auf F.Cu",
+         "pos": {
+          "x": 157.3125,
+          "y": 106.2
+         },
+         "uuid": "55e5b222-f6fe-5c7e-bee6-7fe56479e528"
+        },
+        {
+         "description": "Durchsteckpad 3 [GND] von J2",
+         "pos": {
+          "x": 159.1,
+          "y": 102.58
+         },
+         "uuid": "1241efa0-ba5d-525c-9c5b-dde6fa2889c9"
+        }
+       ]
+      },
+      {
+       "net": "GND",
+       "items": [
+        {
+         "description": "Durchsteckpad 3 [GND] von J2",
+         "pos": {
+          "x": 159.1,
+          "y": 102.58
+         },
+         "uuid": "1241efa0-ba5d-525c-9c5b-dde6fa2889c9"
+        },
+        {
+         "description": "Pad 2 [GND] von C2 auf F.Cu",
+         "pos": {
+          "x": 156.275,
+          "y": 98.0
+         },
+         "uuid": "3d5ea52b-72e2-5305-9420-7ed1519870b3"
+        }
+       ]
+      },
+      {
+       "net": "VBUS",
+       "items": [
+        {
+         "description": "Pad B9 [VBUS] von J1 auf F.Cu",
+         "pos": {
+          "x": 137.0,
+          "y": 105.97
+         },
+         "uuid": "e99fed5b-2519-52a7-bf89-475e164960e0"
+        },
+        {
+         "description": "Pad A9 [VBUS] von J1 auf F.Cu",
+         "pos": {
+          "x": 140.0,
+          "y": 105.97
+         },
+         "uuid": "1ddbb0e3-aab1-5bf5-95ae-a728aea203ea"
+        }
+       ]
+      },
+      {
+       "net": "VBUS",
+       "items": [
+        {
+         "description": "Pad 1 [VBUS] von F1 auf F.Cu",
+         "pos": {
+          "x": 137.5625,
+          "y": 103.0
+         },
+         "uuid": "0a07d715-e3e9-5aff-97e0-7de8d83e6994"
+        },
+        {
+         "description": "Pad B9 [VBUS] von J1 auf F.Cu",
+         "pos": {
+          "x": 137.0,
+          "y": 105.97
+         },
+         "uuid": "e99fed5b-2519-52a7-bf89-475e164960e0"
+        }
+       ]
+      }
+     ],
+     "violations": [],
+     "warnings": [
+      {
+       "description": "Silkscreen clipped by board edge",
+       "items": [
+        {
+         "description": "Abschnitt auf Edge.Cuts",
+         "pos": {
+          "x": 128.5,
+          "y": 90.0
+         },
+         "uuid": "9d5b16fe-5cd9-42e2-924b-37253d556954"
+        },
+        {
+         "description": "Referenzfeld von H1",
+         "pos": {
+          "x": 131.2,
+          "y": 89.55
+         },
+         "uuid": "cece94ab-f70d-48a4-b5f9-90ecadf64dc9"
+        }
+       ],
+       "severity": "warning",
+       "type": "silk_edge_clearance"
+      },
+      {
+       "description": "Silkscreen clipped by board edge",
+       "items": [
+        {
+         "description": "Abschnitt auf Edge.Cuts",
+         "pos": {
+          "x": 128.5,
+          "y": 90.0
+         },
+         "uuid": "9d5b16fe-5cd9-42e2-924b-37253d556954"
+        },
+        {
+         "description": "Referenzfeld von H2",
+         "pos": {
+          "x": 159.8,
+          "y": 89.55
+         },
+         "uuid": "1ddb595e-280c-424d-a62c-43b9b8663d72"
+        }
+       ],
+       "severity": "warning",
+       "type": "silk_edge_clearance"
+      },
+      {
+       "description": "Silkscreen clearance",
+       "items": [
+        {
+         "description": "Referenzfeld von J1",
+         "pos": {
+          "x": 138.5,
+          "y": 103.6
+         },
+         "uuid": "1b15640c-b778-4a0f-9fad-2f4ffe478369"
+        },
+        {
+         "description": "Abschnitt von F1 auf F.Silkscreen",
+         "pos": {
+          "x": 138.241422,
+          "y": 103.71
+         },
+         "uuid": "a6117a4e-5d2f-4404-9761-0301a7ffc3f8"
+        }
+       ],
+       "severity": "warning",
+       "type": "silk_overlap"
+      },
+      {
+       "description": "Silkscreen clipped by solder mask",
+       "items": [
+        {
+         "description": "Referenzfeld von H4",
+         "pos": {
+          "x": 159.8,
+          "y": 107.15
+         },
+         "uuid": "f43ffd70-3434-4797-83b5-a287b12a1a88"
+        },
+        {
+         "description": "Pad 2 [/LED_A] von D2 auf F.Cu",
+         "pos": {
+          "x": 158.8875,
+          "y": 106.2
+         },
+         "uuid": "fbbef25b-12c8-53cd-abad-515ade2f69d5"
+        }
+       ],
+       "severity": "warning",
+       "type": "silk_over_copper"
+      },
+      {
+       "description": "Silkscreen clipped by solder mask",
+       "items": [
+        {
+         "description": "Referenzfeld von J1",
+         "pos": {
+          "x": 138.5,
+          "y": 103.6
+         },
+         "uuid": "1b15640c-b778-4a0f-9fad-2f4ffe478369"
+        },
+        {
+         "description": "Pad 2 [/VBUS_F] von F1 auf F.Cu",
+         "pos": {
+          "x": 139.4375,
+          "y": 103.0
+         },
+         "uuid": "61988e9e-e492-54c9-bb03-abb3f7dac23d"
+        }
+       ],
+       "severity": "warning",
+       "type": "silk_over_copper"
+      },
+      {
+       "description": "Fehlendes Symbolfeld \"LCSC\" in Footprint",
+       "items": [
+        {
+         "description": "Footprint C1",
+         "pos": {
+          "x": 146.1,
+          "y": 102.5
+         },
+         "uuid": "af5e36b1-4b19-5149-aa45-ec7c71d1b98b"
+        }
+       ],
+       "severity": "warning",
+       "type": "footprint_symbol_field_mismatch"
+      },
+      {
+       "description": "Fehlendes Symbolfeld \"LCSC\" in Footprint",
+       "items": [
+        {
+         "description": "Footprint C2",
+         "pos": {
+          "x": 155.5,
+          "y": 98.0
+         },
+         "uuid": "0723eba4-7bb2-5606-a15a-6b7465b2a387"
+        }
+       ],
+       "severity": "warning",
+       "type": "footprint_symbol_field_mismatch"
+      },
+      {
+       "description": "Fehlendes Symbolfeld \"LCSC\" in Footprint",
+       "items": [
+        {
+         "description": "Footprint C3",
+         "pos": {
+          "x": 149.293,
+          "y": 108.239
+         },
+         "uuid": "a087709a-1935-5891-8af1-88c4a11eff9f"
+        }
+       ],
+       "severity": "warning",
+       "type": "footprint_symbol_field_mismatch"
+      },
+      {
+       "description": "Fehlendes Symbolfeld \"LCSC\" in Footprint",
+       "items": [
+        {
+         "description": "Footprint D1",
+         "pos": {
+          "x": 138.5,
+          "y": 98.5
+         },
+         "uuid": "65a27777-b5aa-552f-9212-92f3104fd131"
+        }
+       ],
+       "severity": "warning",
+       "type": "footprint_symbol_field_mismatch"
+      },
+      {
+       "description": "Fehlendes Symbolfeld \"LCSC\" in Footprint",
+       "items": [
+        {
+         "description": "Footprint D2",
+         "pos": {
+          "x": 158.1,
+          "y": 106.2
+         },
+         "uuid": "44317463-4d59-5b96-97df-d783ab075dcb"
+        }
+       ],
+       "severity": "warning",
+       "type": "footprint_symbol_field_mismatch"
+      },
+      {
+       "description": "Fehlendes Symbolfeld \"LCSC\" in Footprint",
+       "items": [
+        {
+         "description": "Footprint F1",
+         "pos": {
+          "x": 138.5,
+          "y": 103.0
+         },
+         "uuid": "e9a47d49-f498-5fd8-b1d2-40f9c1ed76d2"
+        }
+       ],
+       "severity": "warning",
+       "type": "footprint_symbol_field_mismatch"
+      },
+      {
+       "description": "Fehlendes Symbolfeld \"LCSC\" in Footprint",
+       "items": [
+        {
+         "description": "Footprint J1",
+         "pos": {
+          "x": 138.5,
+          "y": 108.0
+         },
+         "uuid": "4f6e2517-b11d-5603-8918-767e44aa03af"
+        }
+       ],
+       "severity": "warning",
+       "type": "footprint_symbol_field_mismatch"
+      },
+      {
+       "description": "Fehlendes Symbolfeld \"LCSC\" in Footprint",
+       "items": [
+        {
+         "description": "Footprint J2",
+         "pos": {
+          "x": 159.1,
+          "y": 97.5
+         },
+         "uuid": "e33ed40c-07e5-5635-9733-36461edb8fb7"
+        }
+       ],
+       "severity": "warning",
+       "type": "footprint_symbol_field_mismatch"
+      },
+      {
+       "description": "Fehlendes Symbolfeld \"LCSC\" in Footprint",
+       "items": [
+        {
+         "description": "Footprint R1",
+         "pos": {
+          "x": 146.1,
+          "y": 105.8
+         },
+         "uuid": "5ff5b5db-575c-585b-996c-cdbcdc917a10"
+        }
+       ],
+       "severity": "warning",
+       "type": "footprint_symbol_field_mismatch"
+      },
+      {
+       "description": "Fehlendes Symbolfeld \"LCSC\" in Footprint",
+       "items": [
+        {
+         "description": "Footprint R2",
+         "pos": {
+          "x": 146.1,
+          "y": 108.6
+         },
+         "uuid": "79972742-08a5-513f-a41e-8200b970b43b"
+        }
+       ],
+       "severity": "warning",
+       "type": "footprint_symbol_field_mismatch"
+      },
+      {
+       "description": "Fehlendes Symbolfeld \"LCSC\" in Footprint",
+       "items": [
+        {
+         "description": "Footprint R3",
+         "pos": {
+          "x": 150.0,
+          "y": 103.5
+         },
+         "uuid": "187716ec-b234-56b5-8037-0d85aa776056"
+        }
+       ],
+       "severity": "warning",
+       "type": "footprint_symbol_field_mismatch"
+      },
+      {
+       "description": "Fehlendes Symbolfeld \"LCSC\" in Footprint",
+       "items": [
+        {
+         "description": "Footprint U1",
+         "pos": {
+          "x": 153.0,
+          "y": 107.5
+         },
+         "uuid": "9e59ccc1-4281-503d-8dbb-2867e6a304e1"
+        }
+       ],
+       "severity": "warning",
+       "type": "footprint_symbol_field_mismatch"
+      },
+      {
+       "description": "Fehlendes Symbolfeld \"LCSC\" in Footprint",
+       "items": [
+        {
+         "description": "Footprint U2",
+         "pos": {
+          "x": 149.5,
+          "y": 98.0
+         },
+         "uuid": "19836ba3-6694-5f19-959f-112c5adf2c9e"
+        }
+       ],
+       "severity": "warning",
+       "type": "footprint_symbol_field_mismatch"
+      }
+     ],
+     "unstable": false,
+     "runs": 3,
+     "list_complete": true,
+     "incomplete_reasons": [],
+     "notes": [],
+     "parity": {
+      "status": "required",
+      "reason": null
+     }
+    },
+    "connectivity": {
+     "checked": true,
+     "isolated": [],
+     "incomplete": null,
+     "runs": 5,
+     "positions_verified": true,
+     "proven": [
+      18,
+      19,
+      20,
+      21,
+      24
+     ]
+    },
+    "revision_differences": {
+     "text_lines_changed": 19,
+     "reserialised_by": "kicad_tools (formatting differs; this is not avoided)",
+     "net_table_entries_before": 26,
+     "net_table_entries_after": 26,
+     "carried_nodes": 1,
+     "other_content_identical": true
+    },
+    "write_check": {
+     "missing": {
+      "count": 0,
+      "items": []
+     },
+     "unexpected": {
+      "count": 0,
+      "items": []
+     },
+     "tolerated": {
+      "count": 0,
+      "items": []
+     }
+    },
+    "proves": "poured means: the candidate was graded by verify_board, the zone is filled (measured in a kicad-cli refilled copy) and no pad was found isolated by the checks in this result. It does not mean the board is connected or complete: pads with connectivity 'unproven' (for example those waiting for a via) and every open signal remain, and the acceptance authority for connectivity is verify_board on the board after routing.",
+    "net_check": {
+     "net_table": true,
+     "note": "net ids and names of carried nodes were cross-checked against the net table. The revision is a kicad_tools re-serialisation of the original (whitespace and layout differ, and a net table may be added) with the carried zones, vias and tracks appended: see revision_differences for what differs semantically."
+    },
+    "fill_fraction_note": "fill_fraction counts every fill polygon, islands included; whether pads are connected is decided separately by kicad-cli (connectivity)",
+    "candidate_grade": {
+     "verdict": "FAIL",
+     "unconnected": [
+      {
+       "net": "+3V3",
+       "items": [
+        {
+         "description": "Pad 3 [+3V3] von U2 auf F.Cu",
+         "pos": {
+          "x": 147.55,
+          "y": 99.5
+         },
+         "uuid": "aaf9bcde-6a46-514e-977d-65a0b94991fe"
+        },
+        {
+         "description": "Pad 1 [+3V3] von C3 auf F.Cu",
+         "pos": {
+          "x": 150.068,
+          "y": 108.239
+         },
+         "uuid": "6514b122-9f33-598b-adb6-ea52f85a5c64"
+        }
+       ]
+      },
+      {
+       "net": "+3V3",
+       "items": [
+        {
+         "description": "Pad 1 [+3V3] von C3 auf F.Cu",
+         "pos": {
+          "x": 150.068,
+          "y": 108.239
+         },
+         "uuid": "6514b122-9f33-598b-adb6-ea52f85a5c64"
+        },
+        {
+         "description": "Pad 4 [+3V3] von U1 auf F.Cu",
+         "pos": {
+          "x": 151.55,
+          "y": 107.9
+         },
+         "uuid": "07764231-ea99-5a52-9c79-e2351d3b9e85"
+        }
+       ]
+      },
+      {
+       "net": "+3V3",
+       "items": [
+        {
+         "description": "Pad 1 [+3V3] von C2 auf F.Cu",
+         "pos": {
+          "x": 154.725,
+          "y": 98.0
+         },
+         "uuid": "c4fc60dc-3e7c-51c4-be35-f6fbacd8e76a"
+        },
+        {
+         "description": "Pad 3 [+3V3] von U2 auf F.Cu",
+         "pos": {
+          "x": 147.55,
+          "y": 99.5
+         },
+         "uuid": "aaf9bcde-6a46-514e-977d-65a0b94991fe"
+        }
+       ]
+      },
+      {
+       "net": "+3V3",
+       "items": [
+        {
+         "description": "Durchsteckpad 1 [+3V3] von J2",
+         "pos": {
+          "x": 159.1,
+          "y": 97.5
+         },
+         "uuid": "0b3c534c-1f2d-5b0d-8fe4-b41156d63d4c"
+        },
+        {
+         "description": "Pad 1 [+3V3] von C2 auf F.Cu",
+         "pos": {
+          "x": 154.725,
+          "y": 98.0
+         },
+         "uuid": "c4fc60dc-3e7c-51c4-be35-f6fbacd8e76a"
+        }
+       ]
+      },
+      {
+       "net": "/CC1",
+       "items": [
+        {
+         "description": "Pad A5 [/CC1] von J1 auf F.Cu",
+         "pos": {
+          "x": 138.0,
+          "y": 105.97
+         },
+         "uuid": "2a63dad4-75d7-59f6-a143-c29058f56b7f"
+        },
+        {
+         "description": "Pad 1 [/CC1] von R1 auf F.Cu",
+         "pos": {
+          "x": 145.275,
+          "y": 105.8
+         },
+         "uuid": "32b013a7-d176-5471-82ad-d77ec4209ad4"
+        }
+       ]
+      },
+      {
+       "net": "/CC2",
+       "items": [
+        {
+         "description": "Pad B5 [/CC2] von J1 auf F.Cu",
+         "pos": {
+          "x": 139.0,
+          "y": 105.97
+         },
+         "uuid": "cd735ebd-4704-5659-8a34-43a34fe80024"
+        },
+        {
+         "description": "Pad 1 [/CC2] von R2 auf F.Cu",
+         "pos": {
+          "x": 145.275,
+          "y": 108.6
+         },
+         "uuid": "f3ae0f72-e26c-5696-bc9d-616847fdd019"
+        }
+       ]
+      },
+      {
+       "net": "/LED_A",
+       "items": [
+        {
+         "description": "Pad 2 [/LED_A] von R3 auf F.Cu",
+         "pos": {
+          "x": 150.825,
+          "y": 103.5
+         },
+         "uuid": "d1f6a4c4-7fc5-59f5-b26c-0837d28088b6"
+        },
+        {
+         "description": "Pad 2 [/LED_A] von D2 auf F.Cu",
+         "pos": {
+          "x": 158.8875,
+          "y": 106.2
+         },
+         "uuid": "fbbef25b-12c8-53cd-abad-515ade2f69d5"
+        }
+       ]
+      },
+      {
+       "net": "/LED_CTL",
+       "items": [
+        {
+         "description": "Pad 1 [/LED_CTL] von R3 auf F.Cu",
+         "pos": {
+          "x": 149.175,
+          "y": 103.5
+         },
+         "uuid": "e768f9ee-93b2-5c2b-b5b2-494ed1916f0d"
+        },
+        {
+         "description": "Pad 8 [/LED_CTL] von U1 auf F.Cu",
+         "pos": {
+          "x": 153.0,
+          "y": 108.95
+         },
+         "uuid": "f9b6bcae-1fe3-55d1-85d4-09153b46cf48"
+        }
+       ]
+      },
+      {
+       "net": "/UPDI",
+       "items": [
+        {
+         "description": "Pad 19 [/UPDI] von U1 auf F.Cu",
+         "pos": {
+          "x": 152.6,
+          "y": 106.05
+         },
+         "uuid": "e3ed9027-36aa-5c1e-9ef1-b9a3a02f66cd"
+        },
+        {
+         "description": "Durchsteckpad 2 [/UPDI] von J2",
+         "pos": {
+          "x": 159.1,
+          "y": 100.04
+         },
+         "uuid": "ea042a8c-0621-5c32-80cd-5313979bda45"
+        }
+       ]
+      },
+      {
+       "net": "/VBUS_F",
+       "items": [
+        {
+         "description": "Pad 1 [/VBUS_F] von D1 auf F.Cu",
+         "pos": {
+          "x": 136.35,
+          "y": 98.5
+         },
+         "uuid": "a0f3c045-e089-51f9-b13f-68cf801a3eaf"
+        },
+        {
+         "description": "Pad 2 [/VBUS_F] von F1 auf F.Cu",
+         "pos": {
+          "x": 139.4375,
+          "y": 103.0
+         },
+         "uuid": "61988e9e-e492-54c9-bb03-abb3f7dac23d"
+        }
+       ]
+      },
+      {
+       "net": "/VBUS_F",
+       "items": [
+        {
+         "description": "Pad 2 [/VBUS_F] von F1 auf F.Cu",
+         "pos": {
+          "x": 139.4375,
+          "y": 103.0
+         },
+         "uuid": "61988e9e-e492-54c9-bb03-abb3f7dac23d"
+        },
+        {
+         "description": "Pad 1 [/VBUS_F] von C1 auf F.Cu",
+         "pos": {
+          "x": 145.15,
+          "y": 102.5
+         },
+         "uuid": "6deeaad5-f53d-5bc8-809f-f593f402076d"
+        }
+       ]
+      },
+      {
+       "net": "/VBUS_F",
+       "items": [
+        {
+         "description": "Pad 1 [/VBUS_F] von C1 auf F.Cu",
+         "pos": {
+          "x": 145.15,
+          "y": 102.5
+         },
+         "uuid": "6deeaad5-f53d-5bc8-809f-f593f402076d"
+        },
+        {
+         "description": "Pad 2 [/VBUS_F] von U2 auf F.Cu",
+         "pos": {
+          "x": 147.6375,
+          "y": 98.0
+         },
+         "uuid": "80c9264b-4055-5e6c-82df-2a35e696f089"
+        }
+       ]
+      },
+      {
+       "net": "GND",
+       "items": [
+        {
+         "description": "Durchsteckpad 7 [GND] von J1",
+         "pos": {
+          "x": 134.18,
+          "y": 106.22
+         },
+         "uuid": "5ab468ff-b5d4-5cb7-b6b7-ad1a62b545d1"
+        },
+        {
+         "description": "Pad B12 [GND] von J1 auf F.Cu",
+         "pos": {
+          "x": 135.8,
+          "y": 105.97
+         },
+         "uuid": "dc12a54b-9052-5fd6-b711-5e41a747faef"
+        }
+       ]
+      },
+      {
+       "net": "GND",
+       "items": [
+        {
+         "description": "Pad A12 [GND] von J1 auf F.Cu",
+         "pos": {
+          "x": 141.2,
+          "y": 105.97
+         },
+         "uuid": "dab191ab-26bf-5649-a7b0-d4e30c3050c0"
+        },
+        {
+         "description": "Durchsteckpad 7 [GND] von J1",
+         "pos": {
+          "x": 142.82,
+          "y": 106.22
+         },
+         "uuid": "38a1b4e3-1d20-502d-ba4d-5418992b2504"
+        }
+       ]
+      },
+      {
+       "net": "GND",
+       "items": [
+        {
+         "description": "Durchsteckpad 7 [GND] von J1",
+         "pos": {
+          "x": 142.82,
+          "y": 106.22
+         },
+         "uuid": "38a1b4e3-1d20-502d-ba4d-5418992b2504"
+        },
+        {
+         "description": "Pad 2 [GND] von R1 auf F.Cu",
+         "pos": {
+          "x": 146.925,
+          "y": 105.8
+         },
+         "uuid": "fb8f4186-48e2-54ab-913b-5bd4c4f33800"
+        }
+       ]
+      },
+      {
+       "net": "GND",
+       "items": [
+        {
+         "description": "Pad 2 [GND] von R1 auf F.Cu",
+         "pos": {
+          "x": 146.925,
+          "y": 105.8
+         },
+         "uuid": "fb8f4186-48e2-54ab-913b-5bd4c4f33800"
+        },
+        {
+         "description": "Pad 2 [GND] von C1 auf F.Cu",
+         "pos": {
+          "x": 147.05,
+          "y": 102.5
+         },
+         "uuid": "fb838c12-9937-5db5-90f3-13688a50ef88"
+        }
+       ]
+      },
+      {
+       "net": "GND",
+       "items": [
+        {
+         "description": "Pad 2 [GND] von R2 auf F.Cu",
+         "pos": {
+          "x": 146.925,
+          "y": 108.6
+         },
+         "uuid": "07f59884-b19c-5778-959c-aaaf5df2cd1f"
+        },
+        {
+         "description": "Pad 2 [GND] von R1 auf F.Cu",
+         "pos": {
+          "x": 146.925,
+          "y": 105.8
+         },
+         "uuid": "fb8f4186-48e2-54ab-913b-5bd4c4f33800"
+        }
+       ]
+      },
+      {
+       "net": "GND",
+       "items": [
+        {
+         "description": "Pad 2 [GND] von C1 auf F.Cu",
+         "pos": {
+          "x": 147.05,
+          "y": 102.5
+         },
+         "uuid": "fb838c12-9937-5db5-90f3-13688a50ef88"
+        },
+        {
+         "description": "Pad 1 [GND] von U2 auf F.Cu",
+         "pos": {
+          "x": 147.55,
+          "y": 96.5
+         },
+         "uuid": "c325a801-fb9b-5e1f-9e58-bd5bed56dd7b"
+        }
+       ]
+      },
+      {
+       "net": "GND",
+       "items": [
+        {
+         "description": "Pad 1 [GND] von U2 auf F.Cu",
+         "pos": {
+          "x": 147.55,
+          "y": 96.5
+         },
+         "uuid": "c325a801-fb9b-5e1f-9e58-bd5bed56dd7b"
+        },
+        {
+         "description": "Pad 2 [GND] von D1 auf F.Cu",
+         "pos": {
+          "x": 140.65,
+          "y": 98.5
+         },
+         "uuid": "c56ebf97-468e-55da-b4c2-6193bbb67b97"
+        }
+       ]
+      },
+      {
+       "net": "GND",
+       "items": [
+        {
+         "description": "Pad 2 [GND] von C3 auf F.Cu",
+         "pos": {
+          "x": 148.518,
+          "y": 108.239
+         },
+         "uuid": "ff947947-587c-513d-818f-163d66c946dd"
+        },
+        {
+         "description": "Pad 2 [GND] von R2 auf F.Cu",
+         "pos": {
+          "x": 146.925,
+          "y": 108.6
+         },
+         "uuid": "07f59884-b19c-5778-959c-aaaf5df2cd1f"
+        }
+       ]
+      },
+      {
+       "net": "GND",
+       "items": [
+        {
+         "description": "Pad 3 [GND] von U1 auf F.Cu",
+         "pos": {
+          "x": 151.55,
+          "y": 107.5
+         },
+         "uuid": "7c588059-ca2a-5166-a4aa-6239a67ab585"
+        },
+        {
+         "description": "Pad 2 [GND] von C3 auf F.Cu",
+         "pos": {
+          "x": 148.518,
+          "y": 108.239
+         },
+         "uuid": "ff947947-587c-513d-818f-163d66c946dd"
+        }
+       ]
+      },
+      {
+       "net": "GND",
+       "items": [
+        {
+         "description": "Pad 21 [GND] von U1 auf F.Cu",
+         "pos": {
+          "x": 153.0,
+          "y": 107.5
+         },
+         "uuid": "a8cceb13-a5d4-5e17-8384-8c903789f1a7"
+        },
+        {
+         "description": "Pad 3 [GND] von U1 auf F.Cu",
+         "pos": {
+          "x": 151.55,
+          "y": 107.5
+         },
+         "uuid": "7c588059-ca2a-5166-a4aa-6239a67ab585"
+        }
+       ]
+      },
+      {
+       "net": "GND",
+       "items": [
+        {
+         "description": "Pad 1 [GND] von D2 auf F.Cu",
+         "pos": {
+          "x": 157.3125,
+          "y": 106.2
+         },
+         "uuid": "55e5b222-f6fe-5c7e-bee6-7fe56479e528"
+        },
+        {
+         "description": "Durchsteckpad 3 [GND] von J2",
+         "pos": {
+          "x": 159.1,
+          "y": 102.58
+         },
+         "uuid": "1241efa0-ba5d-525c-9c5b-dde6fa2889c9"
+        }
+       ]
+      },
+      {
+       "net": "GND",
+       "items": [
+        {
+         "description": "Durchsteckpad 3 [GND] von J2",
+         "pos": {
+          "x": 159.1,
+          "y": 102.58
+         },
+         "uuid": "1241efa0-ba5d-525c-9c5b-dde6fa2889c9"
+        },
+        {
+         "description": "Pad 2 [GND] von C2 auf F.Cu",
+         "pos": {
+          "x": 156.275,
+          "y": 98.0
+         },
+         "uuid": "3d5ea52b-72e2-5305-9420-7ed1519870b3"
+        }
+       ]
+      },
+      {
+       "net": "VBUS",
+       "items": [
+        {
+         "description": "Pad B9 [VBUS] von J1 auf F.Cu",
+         "pos": {
+          "x": 137.0,
+          "y": 105.97
+         },
+         "uuid": "e99fed5b-2519-52a7-bf89-475e164960e0"
+        },
+        {
+         "description": "Pad A9 [VBUS] von J1 auf F.Cu",
+         "pos": {
+          "x": 140.0,
+          "y": 105.97
+         },
+         "uuid": "1ddbb0e3-aab1-5bf5-95ae-a728aea203ea"
+        }
+       ]
+      },
+      {
+       "net": "VBUS",
+       "items": [
+        {
+         "description": "Pad 1 [VBUS] von F1 auf F.Cu",
+         "pos": {
+          "x": 137.5625,
+          "y": 103.0
+         },
+         "uuid": "0a07d715-e3e9-5aff-97e0-7de8d83e6994"
+        },
+        {
+         "description": "Pad B9 [VBUS] von J1 auf F.Cu",
+         "pos": {
+          "x": 137.0,
+          "y": 105.97
+         },
+         "uuid": "e99fed5b-2519-52a7-bf89-475e164960e0"
+        }
+       ]
+      }
+     ],
+     "violations": [],
+     "warnings": [
+      {
+       "description": "Silkscreen clipped by board edge",
+       "items": [
+        {
+         "description": "Abschnitt auf Edge.Cuts",
+         "pos": {
+          "x": 128.5,
+          "y": 90.0
+         },
+         "uuid": "9d5b16fe-5cd9-42e2-924b-37253d556954"
+        },
+        {
+         "description": "Referenzfeld von H1",
+         "pos": {
+          "x": 131.2,
+          "y": 89.55
+         },
+         "uuid": "18eb4119-edd5-4d1f-812b-f9111f7a2f1b"
+        }
+       ],
+       "severity": "warning",
+       "type": "silk_edge_clearance"
+      },
+      {
+       "description": "Silkscreen clipped by board edge",
+       "items": [
+        {
+         "description": "Abschnitt auf Edge.Cuts",
+         "pos": {
+          "x": 128.5,
+          "y": 90.0
+         },
+         "uuid": "9d5b16fe-5cd9-42e2-924b-37253d556954"
+        },
+        {
+         "description": "Referenzfeld von H2",
+         "pos": {
+          "x": 159.8,
+          "y": 89.55
+         },
+         "uuid": "8c3b0028-bab5-4650-bbda-855570fc1395"
+        }
+       ],
+       "severity": "warning",
+       "type": "silk_edge_clearance"
+      },
+      {
+       "description": "Silkscreen clearance",
+       "items": [
+        {
+         "description": "Abschnitt von F1 auf F.Silkscreen",
+         "pos": {
+          "x": 138.241422,
+          "y": 103.71
+         },
+         "uuid": "b4e16ead-59ec-4d19-8bd0-4663e85e07fe"
+        },
+        {
+         "description": "Referenzfeld von J1",
+         "pos": {
+          "x": 138.5,
+          "y": 103.6
+         },
+         "uuid": "fbe8fd7b-e83a-4b84-8d5d-a1ee01e181e8"
+        }
+       ],
+       "severity": "warning",
+       "type": "silk_overlap"
+      },
+      {
+       "description": "Silkscreen clipped by solder mask",
+       "items": [
+        {
+         "description": "Referenzfeld von H4",
+         "pos": {
+          "x": 159.8,
+          "y": 107.15
+         },
+         "uuid": "ed74bd82-34c9-4d08-9b37-ad3b81aa456a"
+        },
+        {
+         "description": "Pad 2 [/LED_A] von D2 auf F.Cu",
+         "pos": {
+          "x": 158.8875,
+          "y": 106.2
+         },
+         "uuid": "fbbef25b-12c8-53cd-abad-515ade2f69d5"
+        }
+       ],
+       "severity": "warning",
+       "type": "silk_over_copper"
+      },
+      {
+       "description": "Silkscreen clipped by solder mask",
+       "items": [
+        {
+         "description": "Referenzfeld von J1",
+         "pos": {
+          "x": 138.5,
+          "y": 103.6
+         },
+         "uuid": "fbe8fd7b-e83a-4b84-8d5d-a1ee01e181e8"
+        },
+        {
+         "description": "Pad 2 [/VBUS_F] von F1 auf F.Cu",
+         "pos": {
+          "x": 139.4375,
+          "y": 103.0
+         },
+         "uuid": "61988e9e-e492-54c9-bb03-abb3f7dac23d"
+        }
+       ],
+       "severity": "warning",
+       "type": "silk_over_copper"
+      },
+      {
+       "description": "Fehlendes Symbolfeld \"LCSC\" in Footprint",
+       "items": [
+        {
+         "description": "Footprint C1",
+         "pos": {
+          "x": 146.1,
+          "y": 102.5
+         },
+         "uuid": "af5e36b1-4b19-5149-aa45-ec7c71d1b98b"
+        }
+       ],
+       "severity": "warning",
+       "type": "footprint_symbol_field_mismatch"
+      },
+      {
+       "description": "Fehlendes Symbolfeld \"LCSC\" in Footprint",
+       "items": [
+        {
+         "description": "Footprint C2",
+         "pos": {
+          "x": 155.5,
+          "y": 98.0
+         },
+         "uuid": "0723eba4-7bb2-5606-a15a-6b7465b2a387"
+        }
+       ],
+       "severity": "warning",
+       "type": "footprint_symbol_field_mismatch"
+      },
+      {
+       "description": "Fehlendes Symbolfeld \"LCSC\" in Footprint",
+       "items": [
+        {
+         "description": "Footprint C3",
+         "pos": {
+          "x": 149.293,
+          "y": 108.239
+         },
+         "uuid": "a087709a-1935-5891-8af1-88c4a11eff9f"
+        }
+       ],
+       "severity": "warning",
+       "type": "footprint_symbol_field_mismatch"
+      },
+      {
+       "description": "Fehlendes Symbolfeld \"LCSC\" in Footprint",
+       "items": [
+        {
+         "description": "Footprint D1",
+         "pos": {
+          "x": 138.5,
+          "y": 98.5
+         },
+         "uuid": "65a27777-b5aa-552f-9212-92f3104fd131"
+        }
+       ],
+       "severity": "warning",
+       "type": "footprint_symbol_field_mismatch"
+      },
+      {
+       "description": "Fehlendes Symbolfeld \"LCSC\" in Footprint",
+       "items": [
+        {
+         "description": "Footprint D2",
+         "pos": {
+          "x": 158.1,
+          "y": 106.2
+         },
+         "uuid": "44317463-4d59-5b96-97df-d783ab075dcb"
+        }
+       ],
+       "severity": "warning",
+       "type": "footprint_symbol_field_mismatch"
+      },
+      {
+       "description": "Fehlendes Symbolfeld \"LCSC\" in Footprint",
+       "items": [
+        {
+         "description": "Footprint F1",
+         "pos": {
+          "x": 138.5,
+          "y": 103.0
+         },
+         "uuid": "e9a47d49-f498-5fd8-b1d2-40f9c1ed76d2"
+        }
+       ],
+       "severity": "warning",
+       "type": "footprint_symbol_field_mismatch"
+      },
+      {
+       "description": "Fehlendes Symbolfeld \"LCSC\" in Footprint",
+       "items": [
+        {
+         "description": "Footprint J1",
+         "pos": {
+          "x": 138.5,
+          "y": 108.0
+         },
+         "uuid": "4f6e2517-b11d-5603-8918-767e44aa03af"
+        }
+       ],
+       "severity": "warning",
+       "type": "footprint_symbol_field_mismatch"
+      },
+      {
+       "description": "Fehlendes Symbolfeld \"LCSC\" in Footprint",
+       "items": [
+        {
+         "description": "Footprint J2",
+         "pos": {
+          "x": 159.1,
+          "y": 97.5
+         },
+         "uuid": "e33ed40c-07e5-5635-9733-36461edb8fb7"
+        }
+       ],
+       "severity": "warning",
+       "type": "footprint_symbol_field_mismatch"
+      },
+      {
+       "description": "Fehlendes Symbolfeld \"LCSC\" in Footprint",
+       "items": [
+        {
+         "description": "Footprint R1",
+         "pos": {
+          "x": 146.1,
+          "y": 105.8
+         },
+         "uuid": "5ff5b5db-575c-585b-996c-cdbcdc917a10"
+        }
+       ],
+       "severity": "warning",
+       "type": "footprint_symbol_field_mismatch"
+      },
+      {
+       "description": "Fehlendes Symbolfeld \"LCSC\" in Footprint",
+       "items": [
+        {
+         "description": "Footprint R2",
+         "pos": {
+          "x": 146.1,
+          "y": 108.6
+         },
+         "uuid": "79972742-08a5-513f-a41e-8200b970b43b"
+        }
+       ],
+       "severity": "warning",
+       "type": "footprint_symbol_field_mismatch"
+      },
+      {
+       "description": "Fehlendes Symbolfeld \"LCSC\" in Footprint",
+       "items": [
+        {
+         "description": "Footprint R3",
+         "pos": {
+          "x": 150.0,
+          "y": 103.5
+         },
+         "uuid": "187716ec-b234-56b5-8037-0d85aa776056"
+        }
+       ],
+       "severity": "warning",
+       "type": "footprint_symbol_field_mismatch"
+      },
+      {
+       "description": "Fehlendes Symbolfeld \"LCSC\" in Footprint",
+       "items": [
+        {
+         "description": "Footprint U1",
+         "pos": {
+          "x": 153.0,
+          "y": 107.5
+         },
+         "uuid": "9e59ccc1-4281-503d-8dbb-2867e6a304e1"
+        }
+       ],
+       "severity": "warning",
+       "type": "footprint_symbol_field_mismatch"
+      },
+      {
+       "description": "Fehlendes Symbolfeld \"LCSC\" in Footprint",
+       "items": [
+        {
+         "description": "Footprint U2",
+         "pos": {
+          "x": 149.5,
+          "y": 98.0
+         },
+         "uuid": "19836ba3-6694-5f19-959f-112c5adf2c9e"
+        }
+       ],
+       "severity": "warning",
+       "type": "footprint_symbol_field_mismatch"
+      }
+     ],
+     "unstable": false,
+     "runs": 3,
+     "list_complete": true,
+     "incomplete_reasons": [],
+     "notes": [],
+     "parity": {
+      "status": "required",
+      "reason": null
+     }
+    },
+    "router": {
+     "script": "route_planes.py",
+     "exit_code": 0,
+     "elapsed_s": 0.97,
+     "args": [
+      "<home>\\AppData\\Local\\Temp\\tmp3qxsw2j9\\work\\rung1_usbc_attiny1616.kicad_pcb",
+      "<home>\\AppData\\Local\\Temp\\tmp3qxsw2j9\\candidate\\rung1_usbc_attiny1616.kicad_pcb",
+      "--nets",
+      "GND",
+      "--escalation",
+      "board",
+      "--no-fix-drc-settings",
+      "--strict-sizes",
+      "--clearance",
+      "0.127",
+      "--fab-overrides",
+      "<home>\\AppData\\Local\\Temp\\tmp3qxsw2j9\\board_floor_overrides.txt",
+      "--plane-layers",
+      "B.Cu"
+     ],
+     "summary": {
+      "complete": true,
+      "env_knobs": {
+       "KICAD_FOOTPRINT_DIR": "C:\\Program Files\\KiCad\\10.0\\share\\kicad\\footprints",
+       "KICAD_ROUTING_TOOLS_PATH": "<home>/Documents/KiCadRoutingTools",
+       "KICAD_STOP_CLEANUP": "1",
+       "KICAD_STOP_FILE": "<home>\\AppData\\Local\\Temp\\tmp3qxsw2j9\\candidate\\rung1_usbc_attiny1616.krt_stop_request"
+      },
+      "min_clearance_used": 0.127,
+      "pads": {
+       "geometric_failed": 12
+      },
+      "pads_scope": "all zones in this run, summed -- not per zone; see plane_zones for what was poured",
+      "plane_nets": [
+       "GND"
+      ],
+      "plane_resistance": [
+       {
+        "avg_width_mm": 18.61,
+        "copper_oz": 1.0,
+        "max_current_a": 19.92,
+        "max_current_ipc2152_a": 19.92,
+        "net": "GND",
+        "path_basis": "route",
+        "path_length_mm": 39.66,
+        "resistance_ohms": 0.001023,
+        "temp_rise_c": 10.0
+       }
+      ],
+      "plane_zones": [
+       {
+        "layer": "B.Cu",
+        "net": "GND"
+       }
+      ],
+      "status": "ok"
+     },
+     "project_restored": true,
+     "router_overwrote_project": false,
+     "claim_note": "the router's own summary is a claim, not evidence; only the gate's grade counts"
+    },
+    "fill_note": "The revision on disk holds the zone OUTLINE only (filled_in_file is false): the fill copper above was produced by kicad-cli in a refilled copy and measured there. KiCad refills on open and the gate refills in its graded copy; any export that needs fill copper must refill first.",
+    "note": "A new revision with the pour was written; the original is untouched. The gate grade of this revision is in 'gate' (signals still open on the board are listed there). Call verify_board on output_pcb for a verdict bound to the file.",
+    "original_unchanged": true,
+    "pcb_path": "<repo>\\evals\\rung1\\layout_run\\07_poured\\rung1_usbc_attiny1616.kicad_pcb",
+    "source_pcb": "<repo>\\evals\\rung1\\layout_run\\04_rules\\rung1_usbc_attiny1616.kicad_pcb",
+    "gates": {
+     "<repo>\\evals\\rung1\\layout_run\\04_rules\\rung1_usbc_attiny1616.kicad_pcb": {
+      "verdict": "NOT_RUN",
+      "board_sha": "ba46d3f5c1f5f0cd66f15c7717c039c74ec0f7d335a51b59e2401cedc3bc5889",
+      "project_sha": "d2475bdcd853b400a164f90b5a3e88534b9162a8f2f95cf85aeb1e04cf42c7c5",
+      "verdict_board_sha": null,
+      "age_s": null,
+      "stale": true,
+      "note": "Only a verify_board PASS certifies this board; call verify_board for a current verdict."
+     },
+     "<repo>\\evals\\rung1\\layout_run\\07_poured\\rung1_usbc_attiny1616.kicad_pcb": {
+      "verdict": "NOT_RUN",
+      "board_sha": "f027fc2c80b3304d04121fa55987f8950fb587b5c879d70dda638db767efb82b",
+      "project_sha": "ec1c43718d9cd2b0a1bdb2bbfeb3a0daee7a6e3061db69e1e6bb6e7ca7f9e633",
+      "verdict_board_sha": null,
+      "age_s": null,
+      "stale": true,
+      "note": "Only a verify_board PASS certifies this board; call verify_board for a current verdict."
+     }
+    }
+   }
+  }
+ ],
+ "blocked": null,
+ "paths": {
+  "source_copy": "<repo>\\evals\\rung1\\layout_run\\src\\rung1_usbc_attiny1616.kicad_pcb",
+  "import_from_schematic": "<repo>\\evals\\rung1\\layout_run\\01_import\\rung1_usbc_attiny1616.kicad_pcb",
+  "board_outline": "<repo>\\evals\\rung1\\layout_run\\02_outline\\rung1_usbc_attiny1616.kicad_pcb",
+  "placement": "<repo>\\evals\\rung1\\layout_run\\03_placed\\rung1_usbc_attiny1616.kicad_pcb",
+  "board_rules": "<repo>\\evals\\rung1\\layout_run\\04_rules\\rung1_usbc_attiny1616.kicad_pcb",
+  "pour_step": "<repo>\\evals\\rung1\\layout_run\\07_poured\\rung1_usbc_attiny1616.kicad_pcb"
+ },
+ "final_board": "<repo>\\evals\\rung1\\layout_run\\07_poured\\rung1_usbc_attiny1616.kicad_pcb",
+ "origin_page_mm": [
+  128.5,
+  90.0
+ ]
+}

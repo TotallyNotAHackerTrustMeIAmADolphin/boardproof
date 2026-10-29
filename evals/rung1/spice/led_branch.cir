@@ -1,0 +1,6 @@
+* Rung-1 LED branch: +3V3 -> R3 (1k, from BOM) -> LED D2 (red, Vf ~1.9 V) -> GND
+.model DLED D(IS=1e-20 N=2.0 RS=10)
+vsrc vcc 0 3.3
+r3 vcc led_a 1k
+d2 led_a 0 DLED
+.end

@@ -1,0 +1,90 @@
+{
+ "delivered_below_requested_count": 4,
+ "delivered_below_requested_policy_hit": true,
+ "router_facts": {
+  "added_segments": 96,
+  "added_vias": 6,
+  "board_floors": {
+   "clearance": 0.127,
+   "track_width": 0.127,
+   "via_diameter": 0.45,
+   "via_drill": 0.2
+  },
+  "delivered_below_requested": [
+   {
+    "delivered_mm": 0.2498,
+    "kind": "track_width",
+    "net_name": null,
+    "requested_mm": 0.4
+   },
+   {
+    "delivered_mm": 0.1998,
+    "kind": "track_width",
+    "net_name": null,
+    "requested_mm": 0.4
+   },
+   {
+    "delivered_mm": 0.1998,
+    "kind": "track_width",
+    "net_name": null,
+    "requested_mm": 0.4
+   },
+   {
+    "delivered_mm": 0.45,
+    "kind": "via_diameter",
+    "net_name": null,
+    "requested_mm": 0.6
+   }
+  ],
+  "elapsed_s": 4.74,
+  "exit_code": 3,
+  "fab_floor_relaxed": false,
+  "fab_tier_escalations": 0,
+  "logged_parameters": {
+   "advanced_flags": {},
+   "clearance_mm": 0.127,
+   "escalation": "board",
+   "fab_overrides": "<path>",
+   "grid_step_mm": null,
+   "layer_costs": {
+    "costs": [
+     1.0,
+     4.0
+    ],
+    "layers": [
+     "F.Cu",
+     "B.Cu"
+    ]
+   },
+   "layer_costs_reason": "board has a copper pour",
+   "max_iterations": null,
+   "nets": [
+    "*"
+   ],
+   "strict_sizes": true
+  },
+  "removed_segment_count": 0,
+  "removed_via_count": 0,
+  "router_rewrote_project": true,
+  "router_self_report": {
+   "boxed_in_nets": [],
+   "failed_nets": [],
+   "router_reported_nets": [
+    "/VBUS_F",
+    "+3V3",
+    "/LED_A",
+    "/LED_CTL",
+    "/UPDI",
+    "GND"
+   ]
+  },
+  "router_version": "0.23.1",
+  "strict_sizes_violated": true,
+  "version_check": {
+   "live": "0.23.1",
+   "matches": false,
+   "message": "router version 0.23.1 differs from the snapshot's 0.22.0: re-capture the snapshot and re-run the flag check before trusting this run",
+   "pinned": "0.22.0"
+  }
+ }
+}

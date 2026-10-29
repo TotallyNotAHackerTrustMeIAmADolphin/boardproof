@@ -1,0 +1,103 @@
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+.coverage.*
+htmlcov/
+*.egg-info/
+build/
+dist/
+
+# KiCad-generated sidecar artifacts, not project/fixture content -- created
+# as a side effect of opening a project in a real KiCad GUI (e.g. Phase 6
+# copilot-mode testing against a real pcbnew.exe instance). ~*.lck are
+# per-file open-locks; .history/ is KiCad's own local version-control
+# panel, which nests a real .git repo -- never let that get git-added.
+~*.lck
+.history/
+*-backups/
+_autosave-*
+fp-info-cache
+*.bak
+# A project's .kicad_prl is local GUI state in general, but the committed fixtures and the ladder's
+# rung-1 project keep theirs: it is part of the pinned project hash (protocol 7).
+*.kicad_prl
+!evals/**/*.kicad_prl
+!tests/fixtures/**/*.kicad_prl
+
+# Local Claude Code tooling state (globally-installed skills, etc.) --
+# not project source. Exception: skills this project authors itself
+# (kicad-*), which are meant to ship with the repo -- see the archived backlog's
+# "Companion skills" epic. Also tracked: the agent definitions and the
+# project settings with the git-guardrail hook (build ticket 45).
+.claude/*
+!.claude/skills
+!.claude/agents
+!.claude/settings.json
+.claude/skills/*
+!.claude/skills/kicad-sourcing
+!.claude/skills/kicad-verification
+!.claude/skills/kicad-schematic
+!.claude/skills/kicad-pcb
+!.claude/skills/kicad-manufacture
+!.claude/skills/kicad-simulation
+
+# Editor and OS files.
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Secrets and local environments never belong in the repository.
+.env*
+*.pem
+*.key
+*.p12
+*.pfx
+credentials*.json
+credentials*.txt
+credentials*.yaml
+credentials*.yml
+id_rsa
+id_ed25519
+.venv*/
+
+# Local Claude Code state beyond the tracked agents, skills and settings (see above).
+.claude/settings.local.json
+.claude/worktrees/
+.claude/scheduled_tasks.lock
+.claude/*.lock
+
+# Gate and run output, and the ladder's local run folder (index, batches and run directories stay
+# local; the committed, sanitised history is evals/ladder_results.json).
+/runs/
+*.pytest.out
+batch-gate-*.log
+
+# Planning notes of the old workflow; planning lives in the GitHub issues now.
+/.scratch/
+
+# Local clones, downloaded assets and fetched output. The CDFER library is a git submodule at
+# third_party/JLCPCB-Kicad-Library (not ignored); a stray clone elsewhere is.
+JLCPCB-Kicad-Library/
+!/third_party/JLCPCB-Kicad-Library/
+com_github_*/
+# EasyEDA-fetched part output (LCSC part numbers C<digits>); our own libraries (Rung1_USBC) and
+# the committed fixtures do not match these.
+C[0-9]*.3dshapes/
+**/C[0-9]*.kicad_sym
+**/C[0-9]*.pretty/
+**/lib/C[0-9]*/
+# ... but the submodule is the CDFER library itself, whose own parts are named like that.
+!/third_party/JLCPCB-Kicad-Library/**
+
+# The owner's private pattern file for the publishability check (never committed).
+publish-forbidden*

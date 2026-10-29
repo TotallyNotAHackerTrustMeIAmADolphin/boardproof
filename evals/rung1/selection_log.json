@@ -1,0 +1,191 @@
+{
+ "captured": "2026-10-11, JLCPCB parts API (search_parts LCSC provider is bot-walled)",
+ "parts": [
+  {
+   "ref": "J1",
+   "lcsc": "C456012",
+   "mpn": "TYPE-C 6P (SHOU HAN)",
+   "category": "connector",
+   "tier": "extended",
+   "stock": 665006,
+   "reason": "Power-only 6-pin USB-C receptacle (VBUS/GND/CC1/CC2/shield) matches the power-only brief and keeps pad count low. No Basic or Preferred USB-C receptacle exists in the local tier index or in JLCPCB search (all results Extended); most-stocked Extended chosen.",
+   "footprint": "Rung1_USBC:USB_C_Receptacle_Shouhan_TYPE-C-6P",
+   "extended_exception": "no Basic/Preferred USB-C receptacle exists",
+   "local_index": {
+    "jlcpcb_class": null,
+    "matched": false
+   }
+  },
+  {
+   "ref": "F1",
+   "lcsc": "C20978",
+   "mpn": "SMD0805P050TF",
+   "category": "protection",
+   "tier": "extended",
+   "stock": 19191,
+   "reason": "Hold 0.5 A / trip 1 A (USB default 500 mA), Vmax 6 V >= 5.5 V bus, 0805. Every PTC returned by JLCPCB search is Extended (none Basic/Preferred); most-stocked 0805 chosen over 1206 for size.",
+   "footprint": "Fuse:Fuse_0805_2012Metric",
+   "extended_exception": "no Basic/Preferred PTC exists",
+   "local_index": {
+    "jlcpcb_class": null,
+    "matched": false
+   }
+  },
+  {
+   "ref": "D1",
+   "lcsc": "C7420377",
+   "mpn": "SMBJ6.5CA",
+   "category": "protection",
+   "tier": "basic",
+   "stock": 1312521,
+   "reason": "Basic. Standoff 6.5 V > 5.5 V max VBUS, breakdown 7.22 V, clamp 11.2 V (< regulator abs max). Preferred SMBJ5.0CA/SMAJ5.0A not needed because a Basic part meets the rating.",
+   "footprint": "Diode_SMD:D_SMB",
+   "local_index": {
+    "jlcpcb_class": "basic",
+    "matched": true
+   }
+  },
+  {
+   "ref": "U2",
+   "lcsc": "C14289",
+   "mpn": "HT7533-1",
+   "category": "regulator",
+   "tier": "basic",
+   "stock": 75769,
+   "reason": "Basic. 3.3 V, 100 mA, 30 V Vin max, 2.5 uA Iq: fits the ~15 mA load and the 11 V TVS clamp, no min-load. Rejected Basic AMS1117-3.3 (C6186: datasheet wants 22 uF tantalum + 5-10 mA min load) and XC6206 (C5446: 6 V recommended, below the TVS clamp). UNVERIFIED: the HT7533 datasheet could not be fetched (LCSC/Holtek bot walls). Pinout 1=GND 2=VIN 3=VOUT agrees between the KiCad stock symbol and the JLCPCB library symbol; ratings come from the JLCPCB parametric record only.",
+   "footprint": "Package_TO_SOT_SMD:SOT-89-3",
+   "local_index": {
+    "jlcpcb_class": "basic",
+    "matched": true
+   }
+  },
+  {
+   "ref": "U1",
+   "lcsc": "C507118",
+   "mpn": "ATTINY1616-MNR",
+   "category": "mcu",
+   "tier": "extended",
+   "stock": 7501,
+   "reason": "The rung-1 target MCU (ATtiny1616, VQFN-20 3x3, 0.4 mm pitch); only one orderable variant, Extended.",
+   "footprint": "Package_DFN_QFN:VQFN-20-1EP_3x3mm_P0.4mm_EP1.7x1.7mm",
+   "extended_exception": "the mandated MCU has no Basic/Preferred listing",
+   "local_index": {
+    "jlcpcb_class": null,
+    "matched": false
+   }
+  },
+  {
+   "ref": "C1",
+   "lcsc": "C15850",
+   "mpn": "CL21A106KAYNNNE",
+   "category": "passive_rc",
+   "tier": "basic",
+   "stock": 4311824,
+   "reason": "Basic. VBUS_F bulk / LDO input; 25 V gives margin over 5 V and hot-plug ringing (the Basic 0603 10 uF is only 10 V).",
+   "footprint": "Capacitor_SMD:C_0805_2012Metric",
+   "local_index": {
+    "jlcpcb_class": "basic",
+    "matched": true
+   }
+  },
+  {
+   "ref": "C2",
+   "lcsc": "C15849",
+   "mpn": "CL10A105KB8NNNC",
+   "category": "passive_rc",
+   "tier": "basic",
+   "stock": 8607509,
+   "reason": "Basic. 3.3 V LDO output capacitor (1 uF class).",
+   "footprint": "Capacitor_SMD:C_0603_1608Metric",
+   "local_index": {
+    "jlcpcb_class": "basic",
+    "matched": true
+   }
+  },
+  {
+   "ref": "C3",
+   "lcsc": "C14663",
+   "mpn": "CC0603KRX7R9BB104",
+   "category": "passive_rc",
+   "tier": "basic",
+   "stock": 56393013,
+   "reason": "Basic. MCU VCC decoupling.",
+   "footprint": "Capacitor_SMD:C_0603_1608Metric",
+   "local_index": {
+    "jlcpcb_class": "basic",
+    "matched": true
+   }
+  },
+  {
+   "ref": "R1",
+   "lcsc": "C23186",
+   "mpn": "0603WAF5101T5E",
+   "category": "passive_rc",
+   "tier": "basic",
+   "stock": 24566690,
+   "reason": "Basic. USB-C CC1 Rd pulldown, 5.1k +/-1%, 75 V rating.",
+   "footprint": "Resistor_SMD:R_0603_1608Metric",
+   "local_index": {
+    "jlcpcb_class": "basic",
+    "matched": true
+   }
+  },
+  {
+   "ref": "R2",
+   "lcsc": "C23186",
+   "mpn": "0603WAF5101T5E",
+   "category": "passive_rc",
+   "tier": "basic",
+   "stock": 24566690,
+   "reason": "Basic. USB-C CC2 Rd pulldown.",
+   "footprint": "Resistor_SMD:R_0603_1608Metric",
+   "local_index": {
+    "jlcpcb_class": "basic",
+    "matched": true
+   }
+  },
+  {
+   "ref": "R3",
+   "lcsc": "C21190",
+   "mpn": "0603WAF1001T5E",
+   "category": "passive_rc",
+   "tier": "basic",
+   "stock": 26965395,
+   "reason": "Basic. LED series resistor: (3.3 - ~2.0) V / 1k ~ 1.3 mA, visible and well under 20 mA.",
+   "footprint": "Resistor_SMD:R_0603_1608Metric",
+   "local_index": {
+    "jlcpcb_class": "basic",
+    "matched": true
+   }
+  },
+  {
+   "ref": "D2",
+   "lcsc": "C2286",
+   "mpn": "KT-0603R",
+   "category": "led",
+   "tier": "basic",
+   "stock": 7259832,
+   "reason": "Basic. 0603 red status LED, Vf 1.8-2.4 V, 20 mA max.",
+   "footprint": "LED_SMD:LED_0603_1608Metric",
+   "local_index": {
+    "jlcpcb_class": "basic",
+    "matched": true
+   }
+  },
+  {
+   "ref": "J2",
+   "lcsc": "C49257",
+   "mpn": "2.54-1*3PIN (BOOMELE)",
+   "category": "connector",
+   "tier": "extended",
+   "stock": 277004,
+   "reason": "1x3 2.54 mm through-hole header (VCC, UPDI, GND). Every 1x3 header on JLCPCB is Extended; through-hole, intended hand-soldered, so no SMT feeder fee.",
+   "footprint": "Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical",
+   "extended_exception": "no Basic/Preferred header exists; through-hole, hand-soldered",
+   "local_index": {
+    "jlcpcb_class": null,
+    "matched": false
+   }
+  }
+ ]
+}

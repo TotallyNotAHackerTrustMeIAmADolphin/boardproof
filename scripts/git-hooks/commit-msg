@@ -1,0 +1,41 @@
+#!/bin/sh
+# boardproof identity guard (publish-prep ticket 03a, item 5).
+#
+# Refuses a commit whose author or committer e-mail is not the public alias's GitHub noreply
+# address, so a private address never enters the history. There is no override: fix the identity
+# (git config user.name / user.email, or --author) instead.
+#
+# Covered: `git commit` (also --amend, and the commit after `git merge --squash`) and merge commits
+# that git writes a message for, in this repository and all of its worktrees once the hook sits in
+# the common git dir:
+#
+#   cp scripts/git-hooks/commit-msg "$(git rev-parse --git-common-dir)/hooks/commit-msg"
+#
+# NOT covered (git does not run commit-msg, or the identity is rewritten afterwards): cherry-pick
+# (the original author is kept), rebase (it rewrites the committer), `commit --no-verify` / `-n`,
+# `commit-tree`, and fast-forward merges. The limits are closed elsewhere: the git guardrail
+# (scripts/git_guardrails.py) blocks `commit --no-verify`, and the pre-push guard
+# (scripts/git-hooks/pre-push) checks the author and committer e-mail of every commit a push adds,
+# so no such commit leaves the machine.
+#
+# Git passes the message file as $1 (unused). The identity is what git itself will record:
+# git var resolves GIT_AUTHOR_* / GIT_COMMITTER_* from the environment and from the configuration,
+# and `git commit --author` is exported to this hook the same way.
+
+allowed="60357333+TotallyNotAHackerTrustMeIAmADolphin@users.noreply.github.com"
+status=0
+
+for which in AUTHOR COMMITTER; do
+	ident=$(git var "GIT_${which}_IDENT" 2>/dev/null) || ident=""
+	# "Name <email> timestamp tz"; the e-mail is between the last "<" and the following ">".
+	email=${ident##*<}
+	email=${email%%>*}
+	if [ "$email" != "$allowed" ]; then
+		echo "identity guard: BLOCKED commit: the $(printf '%s' "$which" | tr '[:upper:]' '[:lower:]')" \
+			"e-mail is not the public alias's noreply address (got '${email:-(none)}', expected" \
+			"'$allowed'). Set it with git config user.email (publish-prep ticket 03a)." >&2
+		status=1
+	fi
+done
+
+exit $status

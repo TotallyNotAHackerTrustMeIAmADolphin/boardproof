@@ -1,0 +1,95 @@
+#!/bin/sh
+# kicad-mcp pre-push guard (build ticket 45; playbook section 8 item 0, fork P2, P8 and P12).
+#
+# The authoritative guard for everything a push does (coordinator decision, fix round 2): it sees
+# the real ref updates, whatever started the push (--force, -f, a "+" refspec, an alias, a config
+# default, a shell variable, a script). It refuses every non-fast-forward update of any ref and
+# deleting main on the remote. Normal pushes, new refs and deleting other branches pass.
+#
+# Git does not show the deletions of a mirror push to this hook (measured with git 2.55), so it
+# also refuses every push to a remote configured with remote.<name>.mirror, and every push from a
+# repository without a local refs/heads/main (a mirror push from there would delete main).
+#
+# Git runs this hook for every push from this repository and all of its worktrees once it sits in
+# the common git dir; installing it is a merge step (fork P12):
+#
+#   cp scripts/git-hooks/pre-push "$(git rev-parse --git-common-dir)/hooks/pre-push"
+#
+# It also refuses a push that would add a commit whose author or committer e-mail is not the
+# public alias's GitHub noreply address (publish-prep ticket 03a). That catches what the
+# commit-msg identity guard does not see: cherry-picks (the author is kept), rebases (the
+# committer is rewritten), `commit --no-verify` and `commit-tree`. Only the commits the push adds
+# are looked at (for a new ref: those not reachable from any remote-tracking ref); a deletion
+# adds none. Old history already on the remote never blocks a later push.
+#
+# Git feeds one line per ref on stdin: <local ref> <local sha> <remote ref> <remote sha>.
+# An all-zero sha means "no object": a zero local sha is a deletion, a zero remote sha a new ref.
+
+protected="refs/heads/main"
+allowed_email="60357333+TotallyNotAHackerTrustMeIAmADolphin@users.noreply.github.com"
+status=0
+
+# check_identity <remote sha or empty> <local sha>: fails, with a message, if a commit the push adds
+# has an author or committer e-mail other than the alias's.
+check_identity() {
+	if [ -n "$1" ]; then
+		range="$1..$2"
+	else
+		range="$2 --not --remotes"
+	fi
+	# shellcheck disable=SC2086
+	bad=$(git log --format='%h %ae %ce' $range 2>/dev/null | while read -r h a c; do
+		{ [ "$a" = "$allowed_email" ] && [ "$c" = "$allowed_email" ]; } || printf '%s ' "$h"
+	done)
+	if [ -n "$bad" ]; then
+		echo "pre-push guard: BLOCKED push of $local_ref to $remote_name: commit(s) $bad have an author or" 			"committer e-mail that is not the public alias's noreply address ($allowed_email)." 			"Rewrite them with that identity before publishing (publish-prep ticket 03a)." >&2
+		return 1
+	fi
+	return 0
+}
+remote_name=$1
+
+if [ "$(git config --get --bool "remote.$1.mirror" 2>/dev/null)" = "true" ]; then
+	echo "pre-push guard: BLOCKED push to $1, a mirror remote (remote.$1.mirror=true):" \
+		"mirror pushes are forced and delete branches (build ticket 45)." >&2
+	exit 1
+fi
+if ! git rev-parse --verify -q "$protected" >/dev/null 2>&1; then
+	echo "pre-push guard: BLOCKED push to $1: this repository has no refs/heads/main, and git" \
+		"hides a mirror push's deletion of main from this hook. Fetch or create main first" \
+		"(build ticket 45)." >&2
+	exit 1
+fi
+
+while read -r local_ref local_sha remote_ref remote_sha; do
+	[ -n "$remote_ref" ] || continue
+	case "$local_sha" in
+	*[!0]*) ;;
+	*)
+		# Case-folded: on a case-insensitive file system refs/heads/Main is the file of main.
+		if [ "$(printf '%s' "$remote_ref" | tr '[:upper:]' '[:lower:]')" = "$protected" ]; then
+			echo "pre-push guard: BLOCKED deleting $remote_ref on $1 (build ticket 45)." >&2
+			status=1
+		fi
+		continue
+		;;
+	esac
+	case "$remote_sha" in
+	*[!0]*) ;;
+	*)
+		check_identity "" "$local_sha" || status=1
+		continue
+		;;
+	esac
+	# Fast-forward only: the remote tip must be an ancestor of what we push. An unknown remote
+	# tip (not fetched) cannot be proven an ancestor, so it is refused as well.
+	if ! git merge-base --is-ancestor "$remote_sha" "$local_sha" 2>/dev/null; then
+		echo "pre-push guard: BLOCKED non-fast-forward update of $remote_ref on $1" \
+			"($remote_sha -> $local_sha). Force pushes are not allowed (build ticket 45)." >&2
+		status=1
+	else
+		check_identity "$remote_sha" "$local_sha" || status=1
+	fi
+done
+
+exit $status

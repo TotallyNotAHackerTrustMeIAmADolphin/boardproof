@@ -1,0 +1,4 @@
+[submodule "third_party/JLCPCB-Kicad-Library"]
+	path = third_party/JLCPCB-Kicad-Library
+	url = https://github.com/CDFER/JLCPCB-Kicad-Library
+	shallow = true

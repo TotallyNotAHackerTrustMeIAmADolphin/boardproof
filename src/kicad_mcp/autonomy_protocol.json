@@ -1,0 +1,210 @@
+{
+  "protocol_version": "8",
+  "version_history": {
+    "1": "initial table; never scored on a real rung.",
+    "2": "adds the delivered-below-requested policy and the whole-project rung pin: an attempt whose router facts show delivered_below_requested or strict_sizes_violated is graded but never counts as a pass. The committed table changed, so the version is bumped.",
+    "3": "rung 2 fixture pinned (board_sha256 and project_sha256); the first measurement on protocol 2 was an unofficial dirty-tree run and is kept as history. rung_result now reports the first OFFICIAL scored batch only.",
+    "4": "build ticket 51: pins hash file CONTENT with every CRLF read as LF (nothing else normalised), so Windows (CRLF: git autocrlf, the installer) and Linux (LF) copies of the same source give the same pin; the protocol's own sha is taken the same way. Rung 1 pinned for the first time, board unchanged: evals/rung1/layout_run/07_poured as committed (USB-C footprint and 0.127 mm rules kept on purpose; routability of the USB-C pads under them is not established, paradigm-review-2 ticket 15). Rung 2 re-pinned to the KiCad 10.0.x release demo pic_programmer (identical in tags 10.0.0 to 10.0.7), staged by evals/rung2/stage_input.py: protocol 3's pins (board 2622aadf25cc43a13c7b05dc38441cd80ba01a5566592f1d9b5c3bfbb718fe65, project 0bfb1b546ea8ee647b1f1e5b003b28a053b674e41b723e18a70a23f2e007360e) were raw byte shas of KiCad master 6a26ce9df3067b2233b415ba2d4cbc3164272ccc checked out with CRLF and staged on Windows, which no release install reproduces (build ticket 34). Batches on protocol 3 stay history; the count starts fresh.",
+    "5": "build ticket 67: rung 2 re-pinned from the same KiCad 10.0.x release demo, staged through the write layer: evals/rung2/stage_input.py now parses KiCad's file with write_layer.load, removes the top-level segment, arc, via and zone nodes and nothing else, and saves with write_layer.save (parse check, read-back compare, then replace). Protocol 4's rung-2 pins (board ad92ef757db04ea230b5ecb4a1a0175fe24ad5cb621b16d81764a62caa530807, project 3b5f338921118b92feae08e49e2acf8772db5f62533df3791fa586961fda9b00) were the text kicad_tools' own serialiser wrote after PCB.load and strip_traces; PCB.load also added a numeric net table (112 entries, net 0 to net 111) that KiCad 10's file does not have, so the pin hung on kicad_tools' board model and serialiser, which a release can change. The new pin still relies on kicad_tools' low-level parser: the write layer writes each atom from the source text and quoting the parser keeps (_original_str, _originally_quoted, _originally_bare). The new staging is KiCad's file minus the tracks, with the same input floor (6 silk_overlap, 125 unconnected over 34 nets) and the same pins under kicad_tools 0.23.0 and 0.24.0. Rung 1 unchanged: its pin is the committed files, which no staging rewrites. No batch of any kind was recorded on protocol 4; the count starts fresh. Build ticket 36 (takes effect with build ticket 36): delivered_below_requested is measured, for every backend, from the graded board's raw track widths and via sizes/drills against the board's own net classes and board-wide minimums (build ticket 36), no longer from KRT's own report. Freerouting attempts are now subject to the policy, and KRT's count is the raw count (its strict_sizes_violated still fails an attempt). Batches on earlier protocols never checked Freerouting's widths.",
+    "6": "build ticket 109, the owner's decision of ticket 108 (research ticket 107): a track narrower than its net class is no longer an under-width fail when it is a forced neck at a pad entry, and the attempt is then labelled 'PASS (necked)', never a plain PASS. Ticket 107 showed that on rung 1 U1's pads (0.8 x 0.2 mm at 0.4 mm pitch, gap 0.2 mm) allow a Power track (0.4 mm class, 0.2 mm clearance) at most s + 2 (g - c) = 0.2 mm at the pad, that KiCad's DRC does not flag net-class undercuts (only copper below min_track_width, 0.127 mm), and that Freerouting's two GND segments at 0.0952 mm and KRT's 7.8 mm run at 0.127 mm are real or unbounded cases. The four limits are in policies.necked_pad_entry: forced by the pad geometry, at or above the board minimum, within 2.0 mm of the pad edge (derived from the 1.75 mm beyond the pad of the Freerouting PASS board), counted and labelled. Sub-minimum copper, unforced undercuts, over-length necks, narrow vias and arcs and open nets stay fails. The Freerouting levers fanout_enabled (false: --router.fanout.enabled=false) and neck_width_um (200: --router.neck_width_um=200) enter the lever table through the router wrapper's allow-list, and the Freerouting plan carries both in every attempt (lever_notes holds the measured effect of each value; with the default fanout stage and neck width Freerouting delivers 0.0952 mm GND copper at U1 pin 3 and leaves +3V3 at U1 pin 4 open). The plan therefore changed, so the version is bumped and the count starts fresh; batches on protocol 5 stay history. Rung 1's board and project pins are unchanged (ticket 51); the protocol sha changes, so the official slot of (rung 1, backend, protocol sha) is a new, empty slot. The KRT plan and levers are unchanged. No batch of any kind was recorded on protocol 6 by this ticket.",
+    "7": "publish-prep ticket 02a (after build tickets 51 and 109): asset replacement with identical pad geometry, no gaming. Rung 1's USB-C receptacle came from an EasyEDA user library that carries no licence, so it cannot be published; rung 1 now uses this project's own symbol and footprint (evals/rung1/build_usbc_asset.py), written through the write layer from the manufacturer's dimensions (SHOU HAN TYPE-C 6P, recommended P.C.B. layout). The footprint's pad table (number, position, size, shape, layers, drill of all 10 pads) is identical to the old one within 0.001 mm (the old oval drill 0.599998 x 1.299997 is 0.6 x 1.3), the board outline, the footprint positions, the nets, the GND pour and the rules are unchanged (the .kicad_pro and .kicad_prl are identical as data), and the rebuilt unrouted stage gives the same verify_board result as the old one (FAIL, 26 unconnected items over the same 9 nets, 0 violations). What changed is only the content that the pins hash: the library files (new names, no 3D model), the footprint's silkscreen, fab and courtyard graphics, the schematic and the board's footprint block, so the rung-1 pins are new: board ce369e93a4f60da6a7c3d34ecc7a81be05571d0711c1783225145564b9c297e6 -> e933373f99e9c8e6251ea498e9ca6fd1bf0e99271e536cbb5e47f4c867f4292b, project 4da2dad0f36f8a703f2448cc993e44a8e944fb70a39502322828f6d97a462e74 -> e8b08b4061c597cf4f9b5a3f236b7fed50390ec80c1c0527bc703d772cb439b0. Nothing else changes: the policies, levers and plans, the rung-2 pins and the rules are those of protocol 6. The protocol sha changes, so the official slot of (rung 1, backend, protocol sha) is new and empty; the official batches recorded on protocol 6 stay as history.",
+    "8": "build ticket 114 (the owner's design observation of 2026-10-29): placement of the decoupling capacitor, made before any official batch under protocols 7 and 8 and equal for both routers. In the protocol-7 board C3 (U1's decoupling capacitor) sat 1.8 mm below the package, 2.7 mm edge to edge from U1's +3V3 pin 4 (pin 4 centre to C3 pad 1 centre 3.37 mm) and KRT answered with a two-via detour. The owner decided that C3's +3V3 pad goes directly next to the MCU's +3V3 pin. C3 is the only part that moved: it is now derived by a rule from the raw pad and courtyard geometry in evals/rung1/build_rung1_layout.py (plan_decoupling_capacitor), not typed: rotation 180 so that its +3V3 pad faces U1; its courtyard keeps the board's minimum clearance (0.127 mm) from U1's; its +3V3 pad does not shadow the straight escape of pin 3 (top edge half the minimum track width plus the Power clearance below pin 3's centre line); pin 4's centre line runs through the pad. Result: C3 at (149.293, 108.239) rotation 180 (was (153.0, 111.2) rotation 0), pin 4 to pad 1 edge to edge 0.632 mm (was 2.725 mm). The position was fixed from geometry before any routing result of the new input existed and is not to be re-tuned after a measurement; not placed to help a router. Every other footprint, the outline, the nets, the pad lists, the rules and the pour are unchanged; the rebuilt unrouted stage gives the same verify_board result as before (FAIL, 26 unconnected items over the same 9 nets with the same pad lists, 0 violations). What changed is the content the pins hash, so the rung-1 pins are new: board e933373f99e9c8e6251ea498e9ca6fd1bf0e99271e536cbb5e47f4c867f4292b -> 82be86c09e3f5c34de60a5ad532241bc38331afe58ee55142b171702f6cf1b86, project e8b08b4061c597cf4f9b5a3f236b7fed50390ec80c1c0527bc703d772cb439b0 -> 2e8e4be314d62201319a3c2697ee64159aacfcfc4066c6a6f01a9aa5df7cbaab. Nothing else changes: the policies, levers and plans, the rung-2 pins and the rules are those of protocol 7. The protocol sha changes, so the official slot of (rung 1, backend, protocol sha) is new and empty. Protocol 7 stays on record; it has no official batch (the batches recorded on protocol 6 stay as history)."
+  },
+  "policies": {
+    "delivered_below_requested": "fail",
+    "necked_pad_entry": {
+      "label": "PASS (necked)",
+      "max_length_beyond_pad_mm": 2.0,
+      "rule": "A track narrower than its net class is a forced neck, not an under-width fail, only if all of: (1) the pad geometry forces it: at a pad of the same net and layer that the track enters, the class width plus the class clearance cannot fit between the neighbouring pads of other nets, i.e. the class width w > s + 2 (g - c) with s the pad width across the entry direction, g the gap to the neighbouring pad and c the larger of the two nets' class clearances (and the board minimum clearance); (2) its width is at or above the board minimum min_track_width; (3) every point of it lies within max_length_beyond_pad_mm of the pad edge, measured along the net's straight tracks (the portion inside the pad does not count); (4) it is counted and the attempt is labelled 'PASS (necked)', never a plain PASS. Sub-minimum copper, undercuts the pad geometry does not force, necks beyond the bound, narrow vias and arcs, and open nets stay fails. Pad and track geometry come from the raw S-expressions of the graded board.",
+      "bound_derivation": "Ticket 107: the Freerouting PASS board (fanout off, neck_width_um 200) necks 2.15 mm from the pad centre of U1.4, 1.75 mm (1.758 measured in build ticket 109) beyond the 0.8 mm long pad. The owner (ticket 108) asked for about the pad length plus 2 mm and the bound derived from that evidence. 2.0 mm beyond the pad edge: 14 percent above the only forced-neck evidence, independent of the pad's length (which is already excluded by measuring from the edge), and far below the 7.8 mm of 0.127 mm copper that KRT's power-tap neck-down delivered (ticket 107)."
+    }
+  },
+  "description": "Frozen measurement protocol for the acceptance ladder (.scratch/pivot-ladder/issues/06-autonomous-pass-protocol.md). Changing any value after a board has been seen bumps protocol_version and starts a fresh count; it never replaces history.",
+  "attempts": 5,
+  "budget_s": 1800,
+  "attempt_timeout_s": 300,
+  "budget_status": "unmeasured: set before any real routing run existed; revisit from measured router durations (bumps protocol_version)",
+  "selection_rule": "PASS first, then fewest unconnected, then fewest errors, then lowest index",
+  "never_levers": [
+    "input board",
+    "placement",
+    "design rules",
+    "net classes",
+    "severities",
+    "net scope",
+    "budget",
+    "the gate",
+    "escalation fab"
+  ],
+  "rungs": {
+    "1": {
+      "description": "USB-C-powered ATtiny1616 breakout built by the pipeline; source evals/rung1/layout_run/07_poured (board, USB-C pad geometry and 0.127 mm rules unchanged since protocol 4; the receptacle's symbol and footprint are this project's own since protocol 7; C3 placed next to U1's +3V3 pin since protocol 8)",
+      "board_sha256": "82be86c09e3f5c34de60a5ad532241bc38331afe58ee55142b171702f6cf1b86",
+      "project_sha256": "2e8e4be314d62201319a3c2697ee64159aacfcfc4066c6a6f01a9aa5df7cbaab"
+    },
+    "2": {
+      "description": "KiCad 10.0.x release demo pic_programmer with its tracks, vias and zone removed through the write layer (evals/rung2/stage_input.py)",
+      "board_sha256": "30fa9aecaece938cc535c72ffbe23158bae145fa49484e4fe0bf8d43438ee3aa",
+      "project_sha256": "4a0326e79d763ee8be59bf5c012d4e3838599609101788c50ddd3f31db9a12d6"
+    }
+  },
+  "rungs_note": "board_sha256 and project_sha256 pin the source a rung is measured on: the board's content sha and one sha over the board and every file the gate reads (walked and laid out as gate_state's fingerprint), each file hashed with every CRLF read as LF and nothing else normalised (autonomy_run.board_sha / project_sha). Until BOTH are pinned, a batch on that rung is unofficial with the reason 'rung fixture not pinned'. Pinning is a protocol change: bump protocol_version. Only an official batch fills the reported slot of a (rung, backend, protocol sha); unofficial batches (dirty tree, injected seam, foreign runs root, unpinned rung) are listed beside it as history and never counted as passes.",
+  "backends": {
+    "krt": {
+      "tool": "KiCadRoutingTools route.py",
+      "levers": {
+        "escalation": [
+          "board",
+          "off"
+        ],
+        "grid_step_mm": [
+          null,
+          0.05,
+          0.025
+        ],
+        "max_iterations": [
+          null,
+          800000
+        ],
+        "ordering": [
+          null,
+          "inside_out",
+          "original",
+          "bus"
+        ]
+      },
+      "plan": [
+        {
+          "lever": "baseline",
+          "parameters": {
+            "escalation": "board",
+            "grid_step_mm": null,
+            "max_iterations": null,
+            "ordering": null
+          }
+        },
+        {
+          "lever": "finer-grid",
+          "parameters": {
+            "escalation": "board",
+            "grid_step_mm": 0.05,
+            "max_iterations": null,
+            "ordering": null
+          }
+        },
+        {
+          "lever": "more-iterations",
+          "parameters": {
+            "escalation": "board",
+            "grid_step_mm": null,
+            "max_iterations": 800000,
+            "ordering": null
+          }
+        },
+        {
+          "lever": "ordering-inside-out",
+          "parameters": {
+            "escalation": "board",
+            "grid_step_mm": null,
+            "max_iterations": null,
+            "ordering": "inside_out"
+          }
+        },
+        {
+          "lever": "finer-grid-more-iterations-inside-out",
+          "parameters": {
+            "escalation": "board",
+            "grid_step_mm": 0.05,
+            "max_iterations": 800000,
+            "ordering": "inside_out"
+          }
+        }
+      ]
+    },
+    "freerouting": {
+      "tool": "Freerouting jar via java",
+      "levers": {
+        "fanout_enabled": [
+          null,
+          false
+        ],
+        "max_passes": [
+          10,
+          40
+        ],
+        "neck_width_um": [
+          null,
+          200
+        ],
+        "optimization_strategy": [
+          null,
+          "greedy",
+          "global",
+          "hybrid"
+        ],
+        "selection_strategy": [
+          null,
+          "sequential",
+          "random",
+          "prioritized"
+        ]
+      },
+      "lever_notes": {
+        "fanout_enabled": "false adds --router.fanout.enabled=false. Ticket 107 (Freerouting 2.5.0, rung 1, scratch copy): the fanout stage necks tracks to 3/4 of the class width at pad entries (insertFanoutMicroNeckdown), also where the class width fits (/VBUS_F 0.3 mm at U2) and to 0.0952 mm on GND at U1 pin 3, below the 0.127 mm board minimum (two track_width errors). With it off no under-width item remained and the score was unchanged; the unconnected +3V3 at U1.4, C3.1, J2.1 remained until neck_width_um was set. null leaves the router default (on).",
+        "neck_width_um": "200 adds --router.neck_width_um=200: the legal width the router may use where the class width cannot enter a pad. Rung 1: U1 pads are 0.8 x 0.2 mm at 0.4 mm pitch (gap 0.2 mm) and the Power clearance is 0.2 mm, so a Power track is at most 0.2 mm wide at the pad (w <= s + 2(g - c)). Measured in ticket 107 together with fanout_enabled=false: 0 unrouted, 0.15 and 0.2 mm copper for 2.15 mm from the pad centre (1.75 mm beyond the pad edge) at U1.4, verify_board PASS in 3 of 3 scratch runs. Re-measured in build ticket 109 through the wrapper with the same two levers: verify_board PASS in 8 of 8 scratch runs (3 direct, one per plan entry), always the same three necked segments (0.15, 0.2, 0.2 mm; 2.148 mm of copper, farthest point 1.758 mm beyond the pad edge). With 127 the router applies its 3/4 neck again: 0.0952 mm tracks, two track_width errors and a 0.177 mm clearance error, verify_board FAIL (127 is therefore not a table value). The width must come from the pad geometry (0.2 mm), not from the densest class. null leaves the router default (off)."
+      },
+      "plan": [
+        {
+          "lever": "baseline-neck200",
+          "parameters": {
+            "fanout_enabled": false,
+            "max_passes": 10,
+            "optimization_strategy": null,
+            "selection_strategy": null,
+            "neck_width_um": 200
+          }
+        },
+        {
+          "lever": "more-passes-neck200",
+          "parameters": {
+            "fanout_enabled": false,
+            "max_passes": 40,
+            "optimization_strategy": null,
+            "selection_strategy": null,
+            "neck_width_um": 200
+          }
+        },
+        {
+          "lever": "global-optimization-neck200",
+          "parameters": {
+            "fanout_enabled": false,
+            "max_passes": 10,
+            "optimization_strategy": "global",
+            "selection_strategy": null,
+            "neck_width_um": 200
+          }
+        },
+        {
+          "lever": "prioritized-selection-neck200",
+          "parameters": {
+            "fanout_enabled": false,
+            "max_passes": 10,
+            "optimization_strategy": null,
+            "selection_strategy": "prioritized",
+            "neck_width_um": 200
+          }
+        },
+        {
+          "lever": "more-passes-hybrid-prioritized-neck200",
+          "parameters": {
+            "fanout_enabled": false,
+            "max_passes": 40,
+            "optimization_strategy": "hybrid",
+            "selection_strategy": "prioritized",
+            "neck_width_um": 200
+          }
+        }
+      ]
+    }
+  }
+}

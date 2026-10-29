@@ -1,0 +1,4 @@
+(sym_lib_table
+	(version 7)
+	(lib (name "Rung1_USBC") (type "KiCad") (uri "${KIPRJMOD}/lib/Rung1_USBC/Rung1_USBC.kicad_sym") (options "") (descr ""))
+)

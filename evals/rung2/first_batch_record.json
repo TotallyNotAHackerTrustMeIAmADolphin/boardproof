@@ -1,0 +1,203 @@
+{
+ "rung": 2,
+ "backend": "krt",
+ "protocol_version": "2",
+ "run_dir": "<home>\\Documents\\claude\\Kicad-MCP\\.scratch\\pivot-ladder\\runs\\2\\krt\\20261011T175036Z",
+ "report": "report.json inside run_dir (complete lists per attempt)",
+ "attempts_passed": 0,
+ "attempts_planned": 5,
+ "input_fail_floor": true,
+ "input_floor_reasons": [
+  "input grades FAIL",
+  "6 error-level violation(s) before routing",
+  "125 net(s) unconnected before routing"
+ ],
+ "unofficial": true,
+ "unofficial_reasons": [
+  "repository tree is dirty or its commit is unknown"
+ ],
+ "assisted": false,
+ "autonomous_pass": false,
+ "total_wall_s": 620.9,
+ "tool_versions": {
+  "autonomy_protocol_sha256": "c8f26c2277a3f55bd7c2d62d030904a28007a1c760ab1bf1a69a98ff8eb50ca3",
+  "backend_available": true,
+  "grid_router": "0.22.0",
+  "kicad_cli": "10.0.5",
+  "kicad_tools": "0.20.0",
+  "python": "3.13.14",
+  "router": "0.22.0",
+  "router_python": "3.13.14",
+  "verify_board_sha256": "bf5809c4bc5037f268e10136ddd688c139d37b3628361bd59e105bfed88acbf7"
+ },
+ "attempts": [
+  {
+   "index": 0,
+   "lever": "baseline",
+   "parameters": {
+    "escalation": "board",
+    "grid_step_mm": null,
+    "max_iterations": null,
+    "ordering": null
+   },
+   "status": "FAIL",
+   "cause": null,
+   "router_wall_s": 23.7,
+   "backend_wall_s": 24.6,
+   "verify_wall_s": 9.7,
+   "gate_verdict": "FAIL",
+   "unconnected_edges": 0,
+   "unconnected_per_net": {},
+   "violation_count": 6,
+   "violation_types": {
+    "silk_overlap": 6
+   },
+   "list_complete": true,
+   "unstable": false
+  },
+  {
+   "index": 1,
+   "lever": "finer-grid",
+   "parameters": {
+    "escalation": "board",
+    "grid_step_mm": 0.05,
+    "max_iterations": null,
+    "ordering": null
+   },
+   "status": "TIMEOUT",
+   "cause": "router-timeout",
+   "router_wall_s": 300.1,
+   "backend_wall_s": 300.3,
+   "verify_wall_s": 19.0,
+   "gate_verdict": "FAIL",
+   "unconnected_edges": 125,
+   "unconnected_per_net": {
+    "/CLOCK-RB6": 5,
+    "/DATA-RB7": 6,
+    "/PC-CLOCK-OUT": 2,
+    "/PC-DATA-IN": 1,
+    "/PC-DATA-OUT": 2,
+    "/VPP/MCLR": 4,
+    "/VPP_ON": 2,
+    "/pic_sockets/VCC_PIC": 10,
+    "GND": 39,
+    "Net-(C5-Pad1)": 1,
+    "Net-(D1-A)": 1,
+    "Net-(D1-K)": 2,
+    "Net-(D10-A)": 2,
+    "Net-(D11-A)": 1,
+    "Net-(D11-K)": 2,
+    "Net-(D12-A)": 1,
+    "Net-(D2-A)": 3,
+    "Net-(D4-A)": 3,
+    "Net-(D6-A)": 3,
+    "Net-(D8-A)": 1,
+    "Net-(D9-A)": 1,
+    "Net-(Q1-B)": 1,
+    "Net-(Q2-B)": 3,
+    "Net-(Q2-C)": 3,
+    "Net-(Q3-B)": 2,
+    "Net-(R12-Pad1)": 1,
+    "Net-(R13-Pad1)": 1,
+    "Net-(R15-Pad1)": 1,
+    "Net-(R16-Pad1)": 1,
+    "Net-(R8-Pad1)": 1,
+    "Net-(U4-FB+)": 1,
+    "Net-(U4-Vc)": 2,
+    "VCC": 11,
+    "VPP": 5
+   },
+   "violation_count": 6,
+   "violation_types": {
+    "silk_overlap": 6
+   },
+   "list_complete": true,
+   "unstable": false
+  },
+  {
+   "index": 2,
+   "lever": "more-iterations",
+   "parameters": {
+    "escalation": "board",
+    "grid_step_mm": null,
+    "max_iterations": 800000,
+    "ordering": null
+   },
+   "status": "FAIL",
+   "cause": null,
+   "router_wall_s": 37.7,
+   "backend_wall_s": 38.4,
+   "verify_wall_s": 11.8,
+   "gate_verdict": "FAIL",
+   "unconnected_edges": 0,
+   "unconnected_per_net": {},
+   "violation_count": 6,
+   "violation_types": {
+    "silk_overlap": 6
+   },
+   "list_complete": true,
+   "unstable": false
+  },
+  {
+   "index": 3,
+   "lever": "ordering-inside-out",
+   "parameters": {
+    "escalation": "board",
+    "grid_step_mm": null,
+    "max_iterations": null,
+    "ordering": "inside_out"
+   },
+   "status": "FAIL",
+   "cause": null,
+   "router_wall_s": 43.5,
+   "backend_wall_s": 44.6,
+   "verify_wall_s": 12.3,
+   "gate_verdict": "FAIL",
+   "unconnected_edges": 0,
+   "unconnected_per_net": {},
+   "violation_count": 6,
+   "violation_types": {
+    "silk_overlap": 6
+   },
+   "list_complete": true,
+   "unstable": false
+  },
+  {
+   "index": 4,
+   "lever": "finer-grid-more-iterations-inside-out",
+   "parameters": {
+    "escalation": "board",
+    "grid_step_mm": 0.05,
+    "max_iterations": 800000,
+    "ordering": "inside_out"
+   },
+   "status": "FAIL",
+   "cause": null,
+   "router_wall_s": 147.8,
+   "backend_wall_s": 148.7,
+   "verify_wall_s": 10.5,
+   "gate_verdict": "FAIL",
+   "unconnected_edges": 0,
+   "unconnected_per_net": {},
+   "violation_count": 6,
+   "violation_types": {
+    "silk_overlap": 6
+   },
+   "list_complete": true,
+   "unstable": false
+  }
+ ],
+ "freerouting": {
+  "status": "UNAVAILABLE",
+  "reason": "FREEROUTING_JAR_PATH is not set (no jar on this machine); no number invented",
+  "attempts_planned": 5,
+  "attempts_run": 0,
+  "run_dir": ".scratch/pivot-ladder/runs/2/freerouting/20261011T180121Z"
+ },
+ "source": {
+  "project": "KiCad",
+  "path": "demos/pic_programmer",
+  "commit": "6a26ce9df3067b2233b415ba2d4cbc3164272ccc",
+  "attribution_confirmed": false
+ }
+}

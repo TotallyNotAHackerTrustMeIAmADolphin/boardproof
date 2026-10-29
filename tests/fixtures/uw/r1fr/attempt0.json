@@ -1,0 +1,42 @@
+{
+ "delivered_below_requested_count": 0,
+ "delivered_below_requested_policy_hit": false,
+ "router_facts": {
+  "added_segments": 82,
+  "added_vias": 8,
+  "dsn_export_repairs": {
+   "clearance_mm": null,
+   "dsn_path": "<path>",
+   "layer_indices_renumbered": 2,
+   "references_repaired": [
+    "C1",
+    "C2",
+    "C3",
+    "D1",
+    "D2",
+    "F1",
+    "J2",
+    "R1",
+    "R2",
+    "R3",
+    "U1",
+    "U2",
+    "H1",
+    "H2",
+    "H3",
+    "H4"
+   ],
+   "width_mm": null
+  },
+  "freerouting_self_report": {
+   "ignored_layers": [
+    "*.Cu",
+    "F.Paste"
+   ],
+   "optimizer_plateaued": false,
+   "self_reported_score": 861.62,
+   "self_reported_unrouted": 3,
+   "self_reported_violations": 12
+  }
+ }
+}

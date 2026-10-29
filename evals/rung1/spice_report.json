@@ -1,0 +1,20 @@
+{
+ "gating": false,
+ "status": "ok",
+ "ngspice": "<home>\\AppData\\Local\\Autodesk\\webdeploy\\production\\c657666a51cec7a9bbd042e10872bcd9532508a8\\Applications\\Electron\\LibEagle\\ngspice\\bin\\ngspice_con.exe",
+ "netlist_export": {
+  "status": "ok",
+  "path": "<home>\\Documents\\claude\\Kicad-MCP\\evals\\rung1\\spice\\rung1_export.cir"
+ },
+ "led_branch_op": {
+  "status": "ok",
+  "analysis": "op",
+  "points": 1,
+  "raw": [
+   [
+    3.3,
+    2.04901184
+   ]
+  ]
+ }
+}

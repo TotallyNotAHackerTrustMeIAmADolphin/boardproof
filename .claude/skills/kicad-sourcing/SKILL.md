@@ -1,0 +1,15 @@
+---
+name: kicad-sourcing
+description: Use when selecting, searching for, or sourcing an electronic component for a KiCad design -- e.g. "find a part for", "select a resistor/regulator/MCU", "what part should I use", "source this component", "check if this part is in stock". Wraps this project's own `sourcing` MCP toolset (search_parts, fetch_datasheet, inspect_datasheet, fetch_part_assets, propose_component_match/confirm_component_match).
+---
+
+# Component sourcing workflow
+
+This project's real differentiator over other KiCad tooling is **verifying a part against its actual datasheet before committing to it** — not just trusting a parametric search match. Follow this sequence, don't skip steps:
+
+1. **Search**: call `search_parts(query, limit, offset)`. It fans out across every registered provider and merges/dedupes the results. Today the only provider is LCSC, and its bot wall makes it raise an error rather than return results. Nexar and Digi-Key are not built (they need credentials). So for a part with a known LCSC number, go straight to the datasheet and asset steps, and use `lookup_jlcpcb_part_tiers` for Basic/Preferred/Extended — never call a provider-specific tool directly, and never loop `search_parts` once per candidate when one paginated call covers it.
+2. **Check ambiguity**: if there's more than one plausible candidate with no clear winner, don't just pick the first result. Use `is_match_ambiguous(candidates)` as the judgment call, or route through `propose_component_match`/`confirm_component_match` (the dry-run+revision-token checkpoint — see docs/ARCHITECTURE.md's "Human-in-the-loop" section) when it's genuinely unclear which part is right, rather than silently guessing.
+3. **Verify against the datasheet before finalizing**: call `fetch_datasheet(url, output_dir)` then `inspect_datasheet(pdf_path, query=...)` on the leading candidate. Actually check that the extracted pin table / absolute-max-ratings / package dimensions match what the design needs (correct pinout, voltage/current ratings within spec, footprint family matches what you intend to place) — don't fetch the datasheet and then ignore it. If `inspect_datasheet` returns `status: incomplete` (e.g. a scanned/image-only PDF with no extractable text), treat that as an ambiguous match too — route it through the same checkpoint as step 2, don't proceed on an unverified part.
+4. **Retrieve real assets**: once a part is confirmed, call `fetch_part_assets(lcsc_id, output_dir)` to get a ready KiCad symbol/footprint/3D model. If that comes back empty/partial (no LCSC match, or the asset pipeline failed), fall back to `generate_footprint(package_type, ...)` for a parametric footprint rather than leaving the part without one.
+
+Never hand-write a symbol/footprint reference from memory, and never skip straight from "search returned something" to "use it" without at least attempting datasheet verification for anything going into a real design (a quick exploratory search for "what's out there" doesn't need the full sequence — use judgment on when a part is actually being committed to the design vs. just being scoped out).

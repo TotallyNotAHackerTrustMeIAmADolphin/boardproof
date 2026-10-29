@@ -1,0 +1,5 @@
+# Known-red tests for scripts/batch_gate.py (build ticket 45; playbook fork P11).
+# One pytest id per line, followed by "# build ticket <n>: <reason>" naming the ticket that owns it.
+# Adding an entry needs its own ticket and an adversarial review; any failure not listed here is RED.
+# Remove an entry in the ticket that makes it pass.
+

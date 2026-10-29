@@ -1,0 +1,1795 @@
+# Frozen lists for tests/test_ratchets.py (build ticket 29; docs/ARCHITECTURE.md decision 4).
+#
+# Frozen 2026-10-19 on main at 34a429b (src/ unchanged since ticket 07's audit at 045ffc9).
+# Keys are file (relative to src/kicad_mcp) + function (dotted, without <locals>) + kind. Raw
+# writes and high-level saves also key on code, the call's exact normalised text (ast.unparse),
+# so retargeting a listed call (open(log) -> open(board)) fails as new + stale; the other lists
+# carry a count. Never line numbers. Code strings are TOML literal strings (triple single quotes).
+#
+# These lists only shrink. A site that is gone, or a count that fell, fails the test until the
+# entry is lowered or deleted here. A new site fails until it is fixed, or until it is added
+# here with a note in the same change, for the reviewer: adding an entry is a claim that the
+# site was looked at, not a way to make the test pass.
+
+# --------------------------------------------------------------------------------------------
+# Pad-write ban exemptions: assignments the pad scan flags whose receiver is provably not a
+# kicad_tools Pad (file, function, kind = "assign .size" etc., count, note). Empty at the freeze.
+pad_write_exempt = []
+
+# --------------------------------------------------------------------------------------------
+# Raw writes: open(..., "w"/"a"/"x"/"+"), write_text, write_bytes, os.write, os.open with write
+# flags, os.fdopen, tempfile files. Copies and renames (shutil.copy*, os.replace, rename) move
+# existing bytes and are not listed. kicad_file = true marks a write of a file KiCad parses.
+# io.FileIO and gzip/bz2/lzma.open count too. kicad_file (required) marks a write of a file
+# KiCad parses; read-only tools may not reach one, unless the entry carries read_only_reach.
+# Ticket 07: 18 sites; this scan finds 19 (os.open in rung_runner._append_line, below).
+
+[[raw_write]]
+file = "routers/kicad_routing_tools.py"
+function = "_restore_original_project"
+kind = "write_bytes"
+code = '''target.write_bytes(original_bytes)'''
+kicad_file = true
+note = "Byte-for-byte restore of the original .kicad_pro after a KRT run; compares bytes before writing, no re-read after (ticket 07)."
+read_only_reach = "KRT runs only on trial copies in this codebase (propose_route_with_retry, propose_placement_optimization, the rung backends), so this restores the trial copy's own .kicad_pro, never the caller's. A read-only tool may reach this KiCad-file write and no other."
+
+[[raw_write]]
+file = "routers/kicad_routing_tools.py"
+function = "write_fab_overrides"
+kind = "write_text"
+code = '''path.write_text('\n'.join(lines) + '\n', encoding='utf-8')'''
+kicad_file = false
+note = "KRT --fab-overrides file."
+
+[[raw_write]]
+file = "routers/kicad_routing_tools.py"
+function = "request_graceful_stop"
+kind = "write_text"
+code = '''path.write_text(f"graceful stop requested{(f': {reason}' if reason else '')}\n", encoding='utf-8')'''
+kicad_file = false
+note = "KRT graceful-stop file."
+
+[[raw_write]]
+file = "routers/kicad_routing_tools.py"
+function = "run_router_script"
+kind = "open"
+code = '''open(stderr_log, 'w', encoding='utf-8', errors='replace')'''
+kicad_file = false
+note = "KRT stderr log."
+
+[[raw_write]]
+file = "routers/kicad_routing_tools.py"
+function = "run_router_script"
+kind = "open"
+code = '''open(stdout_log, 'w', encoding='utf-8', errors='replace')'''
+kicad_file = false
+note = "KRT stdout log."
+
+[[raw_write]]
+file = "routers/kicad_placer_tools.py"
+function = "run_placement_repair"
+kind = "open"
+code = '''open(stderr_log, 'w', encoding='utf-8', errors='replace')'''
+kicad_file = false
+note = "KRT placer stderr log."
+
+[[raw_write]]
+file = "routers/kicad_placer_tools.py"
+function = "run_placement_repair"
+kind = "open"
+code = '''open(stdout_log, 'w', encoding='utf-8', errors='replace')'''
+kicad_file = false
+note = "KRT placer stdout log."
+
+[[raw_write]]
+file = "rung_runner.py"
+function = "_write_json"
+kind = "write_text"
+code = '''tmp.write_text(json.dumps(value, indent=2, sort_keys=True), encoding='utf-8')'''
+kicad_file = false
+note = "Run JSON, written to a temporary file then os.replace."
+
+[[raw_write]]
+file = "rung_runner.py"
+function = "_append_line"
+kind = "os.write"
+code = '''os.write(fd, data)'''
+kicad_file = false
+note = "Append-only JSONL index line."
+
+[[raw_write]]
+file = "rung_runner.py"
+function = "_append_line"
+kind = "os.open"
+code = '''os.open(path, flags, 420)'''
+kicad_file = false
+note = "The os.open (O_APPEND) for the os.write above. Ticket 07's grep keyed on os.write only, so this is the 19th site against its 18."
+
+[[raw_write]]
+file = "sourcing/datasheet.py"
+function = "fetch_datasheet"
+kind = "open"
+code = '''dest.open('wb')'''
+kicad_file = false
+note = "Datasheet PDF download."
+
+[[raw_write]]
+file = "sourcing/jlcpcb_basic.py"
+function = "write_index"
+kind = "write_text"
+code = '''target.write_text(json.dumps(serializable, indent=1, sort_keys=False, ensure_ascii=False), encoding='utf-8')'''
+kicad_file = false
+note = "JLCPCB parts index JSON."
+
+[[raw_write]]
+file = "toolsets/manufacturing.py"
+function = "_fill_lcsc_column"
+kind = "open"
+code = '''bom_path.open('w', newline='', encoding='utf-8')'''
+kicad_file = false
+note = "BOM CSV rewrite with the LCSC column."
+
+[[raw_write]]
+file = "toolsets/manufacturing.py"
+function = "_bom_from_root"
+kind = "write_text"
+code = '''path.write_text(export_bom(items, fab_family, BOMExportConfig()), encoding='utf-8', newline='\n')'''
+kicad_file = false
+note = "BOM CSV built from kicad-cli's netlist of the root sheet into the export directory (build ticket 26), not a KiCad file."
+
+[[raw_write]]
+file = "toolsets/simulation.py"
+function = "run_spice_simulation"
+kind = "write_text"
+code = '''run_path.write_text(combined, encoding='utf-8')'''
+kicad_file = false
+note = "ngspice run script in a TemporaryDirectory."
+
+[[raw_write]]
+file = "write_layer.py"
+function = "save_bytes"
+kind = "open"
+code = '''open(temp, 'xb')'''
+kicad_file = true
+note = "Build ticket 76: the write layer's byte-exact save for a KiCad file kicad-cli cannot parse-check, today only fp-lib-table / sym-lib-table (register_library_asset). The caller's bytes go unchanged into a new, uniquely named temporary sibling (.<name>.<hex>.tmp, mode xb: never an existing file), removed if the write fails; the caller's required verify runs on it before os.replace (_commit), which removes it on any failure. library._verify_insertion checks that the bytes are the source's plus the one new row and that the reparse is the source's children plus that row, in order."
+
+[[raw_write]]
+file = "write_layer.py"
+function = "_write_temp"
+kind = "open"
+code = '''open(temp, 'w', encoding='utf-8', newline=_KICAD_NEWLINE)'''
+kicad_file = true
+note = "The write layer's own write (build ticket 42, decision 1): the serialised tree into a uniquely named temporary sibling (.<name>.<hex>.tmp), explicit UTF-8, with the line ending KiCad writes on the platform (fix round 1: CRLF on Windows, measured), created and written inside a guard that removes it if the write fails (for save_project the .kicad_pro JSON). save() parse-checks it with kicad-cli, save_project reads it back, both run the caller's verify before os.replace (_commit), and delete it on any failure."
+read_only_reach = "The layer writes only a temporary sibling of the path its caller names, and replaces only that path. Read-only tools reach it only through saves of their own trial copies inside a TemporaryDirectory (propose_placement_optimization, propose_route_with_retry via _apply_specs), never the caller's board."
+
+[[raw_write]]
+file = "toolsets/schematic.py"
+function = "_write_schematic_utf8"
+kind = "write_text"
+code = '''tmp.write_text(content, encoding='utf-8')'''
+kicad_file = true
+note = "Build ticket 12: replaces 4 in-place Schematic.write calls (add_symbols, add_wires, add_junctions, add_labels), which wrote the platform code page (0-byte .kicad_sch on Ω, silent label loss on µ). Writes kicad_tools' own to_sexp() serialisation (not hand-made text) to a temporary sibling with explicit UTF-8, reads it back and compares the text, then os.replace (see [[commit]]). The read-back proves only that the write landed; the content is still Schematic.to_sexp()'s, so the P2-07 hierarchy collapse is untouched. Moves to the write layer (ticket 42)."
+
+# --------------------------------------------------------------------------------------------
+# Convenience reads: .position, .polygon, .is_filled, .filled_polygons, .board_origin,
+# ._board_origin and Segment .start/.end, as attributes or through getattr(x, "name"), plus
+# calls to get_pad_position, get_pad_positions and pad_position (0 at the freeze). CLAUDE.md
+# hard rule 2.
+# path: "mutation" (the value decides what is written), "advisory" (reported or used for a
+# diagnosis only), "cross-checked" (the read is compared with the raw tokens afterwards), or
+# "kipy" (a live IPC object from KiCad itself, not kicad_tools).
+# Ticket 07: 6 named-property lines + 12 same-family lines on mutation paths, 1 advisory, 2
+# cross-checked left out. This scan adds the getattr form, which the grep missed: 1 more
+# mutation read (routing.py is_filled), 4 advisory reads (ipc/adapter.py FileBackend) and
+# 4 kipy reads. Fix round: filled_polygons joined the family (1 more mutation read).
+
+# Mutation paths, named properties (ticket 07: placement.py, 6 lines).
+[[convenience_read]]
+file = "toolsets/placement.py"
+function = "_footprint_courtyard_or_pad_bbox"
+kind = "position"
+count = 2
+path = "mutation"
+note = "Pad.position (pad-bbox fallback) and Footprint.position (no-pad fallback); feeds align_footprints, pack_footprints_densely and the autoplacement pair. The P3-11 suspect."
+
+[[convenience_read]]
+file = "toolsets/placement.py"
+function = "build.align_footprints"
+kind = "position"
+count = 1
+path = "mutation"
+note = "Footprint.position, the base of the computed move."
+
+[[convenience_read]]
+file = "toolsets/placement.py"
+function = "build.distribute_footprints"
+kind = "position"
+count = 1
+path = "mutation"
+note = "Footprint.position, the base of the computed move."
+
+[[convenience_read]]
+file = "toolsets/placement.py"
+function = "build.snap_footprints_to_grid"
+kind = "position"
+count = 1
+path = "mutation"
+note = "Footprint.position, snapped and written back."
+
+[[convenience_read]]
+file = "toolsets/placement.py"
+function = "build.pack_footprints_densely"
+kind = "position"
+count = 1
+path = "mutation"
+note = "Footprint.position, the base of the computed move."
+
+[[convenience_read]]
+file = "toolsets/routing.py"
+function = "_pre_existing_filled_zone_report"
+kind = "is_filled"
+count = 1
+path = "mutation"
+note = "getattr(zone, 'is_filled'): the filled-zone guard of propose_route_with_retry decides by the property, True for any (fill yes) zone, and an exception reads as 'no filled zones' (fails open; docs/ARCHITECTURE.md known facts). Missed by ticket 07's grep (getattr form)."
+
+[[convenience_read]]
+file = "toolsets/routing.py"
+function = "_pre_existing_filled_zone_report"
+kind = "filled_polygons"
+count = 1
+path = "mutation"
+note = "getattr(zone, 'filled_polygons'): the same filled-zone guard's second test, a kicad_tools property rather than the raw (filled_polygon ...) nodes."
+
+# Mutation paths, same family (ticket 07: 12 lines in the KRT and Freerouting delta code).
+[[convenience_read]]
+file = "routers/kicad_routing_tools.py"
+function = "_segment_key"
+kind = "start"
+count = 2
+path = "mutation"
+note = "Segment.start keys route_delta, the delta of both backends (KRT; Freerouting since build ticket 46)."
+
+[[convenience_read]]
+file = "routers/kicad_routing_tools.py"
+function = "_segment_key"
+kind = "end"
+count = 2
+path = "mutation"
+note = "Segment.end keys route_delta, the delta of both backends (KRT; Freerouting since build ticket 46)."
+
+[[convenience_read]]
+file = "routers/kicad_routing_tools.py"
+function = "_via_key"
+kind = "position"
+count = 2
+path = "mutation"
+note = "Via.position keys route_delta, the delta of both backends (KRT; Freerouting since build ticket 46)."
+
+[[convenience_read]]
+file = "routers/kicad_routing_tools.py"
+function = "route_delta"
+kind = "board_origin"
+count = 2
+path = "mutation"
+note = "Original and routed board_origin; every trace and via route_delta hands to the apply (KRT, and Freerouting since build ticket 46) is shifted by it. For Freerouting both boards are copies of one snapshot, and the apply's expected-copper check compares raw tokens."
+
+[[convenience_read]]
+file = "routers/kicad_routing_tools.py"
+function = "route_delta"
+kind = "start"
+count = 2
+path = "mutation"
+note = "Segment.start of every trace route_delta hands to the apply (KRT; Freerouting since build ticket 46)."
+
+[[convenience_read]]
+file = "routers/kicad_routing_tools.py"
+function = "route_delta"
+kind = "end"
+count = 2
+path = "mutation"
+note = "Segment.end of every trace route_delta hands to the apply (KRT; Freerouting since build ticket 46)."
+
+[[convenience_read]]
+file = "routers/kicad_routing_tools.py"
+function = "route_delta"
+kind = "position"
+count = 2
+path = "mutation"
+note = "Via.position of every via route_delta hands to the apply (KRT; Freerouting since build ticket 46)."
+
+# Advisory: reported or used for diagnosis, never written. Hard rule 2 still applies to reporting.
+[[convenience_read]]
+file = "toolsets/routing.py"
+function = "_absolute_footprint_positions_by_net"
+kind = "position"
+count = 1
+path = "advisory"
+note = "Footprint.position for diagnose_placement_congestion (ticket 07: advisory)."
+
+[[convenience_read]]
+file = "ipc/adapter.py"
+function = "_file_footprint_row"
+kind = "position"
+count = 1
+path = "advisory"
+note = "getattr(fp, 'position') on a kicad_tools Footprint: copilot board state in file mode reports x_mm/y_mm without a cross-check. Missed by ticket 07's grep (getattr form)."
+
+[[convenience_read]]
+file = "ipc/adapter.py"
+function = "_file_symbol_row"
+kind = "position"
+count = 1
+path = "advisory"
+note = "getattr(sym, 'position') on a kicad_tools schematic symbol, reported in file mode. Missed by ticket 07's grep."
+
+[[convenience_read]]
+file = "ipc/adapter.py"
+function = "FileBackend.schematic_state"
+kind = "position"
+count = 2
+path = "advisory"
+note = "getattr(lbl, 'position') on kicad_tools schematic labels, reported in file mode. Missed by ticket 07's grep."
+
+# Cross-checked: ticket 07 left these two out of its frozen list on purpose.
+[[convenience_read]]
+file = "schematic_import.py"
+function = "_build_inner"
+kind = "_board_origin"
+count = 1
+path = "cross-checked"
+note = "Footprint placement offset; _verify compares every raw (at ...) after reload (ticket 07)."
+
+[[convenience_read]]
+file = "toolsets/placement.py"
+function = "_frame_gate"
+kind = "_board_origin"
+count = 1
+path = "cross-checked"
+note = "This is the cross-check: compares the library's origin with the raw Edge.Cuts frame (ticket 07)."
+
+# kipy: live IPC objects from a running KiCad, not kicad_tools.
+[[convenience_read]]
+file = "ipc/adapter.py"
+function = "IpcBackend.schematic_state"
+kind = "position"
+count = 1
+path = "kipy"
+note = "kipy label position from the live editor."
+
+[[convenience_read]]
+file = "ipc/adapter.py"
+function = "_ipc_footprint_row"
+kind = "position"
+count = 1
+path = "kipy"
+note = "kipy footprint position from the live editor."
+
+[[convenience_read]]
+file = "ipc/adapter.py"
+function = "_ipc_symbol_row"
+kind = "position"
+count = 1
+path = "kipy"
+note = "kipy symbol position from the live editor."
+
+[[convenience_read]]
+file = "ipc/adapter.py"
+function = "_ipc_selected_item"
+kind = "position"
+count = 1
+path = "kipy"
+note = "kipy selection item position from the live editor."
+
+# Build ticket 43: not kicad_tools reads. raw_geometry.Arc is that module's own dataclass of
+# the raw (arc (start ...) (mid ...) (end ...)) tokens; the scan matches by attribute name.
+# Proven against pcbnew on nine demo boards and a synthetic board (tests/test_raw_geometry.py).
+[[convenience_read]]
+file = "raw_geometry.py"
+function = "Contour.corners"
+kind = "start"
+count = 1
+path = "cross-checked"
+note = "raw_geometry.Arc.start, the raw (start ...) token of a contour arc; not a kicad_tools property."
+
+[[convenience_read]]
+file = "raw_geometry.py"
+function = "Contour.corners"
+kind = "end"
+count = 1
+path = "cross-checked"
+note = "raw_geometry.Arc.end, the raw (end ...) token of a contour arc; not a kicad_tools property."
+
+[[convenience_read]]
+file = "raw_geometry.py"
+function = "contour_extent"
+kind = "start"
+count = 1
+path = "cross-checked"
+note = "raw_geometry.Arc.start, fed to arc_extent; not a kicad_tools property."
+
+[[convenience_read]]
+file = "raw_geometry.py"
+function = "contour_extent"
+kind = "end"
+count = 1
+path = "cross-checked"
+note = "raw_geometry.Arc.end, fed to arc_extent; not a kicad_tools property."
+
+# --------------------------------------------------------------------------------------------
+# High-level saves: <x>.save(...), <x>.write(...) on anything but a file or buffer handle,
+# save_project, and kicad_tools' CLI writers run_set_footprint / run_fix_annotation. Decision 1:
+# no new high-level save; build ticket 42 moves these onto the write layer's save and shrinks
+# this list. Calls that resolve through an import to the module kicad_mcp.write_layer are
+# exempt; a method on an object the layer returns (doc.save()) is not.
+# Frozen at 31: 21 PCB.save + 1 Footprint.save + 5 Schematic.write + 2 save_project + 2 CLI
+# writers. Build ticket 42 moved all 21 PCB.save sites to write_layer.save_pcb and both
+# save_project sites to write_layer.save_project; build ticket 12 replaced the 4
+# Schematic.write calls in toolsets/schematic.py with _write_schematic_utf8 (see
+# [[raw_write]]): 4 remain. Build ticket 25 (fix round 1) moved assign_footprints off
+# run_set_footprint onto write_layer.save: 3 remain.
+
+[[high_level_save]]
+file = "sourcing/footprint_gen.py"
+function = "generate_footprint"
+kind = "save"
+code = '''footprint.save(output_path)'''
+note = "Footprint.save of a generated .kicad_mod (generator output; decision 1 keeps generators)."
+
+[[high_level_save]]
+file = "toolsets/project.py"
+function = "_project_create"
+kind = "write"
+code = '''schematic.write(schematic_path)'''
+note = "Schematic.write of the new empty schematic."
+
+[[high_level_save]]
+file = "toolsets/schematic.py"
+function = "build.fix_annotation"
+kind = "run_fix_annotation"
+code = '''run_fix_annotation(path, dry_run=False, backup=False)'''
+note = "kicad_tools CLI writer, in place; the sheets are copied outside the project first; reload-observe only (build ticket 26)."
+
+# --------------------------------------------------------------------------------------------
+# Commits: renames, copies, os.replace and --save-board, keyed on their exact call text (fix
+# round 2). They put a file in place without writing it, so a changed target (shutil.copy(trial,
+# pcb_path)) could overwrite the caller's board from a read-only path; the reach lists key
+# commits by function only, and this list pins each call.
+
+[[commit]]
+file = "toolsets/schematic.py"
+function = "_backup_outside_project"
+kind = "shutil.copy2"
+code = '''shutil.copy2(sheet, dest)'''
+note = "Copies each sheet of the tree into a new directory under the system temp directory before kicad_tools writes (build ticket 26); never onto a project file."
+
+[[commit]]
+file = "checkpoint.py"
+function = "copy_project"
+kind = "shutil.copytree"
+code = '''shutil.copytree(source, dest, ignore=_ignore)'''
+note = "The shared checkpoint helper (build ticket 22): copies the source project INTO the new revision's temporary sibling directory (dest must not exist); the source is only read. Replaces the _copy_project copies in board_outline, board_rules, input_prep and schematic_import."
+
+[[commit]]
+file = "pour_step.py"
+function = "_refilled_copy"
+kind = "--save-board"
+code = ''''--save-board''''
+note = "kicad-cli pcb drc --refill-zones --save-board on a scratch copy; the board itself is never touched."
+
+[[commit]]
+file = "rung_runner.py"
+function = "_write_json"
+kind = "os.replace"
+code = '''os.replace(tmp, path)'''
+note = "Moves the run JSON written to a temporary file into place."
+
+[[commit]]
+file = "rung_runner.py"
+function = "rerun_attempt"
+kind = "shutil.copytree"
+code = '''shutil.copytree(run_dir / 'frozen', working)'''
+note = "Copies the frozen run input into a fresh working directory."
+
+[[commit]]
+file = "rung_runner.py"
+function = "run_rung"
+kind = "shutil.copytree"
+code = '''shutil.copytree(board.parent, frozen_dir, ignore=_ignore)'''
+note = "Freezes the rung input and copies it into the attempt's working directory."
+
+[[commit]]
+file = "rung_runner.py"
+function = "run_rung"
+kind = "shutil.copytree"
+code = '''shutil.copytree(frozen_dir, working)'''
+note = "Freezes the rung input and copies it into the attempt's working directory."
+
+[[commit]]
+file = "rung_backends.py"
+function = "_freerouting_round_trip"
+kind = "shutil.copy"
+code = '''shutil.copy(export['dsn_path'], scratch / 'board.dsn')'''
+note = "Keeps KiCad's exported DSN (Specctra text, not a KiCad file) from the attempt's temporary directory beside the router log for the audit trail (build ticket 46); the board is never a source or target."
+
+[[commit]]
+file = "toolsets/routing.py"
+function = "_trial_copy"
+kind = "shutil.copy"
+code = '''shutil.copy(pcb_path, trial)'''
+note = "Copies the board and its sibling project, rules and library tables INTO a scratch trial directory; the source path is never a target."
+
+[[commit]]
+file = "toolsets/routing.py"
+function = "_trial_copy"
+kind = "shutil.copy"
+code = '''shutil.copy(sibling, dest_dir / table_name)'''
+note = "Copies the board and its sibling project, rules and library tables INTO a scratch trial directory; the source path is never a target."
+
+[[commit]]
+file = "toolsets/routing.py"
+function = "_trial_copy"
+kind = "shutil.copy"
+code = '''shutil.copy(sibling, trial.with_suffix(suffix))'''
+note = "Copies the board and its sibling project, rules and library tables INTO a scratch trial directory; the source path is never a target."
+
+[[commit]]
+file = "verify_board.py"
+function = "_copy_project"
+kind = "shutil.copytree"
+code = '''shutil.copytree(source, dest, ignore=_ignore, dirs_exist_ok=True)'''
+note = "Copies the project into a scratch directory for one gate DRC run."
+
+[[commit]]
+file = "write_layer.py"
+function = "commit_directory"
+kind = "os.rename"
+code = '''os.rename(temp_dir, target)'''
+note = "The write layer's directory commit (build ticket 42): moves a verified temporary revision directory onto a target that must not exist, retrying a transient Windows sharing denial for up to COMMIT_RETRY_BUDGET_S. Replaces tmp.rename(out_dir) in board_outline, board_rules, input_prep, pour_step, schematic_import and silk_minimums."
+
+[[commit]]
+file = "write_layer.py"
+function = "_commit"
+kind = "os.replace"
+code = '''os.replace(temp, path)'''
+note = "The write layer's commit (build ticket 42, decision 1): the temporary sibling onto the target, only after the check (kicad-cli parse check; for save_project a JSON read-back) and the caller's verify passed, each run once. A transient Windows sharing denial of the move is retried on commit_directory's schedule through _retry_sharing_denial (build ticket 78); on failure the temporary file's delete is retried the same way and the move's own error propagates."
+
+[[commit]]
+file = "write_layer.py"
+function = "parse_check"
+kind = "shutil.copyfile"
+code = '''shutil.copyfile(written, copy)'''
+note = "Copies the written file INTO a mkdtemp scratch directory for kicad-cli upgrade (which rewrites in place); the scratch directory is removed afterwards."
+
+[[commit]]
+file = "write_layer.py"
+function = "parse_check"
+kind = "shutil.copyfile"
+code = '''shutil.copyfile(written, library / target.name)'''
+note = "Copies a written footprint INTO a scratch check.pretty library for kicad-cli fp upgrade."
+
+[[commit]]
+file = "write_layer.py"
+function = "_check_sub_sheets"
+kind = "shutil.copyfile"
+code = '''shutil.copyfile(source, copy)'''
+note = "Copies each sub-sheet a schematic loads INTO the parse check's scratch directory, to check it on its own."
+
+[[commit]]
+file = "toolsets/schematic.py"
+function = "_write_schematic_utf8"
+kind = "os.replace"
+code = '''os.replace(tmp, path)'''
+note = "Build ticket 12: puts the read-back-checked UTF-8 temporary sibling over the caller's .kicad_sch, after _verify_schematic_write passed (build ticket 38). Reached only from the four mutating schematic tools; the target is the sch_path they were asked to edit. Moves to the write layer (ticket 44)."
+
+[[commit]]
+file = "toolsets/schematic.py"
+function = "_netlist_census"
+kind = "shutil.copyfile"
+code = '''shutil.copyfile(replacement if replacement is not None and source == sheet else source, copy)'''
+note = "Build ticket 38: copies the edited sheet (or the builder's temporary sibling standing in for it) and the sub-sheets it reaches INTO a TemporaryDirectory, so kicad-cli can export the netlist the self-check compares; never onto a project file."
+
+# --------------------------------------------------------------------------------------------
+# Writing tools (ticket 07's 28), by self-check class: none, return-value, reload-observe,
+# reload-verify. proof names the tests that feed the check a corrupted write and show it fires.
+# Only the names in test_ratchets.FROZEN_WITHOUT_PROVEN_SELF_CHECK may lack a proven check
+# (13 without a reload-and-compare check, 1 whose check no test has seen fire). A tool leaves
+# that set by becoming reload-verify with a proof (build tickets 30-32).
+
+[writing_tool.add_symbols]
+self_check = "reload-verify"
+note = "_write_schematic_utf8 reloads the temporary sibling before os.replace: every top-level node of the source unchanged (paper and lib_symbols aside, whose children count one by one), and kicad-cli's netlist with every component and net it had plus the added parts (build ticket 38). The netlist check's net branch (split, lost pin) and lost-component branch are shared by the four tools and pinned in tests/test_schematic_content_loss.py by test_add_symbols_with_a_duplicate_reference_is_refused_as_a_net_split, test_netlist_check_refuses_a_net_that_split, test_netlist_check_refuses_a_pin_that_left_every_net and test_netlist_check_refuses_a_lost_component_even_when_the_count_balances (each red when its branch is replaced by if False); they are not in proof because the proof check wants the tool's own name and a monkeypatched write."
+proof = [
+    "tests/test_schematic_content_loss.py::test_add_symbols_self_check_fires_when_a_bus_changes",
+    "tests/test_schematic_content_loss.py::test_add_symbols_netlist_check_fires_when_the_new_part_is_not_a_component",
+]
+
+[writing_tool.add_wires]
+self_check = "reload-verify"
+note = "_write_schematic_utf8 reloads the temporary sibling before os.replace: every top-level node of the source unchanged (paper and lib_symbols aside, whose children count one by one), and kicad-cli's netlist with every component and net it had plus the added parts (build ticket 38). The netlist check's net branch (split, lost pin) and lost-component branch are shared by the four tools and pinned in tests/test_schematic_content_loss.py by test_add_symbols_with_a_duplicate_reference_is_refused_as_a_net_split, test_netlist_check_refuses_a_net_that_split, test_netlist_check_refuses_a_pin_that_left_every_net and test_netlist_check_refuses_a_lost_component_even_when_the_count_balances (each red when its branch is replaced by if False); they are not in proof because the proof check wants the tool's own name and a monkeypatched write."
+proof = [
+    "tests/test_schematic_content_loss.py::test_add_wires_self_check_fires_when_a_bus_changes",
+]
+
+[writing_tool.add_junctions]
+self_check = "reload-verify"
+note = "_write_schematic_utf8 reloads the temporary sibling before os.replace: every top-level node of the source unchanged (paper and lib_symbols aside, whose children count one by one), and kicad-cli's netlist with every component and net it had plus the added parts (build ticket 38). The netlist check's net branch (split, lost pin) and lost-component branch are shared by the four tools and pinned in tests/test_schematic_content_loss.py by test_add_symbols_with_a_duplicate_reference_is_refused_as_a_net_split, test_netlist_check_refuses_a_net_that_split, test_netlist_check_refuses_a_pin_that_left_every_net and test_netlist_check_refuses_a_lost_component_even_when_the_count_balances (each red when its branch is replaced by if False); they are not in proof because the proof check wants the tool's own name and a monkeypatched write."
+proof = [
+    "tests/test_schematic_content_loss.py::test_add_junctions_self_check_fires_when_a_bus_changes",
+]
+
+[writing_tool.add_labels]
+self_check = "reload-verify"
+note = "_write_schematic_utf8 reloads the temporary sibling before os.replace: every top-level node of the source unchanged (paper and lib_symbols aside, whose children count one by one), and kicad-cli's netlist with every component and net it had plus the added parts (build ticket 38). The netlist check's net branch (split, lost pin) and lost-component branch are shared by the four tools and pinned in tests/test_schematic_content_loss.py by test_add_symbols_with_a_duplicate_reference_is_refused_as_a_net_split, test_netlist_check_refuses_a_net_that_split, test_netlist_check_refuses_a_pin_that_left_every_net and test_netlist_check_refuses_a_lost_component_even_when_the_count_balances (each red when its branch is replaced by if False); they are not in proof because the proof check wants the tool's own name and a monkeypatched write."
+proof = [
+    "tests/test_schematic_content_loss.py::test_add_labels_self_check_fires_when_a_bus_changes",
+]
+
+[writing_tool.place_footprints]
+self_check = "none"
+note = "placed/moved are in-memory lists."
+
+[writing_tool.align_footprints]
+self_check = "none"
+note = "moved holds computed values (P3-11 still present)."
+
+[writing_tool.distribute_footprints]
+self_check = "none"
+note = "No check."
+
+[writing_tool.snap_footprints_to_grid]
+self_check = "none"
+note = "No check."
+
+[writing_tool.confirm_autoplacement]
+self_check = "none"
+note = "applied is the proposal's keys."
+
+[writing_tool.add_traces]
+self_check = "none"
+note = "added is an in-memory counter."
+
+[writing_tool.project_create]
+self_check = "none"
+note = "Returns the paths."
+
+[writing_tool.register_library_asset]
+self_check = "reload-verify"
+proof = [
+    "tests/test_library_toolset.py::test_register_library_asset_self_check_fires_on_a_corrupted_write",
+]
+note = "Build ticket 76: inserts one row and keeps every other byte, through write_layer.save_bytes with library._verify_insertion on the temporary sibling (the bytes outside the new row equal the source's, the row is as built, the reparse is the source's children plus the row, in order); a mismatch is write_not_verified, the table untouched. An unparseable table is refused (lib_table_unparseable), never rewritten."
+
+[writing_tool.generate_footprint]
+self_check = "none"
+note = "pad_count comes from the in-memory object."
+
+[writing_tool.move_reference_designators_to_layer]
+self_check = "return-value"
+note = "moved_count is the library's own return value."
+
+[writing_tool.fetch_part_assets]
+self_check = "return-value"
+note = "Checks only that easyeda2kicad's files exist; a file from an earlier run satisfies it."
+
+[writing_tool.fix_annotation]
+self_check = "reload-observe"
+note = "Reloads the references and reports changed; never checks duplicates or ? are gone."
+
+[writing_tool.pack_footprints_densely]
+self_check = "reload-observe"
+note = "Reloads and runs the collision DRC; positions never compared with the plan."
+
+[writing_tool.confirm_placement_optimization]
+self_check = "reload-observe"
+note = "kicad-cli DRC counts on the saved file."
+
+[writing_tool.confirm_route]
+self_check = "reload-verify"
+proof = [
+    "tests/test_pcbnew_specctra.py::test_confirm_route_self_check_fires_on_a_corrupted_write_and_keeps_the_token",
+]
+note = "Build ticket 46: _apply_specs saves through the write layer with a verify hook on the temporary sibling: reload equals the saved tree and the source plus the added nodes, one segment/via per spec with the via size and drill asked, and (Freerouting proposals) the board's new raw copper equals the routed copy's; a mismatch is write_not_verified, the board untouched, the token kept."
+
+[writing_tool.assign_footprints]
+self_check = "reload-verify"
+note = "Each changed sheet goes through write_layer.save; its temporary file must reload and serialise as the tree did before os.replace, then kicad-cli's netlist of the root is read back (build tickets 25, 26)."
+proof = [
+    "tests/test_line_breaks.py::test_assign_footprints_self_check_fires_on_a_corrupted_write",
+]
+
+[writing_tool.panelize_board]
+self_check = "reload-verify"
+note = "Reloads the panel and checks the footprint multiple; no sabotage test yet."
+
+[writing_tool.confirm_board_outline]
+self_check = "reload-verify"
+note = "Whole-file exact reload compare in kicad_mcp._self_check (build ticket 31)."
+proof = [
+    "tests/test_board_outline.py::test_reload_self_check_fires_on_a_corrupted_write",
+    "tests/test_board_outline.py::test_reload_self_check_compares_the_written_nodes_not_only_their_summary",
+    "tests/test_board_outline.py::test_on_a_kicad10_board_the_added_net_table_must_reload_as_saved",
+]
+
+[writing_tool.confirm_pour_step]
+self_check = "reload-verify"
+note = "Whole-file exact reload compare of the carry-over in kicad_mcp._self_check (build ticket 31)."
+proof = [
+    "tests/test_pour_step.py::test_reload_self_check_fires_on_a_corrupted_write",
+    "tests/test_pour_step.py::test_reload_self_check_compares_the_carried_content_not_only_its_uuid",
+    "tests/test_pour_step.py::test_on_a_kicad10_board_the_added_net_table_must_reload_as_saved",
+]
+
+[writing_tool.confirm_input_preparation]
+self_check = "reload-verify"
+proof = [
+    "tests/test_input_prep.py::test_copper_remaining_after_reload_is_caught_and_cleaned",
+    "tests/test_input_prep.py::test_node_count_change_is_caught",
+    "tests/test_input_prep.py::test_wrong_layer_after_reload_is_caught",
+]
+note = "Checkpoint module, temporary sibling then rename."
+
+[writing_tool.confirm_schematic_import]
+self_check = "reload-verify"
+proof = [
+    "tests/test_schematic_import.py::test_a_wrong_net_in_the_saved_file_is_caught_after_reload_and_cleaned",
+    "tests/test_schematic_import.py::test_a_wrong_raw_position_in_the_saved_file_is_caught",
+]
+note = "Checkpoint module; verifies raw (at), sheet paths and every pad net against the kicad-cli netlist."
+
+[writing_tool.confirm_board_rules]
+self_check = "reload-verify"
+proof = [
+    "tests/test_board_rules.py::test_readback_mismatch_is_a_critical_failure_and_leaves_nothing",
+    "tests/test_board_rules.py::test_unintended_change_anywhere_in_net_settings_fails_the_readback",
+    "tests/test_board_rules.py::test_unrelated_top_level_change_also_fails",
+]
+note = "Checkpoint module; requires fresh == updated everywhere."
+
+[writing_tool.confirm_silkscreen_minimums]
+self_check = "reload-verify"
+proof = [
+    "tests/test_silk_minimums.py::test_corrupting_writer_is_caught_by_reload_verification",
+]
+note = "Checkpoint module."
+
+[writing_tool.confirm_remove_graphic_items]
+self_check = "reload-verify"
+proof = [
+    "tests/test_pcb_editing.py::test_confirm_detects_partial_removal_failure",
+    "tests/test_pcb_editing.py::test_confirm_detects_count_drift_as_corruption",
+]
+note = "Fresh PCB.load, every target uuid gone, per-tag counts exact."
+
+# --------------------------------------------------------------------------------------------
+# Tools not annotated read-only that write no KiCad file: the reason, and every write or commit
+# site (raw write, high-level save, rename, copy, --save-board) the tool reaches through the
+# static call graph, as "file | function | kind". These tools may reach no high-level save and
+# no kicad_file raw write; a new reached site fails until it is listed here, for the reviewer.
+
+[not_a_file_writer.list_toolsets]
+reason = "Meta tool, no annotations; lists toolsets."
+reaches = []
+
+[not_a_file_writer.load_toolset]
+reason = "Meta tool, no annotations; registers tools."
+reaches = []
+
+[not_a_file_writer.unload_toolset]
+reason = "Meta tool, no annotations; removes tools."
+reaches = []
+
+[not_a_file_writer.confirm_component_match]
+reason = "Consumes a token and returns the chosen candidate; writes no file."
+reaches = []
+
+[not_a_file_writer.fetch_datasheet]
+reason = "Downloads a datasheet PDF, not a KiCad file."
+reaches = ["sourcing/datasheet.py | fetch_datasheet | open"]
+
+[not_a_file_writer.export_manufacturing_package]
+reason = "Writes gerbers, drill, BOM and CPL exports, not KiCad source files (ticket 07)."
+reaches = ["toolsets/manufacturing.py | _fill_lcsc_column | open", "toolsets/manufacturing.py | _bom_from_root | write_text"]
+
+[not_a_file_writer.copilot_connect]
+reason = "Opens an IPC connection; no file."
+reaches = []
+
+[not_a_file_writer.copilot_disconnect]
+reason = "Closes the IPC connection; no file."
+reaches = []
+
+[not_a_file_writer.copilot_highlight]
+reason = "Sets the selection in the live editor; no file."
+reaches = []
+
+[not_a_file_writer.copilot_apply_proposal]
+reason = "Writes into the live KiCad editor over IPC, the human saves; return-value check (ticket 07, not counted)."
+reaches = []
+
+# --------------------------------------------------------------------------------------------
+# Tools annotated read-only that reach a write or commit site: the reason, and the sites, as
+# above. Only scratch copies and exports belong here, never the caller's KiCad file; no
+# kicad_file raw write may be reached except one that carries read_only_reach.
+
+[read_only_tool_writes.verify_board]
+reason = "Copies the project into scratch directories for its three refilled kicad-cli DRC runs."
+reaches = ["verify_board.py | _copy_project | shutil.copytree"]
+
+[read_only_tool_writes.pin_rule_baseline]
+reason = "One DRC run on a scratch copy of the project (snapshot_rules)."
+reaches = ["verify_board.py | _copy_project | shutil.copytree"]
+
+[read_only_tool_writes.propose_placement_optimization]
+reason = "Trial copies, placer and router logs and the KRT .kicad_pro restore, all inside a TemporaryDirectory; graded by kicad-cli DRC. The write layer saves only the trial copy (verify_input, build ticket 42)."
+reaches = [
+    "routers/kicad_placer_tools.py | run_placement_repair | open",
+    "routers/kicad_routing_tools.py | _restore_original_project | write_bytes",
+    "routers/kicad_routing_tools.py | run_router_script | open",
+    "toolsets/routing.py | _trial_copy | shutil.copy",
+    "write_layer.py | _check_sub_sheets | shutil.copyfile",
+    "write_layer.py | _write_temp | open",
+    "write_layer.py | parse_check | shutil.copyfile",
+    "write_layer.py | _commit | os.replace",
+]
+
+[read_only_tool_writes.propose_route_with_freerouting]
+reason = "Scratch copies of the board and its project files inside a TemporaryDirectory (_trial_copy), which KiCad's bundled Python exports to DSN and imports the SES into (build ticket 46); the caller's board is only read."
+reaches = [
+    "toolsets/routing.py | _trial_copy | shutil.copy",
+]
+
+[read_only_tool_writes.propose_route_with_retry]
+reason = "Trial copies (_trial_copy, _apply_specs through the write layer, build ticket 42; the scratch copies KiCad exports the DSN from and imports the SES into, build ticket 46), DSN/SES scratch files, KRT overrides, logs and the .kicad_pro restore; graded by kicad-cli DRC on the trial copy."
+reaches = [
+    "routers/kicad_routing_tools.py | _restore_original_project | write_bytes",
+    "routers/kicad_routing_tools.py | run_router_script | open",
+    "routers/kicad_routing_tools.py | write_fab_overrides | write_text",
+    "toolsets/routing.py | _trial_copy | shutil.copy",
+    "write_layer.py | _check_sub_sheets | shutil.copyfile",
+    "write_layer.py | _write_temp | open",
+    "write_layer.py | parse_check | shutil.copyfile",
+    "write_layer.py | _commit | os.replace",
+]
+
+[read_only_tool_writes.run_spice_simulation]
+reason = "ngspice run script inside a TemporaryDirectory."
+reaches = ["toolsets/simulation.py | run_spice_simulation | write_text"]
+
+# ============================================================================================
+# BUILD TICKET 74 BLOCK: raw writes of KiCad files in tests/ (test_kicad_write). Kept together
+# at the end of the file so concurrent tickets that add entries above do not interleave with it.
+#
+# CLAUDE.md hard rule 1 holds in tests: a KiCad variant is built through the write layer (load,
+# typed setters, save), a deliberate fault through tests/_kicad_faults.py. The scan
+# (KicadTestWriteScanner) flags a raw write in tests/ when its target names a KiCad file (pcb,
+# sch, board, sheet, fp, mod, sym, dru, pro, prl, wks, table, a .kicad_* suffix) or its payload
+# is KiCad text (starts with "(kicad_", "(footprint", "(fp_lib_table", "(version", ...) or comes
+# from a serialiser or a read of a KiCad-named path; names are resolved up to two hops through
+# the enclosing functions' assignments, parametrize values and module constants (review round
+# 1). Every raw write in _kicad_faults.py counts. Blind spots are named in the scanner's
+# docstring: a path reached through a function argument or a call's result, a suffix built at
+# run time, Path.write_text(p, t), an aliased method, a temporary file moved onto a .kicad_*
+# file, plural directory names, print(file=fh), fh.write(text) on a handle of a generic name.
+#
+# Keys are file (relative to tests/) + function + kind, with a count; never line numbers. Each
+# entry has a use and a note:
+#   fault       a deliberate fault (drift, garbage, truncation); only _kicad_faults.py should
+#               keep these, the others are debt to move there
+#   fixture     a KiCad file written as hand-made text; debt to build through the write layer,
+#               or text the layer cannot save (.kicad_dru and library tables have no kind)
+#   serialised  built with an object model, written with a serialiser but no parse check
+#   stub        a file whose content is never parsed as KiCad (a fingerprint input, a faked
+#               subprocess's input, a marker the test compares byte for byte)
+#   copy        a KiCad-written file's text copied under a new name
+# Frozen 2026-10-20 on ticket-74 (main 3633af3, merged with 6b0bcfd): 76 entries, 91 sites.
+# Round 1, 2026-10-21 (merged with main f7c8ca1): 78 entries, 93 sites. Only shrinks.
+# ============================================================================================
+
+[[test_kicad_write]]
+file = "_kicad_faults.py"
+function = "drift"
+kind = "open"
+count = 1
+use = "fault"
+note = "The sanctioned fault helper (build ticket 74): appends one line feed, bytes change, tokens do not."
+
+[[test_kicad_write]]
+file = "_kicad_faults.py"
+function = "rewrite_bytes"
+kind = "open"
+count = 1
+use = "fault"
+note = "The sanctioned fault helper (build ticket 74, review round 1): a byte-level change below the tokens; every caller is listed in [[test_kicad_fault_call]]."
+
+[[test_kicad_write]]
+file = "_kicad_faults.py"
+function = "write_unchecked"
+kind = "open"
+count = 1
+use = "fault"
+note = "The sanctioned fault helper (build ticket 74): the layer's serialisation with raw atoms, no parse check."
+
+[[test_kicad_write]]
+file = "test_autonomy_run_pins.py"
+function = "test_a_changed_rung1_rules_file_makes_the_run_unofficial"
+kind = "write_bytes"
+count = 1
+use = "stub"
+note = "A one-line (version 1) rules file appears next to the board: the pin must see a new file, its content is irrelevant."
+
+[[test_kicad_write]]
+file = "test_autonomy_run_pins.py"
+function = "test_rules_and_whitespace_other_than_crlf_still_change_the_pin"
+kind = "write_bytes"
+count = 1
+use = "fixture"
+note = "A relaxed .kicad_dru appears beside the board: the project pin must see the new file. The write layer has no .kicad_dru kind; the byte faults of this test use faults.rewrite_bytes."
+
+[[test_kicad_write]]
+file = "test_autonomy_run_pins.py"
+function = "test_the_relaxed_rule_value_in_the_project_changes_the_pin"
+kind = "write_bytes"
+count = 1
+use = "fixture"
+note = "A rule value in the .kicad_pro JSON edited as bytes; debt: write_layer.save_project on the parsed JSON."
+
+[[test_kicad_write]]
+file = "test_autonomy_run_policy.py"
+function = "test_the_rung_pin_binds_the_whole_graded_project_not_just_the_pcb"
+kind = "write_text"
+count = 1
+use = "fixture"
+note = "A custom-rules file (.kicad_dru) written as text; the write layer has no .kicad_dru kind (no kicad-cli parse check)."
+
+[[test_kicad_write]]
+file = "test_board_outline.py"
+function = "test_footprint_library_found_via_project_fp_lib_table_nickname"
+kind = "write_text"
+count = 1
+use = "fixture"
+note = "A project fp-lib-table as a text literal; the write layer has no library-table kind. Debt: build from typed atoms."
+
+[[test_kicad_write]]
+file = "test_board_outline.py"
+function = "test_nickname_in_first_table_is_authoritative_no_fall_through"
+kind = "write_text"
+count = 1
+use = "fixture"
+note = "A project fp-lib-table as a text literal; the write layer has no library-table kind. Debt: build from typed atoms."
+
+[[test_kicad_write]]
+file = "test_board_rules.py"
+function = "_add_dru"
+kind = "write_text"
+count = 1
+use = "fixture"
+note = "Custom rules (.kicad_dru) text the tests under review parse; the write layer has no .kicad_dru kind."
+
+[[test_kicad_write]]
+file = "test_board_rules.py"
+function = "test_token_goes_stale_when_custom_rules_or_a_lib_table_changes"
+kind = "write_text"
+count = 2
+use = "stub"
+note = "Two different lib-table texts: the revision token must go stale on any change; the content is not parsed as a table."
+
+[[test_kicad_write]]
+file = "test_board_rules.py"
+function = "test_tokenizer_cases_from_the_review"
+kind = "write_bytes"
+count = 1
+use = "fault"
+note = "Tokenizer edge cases on purpose (an empty board, odd .kicad_dru text); move to a _kicad_faults helper."
+
+[[test_kicad_write]]
+file = "test_board_rules.py"
+function = "test_tokenizer_cases_from_the_review"
+kind = "write_text"
+count = 1
+use = "fault"
+note = "Tokenizer edge cases on purpose (an empty board, odd .kicad_dru text); move to a _kicad_faults helper."
+
+[[test_kicad_write]]
+file = "test_gate_field.py"
+function = "project"
+kind = "write_text"
+count = 6
+use = "stub"
+note = "A synthetic project tree (rules, tables, libraries, a sheet) for the gate field's file set: content is hashed, never parsed."
+
+[[test_kicad_write]]
+file = "test_gate_field.py"
+function = "test_a_mutation_during_grading_is_not_forgotten"
+kind = "write_text"
+count = 1
+use = "stub"
+note = "A board replaced mid-grading: the gate field fingerprints bytes, the content is irrelevant."
+
+[[test_kicad_write]]
+file = "test_gate_field.py"
+function = "test_a_symlinked_library_directory_is_fingerprinted_and_cycles_terminate"
+kind = "write_text"
+count = 2
+use = "stub"
+note = "A symbol library behind a symlink: content is hashed, never parsed."
+
+[[test_kicad_write]]
+file = "test_gate_field.py"
+function = "test_changes_inside_directories_the_gate_skips_do_not_make_a_verdict_stale"
+kind = "write_text"
+count = 3
+use = "stub"
+note = "Sheets in skipped and normal directories: content is hashed, never parsed."
+
+[[test_kicad_write]]
+file = "test_gate_field.py"
+function = "test_other_boards_in_the_directory_do_not_make_a_verdict_stale"
+kind = "write_text"
+count = 1
+use = "stub"
+note = "A sibling board stub: only its presence and name matter to the gate field's file set."
+
+[[test_kicad_write]]
+file = "test_gate_field.py"
+function = "test_rewriting_only_the_rules_file_is_stale"
+kind = "write_text"
+count = 2
+use = "fixture"
+note = "Two .kicad_dru texts: the gate field must go stale on a rules rewrite; the write layer has no .kicad_dru kind."
+
+[[test_kicad_write]]
+file = "test_import_duplicate_scan.py"
+function = "_edit_netlist_uuids"
+kind = "write_text"
+count = 1
+use = "serialised"
+note = "A kicad-cli netlist (.net) with edited uuids, serialised by the write layer: not one of hard rule 1's files, and the layer has no netlist kind (build ticket 68)."
+
+[[test_kicad_write]]
+file = "test_jlcpcb_basic.py"
+function = "_write_footprint"
+kind = "write_text"
+count = 1
+use = "serialised"
+note = "Footprint built with kicad_tools' object model and serialize_sexp; debt: write_layer.save (footprint kind exists)."
+
+[[test_kicad_write]]
+file = "test_jlcpcb_basic.py"
+function = "_write_symbol_lib"
+kind = "write_text"
+count = 1
+use = "serialised"
+note = "Symbol library built with kicad_tools' object model and serialize_sexp; debt: write_layer.save (kicad_symbol_lib kind exists)."
+
+[[test_kicad_write]]
+file = "test_kicad_placer_tools.py"
+function = "test_run_placement_repair_streams_log_and_reports_output"
+kind = "write_text"
+count = 1
+use = "stub"
+note = "Input board for a faked placer subprocess: never parsed."
+
+[[test_kicad_write]]
+file = "test_kicad_placer_tools.py"
+function = "test_run_placement_repair_timeout_preserves_log_and_raises"
+kind = "write_text"
+count = 1
+use = "stub"
+note = "Input board for a faked placer subprocess: never parsed."
+
+[[test_kicad_write]]
+file = "test_library_toolset.py"
+function = "test_check_project_portability_catches_absolute_path"
+kind = "write_text"
+count = 1
+use = "fixture"
+note = "A project fp-lib-table with an absolute uri as text; the write layer has no library-table kind."
+
+[[test_kicad_write]]
+file = "test_library_toolset.py"
+function = "test_register_preserves_other_entries_options_and_descr"
+kind = "write_text"
+count = 1
+use = "fixture"
+note = "A project fp-lib-table with options and descr as text; the write layer has no library-table kind (build ticket 76 owns the table writer)."
+
+[[test_kicad_write]]
+file = "test_library_toolset.py"
+function = "test_validate_klc_flags_a_real_violation"
+kind = "write_text"
+count = 1
+use = "fixture"
+note = "A footprint variant made by text replace (REF** -> U1); debt: write_layer.load, set_string, save."
+
+[[test_kicad_write]]
+file = "test_line_breaks.py"
+function = "test_register_library_asset_keeps_an_existing_escaped_line_break_escaped"
+kind = "write_text"
+count = 1
+use = "serialised"
+note = "Build ticket 25: a valid fp-lib-table with an escaped line break in a descr, loaded and set through the layer and written with write_layer.serialise; the layer has no library-table kind to save it."
+
+[[test_kicad_write]]
+file = "test_manufacturing_profiles.py"
+function = "test_reads_kicad_dru_custom_rules"
+kind = "write_text"
+count = 1
+use = "serialised"
+note = "kicad_tools' generate_dru output written as the project's .kicad_dru; the write layer has no .kicad_dru kind."
+
+[[test_kicad_write]]
+file = "test_pour_step.py"
+function = "make_fake_router.fake"
+kind = "write_text"
+count = 1
+use = "serialised"
+note = "A fake router's output board, serialised with kicad_tools' to_string as a router would write it."
+
+[[test_kicad_write]]
+file = "test_pour_step.py"
+function = "test_a_garbled_candidate_is_a_status_not_an_exception.garbage"
+kind = "write_text"
+count = 1
+use = "fault"
+note = "A garbled router output on purpose; move to a _kicad_faults helper."
+
+[[test_kicad_write]]
+file = "test_router_cli_snapshot.py"
+function = "test_keepout_and_footprint_level_zones_are_not_pours"
+kind = "write_text"
+count = 1
+use = "fixture"
+note = "A minimal board text with keepout zones for the pour detector; debt: build through the write layer."
+
+[[test_kicad_write]]
+file = "test_router_cli_snapshot.py"
+function = "test_original_project_is_restored_after_every_router_script"
+kind = "write_text"
+count = 2
+use = "stub"
+note = "A board stub and a .kicad_pro marker text: the test checks the project file comes back byte for byte."
+
+[[test_kicad_write]]
+file = "test_router_timeout_classes.py"
+function = "_run"
+kind = "write_text"
+count = 1
+use = "stub"
+note = "Input board for a faked router subprocess: never parsed."
+
+[[test_kicad_write]]
+file = "test_router_wrapper_hardening.py"
+function = "_pcb"
+kind = "write_text"
+count = 1
+use = "fixture"
+note = "Minimal board texts with zones for the router wrapper's pour checks; debt: build through the write layer."
+
+[[test_kicad_write]]
+file = "test_router_wrapper_hardening.py"
+function = "_setup"
+kind = "write_text"
+count = 2
+use = "stub"
+note = "A board stub and a .kicad_pro marker text for the restore check: never parsed as KiCad files."
+
+[[test_kicad_write]]
+file = "test_router_wrapper_round2.py"
+function = "_run"
+kind = "write_text"
+count = 2
+use = "stub"
+note = "A board stub and a .kicad_pro marker text for the restore check: never parsed as KiCad files."
+
+[[test_kicad_write]]
+file = "test_router_wrapper_round2.py"
+function = "test_keepout_text_inside_a_quoted_zone_name_is_not_a_keepout"
+kind = "write_text"
+count = 1
+use = "fixture"
+note = "A board text with a quoted zone name holding (keepout; debt: build through the write layer."
+
+[[test_kicad_write]]
+file = "test_routing_krt.py"
+function = "test_run_kicad_routing_tools_does_not_clear_a_leftover_stop_file"
+kind = "write_text"
+count = 1
+use = "stub"
+note = "Input board for a faked router subprocess: never parsed."
+
+[[test_kicad_write]]
+file = "test_routing_krt.py"
+function = "test_run_kicad_routing_tools_hard_kill_backstop_when_stop_request_ignored"
+kind = "write_text"
+count = 1
+use = "stub"
+note = "Input board for a faked router subprocess: never parsed."
+
+[[test_kicad_write]]
+file = "test_routing_krt.py"
+function = "test_run_kicad_routing_tools_honors_mid_run_stop_request"
+kind = "write_text"
+count = 1
+use = "stub"
+note = "Input board for a faked router subprocess: never parsed."
+
+[[test_kicad_write]]
+file = "test_routing_krt.py"
+function = "test_run_kicad_routing_tools_honors_pre_existing_stop_file"
+kind = "write_text"
+count = 1
+use = "stub"
+note = "Input board for a faked router subprocess: never parsed."
+
+[[test_kicad_write]]
+file = "test_routing_krt.py"
+function = "test_run_kicad_routing_tools_progress_is_readable_mid_run_via_the_same_log_path"
+kind = "write_text"
+count = 1
+use = "stub"
+note = "Input board for a faked router subprocess: never parsed."
+
+[[test_kicad_write]]
+file = "test_routing_krt.py"
+function = "test_run_kicad_routing_tools_streams_log_to_disk_on_success"
+kind = "write_text"
+count = 1
+use = "stub"
+note = "Input board for a faked router subprocess: never parsed."
+
+[[test_kicad_write]]
+file = "test_routing_krt.py"
+function = "test_run_kicad_routing_tools_timeout_preserves_log_and_raises"
+kind = "write_text"
+count = 1
+use = "stub"
+note = "Input board for a faked router subprocess: never parsed."
+
+[[test_kicad_write]]
+file = "test_routing_krt.py"
+function = "test_trial_copy_carries_every_sibling_krt_or_kicad_cli_can_read"
+kind = "write_text"
+count = 2
+use = "stub"
+note = "A board stub and its sibling stubs (.kicad_pro, .kicad_prl, .kicad_dru, library tables): the test checks which files the trial copy carries, byte for byte; none is parsed."
+
+[[test_kicad_write]]
+file = "test_routing_krt.py"
+function = "test_trial_copy_tolerates_missing_siblings"
+kind = "write_text"
+count = 1
+use = "stub"
+note = "A board stub: the test checks the trial copy without siblings."
+
+[[test_kicad_write]]
+file = "test_routing_toolset_surfaces_router_facts.py"
+function = "_clobbering_runner.run"
+kind = "write_text"
+count = 1
+use = "stub"
+note = "A fake router clobbers the .kicad_pro with a JSON marker: the restore must undo it."
+
+[[test_kicad_write]]
+file = "test_rung_backends_policy.py"
+function = "test_the_krt_wrapper_times_a_killed_run_on_a_clock_that_cannot_step"
+kind = "write_text"
+count = 1
+use = "stub"
+note = "Input board for a faked router subprocess: never parsed."
+
+[[test_kicad_write]]
+file = "test_rung_runner.py"
+function = "project"
+kind = "write_bytes"
+count = 2
+use = "stub"
+note = "A synthetic rung project (board and rules text constants): the runner hashes and copies it, a fake backend grades it."
+
+[[test_kicad_write]]
+file = "test_rung_runner.py"
+function = "test_a_backend_rewriting_an_unlisted_project_file_in_its_copy_is_assisted"
+kind = "write_bytes"
+count = 1
+use = "stub"
+note = "A .kicad_pro marker: the manifest must hash every project file."
+
+[[test_kicad_write]]
+file = "test_rung_runner.py"
+function = "test_a_backend_rewriting_an_unlisted_project_file_in_its_copy_is_assisted.backend"
+kind = "write_bytes"
+count = 1
+use = "stub"
+note = "A backend rewrites the .kicad_pro in its copy: only the changed hash matters."
+
+[[test_kicad_write]]
+file = "test_rung_runner.py"
+function = "test_a_backend_that_removes_a_whole_directory_of_its_copy_does_not_crash_the_batch"
+kind = "write_bytes"
+count = 1
+use = "stub"
+note = "A sheet stub in a sub-directory the backend removes: never parsed."
+
+[[test_kicad_write]]
+file = "test_rung_runner.py"
+function = "test_a_new_file_the_gate_would_read_in_an_attempt_copy_is_assisted_and_named.backend"
+kind = "write_bytes"
+count = 1
+use = "stub"
+note = "A fake backend plants a new file under a parametrized KiCad name in its copy: only the file's presence and name matter, its content is never parsed."
+
+[[test_kicad_write]]
+file = "test_rung_runner.py"
+function = "test_a_rerun_after_the_frozen_copy_was_edited_is_assisted_for_that_too"
+kind = "write_bytes"
+count = 1
+use = "stub"
+note = "Tampering with the frozen rules copy: only the changed hash matters."
+
+[[test_kicad_write]]
+file = "test_rung_runner.py"
+function = "test_attempts_start_from_the_frozen_copy_even_when_the_original_is_edited.backend"
+kind = "write_bytes"
+count = 1
+use = "stub"
+note = "An original edited during a run: only the changed hash matters."
+
+[[test_kicad_write]]
+file = "test_rung_runner.py"
+function = "test_editing_a_rule_file_relabels_the_run_assisted"
+kind = "write_bytes"
+count = 1
+use = "stub"
+note = "A rules edit between attempts: only the changed hash matters."
+
+[[test_kicad_write]]
+file = "test_rung_runner.py"
+function = "test_editing_the_input_board_between_attempts_relabels_the_run_assisted"
+kind = "write_bytes"
+count = 1
+use = "stub"
+note = "A board edit between attempts: only the changed hash matters."
+
+[[test_kicad_write]]
+file = "test_rung_runner.py"
+function = "test_every_attempt_starts_from_a_fresh_copy_of_the_frozen_input.backend"
+kind = "write_text"
+count = 1
+use = "stub"
+note = "A fake backend writes garbage into its copy: the next attempt must start fresh."
+
+[[test_kicad_write]]
+file = "test_rung_runner.py"
+function = "test_every_file_of_the_project_is_hashed_into_the_manifest_and_each_attempt"
+kind = "write_bytes"
+count = 1
+use = "stub"
+note = "A .kicad_pro marker: the manifest must hash every project file."
+
+[[test_kicad_write]]
+file = "test_rung_runner.py"
+function = "test_tampering_with_the_frozen_copy_between_attempts_is_assisted.tamper"
+kind = "write_bytes"
+count = 1
+use = "stub"
+note = "Tampering with the frozen rules copy: only the changed hash matters."
+
+[[test_kicad_write]]
+file = "test_rung_runner_levers.py"
+function = "test_an_attempt_that_changes_a_declared_invariant_cannot_pass.backend"
+kind = "write_text"
+count = 1
+use = "stub"
+note = "A fake backend changes its board copy: only the changed hash matters."
+
+[[test_kicad_write]]
+file = "test_rung_runner_review.py"
+function = "test_a_superset_invariant_allows_additions_but_not_removals.adder"
+kind = "write_text"
+count = 1
+use = "stub"
+note = "A fake backend appends to its board copy: the invariant check compares text lines, never KiCad tokens."
+
+[[test_kicad_write]]
+file = "test_rung_runner_review.py"
+function = "test_a_superset_invariant_allows_additions_but_not_removals.remover"
+kind = "write_text"
+count = 1
+use = "stub"
+note = "A fake backend empties its board copy: the invariant check compares text lines."
+
+[[test_kicad_write]]
+file = "test_schematic_import.py"
+function = "test_unresolved_at_confirm_fails_whole_import_names_part_and_writes_nothing"
+kind = "write_text"
+count = 1
+use = "serialised"
+note = "A global fp-lib-table built from typed atoms and the layer's serialiser (the write layer has no library-table kind to save it); a config file in a throwaway APPDATA, not a design file."
+
+[[test_kicad_write]]
+file = "test_schematic_import.py"
+function = "test_global_table_nickname_beats_the_installed_directory"
+kind = "write_text"
+count = 1
+use = "serialised"
+note = "A global fp-lib-table built from typed atoms and the layer's serialiser; the write layer has no library-table kind to save it."
+
+[[test_kicad_write]]
+file = "test_sheet_tree_readers.py"
+function = "_sheet"
+kind = "write_text"
+count = 1
+use = "serialised"
+note = "Sheets built with kicad_tools' SExp and serialize_sexp; debt: write_layer.save (kicad_sch kind exists)."
+
+[[test_kicad_write]]
+file = "test_sheet_tree_readers.py"
+function = "test_walk_reports_an_unparseable_sheet"
+kind = "write_text"
+count = 1
+use = "fault"
+note = "A board root saved as a .kicad_sch on purpose; move to _kicad_faults.write_unchecked."
+
+[[test_kicad_write]]
+file = "test_silk_minimums.py"
+function = "_build"
+kind = "write_text"
+count = 1
+use = "fixture"
+note = "A custom-rules file (.kicad_dru) as text next to the golden board; the write layer has no .kicad_dru kind."
+
+[[test_kicad_write]]
+file = "test_verify_board.py"
+function = "_build_sheet"
+kind = "write_text"
+count = 1
+use = "serialised"
+note = "Sheets built with kicad_tools' SExp and serialize_sexp; debt: write_layer.save (kicad_sch kind exists)."
+
+[[test_kicad_write]]
+file = "test_verify_board.py"
+function = "test_a_dru_rule_that_relaxes_a_constraint_without_a_severity_clause_is_incomplete"
+kind = "write_text"
+count = 1
+use = "fixture"
+note = "A relaxing rule as .kicad_dru text; the write layer has no .kicad_dru kind."
+
+[[test_kicad_write]]
+file = "test_verify_board.py"
+function = "test_a_dru_severity_ignore_rule_added_after_pinning_is_incomplete"
+kind = "write_text"
+count = 1
+use = "fixture"
+note = "A severity-ignore rule as .kicad_dru text; the write layer has no .kicad_dru kind."
+
+[[test_kicad_write]]
+file = "test_verify_board.py"
+function = "test_a_multiline_dru_severity_clause_is_detected"
+kind = "write_text"
+count = 1
+use = "fixture"
+note = "A multi-line severity clause as .kicad_dru text: its layout is the case under test."
+
+[[test_kicad_write]]
+file = "test_verify_board.py"
+function = "test_an_unannotated_schematic_is_incomplete_when_parity_is_required"
+kind = "write_text"
+count = 1
+use = "fixture"
+note = "A schematic made unannotated by a text edit; debt: write_layer.load, set_string, save (ticket 50 has the module in flight)."
+
+[[test_kicad_write]]
+file = "test_verify_board.py"
+function = "test_an_unparseable_schematic_is_incomplete_not_annotated"
+kind = "write_text"
+count = 1
+use = "fault"
+note = "A truncated schematic on purpose; move to a _kicad_faults helper."
+
+[[test_kicad_write]]
+file = "test_verify_board.py"
+function = "test_missing_schematic_is_incomplete_when_parity_is_required"
+kind = "write_text"
+count = 1
+use = "copy"
+note = "The golden board's text copied to a new name; debt: shutil.copyfile (test_verify_board is in flight on ticket 50)."
+
+[[test_kicad_write]]
+file = "test_verify_board.py"
+function = "test_parity_not_applicable_is_stated_in_the_verdict"
+kind = "write_text"
+count = 1
+use = "copy"
+note = "The golden board's text copied to a new name; debt: shutil.copyfile (test_verify_board is in flight on ticket 50)."
+
+[[test_kicad_write]]
+file = "test_verify_board.py"
+function = "test_sub_sheets_are_copied_so_parity_sees_the_whole_design"
+kind = "write_text"
+count = 1
+use = "stub"
+note = "A sub-sheet stub: the test checks it is copied with the board, it is never parsed."
+
+[[test_kicad_write]]
+file = "test_write_layer.py"
+function = "test_commit_directory_retries_a_transient_windows_sharing_denial"
+kind = "write_bytes"
+count = 1
+use = "stub"
+note = "A one-byte file for the layer's directory-commit retry: never parsed."
+
+# --------------------------------------------------------------------------------------------
+# Calls of the fault helper's writers (write_unchecked, raw_atom, rewrite_bytes) outside
+# tests/_kicad_faults.py and tests/test_kicad_faults.py (KicadFaultCallScanner, review round 1).
+# Each writes a KiCad file KiCad would not write, so each call is listed by its text (code) with
+# a note saying which fault the test needs. 11 calls on 2026-10-21. A new call needs a
+# reviewed entry; drift() is not listed (its bytes change, its tokens do not).
+# The key is the call's text only: the body of a named change function it passes
+# (_with_eol, _insert_one_byte, _same_size_other_content) is not keyed; review it with the call.
+# A bare reference is a site too (w = rb, functools.partial(rb, p)); calls through w are not
+# listed again. Any other reference through the helper fails FaultHelperUseScanner.
+# --------------------------------------------------------------------------------------------
+
+# Merge with main 2026-10-21: sites that tickets 73, 76 and 83 added after 74's freeze. Allowlisted, not converted:
+# library tables carry byte-exact bytes (CRLF, CR-only, tabs) that the write layer has no kind for. Owner: build ticket 94 (library table follow-ups).
+
+[[test_kicad_write]]
+file = "test_import_duplicate_scan.py"
+function = "_drop_netlist_nodes"
+kind = "write_text"
+count = 1
+use = "serialised"
+note = "The netlist (an export tree, not a KiCad file the layer saves) is read through the layer, two nodes dropped, written with the layer's serialiser, no parse check of the result (build ticket 83, owner ticket 90)."
+
+[[test_kicad_write]]
+file = "test_library_toolset.py"
+function = "_link_to_shared_table"
+kind = "write_bytes"
+count = 2
+use = "fixture"
+note = "A library table (fp-lib-table / sym-lib-table) written as exact bytes, because the test is about byte-for-byte keeping, line endings or an unparseable table; the write layer has no kind for tables. Moves to a table helper in build ticket 94."
+
+[[test_kicad_write]]
+file = "test_library_toolset.py"
+function = "test_check_project_portability_reports_an_unparseable_table_as_incomplete"
+kind = "write_bytes"
+count = 1
+use = "fixture"
+note = "A library table (fp-lib-table / sym-lib-table) written as exact bytes, because the test is about byte-for-byte keeping, line endings or an unparseable table; the write layer has no kind for tables. Moves to a table helper in build ticket 94."
+
+[[test_kicad_write]]
+file = "test_library_toolset.py"
+function = "test_register_accepts_a_table_kicad_loads_and_keeps_it_byte_for_byte"
+kind = "write_bytes"
+count = 1
+use = "fixture"
+note = "A library table (fp-lib-table / sym-lib-table) written as exact bytes, because the test is about byte-for-byte keeping, line endings or an unparseable table; the write layer has no kind for tables. Moves to a table helper in build ticket 94."
+
+[[test_kicad_write]]
+file = "test_library_toolset.py"
+function = "test_register_does_not_reuse_the_nickname_of_a_row_without_a_uri"
+kind = "write_bytes"
+count = 1
+use = "fixture"
+note = "A library table (fp-lib-table / sym-lib-table) written as exact bytes, because the test is about byte-for-byte keeping, line endings or an unparseable table; the write layer has no kind for tables. Moves to a table helper in build ticket 94."
+
+[[test_kicad_write]]
+file = "test_library_toolset.py"
+function = "test_register_into_a_cr_only_table_keeps_its_line_ending"
+kind = "write_bytes"
+count = 1
+use = "fixture"
+note = "A library table (fp-lib-table / sym-lib-table) written as exact bytes, because the test is about byte-for-byte keeping, line endings or an unparseable table; the write layer has no kind for tables. Moves to a table helper in build ticket 94."
+
+[[test_kicad_write]]
+file = "test_library_toolset.py"
+function = "test_register_into_an_lf_tab_table_matches_its_line_ending_and_indent"
+kind = "write_bytes"
+count = 2
+use = "fixture"
+note = "A library table (fp-lib-table / sym-lib-table) written as exact bytes, because the test is about byte-for-byte keeping, line endings or an unparseable table; the write layer has no kind for tables. Moves to a table helper in build ticket 94."
+
+[[test_kicad_write]]
+file = "test_library_toolset.py"
+function = "test_register_keeps_every_existing_row_byte_for_byte"
+kind = "write_bytes"
+count = 1
+use = "fixture"
+note = "A library table (fp-lib-table / sym-lib-table) written as exact bytes, because the test is about byte-for-byte keeping, line endings or an unparseable table; the write layer has no kind for tables. Moves to a table helper in build ticket 94."
+
+[[test_kicad_write]]
+file = "test_library_toolset.py"
+function = "test_register_library_asset_self_check_fires_on_a_corrupted_write"
+kind = "write_bytes"
+count = 1
+use = "fixture"
+note = "A library table (fp-lib-table / sym-lib-table) written as exact bytes, because the test is about byte-for-byte keeping, line endings or an unparseable table; the write layer has no kind for tables. Moves to a table helper in build ticket 94."
+
+[[test_kicad_write]]
+file = "test_library_toolset.py"
+function = "test_register_library_asset_self_check_fires_on_a_row_inserted_in_the_wrong_place"
+kind = "write_bytes"
+count = 1
+use = "fixture"
+note = "A library table (fp-lib-table / sym-lib-table) written as exact bytes, because the test is about byte-for-byte keeping, line endings or an unparseable table; the write layer has no kind for tables. Moves to a table helper in build ticket 94."
+
+[[test_kicad_write]]
+file = "test_library_toolset.py"
+function = "test_register_never_writes_a_table_outside_project_dir"
+kind = "write_bytes"
+count = 1
+use = "fixture"
+note = "A library table (fp-lib-table / sym-lib-table) written as exact bytes, because the test is about byte-for-byte keeping, line endings or an unparseable table; the write layer has no kind for tables. Moves to a table helper in build ticket 94."
+
+[[test_kicad_write]]
+file = "test_library_toolset.py"
+function = "test_register_reads_each_name_as_kicad_does"
+kind = "write_bytes"
+count = 1
+use = "fixture"
+note = "A library table (fp-lib-table / sym-lib-table) written as exact bytes, because the test is about byte-for-byte keeping, line endings or an unparseable table; the write layer has no kind for tables. Moves to a table helper in build ticket 94."
+
+[[test_kicad_write]]
+file = "test_library_toolset.py"
+function = "test_register_reads_the_last_uri_of_a_row_as_kicad_does"
+kind = "write_bytes"
+count = 1
+use = "fixture"
+note = "A library table (fp-lib-table / sym-lib-table) written as exact bytes, because the test is about byte-for-byte keeping, line endings or an unparseable table; the write layer has no kind for tables. Moves to a table helper in build ticket 94."
+
+[[test_kicad_write]]
+file = "test_library_toolset.py"
+function = "test_register_refuses_a_nickname_kicad_cannot_read_and_writes_nothing"
+kind = "write_bytes"
+count = 1
+use = "fixture"
+note = "A library table (fp-lib-table / sym-lib-table) written as exact bytes, because the test is about byte-for-byte keeping, line endings or an unparseable table; the write layer has no kind for tables. Moves to a table helper in build ticket 94."
+
+[[test_kicad_write]]
+file = "test_library_toolset.py"
+function = "test_register_refuses_a_row_inside_a_row_without_calling_it_unclosed"
+kind = "write_bytes"
+count = 1
+use = "fixture"
+note = "A library table (fp-lib-table / sym-lib-table) written as exact bytes, because the test is about byte-for-byte keeping, line endings or an unparseable table; the write layer has no kind for tables. Moves to a table helper in build ticket 94."
+
+[[test_kicad_write]]
+file = "test_library_toolset.py"
+function = "test_register_refuses_an_unparseable_table_and_leaves_it_byte_identical"
+kind = "write_bytes"
+count = 1
+use = "fixture"
+note = "A library table (fp-lib-table / sym-lib-table) written as exact bytes, because the test is about byte-for-byte keeping, line endings or an unparseable table; the write layer has no kind for tables. Moves to a table helper in build ticket 94."
+
+[[test_kicad_write]]
+file = "test_library_toolset.py"
+function = "test_register_refuses_when_the_table_changed_on_disk_after_it_was_read"
+kind = "write_bytes"
+count = 1
+use = "fixture"
+note = "A library table (fp-lib-table / sym-lib-table) written as exact bytes, because the test is about byte-for-byte keeping, line endings or an unparseable table; the write layer has no kind for tables. Moves to a table helper in build ticket 94."
+
+[[test_kicad_write]]
+file = "test_library_toolset.py"
+function = "test_register_reports_a_read_only_table_apart_from_one_held_open"
+kind = "write_bytes"
+count = 1
+use = "fixture"
+note = "A library table (fp-lib-table / sym-lib-table) written as exact bytes, because the test is about byte-for-byte keeping, line endings or an unparseable table; the write layer has no kind for tables. Moves to a table helper in build ticket 94."
+
+[[test_kicad_write]]
+file = "test_library_toolset.py"
+function = "test_register_reports_a_table_in_use_and_writes_nothing"
+kind = "write_bytes"
+count = 1
+use = "fixture"
+note = "A library table (fp-lib-table / sym-lib-table) written as exact bytes, because the test is about byte-for-byte keeping, line endings or an unparseable table; the write layer has no kind for tables. Moves to a table helper in build ticket 94."
+
+[[test_kicad_write]]
+file = "test_library_toolset.py"
+function = "test_register_reports_an_already_present_row_that_is_disabled_and_keeps_it"
+kind = "write_bytes"
+count = 1
+use = "fixture"
+note = "A library table (fp-lib-table / sym-lib-table) written as exact bytes, because the test is about byte-for-byte keeping, line endings or an unparseable table; the write layer has no kind for tables. Moves to a table helper in build ticket 94."
+
+[[test_kicad_write]]
+file = "test_library_toolset.py"
+function = "test_register_reports_any_other_failed_replace_and_writes_nothing"
+kind = "write_bytes"
+count = 1
+use = "fixture"
+note = "A library table (fp-lib-table / sym-lib-table) written as exact bytes, because the test is about byte-for-byte keeping, line endings or an unparseable table; the write layer has no kind for tables. Moves to a table helper in build ticket 94."
+
+[[test_kicad_write]]
+file = "test_library_toolset.py"
+function = "test_register_writes_the_readable_table_and_refuses_only_the_unparseable_one"
+kind = "write_bytes"
+count = 3
+use = "fixture"
+note = "A library table (fp-lib-table / sym-lib-table) written as exact bytes, because the test is about byte-for-byte keeping, line endings or an unparseable table; the write layer has no kind for tables. Moves to a table helper in build ticket 94."
+
+[[test_kicad_write]]
+file = "test_write_layer.py"
+function = "test_save_bytes_verifies_the_exact_bytes_before_it_replaces"
+kind = "write_bytes"
+count = 1
+use = "stub"
+note = "An existing target holding the bytes b'old' so save_bytes' verify-before-replace is observed; the content is never parsed as KiCad (build ticket 71 test, owner ticket 90)."
+
+
+[[test_kicad_fault_call]]
+file = "test_autonomy_run_pins.py"
+function = "_eol_copy"
+kind = "rewrite_bytes"
+code = '''faults.rewrite_bytes(path, lambda data: _with_eol(data, eol))'''
+note = "Rewrites every pinned file's line endings to LF or CRLF, as a checkout or an installer does: the pin must not see it."
+
+[[test_kicad_fault_call]]
+file = "test_autonomy_run_pins.py"
+function = "_flip_one_byte"
+kind = "rewrite_bytes"
+code = '''faults.rewrite_bytes(path, _insert_one_byte)'''
+note = "One inserted byte in a pinned file (parametrized over every covered file): the pin must see it."
+
+[[test_kicad_fault_call]]
+file = "test_autonomy_run_pins.py"
+function = "test_rules_and_whitespace_other_than_crlf_still_change_the_pin"
+kind = "rewrite_bytes"
+code = '''faults.rewrite_bytes(pro, lambda data: data + payload)'''
+note = "Bytes appended to the .kicad_pro (parametrized: a trailing space): the project pin must see them."
+
+[[test_kicad_fault_call]]
+file = "test_autonomy_run_pins.py"
+function = "test_rules_and_whitespace_other_than_crlf_still_change_the_pin"
+kind = "rewrite_bytes"
+code = '''faults.rewrite_bytes(pro, lambda data: data.replace(b'\r\n', b'\r', 1))'''
+note = "A lone CR in place of a CRLF in the .kicad_pro: content, so the project pin changes."
+
+[[test_kicad_fault_call]]
+file = "test_autonomy_run_pins.py"
+function = "test_a_cr_inserted_inside_a_quoted_board_token_changes_both_pins"
+kind = "rewrite_bytes"
+code = '''faults.rewrite_bytes(changed, lambda data: data.replace(b'"GND"', b'"G\rND"', 1))'''
+note = "A lone CR inside a quoted board token: content, never a line ending, so both pins change."
+
+[[test_kicad_fault_call]]
+file = "test_autonomy_run_pins.py"
+function = "test_a_cr_inserted_before_a_crlf_in_the_project_file_changes_the_project_pin"
+kind = "rewrite_bytes"
+code = '''faults.rewrite_bytes(pro, lambda data: data.replace(b'\r\n', b'\r\r\n', 1))'''
+note = "A CR inserted before a CRLF in the .kicad_pro: content, so the project pin changes."
+
+[[test_kicad_fault_call]]
+file = "test_gate_field.py"
+function = "test_rewriting_any_single_input_file_makes_the_verdict_stale"
+kind = "rewrite_bytes"
+code = '''faults.rewrite_bytes(target, lambda data: data + b'\n; changed\n')'''
+note = "An appended comment line in each gate input (parametrized): the gate field must go stale on any byte change."
+
+[[test_kicad_fault_call]]
+file = "test_gate_field.py"
+function = "test_same_size_edit_with_restored_mtime_is_caught_for_board_rules_and_project"
+kind = "rewrite_bytes"
+code = '''faults.rewrite_bytes(target, _same_size_other_content)'''
+note = "One byte changed, size and mtime restored: the gate field must hash content, not trust stat."
+
+[[test_kicad_fault_call]]
+file = "test_line_breaks.py"
+function = "test_kicad_itself_writes_a_sheet_pin_name_with_a_raw_line_break"
+kind = "write_unchecked"
+code = '''faults.write_unchecked(_root_with_sheet_pin(project, 'PIN\nname'), project / ROOT)'''
+note = "A sheet pin name with a raw line break, as KiCad 10 itself writes it (build ticket 25): the layer refuses to write one."
+
+[[test_kicad_fault_call]]
+file = "test_pcb_editing.py"
+function = "test_malformed_pcb_file_fails_to_parse_not_silently_accepted"
+kind = "rewrite_bytes"
+code = '''faults.rewrite_bytes(broken, lambda data: data[:len(data) // 2])'''
+note = "A board truncated mid-file (unbalanced parens): the loader and kicad-cli must fail loudly."
+
+[[test_kicad_fault_call]]
+file = "test_silk_minimums.py"
+function = "test_footprint_level_unknown_silk_text_node_is_listed_unhandled"
+kind = "write_unchecked"
+code = '''faults.write_unchecked(b._sexp, pcb)'''
+note = "A footprint with an unknown silk text node (fp_mystery): the layer's parse check refuses it, the scan must list it."

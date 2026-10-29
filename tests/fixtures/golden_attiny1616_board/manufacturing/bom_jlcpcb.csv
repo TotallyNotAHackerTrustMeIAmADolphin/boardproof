@@ -1,0 +1,7 @@
+Comment,Designator,Footprint,LCSC Part #
+100nF,C1,Capacitor_SMD:C_0402_1005Metric,
+1k,R1,Resistor_SMD:R_0402_1005Metric,
+ATtiny1616-M,U1,Package_DFN_QFN:VQFN-20-1EP_3x3mm_P0.4mm_EP1.7x1.7mm,
+LED,D1,LED_SMD:LED_0603_1608Metric,
+PWR_IN,J1,Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical,
+UPDI,J2,Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical,

@@ -1,0 +1,162 @@
+{
+ "input_fail_floor": true,
+ "rung": 2,
+ "source": {
+  "project": "KiCad",
+  "path": "demos/pic_programmer",
+  "commit": "6a26ce9df3067b2233b415ba2d4cbc3164272ccc",
+  "file_version": 20260206,
+  "licence": "KiCad LICENSE.README plus LICENSE.CC-BY-SA-4.0 (demos believed CC BY-SA 4.0)",
+  "attribution_confirmed": false,
+  "attribution_note": "OPEN OWNER ITEM: attribution/licence not confirmed; do not vendor or redistribute."
+ },
+ "reason": "beautifier did not clear the floor (6 errors before, 13 after): the unmodified prepared board is the floor",
+ "violations": [
+  {
+   "description": "Silkscreen clearance",
+   "items": [
+    {
+     "description": "Referenzfeld von RV1",
+     "pos": {
+      "x": 130.175,
+      "y": 95.885
+     },
+     "uuid": "63dc1ab5-ae87-4108-93d9-497d539614a0"
+    },
+    {
+     "description": "Platinen-Text \"13V ADJUST\" auf F.Silkscreen",
+     "pos": {
+      "x": 123.19,
+      "y": 95.25
+     },
+     "uuid": "ca73b4b4-9a51-46ca-a3dc-6983edb0c7bb"
+    }
+   ],
+   "severity": "error",
+   "type": "silk_overlap"
+  },
+  {
+   "description": "Silkscreen clearance",
+   "items": [
+    {
+     "description": "Platinen-Text \"VCC ON\" auf F.Silkscreen",
+     "pos": {
+      "x": 162.9,
+      "y": 99.1
+     },
+     "uuid": "16296d09-e894-45b0-8f80-b052a17e0a89"
+    },
+    {
+     "description": "Kreisbogen von P3 auf F.Silkscreen",
+     "pos": {
+      "x": 168.910001,
+      "y": 96.52
+     },
+     "uuid": "a357a0e1-bd20-4b19-8a46-4bc4858f7255"
+    }
+   ],
+   "severity": "error",
+   "type": "silk_overlap"
+  },
+  {
+   "description": "Silkscreen clearance",
+   "items": [
+    {
+     "description": "Abschnitt von P3 auf F.Silkscreen",
+     "pos": {
+      "x": 177.8,
+      "y": 101.6
+     },
+     "uuid": "a3026b66-173b-4fdb-95b0-6ae958ce65a5"
+    },
+    {
+     "description": "Platinen-Text \"PIC 40 PINS\" auf F.Silkscreen",
+     "pos": {
+      "x": 182.245,
+      "y": 45.085
+     },
+     "uuid": "da996b55-6835-4ad3-bf9f-8dc429e7144c"
+    }
+   ],
+   "severity": "error",
+   "type": "silk_overlap"
+  },
+  {
+   "description": "Silkscreen clearance",
+   "items": [
+    {
+     "description": "Abschnitt von P3 auf F.Silkscreen",
+     "pos": {
+      "x": 187.96,
+      "y": 45.72
+     },
+     "uuid": "504a8352-879a-4f2e-9148-d54b31136914"
+    },
+    {
+     "description": "Platinen-Text \"PIC 40 PINS\" auf F.Silkscreen",
+     "pos": {
+      "x": 182.245,
+      "y": 45.085
+     },
+     "uuid": "da996b55-6835-4ad3-bf9f-8dc429e7144c"
+    }
+   ],
+   "severity": "error",
+   "type": "silk_overlap"
+  },
+  {
+   "description": "Silkscreen clearance",
+   "items": [
+    {
+     "description": "Abschnitt von P3 auf F.Silkscreen",
+     "pos": {
+      "x": 177.8,
+      "y": 45.72
+     },
+     "uuid": "23bbc54b-caff-438c-a3cf-7c0f0c3b7fb4"
+    },
+    {
+     "description": "Platinen-Text \"PIC 40 PINS\" auf F.Silkscreen",
+     "pos": {
+      "x": 182.245,
+      "y": 45.085
+     },
+     "uuid": "da996b55-6835-4ad3-bf9f-8dc429e7144c"
+    }
+   ],
+   "severity": "error",
+   "type": "silk_overlap"
+  },
+  {
+   "description": "Silkscreen clearance",
+   "items": [
+    {
+     "description": "Kreisbogen von P3 auf F.Silkscreen",
+     "pos": {
+      "x": 196.85,
+      "y": 48.26
+     },
+     "uuid": "69b86254-fcbe-4e19-be86-efd440eb954b"
+    },
+    {
+     "description": "Platinen-Text \"1=>>\" auf F.Silkscreen",
+     "pos": {
+      "x": 202.0,
+      "y": 48.7
+     },
+     "uuid": "e9165638-6b2b-4f04-9462-e4a5ff8ea34e"
+    }
+   ],
+   "severity": "error",
+   "type": "silk_overlap"
+  }
+ ],
+ "violation_types": {
+  "silk_overlap": 6
+ },
+ "unconnected_nets_before_routing": 125,
+ "waived": [],
+ "rules_changed": false,
+ "report_label": "rung 2 (input_fail_floor: errors present before routing; not attributable to any router)",
+ "floor_board": "prepared"
+}

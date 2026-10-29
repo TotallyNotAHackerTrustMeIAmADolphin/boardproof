@@ -1,0 +1,112 @@
+{
+ "delivered_below_requested_count": 4,
+ "delivered_below_requested_policy_hit": true,
+ "router_facts": {
+  "added_segments": 538,
+  "added_vias": 33,
+  "board_floors": {
+   "annular": 0.05,
+   "board_edge": 0.01,
+   "clearance": 0.28,
+   "hole_to_hole": 0.25,
+   "track_width": 0.25,
+   "via_diameter": 0.9,
+   "via_drill": 0.5
+  },
+  "delivered_below_requested": [
+   {
+    "delivered_mm": 0.326,
+    "kind": "track_width",
+    "net_name": null,
+    "requested_mm": 0.5
+   },
+   {
+    "delivered_mm": 0.326,
+    "kind": "track_width",
+    "net_name": null,
+    "requested_mm": 0.5
+   },
+   {
+    "delivered_mm": 0.326,
+    "kind": "track_width",
+    "net_name": null,
+    "requested_mm": 0.5
+   },
+   {
+    "delivered_mm": 0.326,
+    "kind": "track_width",
+    "net_name": null,
+    "requested_mm": 0.5
+   }
+  ],
+  "elapsed_s": 13.67,
+  "exit_code": 3,
+  "fab_floor_relaxed": false,
+  "fab_tier_escalations": 0,
+  "logged_parameters": {
+   "advanced_flags": {},
+   "clearance_mm": 0.28,
+   "escalation": "board",
+   "fab_overrides": "<path>",
+   "grid_step_mm": null,
+   "layer_costs": null,
+   "layer_costs_reason": "no copper pour on the board; layer costs not emitted",
+   "max_iterations": null,
+   "nets": [
+    "*"
+   ],
+   "strict_sizes": true
+  },
+  "removed_segment_count": 0,
+  "removed_via_count": 0,
+  "router_rewrote_project": false,
+  "router_self_report": {
+   "boxed_in_nets": [],
+   "failed_nets": [],
+   "router_reported_nets": [
+    "Net-(D11-A)",
+    "Net-(D8-A)",
+    "Net-(D9-A)",
+    "Net-(C5-Pad1)",
+    "/VPP_ON",
+    "/PC-DATA-OUT",
+    "Net-(D12-A)",
+    "Net-(Q2-B)",
+    "Net-(R12-Pad1)",
+    "Net-(D10-A)",
+    "Net-(Q3-B)",
+    "Net-(U4-Vc)",
+    "VPP",
+    "Net-(R13-Pad1)",
+    "Net-(D1-K)",
+    "Net-(Q2-C)",
+    "/PC-CLOCK-OUT",
+    "Net-(D1-A)",
+    "Net-(R16-Pad1)",
+    "Net-(R15-Pad1)",
+    "Net-(D2-A)",
+    "/pic_sockets/VCC_PIC",
+    "Net-(U4-FB+)",
+    "Net-(R8-Pad1)",
+    "/PC-DATA-IN",
+    "Net-(D11-K)",
+    "VCC",
+    "Net-(Q1-B)",
+    "/VPP{slash}MCLR",
+    "Net-(D4-A)",
+    "/CLOCK-RB6",
+    "Net-(D6-A)",
+    "/DATA-RB7",
+    "GND"
+   ]
+  },
+  "router_version": "0.23.1",
+  "strict_sizes_violated": true,
+  "version_check": {
+   "live": "0.23.1",
+   "matches": false,
+   "message": "router version 0.23.1 differs from the snapshot's 0.22.0: re-capture the snapshot and re-run the flag check before trusting this run",
+   "pinned": "0.22.0"
+  }
+ }
+}
