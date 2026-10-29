@@ -4,7 +4,7 @@ Rewritten for the 2026-10-11 pivot. The old Phases 0-6 measured progress by "the
 
 ## Step 0: build the gate (done)
 
-`verify_board`: one machine-checked verdict (`PASS`, `FAIL` or `INCOMPLETE`) plus the complete per-net unconnected list and the complete violation list, all taken from `kicad-cli`. Contract: docs/TESTING.md and docs/ARCHITECTURE.md decision 14. Built in `src/kicad_mcp/verify_board.py` and always loaded, with `pin_rule_baseline`. It has not yet returned a plain PASS on any rung; the only PASSes so far are the five necked rung-1 boards of protocol 6 (docs/TESTING.md). Only a PASS may call a board routed or done.
+`verify_board`: one machine-checked verdict (`PASS`, `FAIL` or `INCOMPLETE`) plus the complete per-net unconnected list and the complete violation list, all taken from `kicad-cli`. Contract: docs/TESTING.md and docs/ARCHITECTURE.md decision 14. Built in `src/kicad_mcp/verify_board.py` and always loaded, with `pin_rule_baseline`. It has not yet returned a plain PASS on any rung; the only PASSes so far are the five `PASS (necked)` rung-1 boards of protocol 6 (docs/TESTING.md); the rung-1 board changed afterwards and has no official batch under the current protocol. Only a PASS may call a board routed or done.
 
 ## The ladder
 

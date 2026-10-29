@@ -4,7 +4,7 @@ Agent-facing rules for this repo. Read `docs/CONTEXT.md` (glossary), then `docs/
 
 ## Project, as of the 2026-10-11 pivot
 
-Kicad-MCP is a Python MCP server (`src/kicad_mcp/`, around 4,090 tests as collected on 2026-10-29) that automates KiCad PCB work: sourcing, schematic, placement, routing, verification and manufacturing export. **It has not yet produced a board that passes the acceptance gate.** One earlier run on openMPPT claimed "routed" and was wrong. The product promise is therefore tiered by board class. The **Copilot tier** is the default. The **Autonomous tier** is earned one board class at a time by passing the acceptance gate on the acceptance ladder.
+Kicad-MCP is a Python MCP server (`src/kicad_mcp/`, around 4,090 tests as collected on 2026-10-29) that automates KiCad PCB work: sourcing, schematic, placement, routing, verification and manufacturing export. **Rung 1 has boards with `PASS (necked)` from the gate (official batches under protocol 6: Freerouting 5 of 5; a PASS with forced necks, counted and labelled, never a plain PASS). No plain PASS exists yet, and the rung-1 board changed afterwards (protocols 7 and 8) and has no official batch under the current protocol.** One earlier run on openMPPT claimed "routed" and was wrong. The product promise is therefore tiered by board class. The **Copilot tier** is the default. The **Autonomous tier** is earned one board class at a time by passing the acceptance gate on the acceptance ladder.
 
 ## Hard rules (no exceptions)
 

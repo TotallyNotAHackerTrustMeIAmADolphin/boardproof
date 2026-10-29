@@ -9,7 +9,7 @@ Who it is for: people who want an MCP client (Claude Code, Claude Desktop or ano
 
 ## Status (2026-10-29)
 
-**No board has passed the acceptance gate as a plain PASS yet.** The tools exist and are tested, but no tool chain has delivered a routed board end to end that the gate accepts without a qualifier. The product promise is therefore tiered by board class:
+**No board has passed the acceptance gate as a plain PASS yet.** The tools exist and are tested, but no tool chain has delivered a routed board end to end that the gate accepts without a qualifier. Rung 1 has boards with `PASS (necked)` (protocol 6, Freerouting 5 of 5); the rung-1 board changed afterwards (protocols 7 and 8) and has no official batch under the current protocol. The product promise is therefore tiered by board class:
 
 - **Copilot tier (default):** you own power routing and zone topology in KiCad. The agent handles schematic, placement, signal routing and verification.
 - **Autonomous tier:** offered only for board classes that have passed the gate on the acceptance ladder. **Currently none.**

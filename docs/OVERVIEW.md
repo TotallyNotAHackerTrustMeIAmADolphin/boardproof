@@ -8,7 +8,7 @@ boardproof is a Python MCP server (code in `src/kicad_mcp/`) that lets an AI age
 
 The project exists because an earlier run on a real board claimed "routed" and was wrong. Since then the rule is that an agent's word, a router's score and a library's convenience property are never evidence. Evidence is the output of `kicad-cli`, read in full.
 
-As of 2026-10-29 no board has passed the acceptance gate as a plain PASS. The first official batches under protocol 6 gave Freerouting 5 of 5 `PASS (necked)` on rung 1 and KiCadRoutingTools 0 of 5; rung 2 cannot pass for any router because its input already carries 6 silkscreen errors. The product promise is therefore tiered: the **Copilot tier** (you own power routing and zones) is the default, and the **Autonomous tier** is earned one board class at a time. [README.md](../README.md) has the numbers and [docs/ROADMAP.md](ROADMAP.md) the ladder.
+As of 2026-10-29 no board has passed the acceptance gate as a plain PASS. The first official batches under protocol 6 gave Freerouting 5 of 5 `PASS (necked)` on rung 1 and KiCadRoutingTools 0 of 5. The rung-1 board changed afterwards (protocols 7 and 8) and has no official batch under the current protocol. Rung 2 cannot pass for any router because its input already carries 6 silkscreen errors. The product promise is therefore tiered: the **Copilot tier** (you own power routing and zones) is the default, and the **Autonomous tier** is earned one board class at a time. [README.md](../README.md) has the numbers and [docs/ROADMAP.md](ROADMAP.md) the ladder.
 
 ## Map of `src/kicad_mcp/`
 
