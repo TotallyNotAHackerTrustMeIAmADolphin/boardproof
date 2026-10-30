@@ -24,11 +24,15 @@ import sys
 from collections import Counter
 from pathlib import Path
 
+import kicad_tools
 import pytest
 from kicad_tools.sexp import Document, SExp, parse_string
 
 from kicad_mcp import kicad_cli
 from kicad_mcp import write_layer as wl
+from tests import _kicad_faults as faults
+
+_KT_VERSION = tuple(int(p) for p in kicad_tools.__version__.split(".")[:2])
 
 ROUND_TRIP = [
     "pic_programmer/pic_programmer.kicad_pcb",
@@ -142,7 +146,9 @@ def test_kicad_tools_loses_carriage_returns_precision_and_negative_zero() -> Non
     """kicad_tools writes ``\r`` raw (its reader turns it into ``\n``), new floats as ``%.6g``
     and ``-0.0`` as ``0``. The layer keeps all three."""
     node = SExp.list("x", "A\rB", 1234.56789, -0.0)
-    assert node.to_string(compact=True) == '(x "A\rB" 1234.57 0)'
+    # 0.25.0 escapes the CR itself (changelog of 0.25.0); up to 0.24 it was written raw.
+    cr = "\\r" if _KT_VERSION >= (0, 25) else "\r"
+    assert node.to_string(compact=True) == f'(x "A{cr}B" 1234.57 0)'
     assert wl.serialise(node, compact=True) == '(x "A\\rB" 1234.56789 -0)'
     reread = parse_string(wl.serialise(node, compact=True))
     assert [c.value for c in reread.children] == ["A\rB", 1234.56789, 0]
@@ -488,10 +494,16 @@ def test_a_raw_carriage_return_survives_load(tmp_path: Path) -> None:
     path = tmp_path / "cr.kicad_sym"
     doc = Document(parse_string("(kicad_symbol_lib (version 20251024))"), path)
     doc.root.children.append(SExp.list("x", "A\rB"))
-    doc.save(path)  # kicad_tools writes the CR raw (the fixture is built by its own writer)
+    doc.save(path)  # the fixture is built by kicad_tools' own writer
+    if _KT_VERSION >= (0, 25):
+        # 0.25.0 escapes the CR itself, so the raw-CR file (what 0.20 to 0.24 wrote and KiCad
+        # tolerates) is rebuilt from that output, and the premise holds on every version.
+        faults.rewrite_bytes(path, lambda data: data.replace(b'"A\\rB"', b'"A\rB"'))
     assert b'"A\rB"' in path.read_bytes()
     assert wl.load(path).children[1].children[0].value == "A\rB"
-    assert parse_file(path).children[1].children[0].value == "A\nB"
+    # kicad_tools' reader turned the CR into a line feed up to 0.24; 0.25.0 reads it as is.
+    expected = "A\rB" if _KT_VERSION >= (0, 25) else "A\nB"
+    assert parse_file(path).children[1].children[0].value == expected
 
 
 def test_unsupported_roots_and_a_missing_kicad_cli_write_nothing(tmp_path: Path, monkeypatch) -> None:

@@ -1793,3 +1793,24 @@ function = "test_footprint_level_unknown_silk_text_node_is_listed_unhandled"
 kind = "write_unchecked"
 code = '''faults.write_unchecked(b._sexp, pcb)'''
 note = "A footprint with an unknown silk text node (fp_mystery): the layer's parse check refuses it, the scan must list it."
+
+[[test_kicad_fault_call]]
+file = "test_write_layer.py"
+function = "test_a_raw_carriage_return_survives_load"
+kind = "rewrite_bytes"
+code = '''faults.rewrite_bytes(path, lambda data: data.replace(b'"A\\rB"', b'"A\rB"'))'''
+note = "Turns the escaped CR kicad_tools 0.25 writes into the raw CR that 0.20 to 0.24 wrote and KiCad tolerates, so load's keeping of a raw CR is tested on every version (build ticket 6). The layer's own save always escapes it, so only a byte rewrite can make this file."
+
+[[test_kicad_fault_call]]
+file = "test_line_breaks.py"
+function = "test_assign_footprints_keeps_a_raw_carriage_return_already_in_a_sheet"
+kind = "rewrite_bytes"
+code = '''faults.rewrite_bytes(project / SUB, lambda data: data.replace(b'"a\\rb"', b'"a\rb"'))'''
+note = "kicad_tools 0.25 escapes the CR it writes; this makes the sheet with a raw CR that 0.20 to 0.24 and KiCad's sheet-pin save write, which the test needs as its input (build ticket 6)."
+
+[[test_kicad_fault_call]]
+file = "test_kicad_tools_facts.py"
+function = "test_carriage_returns_in_strings_by_version"
+kind = "rewrite_bytes"
+code = '''faults.rewrite_bytes(raw_cr, lambda data: data.replace(b'"A\\rB"', b'"A\rB"'))'''
+note = "The same raw-CR fixture, to pin per version how kicad_tools' reader treats a raw CR (LF up to 0.24, kept from 0.25.0); the layer cannot write it (build ticket 6)."

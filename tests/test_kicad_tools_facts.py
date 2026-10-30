@@ -18,6 +18,7 @@ import kicad_tools
 import pytest
 
 from kicad_mcp import write_layer as wl
+from tests import _kicad_faults as faults
 
 VERSION = tuple(int(p) for p in kicad_tools.__version__.split(".")[:2])
 
@@ -130,3 +131,31 @@ def test_dsn_export_to_a_path_writes_a_revision_sidecar_beside_the_board_from_0_
     added = sorted(set(p.name for p in board.parent.iterdir()) - set(project_before))
     assert added == (["pic_programmer.dsn-revision.json"] if VERSION >= (0, 24) else [])
     assert sorted(p.name for p in out.iterdir()) == ["board.dsn"]
+
+
+def test_carriage_returns_in_strings_by_version(tmp_path: Path) -> None:
+    r"""Up to 0.24 ``SExp.to_string`` wrote ``\r`` raw and ``parse_file`` read a raw CR as LF.
+    0.25.0 escapes it (``\r``, the way KiCad does) and reads a raw CR as it is (its file reads
+    keep newlines). The write layer's own serialiser and ``load`` give the same result on both,
+    so none of this changes a byte the layer writes (build ticket 6)."""
+    from kicad_tools.sexp import Document, SExp, parse_file, parse_string
+
+    node = SExp.list("x", "A\rB")
+    raw_cr = tmp_path / "raw.kicad_sym"
+    doc = Document(parse_string("(kicad_symbol_lib (version 20251024))"), raw_cr)
+    doc.root.children.append(node)
+    doc.save(raw_cr)  # kicad_tools' own writer builds the fixture
+    # the raw-CR file (0.20 to 0.24 wrote it, KiCad tolerates it) is made on every version
+    faults.rewrite_bytes(raw_cr, lambda data: data.replace(b'"A\\rB"', b'"A\rB"'))
+    assert b'"A\rB"' in raw_cr.read_bytes()
+
+    if VERSION >= (0, 25):
+        assert node.to_string(compact=True) == '(x "A\\rB")'
+        assert parse_file(raw_cr).children[1].children[0].value == "A\rB"
+    else:
+        assert node.to_string(compact=True) == '(x "A\rB")'
+        assert parse_file(raw_cr).children[1].children[0].value == "A\nB"
+
+    assert wl.serialise(node, compact=True) == '(x "A\\rB")'
+    assert wl.load(raw_cr).children[1].children[0].value == "A\rB"
+    assert parse_string('(x "A\\rB")').children[0].value == "A\rB"

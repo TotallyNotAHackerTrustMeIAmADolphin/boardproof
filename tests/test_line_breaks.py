@@ -22,6 +22,7 @@ import subprocess
 import uuid
 from pathlib import Path
 
+import kicad_tools
 import pytest
 from kicad_tools.sexp import Document, SExp, parse_string
 from mcp.server.mcpserver import MCPServer
@@ -29,6 +30,9 @@ from mcp.server.mcpserver import MCPServer
 from kicad_mcp import kicad_cli
 from kicad_mcp import write_layer as wl
 from tests import _kicad_faults as faults
+
+# kicad_tools 0.25.0 escapes a CR itself (its changelog); up to 0.24 it wrote it raw.
+_KT_WRITES_CR_RAW = tuple(int(p) for p in kicad_tools.__version__.split(".")[:2]) < (0, 25)
 
 DEMO = "complex_hierarchy"
 ROOT = "complex_hierarchy.kicad_sch"
@@ -170,7 +174,7 @@ def test_kicad_tools_high_level_schematic_escapes_lf_but_writes_cr_raw(project: 
     sch.write(project / SUB)
 
     hits = raw_breaks(project / SUB)
-    if "\r" in value:
+    if "\r" in value and _KT_WRITES_CR_RAW:
         assert hits and all(b"\n" not in h for h in hits)  # the CR raw, the LF escaped
     else:
         assert hits == []
@@ -191,7 +195,7 @@ def test_kicad_tools_low_level_tree_escapes_lf_but_writes_cr_raw(project: Path, 
     doc.save(project / SUB)
 
     hits = raw_breaks(project / SUB)
-    assert bool(hits) == ("\r" in value)
+    assert bool(hits) == ("\r" in value and _KT_WRITES_CR_RAW)
     count, fields = netlist(project)
     assert count == COMPONENTS
     assert sum(f["value"] == value for f in fields) == 2
@@ -387,6 +391,8 @@ def test_assign_footprints_keeps_a_raw_carriage_return_already_in_a_sheet(projec
     doc = Document.load(project / SUB)
     _first_symbol_value(doc.root).set_value(1, value)  # kicad_tools writes the CR raw
     doc.save(project / SUB)
+    if not _KT_WRITES_CR_RAW:  # 0.25.0 escapes it: make the raw-CR sheet 0.20 to 0.24 wrote
+        faults.rewrite_bytes(project / SUB, lambda data: data.replace(b'"a\\rb"', b'"a\rb"'))
     assert raw_breaks(project / SUB), "the fixture must hold a raw CR"
     count, fields = netlist(project)
     assert count == COMPONENTS and sum(f["value"] == value for f in fields) == 2

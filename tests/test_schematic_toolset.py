@@ -13,6 +13,7 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 
+import kicad_tools
 import pytest
 from mcp.server.mcpserver import MCPServer
 
@@ -599,6 +600,11 @@ def test_the_writer_refuses_a_carriage_return_in_the_serialised_text_before_writ
     before = dest.read_bytes()
     sch = Schematic.load(dest)
     sch.add_label("A\rB", 220, 100)
+    if tuple(int(p) for p in kicad_tools.__version__.split(".")[:2]) >= (0, 25):
+        # 0.25.0 escapes the CR itself, so this path cannot reach the backstop any more; the
+        # backstop stays for a library that writes it raw (up to 0.24).
+        assert "\r" not in sch.to_sexp() and "A\\rB" in sch.to_sexp()
+        return
     assert "\r" in sch.to_sexp(), "the precondition: kicad_tools serialises the \\r raw"
     writes: list[Path] = []
     real_write_text = Path.write_text

@@ -19,10 +19,13 @@ dependencies = [
     # (kicad_mcp.write_layer, build ticket 42), because 0.22.0+'s own
     # PCB.save fails on Windows (upstream #7478). 0.24.0 since build ticket
     # 71 (all eight upstream issues of build ticket 48 fixed; facts pinned
-    # per version in tests/test_kicad_tools_facts.py). Capped below 0.25: a
-    # fresh install of 0.25.0 broke two tests of the write layer (a raw
-    # carriage return in a string no longer survives load; see the open issue
-    # on kicad-tools 0.25); lift the cap with that compatibility work. This
+    # per version in tests/test_kicad_tools_facts.py). Capped below 0.25
+    # (issue 6): 0.25 escapes a carriage return itself, which the tests now
+    # follow on both versions, but its fix_annotation renumbers the references
+    # of every project-library power symbol of an annotated sheet
+    # (complex_hierarchy: 33 references in 2 files), which the content-loss
+    # test and the tool's contract do not allow. Lift the cap with the ticket
+    # that decides that (see docs/ARCHITECTURE.md, kicad_tools facts). This
     # project still reaches
     # into kicad_tools internals that aren't a documented public API
     # (sexp.parser.SExp's _original_str/_originally_quoted/_originally_bare
