@@ -385,6 +385,15 @@ def _refuse_extra_arguments(mcp: MCPServer, tool_name: str, allowed: tuple[str, 
     tool.fn_metadata.arg_model = strict
 
 
+_SEARCH_FALLBACK = {
+    "tool": "lookup_jlcpcb_part_tiers",
+    "note": (
+        "Fall back to the local JLCPCB tier index (lookup_jlcpcb_part_tiers, jlcpcb_library_status) "
+        "for Basic/Preferred/Extended and stock facts, and retry search_parts later."
+    ),
+}
+
+
 def build(mcp: MCPServer) -> list[str]:
     def search_parts(query: str, limit: int = 20, offset: int = 0, annotate_jlcpcb: bool = True) -> dict:
         """Search every registered component-sourcing provider for parts
@@ -422,12 +431,26 @@ def build(mcp: MCPServer) -> list[str]:
             "has_more": offset + len(page) < total_count,
             "next_offset": offset + len(page) if offset + len(page) < total_count else None,
         }
+        provider_count = len(PROVIDER_REGISTRY.providers())
+        if provider_errors or provider_count == 0:
+            response["fallback"] = dict(_SEARCH_FALLBACK)
         if provider_errors:
-            # Partial results from a subset of providers are still useful --
-            # report the gap honestly rather than silently dropping it.
+            # A provider failure is never a "no match": report the gap.
             response["provider_errors"] = provider_errors
-            if response["status"] == "ok":
+            if len(provider_errors) >= provider_count and not page:
+                response["status"] = "provider_error"
+                response["reason"] = (
+                    "Every provider failed, so zero items is not evidence the part does not exist. "
+                    + _SEARCH_FALLBACK["note"]
+                )
+            else:
                 response["status"] = "partial"
+        elif provider_count == 0:
+            response["status"] = "provider_error"
+            response["reason"] = (
+                "No sourcing provider is registered, so zero items is not evidence the part "
+                "does not exist. " + _SEARCH_FALLBACK["note"]
+            )
         if jlcpcb_report is not None:
             # Surfaced, not folded into `status`: an unindexed part is a gap
             # in JLCPCB tier coverage, not a failure of the search itself.
@@ -669,7 +692,12 @@ def build(mcp: MCPServer) -> list[str]:
             "Search all registered component-sourcing providers (Nexar/Octopart, "
             "Digi-Key, LCSC, ...) for parts matching a query, merged and deduped "
             "by manufacturer+MPN into one paginated list. Supports 'limit'/'offset' "
-            "pagination -- never loop this one part at a time."
+            "pagination -- never loop this one part at a time. status is ok, "
+            "no_results (every provider answered and nothing matched), partial "
+            "(at least one provider failed; see provider_errors) or provider_error "
+            "(every provider failed or none is registered: zero items says nothing "
+            "about whether the part exists). On partial or provider_error the result "
+            "names a fallback (lookup_jlcpcb_part_tiers, the local JLCPCB tier index)."
         ),
         annotations={
             "readOnlyHint": True,

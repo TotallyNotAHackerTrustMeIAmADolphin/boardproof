@@ -122,6 +122,68 @@ def test_search_parts_reports_provider_errors_without_crashing():
     assert any(e["provider"] == "flaky" for e in result["provider_errors"])
 
 
+def test_search_parts_all_providers_failed_is_provider_error_not_no_results():
+    PROVIDER_REGISTRY.register(_FailingProvider())
+    mcp = MCPServer("test")
+    tools = _build_and_get_fns(mcp, sourcing_toolset)
+    result = tools["search_parts"]("thyristor SCR 600V DPAK")
+    assert result["status"] == "provider_error"
+    assert result["count"] == 0
+    assert result["provider_errors"] == [{"provider": "flaky", "error": "provider unreachable"}]
+    assert "not evidence" in result["reason"]
+    assert result["fallback"]["tool"] == "lookup_jlcpcb_part_tiers"
+
+
+def test_search_parts_zero_matches_without_errors_stays_no_results():
+    PROVIDER_REGISTRY.register(_FakeProvider([]))
+    mcp = MCPServer("test")
+    tools = _build_and_get_fns(mcp, sourcing_toolset)
+    result = tools["search_parts"]("nothing")
+    assert result["status"] == "no_results"
+    assert "provider_errors" not in result
+    assert "fallback" not in result
+
+
+def test_search_parts_partial_failure_with_zero_matches_is_partial_not_no_results():
+    PROVIDER_REGISTRY.register(_FakeProvider([]))
+    PROVIDER_REGISTRY.register(_FailingProvider())
+    mcp = MCPServer("test")
+    tools = _build_and_get_fns(mcp, sourcing_toolset)
+    result = tools["search_parts"]("nothing")
+    assert result["status"] == "partial"
+    assert result["count"] == 0
+    assert result["provider_errors"][0]["provider"] == "flaky"
+    assert result["fallback"]["tool"] == "lookup_jlcpcb_part_tiers"
+
+
+def test_search_parts_partial_with_results_names_fallback():
+    PROVIDER_REGISTRY.register(_FakeProvider([_part("R1")]))
+    PROVIDER_REGISTRY.register(_FailingProvider())
+    mcp = MCPServer("test")
+    tools = _build_and_get_fns(mcp, sourcing_toolset)
+    result = tools["search_parts"]("resistor")
+    assert result["status"] == "partial"
+    assert result["fallback"]["tool"] == "lookup_jlcpcb_part_tiers"
+
+
+def test_search_parts_no_providers_registered_is_provider_error():
+    mcp = MCPServer("test")
+    tools = _build_and_get_fns(mcp, sourcing_toolset)
+    result = tools["search_parts"]("anything")
+    assert result["status"] == "provider_error"
+    assert result["fallback"]["tool"] == "lookup_jlcpcb_part_tiers"
+
+
+def test_search_parts_description_names_provider_error_status():
+    mcp = MCPServer("test")
+    sourcing_toolset.build(mcp)
+    import asyncio
+
+    tool = next(t for t in asyncio.run(mcp.list_tools()) if t.name == "search_parts")
+    assert "provider_error" in tool.description
+    assert "no_results" in tool.description
+
+
 def test_search_parts_rejects_nonpositive_limit():
     mcp = MCPServer("test")
     tools = _build_and_get_fns(mcp, sourcing_toolset)
