@@ -243,7 +243,7 @@ def test_f1_registered_tool_passes_package_and_image_dir_and_describes_the_resul
     mcp = MCPServer("t")
     sourcing_toolset.build(mcp)
     tool = next(t for t in mcp._tool_manager.list_tools() if t.name == "inspect_datasheet")  # type: ignore[attr-defined]
-    for word in ("pin_numbering", "machine_extracted", "NOT"):
+    for word in ("pin_numbering", "machine_extracted", "UNVERIFIED"):
         assert word in tool.description
     pdf = _pdf(tmp_path / "t.pdf", [_text(50, 750, "SOT-23 package pin configuration", 14)])
     out = tool.fn(str(pdf), package="SOT-23", image_dir=str(tmp_path / "img"))
