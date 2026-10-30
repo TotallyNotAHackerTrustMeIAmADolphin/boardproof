@@ -562,7 +562,7 @@ def _register_all_toolsets(registry: ToolsetRegistry) -> None:
     else:
         registry.register(
             "library",
-            "Register fetched/generated symbols and footprints into a project's local library tables (portable, project-relative paths only), dedup, minimal KLC checks",
+            "Register fetched/generated symbols and footprints into a project's local library tables (portable, project-relative paths only), dedup, minimal KLC checks, and gated adoption of parts (symbol, footprint, 3D model) into a project-local library (propose_adopt_parts/confirm_adopt_parts)",
             library_toolset.build,
         )
 

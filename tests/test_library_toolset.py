@@ -32,7 +32,9 @@ def _make_footprint(project_dir: Path, name: str = "0402_1005Metric") -> Path:
 def test_build_registers_expected_tools():
     mcp = MCPServer("test")
     names = library_toolset.build(mcp)
-    assert set(names) == {"register_library_asset", "check_project_portability", "validate_klc"}
+    assert set(names) == {
+        "register_library_asset", "check_project_portability", "validate_klc", "propose_adopt_parts", "confirm_adopt_parts",
+    }
 
 
 def test_register_footprint_lib_writes_relative_kiprjmod_uri(tmp_path):

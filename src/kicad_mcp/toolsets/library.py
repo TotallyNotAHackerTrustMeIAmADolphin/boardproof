@@ -902,6 +902,31 @@ def build(mcp: MCPServer) -> list[str]:
             "scope": "minimal subset only -- see validate_klc's docstring for exactly what is and isn't checked",
         }
 
+    def propose_adopt_parts(
+        pcb_path: str,
+        parts: list[dict],
+        library_name: str = "project_parts",
+        library_dir: str = "lib",
+        license: str | None = None,
+        source: str | None = None,
+        source_version: str | None = None,
+        output_dir: str | None = None,
+    ) -> dict:
+        from kicad_mcp import part_adoption
+
+        return part_adoption.propose_adopt_parts(
+            pcb_path, parts, library_name, library_dir, license, source, source_version, output_dir
+        )
+
+    def confirm_adopt_parts(pcb_path: str, revision_token: str) -> dict:
+        from kicad_mcp import part_adoption
+
+        result = part_adoption.confirm_adopt_parts(pcb_path, revision_token)
+        output = result.get("output_pcb")
+        if isinstance(output, str):  # the gate field marks the source and the revision
+            return {**result, "pcb_path": output, "source_pcb": pcb_path}
+        return result
+
     mcp.add_tool(
         register_library_asset,
         name="register_library_asset",
@@ -935,4 +960,47 @@ def build(mcp: MCPServer) -> list[str]:
         description="Check a footprint against a minimal, explicitly-partial subset of the KiCad Library Convention (see docstring for exact scope -- not full KLC compliance).",
         annotations={"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
     )
-    return ["register_library_asset", "check_project_portability", "validate_klc"]
+    mcp.add_tool(
+        propose_adopt_parts,
+        name="propose_adopt_parts",
+        description=(
+            "Dry run of adopting a LIST of parts (symbol, footprint, 3D model) into a project-local library "
+            "(default lib/project_parts.kicad_sym, .pretty and .3dshapes next to the project): reads every "
+            "file, lists per part what it would add and every problem, writes nothing and returns a "
+            "revision_token. One rejected part rejects the whole call (status blocked, no token). pcb_path is "
+            "the project's board. Each part: {lcsc_id, symbol_path, footprint_path or footprint_dir, "
+            "model_path or model_3d_dir, datasheet?, source?, source_version?, license?}: pass what "
+            "fetch_part_assets returned (symbol_path, footprint_dir, model_3d_dir): one symbol per file, "
+            "easyeda2kicad as source. Not resolve_jlcpcb_assets output: its symbol_path is a many-symbol "
+            "library (symbol_name picks one) and is rejected. "
+            "A part with no 3D model is not adopted. license is required (per part or for the call): state "
+            "the licence the USER gives you, never guess one. source and source_version default to "
+            "easyeda2kicad and its installed version. The mandatory symbol properties are Footprint, "
+            "Datasheet, LCSC, Source (name and version) and License; a part missing one is rejected. "
+            "Nothing is overwritten: a symbol or footprint name already in the library for another part, or "
+            "a model file with other content, rejects the part; a part whose LCSC id is already in the "
+            "library is reported already_adopted and skipped. Then call confirm_adopt_parts with the token."
+        ),
+        annotations={"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
+    )
+    mcp.add_tool(
+        confirm_adopt_parts,
+        name="confirm_adopt_parts",
+        description=(
+            "Apply a propose_adopt_parts proposal: writes a NEW project revision (output_pcb; the source is "
+            "never touched) holding the library, both lib-table rows (${KIPRJMOD}-relative), model paths "
+            "rewritten to ${KIPRJMOD}/..., and the mandatory properties set. Verified from a fresh reload, then "
+            "checked per part: model_path_project_relative, model_file_present, mandatory_properties and "
+            "side_view_render (kicad-cli pcb render --side front, with and without the model: the model must "
+            "rise above the board's top face and not sink below its bottom face). Status adopted means every "
+            "check passed; failed means a check failed; incomplete means a check could not run (for example "
+            "the render): neither moves a revision into place, and incomplete is never to be reported as a "
+            "pass. The render check sees the height profile only: a model shifted sideways or rotated about the "
+            "vertical axis still passes it, so tell the user to look at the front and top images in the "
+            "revision's adoption_evidence folder before relying on the 3D model. It does not judge whether the "
+            "model is the right part. The revision_token is single use and is refused with an error if the "
+            "project or a part file changed since the proposal."
+        ),
+        annotations={"readOnlyHint": False, "destructiveHint": True, "idempotentHint": False, "openWorldHint": False},
+    )
+    return ["register_library_asset", "check_project_portability", "validate_klc", "propose_adopt_parts", "confirm_adopt_parts"]

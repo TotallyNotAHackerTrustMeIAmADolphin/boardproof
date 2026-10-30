@@ -463,6 +463,13 @@ code = '''shutil.copy2(sheet, dest)'''
 note = "Copies each sheet of the tree into a new directory under the system temp directory before kicad_tools writes (build ticket 26); never onto a project file."
 
 [[commit]]
+file = "part_adoption.py"
+function = "_write"
+kind = "shutil.copyfile"
+code = '''shutil.copyfile(part['sources']['model'], paths['models'] / model_name)'''
+note = "Build ticket 38: copies the part's 3D model file (a .step/.stp/.wrl, not a KiCad file) INTO the new revision's temporary sibling directory (paths['models'] lies under tmp, the helper's copy of the project); the source and the model's own folder are only read. _verify compares its sha256 with the source model's."
+
+[[commit]]
 file = "checkpoint.py"
 function = "copy_project"
 kind = "shutil.copytree"
@@ -744,6 +751,14 @@ proof = [
     "tests/test_board_rules.py::test_unrelated_top_level_change_also_fails",
 ]
 note = "Checkpoint module; requires fresh == updated everywhere."
+
+[writing_tool.confirm_adopt_parts]
+self_check = "reload-verify"
+proof = [
+    "tests/test_part_adoption.py::test_corrupted_write_is_caught_by_reload_verification",
+    "tests/test_part_adoption.py::test_a_model_copied_wrongly_is_caught",
+]
+note = "Build ticket 38: part_adoption builds the revision with the write layer (write_layer.save for the symbol library and the footprints; the lib tables through library._register_one, ticket 76), reloads the saved files and compares properties, pins, pad numbers, the model path and the model bytes with the intent (NotVerified, write_not_verified), then runs the gate checks (model path, model file, mandatory properties, side-view render; failed or incomplete keep the revision out of place)."
 
 [writing_tool.confirm_silkscreen_minimums]
 self_check = "reload-verify"
