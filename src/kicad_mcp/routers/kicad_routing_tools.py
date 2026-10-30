@@ -1229,6 +1229,88 @@ def run_kicad_routing_tools(
     return run
 
 
+# ---------------------------------------------------------------------------
+# KRT_PARSE_GAP (issue 2): footprints whose pads KRT's parser did not read.
+#
+# With unquoted pad names an old KRT parser read 0 pads for a connector, logged
+# "Skipping N already-routed net(s): Only 1 pad(s)" and reported `failed_nets []`: it never
+# attempted those nets and said nothing. The guard compares, per footprint, the raw `(pad ...)`
+# count in the file's own S-expressions with the count KRT's `parse_kicad_pcb` returned. It only
+# reports; the board is never edited and the router is never stopped.
+# ---------------------------------------------------------------------------
+
+KRT_PARSE_GAP = "KRT_PARSE_GAP"
+
+# Runs inside the KRT interpreter (same sys.path layout as route.py), never this process.
+_PARSE_PADS_SCRIPT = r"""
+import json, sys
+checkout, pcb = sys.argv[1], sys.argv[2]
+sys.path.insert(0, checkout + "/rust_router")
+sys.path.insert(0, checkout + "/py_router")
+from kicad_parser import parse_kicad_pcb
+data = parse_kicad_pcb(pcb)
+print(json.dumps({"footprints": [[fp.reference, len(fp.pads)] for fp in data.footprints.values()]}))
+"""
+
+
+def _group(pairs: list[tuple[str, int]]) -> dict[str, list[int]]:
+    out: dict[str, list[int]] = {}
+    for reference, count in pairs:
+        out.setdefault(reference, []).append(count)
+    return {reference: sorted(counts, reverse=True) for reference, counts in out.items()}
+
+
+def raw_pad_counts(pcb_path: str | Path) -> dict[str, list[int]]:
+    """Per footprint reference, the number of ``(pad ...)`` nodes in the raw file (one entry per
+    footprint carrying that reference, largest first). Read from the S-expression tree, never from
+    a ``kicad_tools`` model."""
+    from kicad_mcp import raw_geometry, write_layer
+
+    root = write_layer.load(pcb_path)
+    pairs = [
+        (raw_geometry._reference(fp), len([c for c in fp.children if not c.is_atom and c.name == "pad"]))
+        for fp in root.children
+        if not fp.is_atom and fp.name == "footprint"
+    ]
+    return _group(pairs)
+
+
+def parsed_pad_counts(pcb_path: str | Path, *, timeout: int = 120) -> dict[str, list[int]]:
+    """Per footprint reference, the number of pads KRT's own ``parse_kicad_pcb`` returned.
+    Raises ``KicadRoutingToolsError`` when KRT cannot be run or answers nothing usable."""
+    checkout = find_kicad_routing_tools()
+    python = find_kicad_routing_tools_python()
+    try:
+        proc = subprocess.run(
+            [str(python), "-c", _PARSE_PADS_SCRIPT, str(checkout), str(pcb_path)],
+            capture_output=True, text=True, encoding="utf-8", errors="replace", check=False, timeout=timeout,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise KicadRoutingToolsError(f"KRT pad parse could not run: {exc}") from exc
+    for line in reversed((proc.stdout or "").splitlines()):
+        line = line.strip()
+        if line.startswith("{"):
+            try:
+                return _group([(str(r), int(n)) for r, n in json.loads(line)["footprints"]])
+            except (json.JSONDecodeError, KeyError, TypeError, ValueError):
+                break
+    tail = (proc.stderr or "").strip()[-300:]
+    raise KicadRoutingToolsError(f"KRT pad parse answered nothing usable (exit {proc.returncode}): {tail}")
+
+
+def krt_parse_gap(raw: dict[str, list[int]], parsed: dict[str, list[int]]) -> list[dict]:
+    """The footprints KRT read fewer pads of than the raw file holds, one named gap each. A
+    footprint KRT did not return at all counts as 0 parsed pads. More parsed than raw is no gap."""
+    gaps = []
+    for reference in sorted(raw):
+        seen = parsed.get(reference, [])
+        for i, raw_n in enumerate(raw[reference]):
+            parsed_n = seen[i] if i < len(seen) else 0
+            if parsed_n < raw_n:
+                gaps.append({"code": KRT_PARSE_GAP, "reference": reference, "raw_pads": raw_n, "parsed_pads": parsed_n})
+    return gaps
+
+
 def _file_state(path: Path) -> tuple[int, int] | None:
     """(mtime_ns, size) of a file, or None if absent -- the pre-run snapshot
     used to tell a router-created file from one that was already there."""

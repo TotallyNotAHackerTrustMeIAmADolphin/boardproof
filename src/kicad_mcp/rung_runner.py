@@ -124,7 +124,7 @@ DEFAULT_ATTEMPT_TIMEOUT_S = float(_PROTOCOL["attempt_timeout_s"])
 # unofficial, so the runner's own fake-seam tests can observe an official run.
 SEAMS_ENFORCED = True
 CAUSE_TAGS = (
-    "delivered-below-requested",
+    "delivered-below-requested", "unconnected-nets",
     "router-timeout", "router-failure", "budget-exceeded", "rules-conflict", "input-floor",
     "invariant-violated", "input-refused",
 )
@@ -471,12 +471,32 @@ def _attempt_core(
         if status == "PASS" or cause is None:
             cause = "delivered-below-requested"
         status = "FAIL"
+    # Issue 2: the nets the gate lists as unconnected are the cause of a failed attempt, named, next
+    # to (never instead of) the under-width fact. A cause the router or an invariant already gave
+    # (timeout, crash, invariant) is the more specific one and stays.
+    unconnected_nets = _unconnected_net_names(gate_result)
+    if unconnected_nets and status in ("FAIL", "INCOMPLETE") and cause in (None, "delivered-below-requested"):
+        cause = "unconnected-nets"
+    if unconnected_nets and status != "PASS":
+        detail = (detail + "; " if detail else "") + (
+            f"{len(unconnected_nets)} net(s) unconnected: " + ", ".join(unconnected_nets)
+            + (f"; under-width delivery: {below_n} item(s)" if below_n else "")
+            + ("; strict sizes violated" if facts_d.get("strict_sizes_violated") else "")
+        )
+    gap = facts_d.get("krt_parse_gap")
+    if isinstance(gap, list) and gap:
+        # Issue 2: the router's parser read fewer pads than the file holds; named, never silent.
+        detail = (detail + "; " if detail else "") + "KRT_PARSE_GAP: " + ", ".join(
+            f"{g.get('reference')} (raw {g.get('raw_pads')} pads, parsed {g.get('parsed_pads')})"
+            for g in gap if isinstance(g, dict)
+        )
     removed_seg = facts_d.get("removed_segment_count")
     removed_via = facts_d.get("removed_via_count")
     removed = None
     if (isinstance(removed_seg, int) and removed_seg > 0) or (isinstance(removed_via, int) and removed_via > 0):
         removed = {"segments": removed_seg or 0, "vias": removed_via or 0}
     return {
+        "unconnected_nets": unconnected_nets,
         "delivered_below_requested_count": below_n,
         "delivered_below_requested_policy_hit": policy_hit,
         "necked_count": len(necked),
@@ -491,6 +511,12 @@ def _attempt_core(
         # Recorded for the audit trail only; status and ranking never read it.
         "router_facts": facts if isinstance(facts, dict) else {},
     }
+
+
+def _unconnected_net_names(gate_result: dict) -> list[str]:
+    """The distinct net names of the gate's unconnected entries, sorted (empty when none)."""
+    names = {str(e.get("net")) for e in gate_result.get("unconnected", []) if isinstance(e, dict)}
+    return sorted(names)
 
 
 def _floor_label(setup: dict | None) -> tuple[dict | None, bool, list[str]]:
@@ -756,7 +782,7 @@ def run_rung(
                  "invariant_violations": [], "router_facts": {},
                  "delivered_below_requested_count": 0, "delivered_below_requested_policy_hit": False,
                  "necked_count": 0, "necked_length_mm": 0.0, "status_label": "NOT_RUN",
-                 "removed_copper": None,
+                 "removed_copper": None, "unconnected_nets": [],
                  "input_sha256": None, "output_board_sha256": None}
             )
             continue
@@ -807,6 +833,7 @@ def run_rung(
              "gate": core["gate"], "cause": core["cause"], "detail": core["detail"],
              "invariant_violations": core["invariant_violations"],
              "router_facts": core["router_facts"],
+             "unconnected_nets": core["unconnected_nets"],
              "delivered_below_requested_count": core["delivered_below_requested_count"],
              "delivered_below_requested_policy_hit": core["delivered_below_requested_policy_hit"],
              "necked_count": core["necked_count"], "necked_length_mm": core["necked_length_mm"],
@@ -1326,6 +1353,7 @@ def rerun_attempt(
          "status": core["status"], "gate": core["gate"], "cause": core["cause"],
          "detail": core["detail"], "invariant_violations": core["invariant_violations"],
          "router_facts": core["router_facts"],
+         "unconnected_nets": core["unconnected_nets"],
          "delivered_below_requested_count": core["delivered_below_requested_count"],
          "delivered_below_requested_policy_hit": core["delivered_below_requested_policy_hit"],
          "necked_count": core["necked_count"], "necked_length_mm": core["necked_length_mm"],

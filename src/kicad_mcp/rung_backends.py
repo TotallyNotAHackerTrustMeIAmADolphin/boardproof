@@ -381,6 +381,16 @@ def _pour_problem(board: Path) -> str | None:
 # --- KiCadRoutingTools ----------------------------------------------------------------------------
 
 
+def parse_gap_facts(board: Path) -> dict:
+    """The KRT_PARSE_GAP check as attempt facts. Report only: it reads the board and never writes it,
+    and a check that cannot run says so in ``krt_parse_gap_check_error`` rather than staying silent."""
+    try:
+        gaps = krt_tools.krt_parse_gap(krt_tools.raw_pad_counts(board), krt_tools.parsed_pad_counts(board))
+    except Exception as exc:  # noqa: BLE001 - an unreadable check is a disclosure, not a failed attempt
+        return {"krt_parse_gap": [], "krt_parse_gap_check_error": f"{type(exc).__name__}: {exc}"[:500]}
+    return {"krt_parse_gap": gaps, "krt_parse_gap_check_error": None}
+
+
 def krt_backend() -> rung_runner.Backend:
     """Adapter for KiCadRoutingTools (the version `krt_cli_snapshot.json` pins) through the pinned wrapper."""
 
@@ -396,6 +406,7 @@ def krt_backend() -> rung_runner.Backend:
         if filled:
             return _refuse("input-refused", filled)
 
+        parse_gap = parse_gap_facts(board)  # before the router: what KRT can read of this board
         scratch = _scratch(log)
         routed = scratch / board.name
         escalation = params["escalation"]
@@ -418,11 +429,11 @@ def krt_backend() -> rung_runner.Backend:
             )
         except krt_tools.KicadRoutingToolsTimeout as exc:
             return {"status": "timeout", "cause": "router-timeout", "router_elapsed_s": exc.elapsed_s,
-                    "facts": {"error": str(exc)[:500], "timeout_s": exc.timeout}}
+                    "facts": {"error": str(exc)[:500], "timeout_s": exc.timeout, **parse_gap}}
         except krt_tools.KicadRoutingToolsError as exc:
-            return _refuse("router-failure", str(exc)[:1000])
+            return _refuse("router-failure", str(exc)[:1000], **parse_gap)
         except Exception as exc:  # noqa: BLE001
-            return _refuse("router-failure", f"{type(exc).__name__}: {exc}")
+            return _refuse("router-failure", f"{type(exc).__name__}: {exc}", **parse_gap)
         measured_router_wall = time.monotonic() - measured_started
 
         try:
@@ -436,6 +447,7 @@ def krt_backend() -> rung_runner.Backend:
         facts = {
             "exit_code": run_record["exit_code"],
             "elapsed_s": run_record["elapsed_s"],
+            **parse_gap,
             "router_version": run_record.get("router_version"),
             "version_check": run_record.get("version_check"),
             "strict_sizes_violated": bool(run_record.get("strict_sizes_violated")),
