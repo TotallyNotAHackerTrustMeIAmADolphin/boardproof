@@ -573,7 +573,10 @@ def build(mcp: MCPServer) -> list[str]:
         part at a time. Extended parts cost a per-part feeder loading fee
         ($3); Basic and Preferred Extended do not. A part that isn't in the
         local index comes back with a null tier meaning "unknown", which is
-        NOT the same as "Extended".
+        NOT the same as "Extended". Every result carries `index` (date,
+        commit, total_parts); the shipped index records a commit but no date,
+        and says so. Each unknown part has a `tier_meaning` sentence naming
+        the index it is missing from.
         """
         return jlc.classify_parts(identifiers)
 
@@ -777,7 +780,10 @@ def build(mcp: MCPServer) -> list[str]:
             "of LCSC part numbers and/or MPNs, from a local index with no network call. Extended "
             "parts cost a per-part feeder loading fee; Basic and Preferred Extended do not. Use "
             "this to make a BOM cost-aware -- pass every part at once, never one per call. A null "
-            "tier means 'not in the local index / unknown', not 'Extended'."
+            "tier means 'not in the local index / unknown', not 'Extended'. The result carries "
+            "`index` (date, commit, total_parts; the date is null with a date_note when the index "
+            "records none) and each unknown part a `tier_meaning` ('not in the index ..., N parts'); "
+            "print that, never a guessed tier."
         ),
         annotations={
             "readOnlyHint": True,

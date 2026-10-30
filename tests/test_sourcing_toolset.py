@@ -533,3 +533,41 @@ def _build_and_get_fns(mcp: MCPServer, module) -> dict:
     """
     module.build(mcp)
     return {t.name: t.fn for t in mcp._tool_manager.list_tools()}  # type: ignore[attr-defined]
+
+
+def test_lookup_jlcpcb_part_tiers_carries_index_age_and_part_count():
+    """Issue 37: an unknown tier must say which index it is unknown in."""
+    from kicad_mcp.sourcing import jlcpcb_basic as jlc
+
+    idx = jlc.load_index()
+    mcp = MCPServer("test")
+    tools = _build_and_get_fns(mcp, sourcing_toolset)
+    result = tools["lookup_jlcpcb_part_tiers"](["C7955", "C3105"])
+    info = result["index"]
+    assert info["total_parts"] == len(idx)
+    assert info["commit"] == idx.source["commit"]
+    # The shipped index records a commit but no date: say so, do not invent one.
+    if not idx.source.get("commit_date"):
+        assert info["date"] is None
+        assert "not recorded" in info["date_note"]
+    unknown = [r for r in result["results"] if r["jlcpcb_class"] is None]
+    assert unknown, "C3105 is expected to be absent from the index"
+    for r in unknown:
+        meaning = r["tier_meaning"]
+        assert f"{len(idx)} parts" in meaning
+        assert idx.source["commit"][:7] in meaning
+        assert "not in the index" in meaning
+        assert "not Extended" in meaning
+    assert "index" in result["reason"] and str(len(idx)) in result["reason"]
+
+
+def test_lookup_index_info_uses_a_recorded_date_when_the_index_has_one():
+    from kicad_mcp.sourcing import jlcpcb_basic as jlc
+
+    payload = {
+        "source": {"commit": "a" * 40, "commit_date": "2026-01-02T03:04:05+00:00"},
+        "parts": [{"lcsc": "C1", "mpn": "X", "tier": "basic"}],
+    }
+    result = jlc.classify_parts(["C2"], index=jlc.JLCPCBBasicIndex(payload))
+    assert result["index"]["date"] == "2026-01-02"
+    assert result["results"][0]["tier_meaning"].startswith("not in the index of 2026-01-02, 1 parts")

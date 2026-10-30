@@ -316,6 +316,41 @@ def _result_for(identifier: str, match_type: str | None, entries: Sequence[dict]
     return base
 
 
+def index_info(idx: JLCPCBBasicIndex) -> dict:
+    """Age and size of the index a lookup was answered from.
+
+    The shipped index records its upstream commit (the pin the refresh script
+    writes) and its part counts, but no date: ``date`` is then None and
+    ``date_note`` says so. A date is shown only if ``source.commit_date`` holds one.
+    """
+    commit = idx.source.get("commit")
+    raw_date = idx.source.get("commit_date")
+    date = str(raw_date)[:10] if raw_date else None
+    info: dict[str, Any] = {
+        "date": date,
+        "commit": commit,
+        "total_parts": len(idx),
+        "counts": dict(idx.counts),
+    }
+    if date is None:
+        info["date_note"] = (
+            "the index records its upstream commit but not a date (date not recorded); "
+            "judge its age from the commit"
+        )
+    return info
+
+
+def _unknown_tier_meaning(info: dict) -> str:
+    when = f"of {info['date']}" if info["date"] else (
+        f"(pinned commit {str(info['commit'])[:7]}, date not recorded)" if info["commit"]
+        else "(commit and date not recorded)"
+    )
+    return (
+        f"not in the index {when}, {info['total_parts']} parts. Tier unknown: this is not Extended, "
+        "and a newer or wider catalogue may know the part."
+    )
+
+
 def classify_parts(identifiers: Sequence[str], *, index: JLCPCBBasicIndex | None = None) -> dict:
     """**Batch** tier lookup: many part identifiers in, one result set out.
 
@@ -348,9 +383,12 @@ def classify_parts(identifiers: Sequence[str], *, index: JLCPCBBasicIndex | None
         }
 
     results = [_result_for(i, *idx.lookup(i)) for i in cleaned]
+    info = index_info(idx)
     summary = {TIER_BASIC: 0, TIER_PREFERRED: 0, TIER_EXTENDED: 0, "unknown": 0}
     for r in results:
         summary[r["jlcpcb_class"] or "unknown"] += 1
+        if r["jlcpcb_class"] is None:
+            r["tier_meaning"] = _unknown_tier_meaning(info)
 
     unresolved = summary["unknown"]
     response: dict[str, Any] = {
@@ -359,10 +397,12 @@ def classify_parts(identifiers: Sequence[str], *, index: JLCPCBBasicIndex | None
         "results": results,
         "summary": summary,
         "index_source": idx.source,
+        "index": info,
     }
     if unresolved:
         response["reason"] = (
-            f"{unresolved} of {len(results)} identifiers are not in the JLCPCB-Kicad-Library index; "
+            f"{unresolved} of {len(results)} identifiers are not in the JLCPCB-Kicad-Library index "
+            f"({info['total_parts']} parts, {'date ' + info['date'] if info['date'] else 'date not recorded'}); "
             "their tier is unknown (reported as null), not Extended."
         )
     return response
