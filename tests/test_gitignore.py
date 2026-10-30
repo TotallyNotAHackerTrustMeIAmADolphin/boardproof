@@ -80,6 +80,7 @@ IGNORED_CASES: list[tuple[str, tuple[str, ...]]] = [
     ("a1b2c3d.pytest.out", ("*.pytest.out",)),
     ("batch-gate-1.log", ("batch-gate-*.log",)),
     (OLD_NOTES + "/publish-prep/map.md", ("/.scratch/",)),
+    (".tools/KiCadRoutingTools-0.23.1/README.md", ("/.tools/",)),
     ("tools/JLCPCB-Kicad-Library/x/y.kicad_sym", ("JLCPCB-Kicad-Library/",)),
     ("com_github_x/readme.md", ("com_github_*/",)),
     ("fetched/C12345.3dshapes/x.step", ("C[0-9]*.3dshapes/",)),

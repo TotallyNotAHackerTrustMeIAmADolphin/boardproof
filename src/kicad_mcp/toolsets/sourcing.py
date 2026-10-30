@@ -658,7 +658,7 @@ def build(mcp: MCPServer) -> list[str]:
         completeness is not proven, so compare the pin count with the
         datasheet), or false with a reason and, with image_dir, PNG crops of
         the candidate pages. Pin diagrams are usually images; on false,
-        the numbering is NOT verified and a symbol must not be passed on it.
+        the numbering is UNVERIFIED and a symbol must not be passed on it.
         """
         return _inspect_datasheet(pdf_path, query, package, image_dir)
 
@@ -848,7 +848,7 @@ def build(mcp: MCPServer) -> list[str]:
     mcp.add_tool(
         inspect_datasheet,
         name="inspect_datasheet",
-        description="Extract structured content (pin tables, absolute max ratings, package dimensions) from a fetched datasheet PDF, to verify a candidate part against its real spec before confirming a match. Call before select_component/confirm_component_match, per the kicad-sourcing skill. With package=\"SOT-23\" (and image_dir) it also returns pin_numbering for that package variant: machine_extracted true with the pins (a table found under a heading naming the package; completeness is not proven), or false with a reason and rendered page images (pin diagrams are usually images; false means the numbering is NOT verified, never guess pin names).",
+        description="Extract structured content (pin tables, absolute max ratings, package dimensions) from a fetched datasheet PDF, to verify a candidate part against its real spec before confirming a match. Call before select_component/confirm_component_match, per the kicad-sourcing skill. With package=\"SOT-23\" (and image_dir) it also returns pin_numbering for that package variant: machine_extracted true with the pins (a table found under a heading naming the package; completeness is not proven), or false with a reason and rendered page images (pin diagrams are usually images; false means the numbering is UNVERIFIED, never guess pin names).",
         annotations={
             "readOnlyHint": False,  # writes PNG page crops to image_dir when given
             "destructiveHint": False,
