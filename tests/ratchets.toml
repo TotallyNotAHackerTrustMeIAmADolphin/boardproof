@@ -34,6 +34,14 @@ note = "Byte-for-byte restore of the original .kicad_pro after a KRT run; compar
 read_only_reach = "KRT runs only on trial copies in this codebase (propose_route_with_retry, propose_placement_optimization, the rung backends), so this restores the trial copy's own .kicad_pro, never the caller's. A read-only tool may reach this KiCad-file write and no other."
 
 [[raw_write]]
+file = "sourcing/datasheet.py"
+function = "_package_pin_numbering"
+kind = "write_bytes"
+code = '''dest.write_bytes(_png_bytes(area))'''
+kicad_file = false
+note = "Writes a PNG crop of a datasheet page into the caller-given image_dir (issue 39); not a KiCad file."
+
+[[raw_write]]
 file = "routers/kicad_routing_tools.py"
 function = "write_fab_overrides"
 kind = "write_text"
@@ -800,6 +808,10 @@ reaches = []
 [not_a_file_writer.fetch_datasheet]
 reason = "Downloads a datasheet PDF, not a KiCad file."
 reaches = ["sourcing/datasheet.py | fetch_datasheet | open"]
+
+[not_a_file_writer.inspect_datasheet]
+reason = "Renders PNG crops of datasheet pages into the caller-given image_dir (issue 39), not a KiCad file."
+reaches = ["sourcing/datasheet.py | _package_pin_numbering | write_bytes"]
 
 [not_a_file_writer.export_manufacturing_package]
 reason = "Writes gerbers, drill, BOM and CPL exports, not KiCad source files (ticket 07)."

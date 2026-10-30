@@ -641,7 +641,9 @@ def build(mcp: MCPServer) -> list[str]:
         """
         return _fetch_datasheet(url, output_dir)
 
-    def inspect_datasheet(pdf_path: str, query: str | None = None) -> dict:
+    def inspect_datasheet(
+        pdf_path: str, query: str | None = None, package: str | None = None, image_dir: str | None = None
+    ) -> dict:
         """Extract structured content (pin tables, absolute maximum
         ratings, package dimensions) from a fetched datasheet PDF, so a
         sourcing decision can be verified against the real part spec
@@ -649,8 +651,16 @@ def build(mcp: MCPServer) -> list[str]:
         before confirming a component match -- see the kicad-sourcing
         skill. A scanned/image-only PDF with no extractable text reports
         status: incomplete rather than a false pass.
+
+        Pass package (e.g. "SOT-23") for the pin numbering of that package
+        variant: result["pin_numbering"] has machine_extracted true with
+        the pins (a table found under a heading naming the package;
+        completeness is not proven, so compare the pin count with the
+        datasheet), or false with a reason and, with image_dir, PNG crops of
+        the candidate pages. Pin diagrams are usually images; on false,
+        the numbering is NOT verified and a symbol must not be passed on it.
         """
-        return _inspect_datasheet(pdf_path, query)
+        return _inspect_datasheet(pdf_path, query, package, image_dir)
 
     def fetch_part_assets(lcsc_id: str, output_dir: str, overwrite: bool = True) -> dict:
         """Retrieve a ready KiCad symbol/footprint/3D model for an
@@ -838,9 +848,9 @@ def build(mcp: MCPServer) -> list[str]:
     mcp.add_tool(
         inspect_datasheet,
         name="inspect_datasheet",
-        description="Extract structured content (pin tables, absolute max ratings, package dimensions) from a fetched datasheet PDF, to verify a candidate part against its real spec before confirming a match. Call before select_component/confirm_component_match, per the kicad-sourcing skill.",
+        description="Extract structured content (pin tables, absolute max ratings, package dimensions) from a fetched datasheet PDF, to verify a candidate part against its real spec before confirming a match. Call before select_component/confirm_component_match, per the kicad-sourcing skill. With package=\"SOT-23\" (and image_dir) it also returns pin_numbering for that package variant: machine_extracted true with the pins (a table found under a heading naming the package; completeness is not proven), or false with a reason and rendered page images (pin diagrams are usually images; false means the numbering is NOT verified, never guess pin names).",
         annotations={
-            "readOnlyHint": True,
+            "readOnlyHint": False,  # writes PNG page crops to image_dir when given
             "destructiveHint": False,
             "idempotentHint": True,
             "openWorldHint": False,
