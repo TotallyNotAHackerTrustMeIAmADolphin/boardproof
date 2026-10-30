@@ -72,7 +72,7 @@ Each tool is found the same way: an environment variable first, then `PATH`, the
 | KiCad's bundled Python | Freerouting's Specctra export and import; KiKit | `KICAD_PYTHON_PATH` |
 | KiCadRoutingTools v0.23.1 (MIT) | Routing and placement optimisation, run from a checkout (`python build_router.py` builds its router) | `KICAD_ROUTING_TOOLS_PATH`, `KICAD_ROUTING_TOOLS_PYTHON` |
 | Freerouting 2.5.0 jar (GPLv3) and Java 25 | Routing, as a subprocess | `FREEROUTING_JAR_PATH`, `JAVA_PATH` |
-| ngspice 47 (pinned; `ngspice_con.exe` on Windows) | SPICE simulation | `NGSPICE_PATH` |
+| ngspice 47 (pinned; `ngspice_con.exe` on Windows) | SPICE simulation. **Optional while the simulation map is parked** (owner decision of 2026-10-30, issue 40): the batch gate does not require it, and its live tests skip, counted, when it is absent | `NGSPICE_PATH` |
 | KiKit | Panelisation | `KIKIT_PATH` |
 | KiCad's demo projects | Inputs of the second rung and of the oracle tests | `KICAD_DEMOS_DIR` |
 | KiCad's symbol libraries | Schematic building and tests | `KICAD_SYMBOL_DIR` |

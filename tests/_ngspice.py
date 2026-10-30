@@ -1,8 +1,12 @@
-"""ngspice for tests: skip when it is absent, fail in the gate run (build ticket 02, spice-simulation).
+"""ngspice for tests: skip when it is absent, fail when ``NGSPICE_REQUIRED`` is set (build ticket 02).
 
-ngspice is an environment fact, not code: a live test skips with the reason in an ad-hoc run and
-fails when ``NGSPICE_REQUIRED`` is set (any value but empty or ``0``; the local gate run sets it),
-so the gate can never pass by skipping the live tests. The same rule as
+ngspice is an environment fact, not code. Since the owner decision of 2026-10-30 (issue 40) it is
+optional while the simulation map is parked: the batch gate no longer sets ``NGSPICE_REQUIRED``, a
+live test skips with the reason when ngspice is absent, and ``scripts/known-skips.toml`` allows
+exactly those skips (a file and a ``max`` each), so they stay counted and printed and any other skip
+is RED. The live tests still run when ``NGSPICE_PATH`` is set. ``NGSPICE_REQUIRED`` (any value but
+empty or ``0``) still turns the skip into a failure, for a machine that wants it strict. The rule is
+otherwise the same as
 ``KICAD_DEMOS_REQUIRED`` (``tests/_kicad_demos.py``) and ``KICAD_ROUTING_TOOLS_REQUIRED``
 (``tests/_krt.py``).
 
@@ -35,7 +39,8 @@ def missing(reason: str, env: Mapping[str, str] = os.environ) -> NoReturn:
         pytest.fail(f"ngspice is required ({REQUIRED_FLAG} is set) but not usable: {reason}", pytrace=False)
     pytest.skip(
         f"ngspice not installed/found: {reason.rstrip('. ')}. Set {PATH_VAR} to ngspice_con.exe "
-        f"(pinned version {PINNED_VERSION}); the gate run sets {REQUIRED_FLAG}=1, which makes this a failure"
+        f"(pinned version {PINNED_VERSION}). ngspice is optional while the simulation map is parked (issue #40); "
+        f"{REQUIRED_FLAG}=1 makes this a failure"
     )
 
 

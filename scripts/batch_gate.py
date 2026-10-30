@@ -6,7 +6,7 @@ P11). Run it from any directory; it always tests the checkout or worktree it liv
     python <worktree>/scripts/batch_gate.py
 
 It runs ``<interpreter> -m pytest -m "not network" -rfEs -p no:cacheprovider`` from the worktree
-root with ``PYTHONPATH=<worktree>/src``, ``KICAD_DEMOS_REQUIRED=1``, ``KICAD_ROUTING_TOOLS_REQUIRED=1`` and ``NGSPICE_REQUIRED=1``,
+root with ``PYTHONPATH=<worktree>/src``, ``KICAD_DEMOS_REQUIRED=1``, ``KICAD_ROUTING_TOOLS_REQUIRED=1`` (not ``NGSPICE_REQUIRED``: ngspice is optional, see below),
 under a timeout (``SUITE_TIMEOUT_S``, about 3x the slowest measured suite ``SUITE_MEASURED_S``, with only other gates known to be running;
 ``--timeout`` overrides it; the timeout is measured on the wall clock), and then
 ``scripts/lint_gate.py``. The interpreter is ``--python``, else ``$KICAD_MCP_PYTHON``, else the
@@ -15,8 +15,6 @@ shared ``.venv`` of the main checkout (found through ``git rev-parse --git-commo
 RED, never silence, when:
 - the working tree is not clean;
 - ``KICAD_ROUTING_TOOLS_PATH`` is unset or not a directory (the KRT tests would skip);
-- ``NGSPICE_PATH`` is unset or not a file (the live ngspice tests would fail; build ticket 02 of the
-  spice-simulation effort);
 - ``kicad_mcp.__file__`` does not lie inside this worktree's ``src`` (the suite is then not run);
 - pytest's ``rootdir:`` line is missing or names another directory, or its ``configfile:`` is not
   ``pyproject.toml``, or ``[tool.pytest.ini_options]`` differs from ``EXPECTED_PYTEST_CONFIG``
@@ -379,20 +377,22 @@ def run_gate(
     env["PYTHONPATH"] = str(root / "src")
     env["KICAD_DEMOS_REQUIRED"] = "1"
     env["KICAD_ROUTING_TOOLS_REQUIRED"] = "1"  # an absent KRT fails its tests, never skips (build ticket 53)
-    env["NGSPICE_REQUIRED"] = "1"  # an absent ngspice fails the live simulation tests, never skips (spice-simulation 02)
-    say(f"env: KICAD_DEMOS_REQUIRED=1 KICAD_ROUTING_TOOLS_REQUIRED=1 NGSPICE_REQUIRED=1 PYTHONPATH={env['PYTHONPATH']}")
+    say(f"env: KICAD_DEMOS_REQUIRED=1 KICAD_ROUTING_TOOLS_REQUIRED=1 PYTHONPATH={env['PYTHONPATH']}")
     krt = env.get("KICAD_ROUTING_TOOLS_PATH")
     say(f"env: KICAD_ROUTING_TOOLS_PATH={krt if krt else '(unset)'}")
     if not krt:
         res.reasons.append("KICAD_ROUTING_TOOLS_PATH unset (the KRT tests would skip)")
     elif not Path(krt).is_dir():
         res.reasons.append(f"KICAD_ROUTING_TOOLS_PATH is not a directory: {krt}")
+    # ngspice is optional while the simulation map is parked (owner decision of 2026-10-30, issue 40):
+    # absent, the live ngspice tests skip, and scripts/known-skips.toml allows exactly those skips,
+    # counted and printed. Any other skip is still RED. NGSPICE_REQUIRED is no longer set here.
     ngspice = env.get("NGSPICE_PATH")
-    say(f"env: NGSPICE_PATH={ngspice if ngspice else '(unset)'}")
-    if not ngspice:
-        res.reasons.append("NGSPICE_PATH unset (the live ngspice tests would fail)")
-    elif not Path(ngspice).is_file():
-        res.reasons.append(f"NGSPICE_PATH is not a file: {ngspice}")
+    if ngspice and Path(ngspice).is_file():
+        say(f"env: NGSPICE_PATH={ngspice} (the live ngspice tests run)")
+    else:
+        say(f"env: NGSPICE_PATH={ngspice if ngspice else '(unset)'}"
+            " (ngspice is optional, issue 40: the live ngspice tests skip, as the known skips count)")
 
     # The standing publishability check, on the tracked files (publish-prep ticket 03a).
     res.reasons += (publish_check or check_publishable_tracked)(root, python, say)

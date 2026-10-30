@@ -3,8 +3,9 @@
 # `max` the most skips allowed with that file and reason, `why` the reason it is acceptable.
 # Adding an entry or raising a max needs its own ticket and a review, like a known-red entry.
 # Measured 2026-10-20 on this machine (12 skips): no KiCad GUI running, no KiKit, no ngspice,
-# no symlink privilege, network tests off. ngspice has no entry any more: spice-simulation build
-# ticket 02 made its live tests required (NGSPICE_REQUIRED=1 in the gate, tests/_ngspice.py).
+# no symlink privilege, network tests off. ngspice is optional again (issue 40, owner decision of
+# 2026-10-30, the simulation map is parked): the two entries at the end allow its live tests to skip
+# when it is absent. tests/test_ngspice_required.py pins their files, reason, ticket and max.
 
 [[skip]]
 file = "tests/test_copilot_toolset.py"
@@ -53,3 +54,15 @@ file = "tests/test_datasheet.py"
 reason = "the vendor datasheet PDFs are third-party files and are not in the public export"
 max = 4
 why = "public export (publish-prep ticket 03): the vendor datasheet PDFs are third-party files and were left out"
+
+[[skip]]
+file = "tests/test_simulation_toolset.py"
+reason = "ngspice not installed/found"
+max = 8
+why = "ngspice is optional while the simulation map is parked (issue #40, owner decision of 2026-10-30); the live tests run when NGSPICE_PATH is set"
+
+[[skip]]
+file = "tests/test_ngspice_required.py"
+reason = "ngspice not installed/found"
+max = 1
+why = "the version pin needs the pinned ngspice-47; optional while the simulation map is parked (issue #40)"

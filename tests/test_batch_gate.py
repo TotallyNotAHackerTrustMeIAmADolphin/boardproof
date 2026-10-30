@@ -101,7 +101,8 @@ class FakeRunner:
         self.calls.append(cmd)
         assert env["KICAD_DEMOS_REQUIRED"] == "1"
         assert env["KICAD_ROUTING_TOOLS_REQUIRED"] == "1"  # KRT tests fail, never skip (build ticket 53)
-        assert env["NGSPICE_REQUIRED"] == "1"  # live ngspice tests fail, never skip (spice-simulation 02)
+        # ngspice is optional while the simulation map is parked (issue 40): the gate must not demand it
+        assert "NGSPICE_REQUIRED" not in env
         assert env["PYTHONPATH"] == str(self.root / "src")
         assert Path(cwd) == self.root
         if cmd[1] == "-c":
@@ -141,6 +142,7 @@ def root(tmp_path, monkeypatch):
     ngspice = tmp_path / "ngspice_con.exe"
     ngspice.write_text("", encoding="utf-8")
     monkeypatch.setenv("NGSPICE_PATH", str(ngspice))
+    monkeypatch.delenv("NGSPICE_REQUIRED", raising=False)  # an outer shell must not leak into the gate env
     # The publishability check has its own tests (tests/test_gate_publishable.py); here it passes.
     monkeypatch.setattr(gate, "check_publishable_tracked", lambda *a, **kw: [])
     return r
@@ -412,16 +414,55 @@ def test_routing_tools_path_that_is_no_directory_is_red(root, monkeypatch, tmp_p
     assert any("KICAD_ROUTING_TOOLS_PATH" in r for r in res.reasons)
 
 
-def test_unset_ngspice_path_is_red(root, monkeypatch):
+def test_unset_ngspice_path_is_not_red(root, monkeypatch):
+    """Issue 40: ngspice is optional while the simulation map is parked; its live tests skip, counted."""
     monkeypatch.delenv("NGSPICE_PATH")
     res, _ = run(root, FakeRunner(root))
-    assert any("NGSPICE_PATH" in r for r in res.reasons)
+    assert res.green, res.reasons
 
 
-def test_ngspice_path_that_is_no_file_is_red(root, monkeypatch, tmp_path):
+def test_ngspice_path_that_is_no_file_is_not_red(root, monkeypatch, tmp_path):
     monkeypatch.setenv("NGSPICE_PATH", str(tmp_path / "missing.exe"))
     res, _ = run(root, FakeRunner(root))
-    assert any("NGSPICE_PATH" in r for r in res.reasons)
+    assert res.green, res.reasons
+
+
+def _real_ngspice_skip_run(root, *, skips_text):
+    """The suite run of a machine without ngspice: the live tests' skips, as the committed counts."""
+    ks = gate.read_known_skips((ROOT / "scripts" / "known-skips.toml").read_text(encoding="utf-8"))
+    ng = [k for k in ks.entries if k.file in ("tests/test_simulation_toolset.py", "tests/test_ngspice_required.py")]
+    reason = "ngspice not installed/found: NGSPICE_PATH is unset and none is on PATH. Set NGSPICE_PATH"
+    skipped = [(k.file.replace("/", "\\"), reason, k.max) for k in ng]
+    res, _ = run(root, FakeRunner(root, suite_out=pytest_output(root, skipped=skipped)), skips=skips_text)
+    return res, ng
+
+
+def test_the_live_ngspice_skips_of_a_machine_without_ngspice_are_green_with_the_committed_allowlist(root):
+    text = (ROOT / "scripts" / "known-skips.toml").read_text(encoding="utf-8")
+    res, ng = _real_ngspice_skip_run(root, skips_text=text)
+    assert len(ng) == 2
+    assert res.green, res.reasons
+
+
+def test_mutant_without_the_ngspice_allowlist_entries_the_same_run_is_red(root):
+    """Remove the known-skips entries of ngspice: the skips are unexplained and the gate is RED."""
+    text = (ROOT / "scripts" / "known-skips.toml").read_text(encoding="utf-8")
+    blocks = re.split(r"\n(?=\[\[skip\]\])", text)
+    kept = "\n".join(b for b in blocks if not ("[[skip]]" in b and "ngspice" in b.lower()))
+    assert kept != text
+    res, _ = _real_ngspice_skip_run(root, skips_text=kept)
+    assert not res.green
+    assert any("unknown skip" in r for r in res.reasons)
+
+
+def test_mutant_one_more_ngspice_skip_than_the_allowed_maximum_is_red(root):
+    text = (ROOT / "scripts" / "known-skips.toml").read_text(encoding="utf-8")
+    ks = gate.read_known_skips(text)
+    sim = next(k for k in ks.entries if k.file == "tests/test_simulation_toolset.py" and "ngspice" in k.reason)
+    out = pytest_output(root, skipped=[("tests\\test_simulation_toolset.py", sim.reason + ": x", sim.max + 1)])
+    res, _ = run(root, FakeRunner(root, suite_out=out), skips=text)
+    assert not res.green
+    assert any("more skips than allowed" in r for r in res.reasons)
 
 
 @pytest.mark.parametrize(
