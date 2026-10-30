@@ -99,5 +99,8 @@ C[0-9]*.3dshapes/
 # ... but the submodule is the CDFER library itself, whose own parts are named like that.
 !/third_party/JLCPCB-Kicad-Library/**
 
+# Locally installed tools for the batch gate (Freerouting jar, pinned KRT checkout, ngspice, Java).
+/.tools/
+
 # The owner's private pattern file for the publishability check (never committed).
 publish-forbidden*
