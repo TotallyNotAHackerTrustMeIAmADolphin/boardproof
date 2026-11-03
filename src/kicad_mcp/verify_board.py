@@ -19,7 +19,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Literal, get_args
 
-from kicad_mcp import kicad_cli
+from kicad_mcp import kicad_cli, write_layer
 
 Parity = Literal["required", "not_applicable"]
 PARITY_MODES: tuple[str, ...] = get_args(Parity)
@@ -644,11 +644,146 @@ def _sheet_load_problems(tree: Any) -> list[str]:
     return problems
 
 
+# --- the stored fill of the original file ------------------------------------------
+#
+# The gate refills every zone in a scratch copy, so its verdict is about the board as KiCad
+# fills it (property A). The fill stored in the original file (property B) is another fact:
+# a board can PASS with zero stored fill copper, and a tool that reads the file without
+# refilling (a viewer, an export from the stored fill) sees no pour. This block only
+# reports it, from the raw S-expression; it never changes the verdict.
+
+STORED_FILL_SCOPE = (
+    "The verdict grades the board after kicad-cli refilled every zone in a scratch copy; it says "
+    "nothing about the fill stored in the file, and a PASS does not mean the stored fill is "
+    "correct. stored_fill reports only whether the file itself carries fill copper on each "
+    "intended layer; it does not compare the stored fill with the refilled one."
+)
+_MIN_FILL_POINTS = 3
+
+
+def _zone_copper_layers(zone: Any, board_copper: list[str]) -> list[str]:
+    """The copper layers a zone is meant to be filled on, from its raw ``layer`` / ``layers``."""
+    names: list[str] = []
+    layers = zone.find("layers")
+    layer = zone.find("layer")
+    if layers is not None:
+        names = [str(v) for v in layers.values]
+    elif layer is not None and layer.values:
+        names = [str(layer.values[0])]
+    out: list[str] = []
+    for name in names:
+        expanded = {"F&B.Cu": ["F.Cu", "B.Cu"], "*.Cu": board_copper}.get(name, [name])
+        out.extend(n for n in expanded if n.endswith(".Cu") and n not in out)
+    return out
+
+
+def stored_fill_report(pcb_path: str | Path) -> dict[str, Any]:
+    """What the file itself stores as zone fill, per copper zone and intended layer.
+
+    Read from the raw S-expression (``write_layer.load``), never refilled; zones nested in
+    footprints are read too. Keepout rule
+    areas are skipped. ``status`` per zone: ``present`` (fill copper on every intended
+    layer), ``none`` (on no layer), ``partial`` (on some; ``missing_layers`` names the rest)
+    or ``undetermined`` (the intended layers or a fill's layer could not be read). A board
+    that cannot be read is ``unreadable``. Only ``present`` and ``no_copper_zones`` are fine;
+    nothing unknown is ever reported as fine."""
+    try:
+        return _read_stored_fill(pcb_path)
+    except Exception as exc:  # noqa: BLE001 - fail closed: an unexpected shape is never fine
+        return _unreadable_stored_fill(exc)
+
+
+def _unreadable_stored_fill(exc: Exception) -> dict[str, Any]:
+    return {
+        "scope": STORED_FILL_SCOPE,
+        "status": "unreadable",
+        "zones": [],
+        "problems": [f"the stored fill could not be read ({type(exc).__name__}: {exc})"],
+    }
+
+
+def _read_stored_fill(pcb_path: str | Path) -> dict[str, Any]:
+    root = write_layer.load(pcb_path)
+    board_copper: list[str] = []
+    table = root.find("layers")
+    if table is not None:
+        for entry in table.children:
+            name = entry.values[1] if len(entry.values) > 1 else None
+            if isinstance(name, str) and name.endswith(".Cu"):
+                board_copper.append(name)
+    zones: list[dict[str, Any]] = []
+    # Board-level zones and zones nested in footprints: both are copper the file may hold.
+    candidates = [c for c in root.children if c.name == "zone"]
+    for footprint in root.children:
+        if footprint.name == "footprint":
+            candidates.extend(c for c in footprint.children if c.name == "zone")
+    for zone in candidates:
+        if zone.find("keepout") is not None:
+            continue
+        intended = _zone_copper_layers(zone, board_copper)
+        filled: list[str] = []
+        unreadable_fill = False
+        for fp in zone.find_all("filled_polygon"):
+            fp_layer = fp.find("layer")
+            pts = fp.find("pts")
+            if fp_layer is None or not fp_layer.values:
+                unreadable_fill = True
+            elif pts is not None and len(pts.find_all("xy")) >= _MIN_FILL_POINTS:
+                filled.append(str(fp_layer.values[0]))
+        missing = [layer for layer in intended if layer not in filled]
+        if not intended or unreadable_fill:
+            status = "undetermined"
+        elif not missing:
+            status = "present"
+        elif len(missing) == len(intended):
+            status = "none"
+        else:
+            status = "partial"
+        uuid = zone.find("uuid")
+        name = zone.find("name")
+        net = zone.find("net_name")
+        zones.append(
+            {
+                "uuid": str(uuid.values[0]) if uuid is not None and uuid.values else "",
+                "name": str(name.values[0]) if name is not None and name.values else "",
+                "net": str(net.values[0]) if net is not None and net.values else "",
+                "intended_layers": intended,
+                "filled_layers": sorted(set(filled)),
+                "missing_layers": missing,
+                "status": status,
+            }
+        )
+    problems = [_stored_fill_problem(z) for z in zones if z["status"] != "present"]
+    status = "no_copper_zones" if not zones else ("present" if not problems else "problems")
+    return {"scope": STORED_FILL_SCOPE, "status": status, "zones": zones, "problems": problems}
+
+
+def _stored_fill_problem(zone: dict[str, Any]) -> str:
+    label = f"zone {zone['name'] or zone['uuid'] or '?'} (net {zone['net'] or '?'})"
+    layers = ", ".join(zone["intended_layers"]) or "unknown"
+    if zone["status"] == "none" and zone["filled_layers"]:
+        only = ", ".join(zone["filled_layers"])
+        return f"{label}: no stored fill on {layers} (the file holds fill on {only} only)"
+    if zone["status"] == "none":
+        return (
+            f"{label}: no stored fill on {layers}; the file holds the zone outline only, so a "
+            "reader that does not refill sees no copper here"
+        )
+    if zone["status"] == "partial":
+        missing = ", ".join(zone["missing_layers"])
+        return f"{label}: no stored fill on {missing} (stored on the other intended layers)"
+    return f"{label}: the stored fill could not be determined (intended layers: {layers}); not read as fine"
+
+
 # --- the gate ----------------------------------------------------------------
 
 
 def _incomplete_result(
-    parity: str, parity_reason: str | None, reasons: list[str], notes: list[str] | None = None
+    parity: str,
+    parity_reason: str | None,
+    reasons: list[str],
+    notes: list[str] | None = None,
+    stored_fill: dict | None = None,
 ) -> dict:
     return {
         "verdict": "INCOMPLETE",
@@ -662,6 +797,7 @@ def _incomplete_result(
         "notes": notes or [],
         "parity": {"status": parity, "reason": parity_reason},
         "baseline_snapshot": None,
+        "stored_fill": stored_fill,
     }
 
 
@@ -681,12 +817,17 @@ def verify_board(
     running yields ``INCOMPLETE``, never an exception and never a pass; evidence
     already collected still counts (``FAIL`` takes precedence over ``INCOMPLETE``).
     ``notes`` are informational (for example, the units of one part disagree on DNP): never
-    a reason, they never change the verdict.
+    a reason, they never change the verdict. ``stored_fill`` reports what the original file
+    itself stores as zone fill (property B); the verdict grades the refilled board (property
+    A), so a PASS never means the stored fill is correct, and an empty stored fill is a note,
+    never a reason.
     """
     pcb_path = Path(pcb_path)
     run_drc = drc or kicad_cli.run_drc
     check_parity, incomplete_reasons = _check_parity(pcb_path, parity, parity_reason)
     notes: list[str] = []  # informational: never a reason, never changes the verdict
+    stored_fill = stored_fill_report(pcb_path)
+    notes.extend(f"stored fill: {problem}" for problem in stored_fill["problems"])
 
     reports: list[dict] = []
     try:
@@ -708,11 +849,15 @@ def verify_board(
                 except Exception as exc:  # noqa: BLE001 - fail closed
                     incomplete_reasons.append(f"{_GUARD} could not run ({type(exc).__name__}: {exc})")
         if not reports:
-            return _incomplete_result(parity, parity_reason, incomplete_reasons, notes)
+            return _incomplete_result(parity, parity_reason, incomplete_reasons, notes, stored_fill)
         current = _current_rules(pcb_path, _ignored_keys(reports[0]))
     except (kicad_cli.KicadCliError, OSError, ValueError) as exc:
         return _incomplete_result(
-            parity, parity_reason, [*incomplete_reasons, f"kicad-cli could not complete: {exc}"], notes
+            parity,
+            parity_reason,
+            [*incomplete_reasons, f"kicad-cli could not complete: {exc}"],
+            notes,
+            stored_fill,
         )
 
     classified = [_classify(report) for report in reports]
@@ -770,4 +915,5 @@ def verify_board(
         "notes": notes,
         "parity": {"status": parity, "reason": parity_reason},
         "baseline_snapshot": current,
+        "stored_fill": stored_fill,
     }

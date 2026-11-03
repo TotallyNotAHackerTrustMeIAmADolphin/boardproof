@@ -80,7 +80,10 @@ def build_server() -> MCPServer:
         FAIL takes precedence over INCOMPLETE. incomplete_reasons say why a verdict is
         INCOMPLETE. notes are informational hints (e.g. the units of one part disagree on DNP):
         they are never reasons and never change the verdict, so a note neither doubts a PASS
-        nor excuses a FAIL or INCOMPLETE."""
+        nor excuses a FAIL or INCOMPLETE.
+        The verdict grades the board after a refill in a scratch copy, not the fill stored in the
+        file: a PASS never means the stored fill is correct. stored_fill (and a note starting
+        "stored fill:") reports zones whose file holds no fill copper on an intended layer."""
         from kicad_mcp import verify_board as gate
 
         snapshot = gate_state.begin_grading(pcb_path)  # before grading, never after
