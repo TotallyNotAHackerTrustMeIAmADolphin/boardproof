@@ -1,6 +1,7 @@
 {
  "snapshot_schema": 1,
  "router_version": "0.23.7",
+ "router_commit": "299ad57081d303ac60cbc84cd374f6e3800e9158",
  "captured_from": "route.py --capabilities",
  "modules": {
   "route.py": {

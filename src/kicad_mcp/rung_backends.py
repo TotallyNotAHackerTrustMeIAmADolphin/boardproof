@@ -126,7 +126,8 @@ def krt_availability() -> dict:
         snapshot = krt_tools.load_cli_snapshot()
         missing = krt_tools.check_emitted_flags(snapshot)
         version = krt_tools.router_version(status["checkout"])
-        version_check = krt_tools.compare_router_version(snapshot, version)
+        commit = krt_tools.router_commit(status["checkout"])
+        version_check = krt_tools.compare_router_version(snapshot, version, commit)
     except krt_tools.KicadRoutingToolsError as exc:
         return {"backend": "krt", "available": False, "reason": str(exc)}
     if missing:
@@ -137,7 +138,7 @@ def krt_availability() -> dict:
         "backend": "krt",
         "available": True,
         "reason": None,
-        "versions": {"router": version, "grid_router": status.get("grid_router_version"),
+        "versions": {"router": version, "router_commit": commit, "grid_router": status.get("grid_router_version"),
                      "router_python": status.get("python_version")},
         "version_check": version_check,
     }

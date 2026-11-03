@@ -771,7 +771,57 @@ def router_version(checkout: str | Path) -> str | None:
     return text or None
 
 
-def compare_router_version(snapshot: dict, live_version: str | None) -> dict:
+_SHA_RE = re.compile(r"[0-9a-f]{40}")
+
+
+def router_commit(checkout: str | Path) -> str | None:
+    """The checkout's git HEAD commit (40 hex digits), read from `.git` without running git, or
+    None when it is not a git checkout or HEAD cannot be resolved. `VERSION` cannot tell a release
+    tag from a later commit (issue 54), so the pin is the commit."""
+    try:
+        return _read_router_commit(Path(checkout))
+    except (OSError, ValueError):  # ValueError: a NUL byte in a path, undecodable text
+        return None
+
+
+def _read_router_commit(root: Path) -> str | None:
+    git = root / ".git"
+    if git.is_file():  # a worktree or submodule: ".git" holds "gitdir: <path>"
+        line = git.read_text(encoding="utf-8").strip()
+        if not line.startswith("gitdir:"):
+            return None
+        git = (root / line[len("gitdir:"):].strip()).resolve()
+    head = (git / "HEAD").read_text(encoding="utf-8").strip()
+    if _SHA_RE.fullmatch(head):
+        return head
+    if not head.startswith("ref:"):
+        return None
+    ref = head[len("ref:"):].strip()
+    if not ref.startswith("refs/") or ".." in ref.split("/"):
+        return None  # a ref never leaves refs/
+    homes = [git]
+    common = git / "commondir"  # a linked worktree keeps its refs in the common git dir
+    if common.is_file():
+        homes.append((git / common.read_text(encoding="utf-8").strip()).resolve())
+    for home in homes:
+        loose = home / ref
+        if loose.is_file():
+            sha = loose.read_text(encoding="utf-8").strip()
+            return sha if _SHA_RE.fullmatch(sha) else None
+        packed = home / "packed-refs"
+        if packed.is_file():
+            for line in packed.read_text(encoding="utf-8").splitlines():
+                parts = line.split()
+                if len(parts) == 2 and parts[1] == ref and _SHA_RE.fullmatch(parts[0]):
+                    return parts[0]
+    return None
+
+
+def compare_router_version(snapshot: dict, live_version: str | None, live_commit: str | None = None) -> dict:
+    """Version text first, then the commit when the snapshot pins one (a snapshot without a
+    `router_commit` compares the version only). A live commit that is unknown or different does
+    not match: the version text is the same for the v0.23.7 tag and the commit pinned in
+    docs/ARCHITECTURE.md."""
     pinned = snapshot.get("router_version")
     if live_version is None:
         return {"matches": False, "pinned": pinned, "live": None,
@@ -780,7 +830,22 @@ def compare_router_version(snapshot: dict, live_version: str | None) -> dict:
         return {"matches": False, "pinned": pinned, "live": live_version,
                 "message": f"router version {live_version} differs from the snapshot's {pinned}: "
                            "re-capture the snapshot and re-run the flag check before trusting this run"}
-    return {"matches": True, "pinned": pinned, "live": live_version, "message": "router version matches snapshot"}
+    pinned_commit = snapshot.get("router_commit")
+    result = {"matches": True, "pinned": pinned, "live": live_version, "message": "router version matches snapshot"}
+    if pinned_commit:
+        result.update({"pinned_commit": pinned_commit, "live_commit": live_commit})
+        if live_commit is None:
+            result.update(matches=False, message=(
+                f"router commit unknown (the checkout is not a readable git checkout); snapshot pins "
+                f"{pinned_commit[:8]}, and the version text {pinned} alone cannot tell it from the release tag"))
+        elif live_commit != pinned_commit:
+            result.update(matches=False, message=(
+                f"router commit {live_commit[:8]} differs from the snapshot's {pinned_commit[:8]} "
+                f"(same version text {pinned}): re-capture the snapshot and re-run the flag check "
+                "before trusting this run"))
+        else:
+            result["message"] = "router version and commit match snapshot"
+    return result
 
 
 def emittable_flags() -> set[str]:
@@ -871,6 +936,7 @@ def capture_cli_snapshot(checkout: str | Path, python: str | Path, *, timeout: i
     return {
         "snapshot_schema": SNAPSHOT_SCHEMA,
         "router_version": router_version(checkout),
+        "router_commit": router_commit(checkout),
         "captured_from": "route.py --capabilities",
         "modules": modules,
     }
@@ -1211,6 +1277,7 @@ def run_kicad_routing_tools(
     json_text = json_out.read_text(encoding="utf-8") if json_out.is_file() else None
     log = parse_route_log(run.pop("stdout_text"), json_text)
     version = router_version(checkout)
+    commit = router_commit(checkout)
     run.update(
         {
             "log": log,
@@ -1220,7 +1287,8 @@ def run_kicad_routing_tools(
                 pour_info=pour_info, pour_layer_cost=pour_layer_cost, advanced_flags=advanced_flags,
             ),
             "router_version": version,
-            "version_check": compare_router_version(snapshot, version),
+            "router_commit": commit,
+            "version_check": compare_router_version(snapshot, version, commit),
             # `--strict-sizes` exits 3 when a feature was delivered below its
             # requested size or a fab-tier escalation fired. Not an error
             # (the board was still written); it is a disclosure.
@@ -1712,6 +1780,7 @@ __all__ = [
     "logged_parameters",
     "parse_route_log",
     "route_delta",
+    "router_commit",
     "router_version",
     "run_kicad_routing_tools",
     "run_router_script",

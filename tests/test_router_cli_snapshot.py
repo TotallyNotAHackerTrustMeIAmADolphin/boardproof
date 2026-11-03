@@ -143,7 +143,7 @@ def test_installed_router_still_matches_the_snapshot(krt_checkout):
     checkout = krt_checkout  # absent: skip with the reason, or fail in the gate run (build ticket 53)
     live = krt.capture_cli_snapshot(checkout, Path(sys.executable))
     pinned = krt.load_cli_snapshot()
-    version = krt.compare_router_version(pinned, live["router_version"])
+    version = krt.compare_router_version(pinned, live["router_version"], live["router_commit"])
     assert version["matches"], version["message"]
     for module, entry in pinned["modules"].items():
         gone = sorted(set(entry["flags"]) - set(live["modules"].get(module, {}).get("flags", [])))
@@ -220,3 +220,162 @@ def test_run_result_carries_logged_parameters_and_version_check(tmp_path, monkey
     assert result["version_check"]["matches"] is False
     assert "--strict-sizes" in result["args"] and "--layer-costs" in result["args"]
     assert result["strict_sizes_violated"] is False
+
+
+# ---------------------------------------------------------------------------
+# The pin sees the commit (issue 54): `VERSION` reads 0.23.7 for the v0.23.7 tag and for the
+# commit 234 commits later, so the version text alone cannot tell them apart.
+# ---------------------------------------------------------------------------
+
+PINNED_COMMIT = "299ad57081d303ac60cbc84cd374f6e3800e9158"
+OTHER_COMMIT = "0123456789abcdef0123456789abcdef01234567"
+
+
+def _fake_git(checkout: Path, head: str, refs: dict[str, str] | None = None, packed: str | None = None) -> None:
+    git = checkout / ".git"
+    (git / "refs" / "heads").mkdir(parents=True, exist_ok=True)
+    (git / "HEAD").write_text(head, encoding="utf-8")
+    for name, sha in (refs or {}).items():
+        target = git / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(sha + "\n", encoding="utf-8")
+    if packed is not None:
+        (git / "packed-refs").write_text(packed, encoding="utf-8")
+
+
+def test_router_commit_reads_a_detached_head(tmp_path):
+    _fake_git(tmp_path, PINNED_COMMIT + "\n")
+    assert krt.router_commit(tmp_path) == PINNED_COMMIT
+
+
+def test_router_commit_follows_a_branch_ref_loose_and_packed(tmp_path):
+    loose = tmp_path / "loose"
+    _fake_git(loose, "ref: refs/heads/main\n", {"refs/heads/main": PINNED_COMMIT})
+    assert krt.router_commit(loose) == PINNED_COMMIT
+    packed = tmp_path / "packed"
+    _fake_git(packed, "ref: refs/heads/main\n", packed=f"# pack-refs\n{OTHER_COMMIT} refs/heads/other\n{PINNED_COMMIT} refs/heads/main\n")
+    assert krt.router_commit(packed) == PINNED_COMMIT
+
+
+def test_router_commit_is_none_without_git_or_with_a_broken_head(tmp_path):
+    assert krt.router_commit(tmp_path) is None
+    broken = tmp_path / "broken"
+    _fake_git(broken, "ref: refs/heads/gone\n")
+    assert krt.router_commit(broken) is None
+    junk = tmp_path / "junk"
+    _fake_git(junk, "not a sha\n")
+    assert krt.router_commit(junk) is None
+
+
+def test_the_snapshot_pins_the_commit_not_only_the_version():
+    snapshot = krt.load_cli_snapshot()
+    assert snapshot["router_commit"] == PINNED_COMMIT
+
+
+def test_same_version_text_but_another_commit_does_not_match():
+    snapshot = {"router_version": "0.23.7", "router_commit": PINNED_COMMIT}
+    ok = krt.compare_router_version(snapshot, "0.23.7", PINNED_COMMIT)
+    assert ok["matches"] is True
+    tag = krt.compare_router_version(snapshot, "0.23.7", OTHER_COMMIT)
+    assert tag["matches"] is False
+    assert PINNED_COMMIT[:8] in tag["message"] and OTHER_COMMIT[:8] in tag["message"]
+    assert tag["pinned_commit"] == PINNED_COMMIT and tag["live_commit"] == OTHER_COMMIT
+
+
+def test_an_unknown_commit_does_not_match_a_snapshot_that_pins_one():
+    snapshot = {"router_version": "0.23.7", "router_commit": PINNED_COMMIT}
+    unknown = krt.compare_router_version(snapshot, "0.23.7", None)
+    assert unknown["matches"] is False and "commit" in unknown["message"].lower()
+    assert "unknown" in unknown["message"].lower()
+
+
+def test_a_snapshot_without_a_commit_pin_still_compares_the_version_only():
+    assert krt.compare_router_version({"router_version": "0.22.0"}, "0.22.0", None)["matches"] is True
+
+
+def test_run_result_carries_the_commit_and_flags_a_commit_mismatch(tmp_path, monkeypatch):
+    checkout = _checkout_with(tmp_path / "krt", "route.py")
+    (checkout / "VERSION").write_text(krt.load_cli_snapshot()["router_version"] + "\n", encoding="utf-8")
+    _fake_git(checkout, OTHER_COMMIT + "\n")
+    monkeypatch.setenv(krt.ENV_PATH, str(checkout))
+    monkeypatch.delenv(krt.ENV_PYTHON, raising=False)
+    src = tmp_path / "b.kicad_pcb"
+    shutil.copy(POUR_PCB, src)
+    result = krt.run_kicad_routing_tools(src, tmp_path / "o" / "b.kicad_pcb", timeout=30)
+    assert result["router_commit"] == OTHER_COMMIT
+    assert result["version_check"]["matches"] is False
+    assert "commit" in result["version_check"]["message"].lower()
+
+
+def test_installed_router_is_at_the_pinned_commit(krt_checkout):
+    commit = krt.router_commit(krt_checkout)
+    assert commit == krt.load_cli_snapshot()["router_commit"], (
+        f"the KRT checkout is at {commit}, the snapshot pins {krt.load_cli_snapshot()['router_commit']}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Review of issue 54: the availability path, and router_commit never raises or leaves .git
+# ---------------------------------------------------------------------------
+
+
+def _availability_with(tmp_path, monkeypatch, *, head: str | None):
+    from kicad_mcp import rung_backends
+
+    checkout = tmp_path / "krt"
+    checkout.mkdir()
+    (checkout / "VERSION").write_text(krt.load_cli_snapshot()["router_version"] + "\n", encoding="utf-8")
+    if head is not None:
+        _fake_git(checkout, head)
+    monkeypatch.setenv(krt.ENV_PATH, str(checkout))
+    monkeypatch.setattr(krt, "check_availability", lambda: {"status": "complete", "checkout": str(checkout)})
+    return rung_backends, rung_backends.krt_availability()
+
+
+def test_availability_flags_a_checkout_at_another_commit_as_unofficial(tmp_path, monkeypatch):
+    rung_backends, info = _availability_with(tmp_path, monkeypatch, head=OTHER_COMMIT + "\n")
+    assert info["available"] is True
+    assert info["version_check"]["matches"] is False
+    assert info["versions"]["router_commit"] == OTHER_COMMIT
+    assert rung_backends.unofficial_reasons(info)
+
+
+def test_availability_flags_a_checkout_without_git_as_unofficial(tmp_path, monkeypatch):
+    rung_backends, info = _availability_with(tmp_path, monkeypatch, head=None)
+    assert info["version_check"]["matches"] is False
+    assert info["versions"]["router_commit"] is None
+    assert rung_backends.unofficial_reasons(info)
+
+
+def test_availability_at_the_pinned_commit_is_official(tmp_path, monkeypatch):
+    rung_backends, info = _availability_with(tmp_path, monkeypatch, head=PINNED_COMMIT + "\n")
+    assert info["version_check"]["matches"] is True
+    assert info["versions"]["router_commit"] == PINNED_COMMIT
+    assert rung_backends.unofficial_reasons(info) == []
+
+
+def test_router_commit_never_raises_on_a_gitdir_with_a_nul(tmp_path):
+    (tmp_path / ".git").write_text("gitdir: a\x00b\n", encoding="utf-8")
+    assert krt.router_commit(tmp_path) is None
+
+
+def test_router_commit_refuses_a_ref_that_leaves_refs(tmp_path):
+    (tmp_path / "outside").write_text(PINNED_COMMIT + "\n", encoding="utf-8")
+    for ref in ("../../outside", "refs/../../outside", "outside", "/outside"):
+        root = tmp_path / ("r" + str(abs(hash(ref))))
+        _fake_git(root, f"ref: {ref}\n")
+        (root.parent / "outside").write_text(PINNED_COMMIT + "\n", encoding="utf-8")
+        assert krt.router_commit(root) is None, ref
+
+
+def test_router_commit_follows_commondir_for_a_worktree_on_a_branch(tmp_path):
+    main = tmp_path / "main"
+    _fake_git(main, "ref: refs/heads/main\n", {"refs/heads/work": PINNED_COMMIT})
+    gitdir = main / ".git" / "worktrees" / "w"
+    gitdir.mkdir(parents=True)
+    (gitdir / "HEAD").write_text("ref: refs/heads/work\n", encoding="utf-8")
+    (gitdir / "commondir").write_text("../..\n", encoding="utf-8")
+    wt = tmp_path / "wt"
+    wt.mkdir()
+    (wt / ".git").write_text(f"gitdir: {gitdir}\n", encoding="utf-8")
+    assert krt.router_commit(wt) == PINNED_COMMIT
