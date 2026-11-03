@@ -274,8 +274,6 @@ def test_the_docstring_says_a_pass_is_not_the_stored_fill() -> None:
     assert "an empty stored fill is a note, never a reason" in doc
 
 
-
-
 def test_a_zone_nested_in_a_footprint_is_examined(tmp_path: Path) -> None:
     pcb = _copy(GOLDEN, tmp_path)
     root = write_layer.load(pcb)
@@ -290,19 +288,14 @@ def test_a_zone_nested_in_a_footprint_is_examined(tmp_path: Path) -> None:
     assert len(_stored_notes(result)) == 1
 
 
-def test_a_nested_zone_with_a_fill_is_present(tmp_path: Path) -> None:
+def test_a_nested_zone_with_a_fill_is_present(tmp_path: Path, monkeypatch) -> None:
     root = parse_string(
         '(kicad_pcb (footprint "x" (zone (net_name "N") (layer "F.Cu") (uuid "a")'
         ' (filled_polygon (layer "F.Cu") (pts (xy 0 0) (xy 1 0) (xy 1 1))))))'
     )
-    pcb = tmp_path / "n.kicad_pcb"
-    # the path is never opened: load is replaced below
-    original = gate.write_layer.load
-    gate.write_layer.load = lambda _p: root
-    try:
-        report = gate.stored_fill_report(pcb)
-    finally:
-        gate.write_layer.load = original
+    pcb = tmp_path / "n.kicad_pcb"  # never opened: load is replaced
+    monkeypatch.setattr(gate.write_layer, "load", lambda _p: root)
+    report = gate.stored_fill_report(pcb)
     assert [z["status"] for z in report["zones"]] == ["present"]
 
 
@@ -340,4 +333,93 @@ def test_an_unexpected_node_shape_is_unreadable_not_an_exception(tmp_path: Path,
 
     assert report["status"] == "unreadable" and "could not be read" in report["problems"][0]
     assert result["stored_fill"]["status"] == "unreadable"
+    assert len(_stored_notes(result)) == 1
+
+
+# --- issue 55: nested keepouts and nested multi-layer zones ------------------------------------
+
+_BOARD_LAYERS = '(layers (0 "F.Cu" signal) (1 "In1.Cu" signal) (31 "B.Cu" signal) (44 "Edge.Cuts" user))'
+
+
+def _fill(layer: str) -> str:
+    return f'(filled_polygon (layer "{layer}") (pts (xy 0 0) (xy 1 0) (xy 1 1)))'
+
+
+def _report_for(monkeypatch, text: str) -> dict:
+    """stored_fill_report on an in-memory board; write_layer.load is replaced, no file is read."""
+    root = parse_string(text)
+    monkeypatch.setattr(gate.write_layer, "load", lambda _p: root)
+    return gate.stored_fill_report(Path("in-memory.kicad_pcb"))
+
+
+def test_a_keepout_nested_in_a_footprint_is_not_a_copper_zone(monkeypatch) -> None:
+    keepout = '(zone (net 0) (net_name "") (layer "F.Cu") (uuid "k") (keepout (tracks not_allowed)))'
+    report = _report_for(monkeypatch, f'(kicad_pcb {_BOARD_LAYERS} (footprint "x" {keepout}))')
+
+    assert report["status"] == "no_copper_zones"
+    assert report["zones"] == [] and report["problems"] == []
+
+
+def test_a_nested_keepout_beside_a_nested_copper_zone_reports_only_the_copper(monkeypatch) -> None:
+    keepout = '(zone (net 0) (net_name "") (layer "F.Cu") (uuid "k") (keepout (tracks not_allowed)))'
+    pour = f'(zone (net 1) (net_name "GND") (layer "F.Cu") (uuid "p") {_fill("F.Cu")})'
+    report = _report_for(monkeypatch, f'(kicad_pcb {_BOARD_LAYERS} (footprint "x" {keepout} {pour}))')
+
+    assert [(z["uuid"], z["status"]) for z in report["zones"]] == [("p", "present")]
+    assert report["status"] == "present"
+
+
+def test_a_nested_two_layer_zone_with_one_fill_is_partial(monkeypatch) -> None:
+    zone = f'(zone (net 1) (net_name "GND") (layers "F&B.Cu") (uuid "n") {_fill("F.Cu")})'
+    report = _report_for(monkeypatch, f'(kicad_pcb {_BOARD_LAYERS} (footprint "x" {zone}))')
+
+    only = report["zones"][0]
+    assert only["intended_layers"] == ["F.Cu", "B.Cu"]
+    assert (only["status"], only["missing_layers"]) == ("partial", ["B.Cu"])
+    assert report["status"] == "problems" and "no stored fill on B.Cu" in report["problems"][0]
+
+
+def test_a_nested_two_layer_zone_filled_on_both_layers_is_present(monkeypatch) -> None:
+    zone = f'(zone (net 1) (net_name "GND") (layers "F&B.Cu") (uuid "n") {_fill("F.Cu")} {_fill("B.Cu")})'
+    report = _report_for(monkeypatch, f'(kicad_pcb {_BOARD_LAYERS} (footprint "x" {zone}))')
+
+    assert (report["zones"][0]["status"], report["zones"][0]["filled_layers"]) == ("present", ["B.Cu", "F.Cu"])
+    assert report["status"] == "present"
+
+
+def test_a_nested_wildcard_zone_expands_to_the_board_copper_layers(monkeypatch) -> None:
+    zone = f'(zone (net 1) (net_name "GND") (layers "*.Cu") (uuid "w") {_fill("F.Cu")} {_fill("B.Cu")})'
+    report = _report_for(monkeypatch, f'(kicad_pcb {_BOARD_LAYERS} (footprint "x" {zone}))')
+
+    only = report["zones"][0]
+    assert only["intended_layers"] == ["F.Cu", "In1.Cu", "B.Cu"]
+    assert (only["status"], only["missing_layers"]) == ("partial", ["In1.Cu"])
+
+
+def test_zones_in_every_footprint_are_examined_not_only_the_first(monkeypatch) -> None:
+    first = f'(footprint "a" (zone (net 1) (net_name "A") (layer "F.Cu") (uuid "za") {_fill("F.Cu")}))'
+    second = '(footprint "b" (zone (net 2) (net_name "B") (layer "F.Cu") (uuid "zb")))'
+    board_level = '(zone (net 3) (net_name "C") (layer "B.Cu") (uuid "zc"))'
+    report = _report_for(monkeypatch, f"(kicad_pcb {_BOARD_LAYERS} {first} {second} {board_level})")
+
+    assert sorted((z["uuid"], z["status"]) for z in report["zones"]) == [
+        ("za", "present"),
+        ("zb", "none"),
+        ("zc", "none"),
+    ]
+
+
+def test_a_nested_multilayer_zone_through_the_write_layer_on_a_tmp_copy(tmp_path: Path) -> None:
+    """The same nested two-layer case on a real file written through the write layer."""
+    pcb = _copy(GOLDEN, tmp_path)
+    root = write_layer.load(pcb)
+    footprint = next(c for c in root.children if c.name == "footprint")
+    footprint.append(
+        parse_string(f'(zone (net 0) (net_name "") (layers "F&B.Cu") (uuid "u2") {_fill("F.Cu")})')
+    )
+    write_layer.save(root, pcb)
+
+    result = _grade(pcb)
+
+    assert [(z["status"], z["missing_layers"]) for z in result["stored_fill"]["zones"]] == [("partial", ["B.Cu"])]
     assert len(_stored_notes(result)) == 1

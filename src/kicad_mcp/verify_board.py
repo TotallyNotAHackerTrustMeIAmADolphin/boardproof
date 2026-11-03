@@ -708,7 +708,7 @@ def _read_stored_fill(pcb_path: str | Path) -> dict[str, Any]:
     table = root.find("layers")
     if table is not None:
         for entry in table.children:
-            name = entry.values[1] if len(entry.values) > 1 else None
+            name = entry.values[0] if entry.values else None  # (0 "F.Cu" signal): number is the node name
             if isinstance(name, str) and name.endswith(".Cu"):
                 board_copper.append(name)
     zones: list[dict[str, Any]] = []
