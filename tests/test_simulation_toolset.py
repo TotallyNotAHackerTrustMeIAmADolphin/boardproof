@@ -247,7 +247,7 @@ def test_build_registers_expected_tools():
 # The fixtures in tests/fixtures/spice/ are the raw `wrdata` files and the stdout of the real
 # ngspice-47 (official Windows build, ngspice_con.exe) run on the netlists beside them; see the
 # README there. The live tests below run the same circuits through the tool and need the binary
-# (NGSPICE_PATH): they skip without it, and fail when NGSPICE_REQUIRED is set (the gate run).
+# (NGSPICE_PATH): they skip without it, and fail when NGSPICE_REQUIRED is set by hand (the gate does not set it).
 
 SPICE_FIXTURES = Path(__file__).parent / "fixtures" / "spice"
 RC_NETLIST = SPICE_FIXTURES / "rc_lowpass.cir"

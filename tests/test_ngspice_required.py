@@ -1,5 +1,5 @@
 """The ngspice guard (spice-simulation build ticket 02): a live test skips without ngspice in an
-ad-hoc run and fails when ``NGSPICE_REQUIRED`` is set (the gate run), the pinned version is the
+ad-hoc run and fails when ``NGSPICE_REQUIRED`` is set by hand (the gate does not set it), the pinned version is the
 one the recorded fixtures came from, and no other test module decides an ngspice skip itself."""
 from __future__ import annotations
 
@@ -133,7 +133,7 @@ def test_the_skip_message_names_the_optional_status_and_the_ticket():
 
 @pytest.mark.parametrize("process_flag", ["1", None])
 def test_an_explicit_env_wins_over_the_process_environment(monkeypatch, process_flag):
-    """The gate sets NGSPICE_REQUIRED=1 in the real environment; a caller passing its own env must
+    """A strict machine may set NGSPICE_REQUIRED=1 in the real environment (the gate does not); a caller passing its own env must
     still get that env's answer from ``exe_or_missing`` (it once ignored ``env`` for the decision)."""
     if process_flag is None:
         monkeypatch.delenv(_ngspice.REQUIRED_FLAG, raising=False)
