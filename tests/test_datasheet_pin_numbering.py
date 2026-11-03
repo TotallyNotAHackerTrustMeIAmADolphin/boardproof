@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from kicad_mcp.sourcing.datasheet import inspect_datasheet
+from kicad_mcp.sourcing.datasheet import _table_is_pin_like, inspect_datasheet
 
 
 def _pdf(path: Path, pages: list[str]) -> Path:
@@ -420,3 +420,131 @@ def test_f1_widened_pin_like_shapes_make_the_first_table_unverified(tmp_path, fi
 def test_f1_non_pin_tables_on_the_next_page_still_let_the_first_table_stand(tmp_path, rows):
     cont = _grid(50, 760, [60, 100, 200], rows)
     assert _ext(_two_page(tmp_path, "neg.pdf", cont), "SOT-23")["machine_extracted"] is True
+
+
+# ---- issue #46: limits of the next-page check (header depth, column order, id shapes, lookahead, rotation) ----
+
+
+
+
+def test_issue46_header_on_row_four_of_the_next_table_is_unverified(tmp_path):
+    rows = [["Device", "", ""], ["Table 3", "", ""], ["", "", ""], ["Pin No.", "Name", "Function"], ["Q", "X", "x"]]
+    cont = _grid(50, 760, [60, 100, 200], rows)
+    pn = _ext(_two_page(tmp_path, "row4.pdf", cont), "SOT-23")
+    assert pn["machine_extracted"] is False and "may continue" in pn["reason"]
+
+
+def test_issue46_id_on_a_late_row_only_is_unverified(tmp_path):
+    rows = [["a", "b", "c"], ["d", "e", "f"], ["g", "h", "i"], ["j", "k", "l"], ["7", "X", "x"]]
+    cont = _grid(50, 760, [60, 100, 200], rows)
+    assert _ext(_two_page(tmp_path, "late.pdf", cont), "SOT-23")["machine_extracted"] is False
+
+
+@pytest.mark.parametrize(
+    "rows",
+    [
+        [["GND", "1"], ["VIN", "2"]],
+        [["Name", "No."], ["GND", "3"], ["VIN", "4"]],
+        [["GND", "x", "3"], ["VIN", "y", "4"]],
+    ],
+)
+def test_issue46_next_table_with_the_name_before_the_number_is_unverified(tmp_path, rows):
+    cont = _grid(50, 760, [60, 100, 200][: len(rows[0])], rows)
+    assert _ext(_two_page(tmp_path, "namefirst.pdf", cont), "SOT-23")["machine_extracted"] is False
+
+
+@pytest.mark.parametrize("pin_id", ["P1.0", "1,2", "12345", "\uff13", "\uff21\uff11", "1-3", "A1.2", "10/11", "PA10", "3\u2024"])
+def test_issue46_pin_like_id_shapes(pin_id):
+    assert _table_is_pin_like([[pin_id, "X", "x"]]) is True
+    assert _table_is_pin_like([["GND", pin_id], ["VIN", pin_id]]) is True
+
+
+@pytest.mark.parametrize("cell", ["Ordering", "Part", "Max", "a", "x", "", "Name", "Function"])
+def test_issue46_plain_words_are_not_pin_like(cell):
+    assert _table_is_pin_like([[cell, cell], [cell, cell]]) is False
+
+
+def test_issue46_blank_page_between_two_parts_is_unverified(tmp_path):
+    cont = _grid(50, 760, [60, 100, 200], [["Pin No.", "Name", "Function"], ["3", "X", "x"]])
+    pdf = _pdf(tmp_path / "blank.pdf", [_pin_page("SOT-23", _FIRST_TWO), "", cont])
+    pn = _ext(pdf, "SOT-23")
+    assert pn["machine_extracted"] is False and "may continue" in pn["reason"]
+
+
+def test_issue46_figure_page_between_two_parts_is_unverified(tmp_path):
+    fig = _text(50, 750, "Package outline", 14) + "100 400 200 100 re S\n"
+    cont = _grid(50, 760, [60, 100, 200], [["Pin No.", "Name", "Function"], ["3", "X", "x"]])
+    pdf = _pdf(tmp_path / "fig.pdf", [_pin_page("SOT-23", _FIRST_TWO), fig, fig, cont])
+    assert _ext(pdf, "SOT-23")["machine_extracted"] is False
+
+
+def test_issue46_pin_table_beyond_the_lookahead_window_is_a_stated_limit(tmp_path):
+    cont = _grid(50, 760, [60, 100, 200], [["Pin No.", "Name", "Function"], ["3", "X", "x"]])
+    pdf = _pdf(tmp_path / "far.pdf", [_pin_page("SOT-23", _FIRST_TWO), "", "", "", "", cont])
+    assert _ext(pdf, "SOT-23")["machine_extracted"] is True  # limit: only the next 3 pages are read
+
+
+@pytest.mark.parametrize("rotate", [90, 180, 270])
+def test_issue46_rotated_next_page_pin_table_is_unverified(tmp_path, rotate):
+    cont = _grid(50, 760, [60, 100, 200], [["Pin No.", "Name", "Function"], ["3", "X", "x"]])
+    src = _pdf(tmp_path / "unrot.pdf", [_pin_page("SOT-23", _FIRST_TWO), cont])
+    raw = src.read_bytes()
+    first = raw.index(b"/MediaBox")
+    second = raw.index(b"/MediaBox", first + 1)
+    rotated = raw[:second] + b"/Rotate %d " % rotate + raw[second:]
+    (tmp_path / "rot.pdf").write_bytes(rotated)
+    assert _ext(tmp_path / "rot.pdf", "SOT-23")["machine_extracted"] is False
+
+
+@pytest.mark.parametrize("rotate", [90, 270])
+def test_issue46_rotated_next_page_with_name_first_rows_is_unverified(tmp_path, rotate):
+    cont = _grid(50, 760, [100, 60], [["GND", "3"], ["VIN", "4"]])
+    src = _pdf(tmp_path / "unrot2.pdf", [_pin_page("SOT-23", _FIRST_TWO), cont])
+    raw = src.read_bytes()
+    first = raw.index(b"/MediaBox")
+    second = raw.index(b"/MediaBox", first + 1)
+    (tmp_path / "rot2.pdf").write_bytes(raw[:second] + b"/Rotate %d " % rotate + raw[second:])
+    assert _ext(tmp_path / "rot2.pdf", "SOT-23")["machine_extracted"] is False
+
+
+def test_issue46_landscape_next_page_pin_table_is_unverified(tmp_path):
+    cont = _grid(50, 560, [60, 100, 200], [["Pin No.", "Name", "Function"], ["3", "X", "x"]])
+    raw = _pdf(tmp_path / "unland.pdf", [_pin_page("SOT-23", _FIRST_TWO), cont]).read_bytes()
+    first = raw.index(b"/MediaBox [0 0 600 800]")
+    second = raw.index(b"/MediaBox [0 0 600 800]", first + 1)
+    (tmp_path / "land.pdf").write_bytes(raw[:second] + raw[second:].replace(b"[0 0 600 800]", b"[0 0 800 600]", 1))
+    assert _ext(tmp_path / "land.pdf", "SOT-23")["machine_extracted"] is False
+
+
+def test_issue46_image_render_never_replaces_an_existing_file(tmp_path):
+    page = _text(50, 750, "SOT-23 package pin configuration", 14) + "100 400 200 100 re S\n"
+    pdf = _pdf(tmp_path / "keep.pdf", [page])
+    out = tmp_path / "img"
+    out.mkdir()
+    mine = out / "keep_p1.png"
+    mine.write_bytes(b"my own file")
+    pn = inspect_datasheet(pdf, package="SOT-23", image_dir=out)["pin_numbering"]
+    written = Path(pn["page_images"][0]["path"])
+    assert mine.read_bytes() == b"my own file"
+    assert written != mine and written.read_bytes().startswith(b"\x89PNG")
+    again = inspect_datasheet(pdf, package="SOT-23", image_dir=out)["pin_numbering"]
+    assert Path(again["page_images"][0]["path"]) == written  # same content: the same file, no litter
+    assert sorted(p.name for p in out.iterdir()) == sorted([mine.name, written.name])
+
+
+def test_issue46_rotated_rule_reads_a_reversed_header_and_reversed_id():
+    # only the reversed reading is pin-like: pdfplumber returns characters reversed on 180/270 pages
+    assert _table_is_pin_like([["noitcnuF", "emaN", ".oN niP"]], rotated=True) is True
+    assert _table_is_pin_like([["X", "01A"]], rotated=True) is True
+    assert _table_is_pin_like([["noitcnuF", "emaN", ".oN niP"]], rotated=False) is False
+
+
+def test_issue46_a_directory_named_like_the_png_counts_as_a_taken_name(tmp_path):
+    page = _text(50, 750, "SOT-23 package pin configuration", 14) + "100 400 200 100 re S\n"
+    pdf = _pdf(tmp_path / "dir.pdf", [page])
+    out = tmp_path / "img"
+    (out / "dir_p1.png").mkdir(parents=True)
+    pn = inspect_datasheet(pdf, package="SOT-23", image_dir=out)["pin_numbering"]
+    written = Path(pn["page_images"][0]["path"])
+    assert written.name == "dir_p1_2.png" and written.read_bytes().startswith(b"\x89PNG")
+    assert (out / "dir_p1.png").is_dir()

@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import re
 import struct
+import unicodedata
 import zlib
 from pathlib import Path
 from typing import Any
@@ -335,51 +336,96 @@ def _large_images(page: Any) -> bool:
 
 
 # Deliberately wider than the parser's _PIN_ID_RE / _PIN_COL_RE: the parser must stay strict (a
-# row it accepts becomes a pin), while this predicate only decides whether a next-page table
+# row it accepts becomes a pin), while this predicate only decides whether a later-page table
 # looks like pin data, where a false positive costs a "may continue" and a false negative
-# lets foreign pins hide behind a verified table.
-_PIN_LIKE_ID_RE = re.compile(r"^(\d{1,4}\.?|\d{1,3}[A-Z]|[A-Z]{1,2}\d{1,2}[A-Z]?|EP)$", re.IGNORECASE)
+# lets foreign pins hide behind a verified table. Cells are NFKC-normalised first, so full-width
+# digits and letters read as ASCII.
+_PIN_LIKE_ID_PART = r"[A-Z]{0,3}\d{1,5}[A-Z]?"
+_PIN_LIKE_ID_RE = re.compile(
+    rf"^(EP|{_PIN_LIKE_ID_PART}(?:[.,/\-]\s?{_PIN_LIKE_ID_PART})*\.?)$", re.IGNORECASE
+)
 _PIN_LIKE_HEADER_RE = re.compile(
     r"^(pins?(\s*(no\.?|number|#|name))?|pin\s*/\s*pad|no\.?|number|pad|terminals?)$", re.IGNORECASE
 )
-_PIN_LIKE_ROWS = 3  # a title row or two may sit above the header
+_LOOKAHEAD_PAGES = 3  # pages after the table that are searched for a pin-like table
 
 
-def _table_is_pin_like(rows: list[list[Any]]) -> bool:
-    """True when one of the first rows of a table has a pin-column header cell or starts with a
-    pin-like identifier (the first non-blank cell, so a blank leading cell does not hide it)."""
-    for row in rows[:_PIN_LIKE_ROWS]:
-        cells = [_clean(c) for c in row]
-        if any(_PIN_LIKE_HEADER_RE.match(c) or _PIN_COL_RE.match(c) for c in cells):
+def _is_id(cell: str) -> bool:
+    return bool(_PIN_LIKE_ID_RE.match(cell) or _PIN_ID_RE.match(cell))
+
+
+def _is_header(cell: str) -> bool:
+    return bool(_PIN_LIKE_HEADER_RE.match(cell) or _PIN_COL_RE.match(cell))
+
+
+def _table_is_pin_like(rows: list[list[Any]], rotated: bool = False) -> bool:
+    """True when any row of a table has a pin-column header cell or starts with a pin-like
+    identifier (the first non-blank cell, so a blank leading cell does not hide it), or when
+    one column holds a pin-like identifier in at least two rows (the name-first, headerless
+    shape). Every row is examined, so a header on row four is found.
+
+    On a rotated page pdfplumber hands the grid back transposed, with rows and character order
+    reversed (checked at 90, 180 and 270 degrees), so none of those shapes can be relied on:
+    there any cell, or its reversal, that is a pin-like identifier or pin header counts."""
+    grid = [[unicodedata.normalize("NFKC", _clean(c)) for c in row] for row in rows]
+    if rotated:
+        return any(_is_id(c) or _is_header(c) or _is_id(c[::-1]) or _is_header(c[::-1]) for row in grid for c in row if c)
+    for cells in grid:
+        if any(_is_header(c) for c in cells):
             return True
         first = next((c for c in cells if c), "")
-        if first and (_PIN_LIKE_ID_RE.match(first) or _PIN_ID_RE.match(first)):
+        if first and _is_id(first):
             return True
-    return False
+    width = max((len(r) for r in grid), default=0)
+    return any(sum(1 for r in grid if ci < len(r) and r[ci] and _is_id(r[ci])) >= 2 for ci in range(width))
 
 
 def _may_continue(pdf: Any, page_index: int) -> bool:
-    """True when ANY table on the next page is pin-like, whatever heading it sits under.
+    """True when ANY table on any of the next _LOOKAHEAD_PAGES pages is pin-like, whatever
+    heading it sits under.
 
-    Fail closed (issue #39, rounds 4 and 5): no attempt is made to tell a continuation of the
-    first table from the table of another package or part, because any such heading
-    heuristic can fail open. Every pin-like table on the next page counts, not only the first
-    one, and for each table the first rows are examined (see _table_is_pin_like), so an
-    ordering table above the pin table or a title row above its header does not hide it. A
-    table is pin-like when one of its first rows has a pin-column header cell or starts with a
-    pin-like identifier. The first table stands only when the next page has no table, only
-    tables of empty cells, or only tables of other shapes.
+    Fail closed (issue #39, rounds 4 and 5; issue #46): no attempt is made to tell a
+    continuation of the first table from the table of another package or part, because any
+    such heading heuristic can fail open. Every pin-like table counts, not only the first one,
+    every row of each is examined (see _table_is_pin_like), and a blank or figure page between
+    two parts does not hide a following pin table. A table is pin-like when one of its rows has
+    a pin-column header cell or starts with a pin-like identifier, or a column holds such
+    identifiers in two rows. A rotated page is read with the looser rotated rule. The first
+    table stands only when those pages have no table, only tables of empty cells, or only
+    tables of other shapes.
 
-    Known limits, not handled: only the page directly after the table is looked at, so a blank
-    page between two parts (F2) hides a following pin table; a rotated page (F3) may yield
-    tables whose cells are read in another order or not found. Both still give true."""
-    if page_index + 1 >= len(pdf.pages):
-        return False
-    for table in pdf.pages[page_index + 1].find_tables():
-        rows = table.extract()
-        if rows and _table_is_pin_like(rows):
-            return True
+    Known limits, not handled (issue #46): a pin table more than _LOOKAHEAD_PAGES pages after the
+    first one is not seen; a pin table drawn as an image or as text without ruled cells is not
+    seen (the same blindness as the main extraction); on a rotated page a table that
+    pdfplumber does not find stays unseen. Landscape pages (wider than tall, no rotation flag)
+    are read like portrait ones and are tested."""
+    for nxt in range(page_index + 1, min(page_index + 1 + _LOOKAHEAD_PAGES, len(pdf.pages))):
+        page = pdf.pages[nxt]
+        rotated = bool(page.rotation % 360)
+        for table in page.find_tables():
+            rows = table.extract()
+            if rows and _table_is_pin_like(rows, rotated):
+                return True
     return False
+
+
+def _write_png_without_replacing(out: Path, stem: str, data: bytes) -> Path:
+    """Write the PNG as <stem>.png, or <stem>_2.png, <stem>_3.png ... when a file of another
+    content already has the name: an existing file is never replaced (issue #46). A file with
+    the same bytes is reused, so repeated calls leave no copies."""
+    n = 1
+    while True:
+        dest = out / (f"{stem}.png" if n == 1 else f"{stem}_{n}.png")
+        try:
+            with dest.open("xb") as fh:
+                fh.write(data)
+            return dest
+        except (FileExistsError, PermissionError, IsADirectoryError):
+            if not dest.exists():
+                raise  # a real permission problem, not a taken name
+            if dest.is_file() and dest.read_bytes() == data:
+                return dest
+            n += 1
 
 
 def _package_pin_numbering(pdf_path: Path, package: str, image_dir: str | Path | None) -> dict[str, Any]:
@@ -459,8 +505,7 @@ def _package_pin_numbering(pdf_path: Path, package: str, image_dir: str | Path |
                     area, crop = page.crop(bbox), "images"
                 else:
                     area, crop = page, "full_page"
-                dest = out / f"{pdf_path.stem}_p{page_no}.png"
-                dest.write_bytes(_png_bytes(area))
+                dest = _write_png_without_replacing(out, f"{pdf_path.stem}_p{page_no}", _png_bytes(area))
                 images.append(
                     {
                         "page": page_no,

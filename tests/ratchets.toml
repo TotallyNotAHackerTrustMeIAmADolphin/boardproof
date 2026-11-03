@@ -35,11 +35,11 @@ read_only_reach = "KRT runs only on trial copies in this codebase (propose_route
 
 [[raw_write]]
 file = "sourcing/datasheet.py"
-function = "_package_pin_numbering"
-kind = "write_bytes"
-code = '''dest.write_bytes(_png_bytes(area))'''
+function = "_write_png_without_replacing"
+kind = "open"
+code = '''dest.open('xb')'''
 kicad_file = false
-note = "Writes a PNG crop of a datasheet page into the caller-given image_dir (issue 39); not a KiCad file."
+note = "Writes a PNG crop of a datasheet page into the caller-given image_dir (issue 39), in exclusive-create mode so an existing file is never replaced (issue 46); not a KiCad file."
 
 [[raw_write]]
 file = "routers/kicad_routing_tools.py"
@@ -811,7 +811,7 @@ reaches = ["sourcing/datasheet.py | fetch_datasheet | open"]
 
 [not_a_file_writer.inspect_datasheet]
 reason = "Renders PNG crops of datasheet pages into the caller-given image_dir (issue 39), not a KiCad file."
-reaches = ["sourcing/datasheet.py | _package_pin_numbering | write_bytes"]
+reaches = ["sourcing/datasheet.py | _write_png_without_replacing | open"]
 
 [not_a_file_writer.export_manufacturing_package]
 reason = "Writes gerbers, drill, BOM and CPL exports, not KiCad source files (ticket 07)."
