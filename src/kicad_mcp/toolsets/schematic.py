@@ -89,9 +89,10 @@ def _incomplete(reason: str, **extra: Any) -> dict:
 def _carriage_returns(value: Any, where: str) -> list[str]:
     """Paths (``specs[0].text``) of every input string that holds a carriage return.
 
-    kicad_tools 0.20.0 writes a ``\\r`` inside a string raw (docs/ARCHITECTURE.md decision 1:
-    escaping is build ticket 42's write layer) and its parser drops it on reload, so the
-    text would not survive. The tools refuse such input before loading anything.
+    kicad_tools up to 0.24.0 writes a ``\\r`` inside a string raw (docs/ARCHITECTURE.md decision 1:
+    escaping is build ticket 42's write layer) and its parser reads it back as a line feed, so
+    the text would not survive (0.25.0 escapes it; the refusal stays, with its backstop in
+    ``_write_schematic_utf8``). The tools refuse such input before loading anything.
     """
     if isinstance(value, str):
         return [where] if "\r" in value else []

@@ -658,3 +658,21 @@ def test_a_carriage_return_in_input_text_is_refused_up_front(tmp_path, sch_tools
     assert "carriage return" in result["reason"] and field in result["reason"], result
     assert dest.read_bytes() == before
     assert sorted(p.name for p in tmp_path.iterdir()) == ["sch.kicad_sch"]
+
+
+def test_the_carriage_return_backstop_fires_on_any_kicad_tools_version(tmp_path, monkeypatch):
+    # Issue 48: the test above returns early on kicad-tools 0.25+, where the CR is escaped and
+    # the backstop is unreachable. Here the serialised text is made to hold a raw CR directly
+    # (what a library that writes it raw would produce), so the backstop is exercised on every version.
+    from kicad_tools.schematic.models.schematic import Schematic
+
+    dest = tmp_path / "sch.kicad_sch"
+    shutil.copy(FIXTURE, dest)
+    before = dest.read_bytes()
+    sch = Schematic.load(dest)
+    monkeypatch.setattr(schematic_toolset, "_schematic_text", lambda _sch: '(kicad_sch (label "A\rB"))\n')
+    with pytest.raises(ValueError, match="carriage return"):
+        schematic_toolset._write_schematic_utf8(sch, dest)
+
+    assert dest.read_bytes() == before
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["sch.kicad_sch"], "nothing written, no temporary file"

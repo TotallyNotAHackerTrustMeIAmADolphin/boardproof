@@ -6,7 +6,8 @@ silently or fail:
 
 - a string set through ``SExp.set_value`` that looks numeric is written bare (``100``), and
   KiCad refuses the file;
-- ``\r`` inside a string is written raw, and ``kicad_tools`` reads it back as ``\n``;
+- ``\r`` inside a string is written raw, and ``kicad_tools`` reads it back as ``\n`` (true up to
+  0.24.0; 0.25.0 escapes it and reads it exactly, and the layer still escapes it itself);
 - a new float is written with 6 significant digits (``%.6g``: 1234.56789 becomes 1234.57),
   and ``-0.0`` becomes ``0``;
 - 0.23.0's ``PCB.save`` cannot save on Windows (``OSError [Errno 9]``, upstream #7478).
