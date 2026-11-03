@@ -28,7 +28,11 @@ revision out of place):
 - ``side_view_render``: ``kicad-cli pcb render --side front`` of a scratch board that carries the
   adopted footprint, once with and once without its model. The model must add a silhouette above
   the board's top face (at least 0.1 mm, or 2 px where the image cannot resolve that) and none
-  below the bottom face. A render that cannot run or be read is ``incomplete``, never clean.
+  below the bottom face. A render that cannot run or be read is ``incomplete``, never clean. A
+  silhouette that touches the image edge is clipped: its figure is reported as
+  ``body_above_board_at_least_mm`` (or ``..._below_...``) with ``..._clipped`` true, never as a
+  measurement under ``body_above_board_mm``.
+- a footprint without pads is rejected at the proposal (nothing to match the symbol's pins to).
 
 Named limits: the render check sees the HEIGHT profile of the body in the side view only. A model
 shifted along the board's plane, rotated about the vertical axis, or mirrored in X or Y still
@@ -393,7 +397,11 @@ def _plan_part(
             problems.append("the symbol has no pins")
         symbol_pads = {p[0] for p in _pins(sym_found[1])}
         pads = set(_pad_numbers(fp_found[0]))
-        if pads and symbol_pads and not symbol_pads <= pads:
+        if not pads:
+            problems.append(
+                f"the footprint {footprint_name!r} has no pads: the symbol's pins cannot be matched to anything"
+            )
+        elif symbol_pads and not symbol_pads <= pads:
             problems.append(
                 f"symbol pins {sorted(symbol_pads - pads)[:5]} have no pad in the footprint {footprint_name!r}"
             )
@@ -589,13 +597,18 @@ def _read_png_alpha_rows(path: Path) -> list[bool]:
 def _silhouette(path: Path) -> tuple[int, int]:
     """First and last row (from the top) with any opaque pixel. A render with no transparent
     background (the whole image opaque) cannot be measured and raises ``_Unreadable``."""
+    return _silhouette_rows(path)[:2]
+
+
+def _silhouette_rows(path: Path) -> tuple[int, int, int]:
+    """``(first row, last row, image height)`` of the opaque pixels; same refusals as ``_silhouette``."""
     rows = _read_png_alpha_rows(path)
     filled = [i for i, r in enumerate(rows) if r]
     if not filled:
         raise _Unreadable("the render is empty")
     if filled[0] == 0 and filled[-1] == len(rows) - 1 and len(filled) == len(rows):
         raise _Unreadable("the render has no transparent background, so the silhouette cannot be measured")
-    return filled[0], filled[-1]
+    return filled[0], filled[-1], len(rows)
 
 
 def kicad_cli_render(board: Path, png: Path, side: str) -> dict:
@@ -681,8 +694,8 @@ def _render_check(
             evidence["top"] = None
             evidence["top_note"] = f"not made: {top_result.get('reason')}"
         try:
-            with_top, with_bottom = _silhouette(front)
-            bare_top, bare_bottom = _silhouette(baseline)
+            with_top, with_bottom, with_height = _silhouette_rows(front)
+            bare_top, bare_bottom, _ = _silhouette_rows(baseline)
         except _Unreadable as exc:
             check["detail"] = f"the render cannot be measured: {exc}"
             return check, evidence
@@ -700,25 +713,57 @@ def _render_check(
         return check, evidence
     rise_mm, sink_mm = rise_px / px_per_mm, sink_px / px_per_mm
     need_mm = max(MIN_RISE_MM, MIN_RISE_PX / px_per_mm)
-    measured = {"body_above_board_mm": round(rise_mm, 3), "body_below_board_mm": round(sink_mm, 3)}
-    evidence.update(measured)
+    # A silhouette that touches the image edge is cut off there: the figure is then a lower
+    # bound, reported under another key and worded "at least", never as a measurement.
+    rise_clipped, sink_clipped = with_top == 0, with_bottom == with_height - 1
+    evidence["body_above_board_clipped"] = rise_clipped
+    evidence["body_below_board_clipped"] = sink_clipped
+    evidence["body_above_board_at_least_mm" if rise_clipped else "body_above_board_mm"] = round(rise_mm, 3)
+    evidence["body_below_board_at_least_mm" if sink_clipped else "body_below_board_mm"] = round(sink_mm, 3)
+    rise_text = f"{'at least ' if rise_clipped else ''}{rise_mm:.2f} mm"
+    sink_text = f"{'at least ' if sink_clipped else ''}{sink_mm:.2f} mm"
+    clip_note = (
+        " (the render is clipped at the image edge, so the figure is a lower bound, not a measurement)"
+        if rise_clipped or sink_clipped
+        else ""
+    )
+    cut_off = (
+        "the render is cut off at the image edge, so the {what} is only a lower bound and the check cannot "
+        "decide: use a taller render or look at the saved images"
+    )
     if sink_mm > max(MAX_SINK_MM, MIN_RISE_PX / px_per_mm):
+        # a lower bound that already exceeds the limit is a valid fail
         check.update(
             status="fail",
-            detail=f"the model reaches {sink_mm:.2f} mm below the board's bottom face: it is mounted upside down "
-            "or offset in Z",
+            detail=f"the model reaches {sink_text} below the board's bottom face{clip_note}: it is mounted "
+            "upside down or offset in Z",
+        )
+    elif sink_clipped:
+        # within the limit as a lower bound only: the true sink may exceed it
+        check.update(
+            status="incomplete",
+            detail=f"the model reaches at least {sink_mm:.2f} mm below the bottom face; "
+            + cut_off.format(what="sink"),
+        )
+    elif rise_mm < need_mm and rise_clipped:
+        check.update(
+            status="incomplete",
+            detail=f"the model adds at least {rise_mm:.2f} mm above the top face, less than the {need_mm:.2f} mm "
+            "needed; " + cut_off.format(what="rise"),
         )
     elif rise_mm < need_mm:
         check.update(
             status="fail",
-            detail=f"the model adds {rise_mm:.2f} mm above the board's top face, less than the {need_mm:.2f} mm "
-            "needed: it is missing, not loaded, flat, or sunk into the board",
+            detail=f"the model adds {rise_text} above the board's top face, less than the {need_mm:.2f} mm "
+            f"needed{clip_note}: it is missing, not loaded, flat, or sunk into the board",
         )
     else:
+        # a clipped rise that already meets the needed height passes: a lower bound suffices
         check.update(
             status="pass",
-            detail=f"the model rises {rise_mm:.2f} mm above the top face and {sink_mm:.2f} mm below the bottom face "
-            "(height profile only: sideways shift and rotation are for the human to judge in the renders)",
+            detail=f"the model rises {rise_text} above the top face and {sink_text} below the bottom face"
+            f"{clip_note} (height profile only: sideways shift and rotation are for the human to judge in the "
+            "renders)",
         )
     return check, evidence
 

@@ -613,3 +613,184 @@ def test_an_empty_model_file_fails_the_file_check(project: Path, tmp_path: Path,
     result = pa.confirm_adopt_parts(project, proposed["revision_token"])
     assert result["status"] == "failed", result
     assert ("model_file_present", "fail") in _failed_checks(result)
+
+
+# --------------------------------------------------------------------------- follow-ups of ticket 38 (issue 50)
+
+
+def _edit_footprint(part: dict, edit) -> None:
+    """Rewrite the one footprint of a ``_part_assets`` part through the write layer."""
+    path = next(Path(part["footprint_dir"]).glob("*.kicad_mod"))
+    root = write_layer.load(path)
+    edit(root)
+    path.unlink()
+    write_layer.save(root, path)
+
+
+def test_a_footprint_without_pads_is_rejected_not_waved_through(project: Path, tmp_path: Path) -> None:
+    part = _part_assets(tmp_path, "C100")
+
+    def drop_pads(root: SExp) -> None:
+        for pad in pa._children(root, "pad"):
+            root.remove(pad)
+
+    _edit_footprint(part, drop_pads)
+    result = _propose(project, [part], tmp_path / "rev")
+    assert result["status"] == "blocked"
+    assert result["revision_token"] is None
+    assert any("no pads" in p for p in result["parts"][0]["problems"]), result["parts"][0]["problems"]
+
+
+def _tall_png(width: int, first_row: int, last_row: int, height: int = 240) -> bytes:
+    opaque = bytes([200, 0, 0, 255]) * width
+    clear = bytes(4 * width)
+    rows = [opaque if first_row <= y <= last_row else clear for y in range(height)]
+    return _png(width, height, rows, [0] * height)
+
+
+@needs_cli
+def test_a_body_height_clipped_by_the_render_is_reported_as_clipped(project: Path, tmp_path: Path) -> None:
+    proposed = _propose(project, [_part_assets(tmp_path, "C100")], tmp_path / "rev")
+
+    def clipped_render(board, png, side):
+        name = png.name
+        # the bare slab is rows 100..119; with the model the silhouette runs off the top of the image
+        data = _tall_png(4, 100, 119) if "without_model" in name else _tall_png(4, 0, 119)
+        png.write_bytes(data)
+        return {"status": "ok"}
+
+    result = pa.confirm_adopt_parts(project, proposed["revision_token"], render=clipped_render)
+    assert result["status"] == "adopted", result
+    part = result["parts"][0]
+    check = next(c for c in part["checks"] if c["check"] == "side_view_render")
+    assert check["status"] == "pass"
+    assert "at least" in check["detail"] and "clipped" in check["detail"]
+    assert part["evidence"]["body_above_board_clipped"] is True
+    assert "body_above_board_mm" not in part["evidence"]  # a lower bound is not a measurement
+    assert part["evidence"]["body_above_board_at_least_mm"] > 0
+
+
+@needs_cli
+def test_an_unclipped_body_height_stays_a_measurement(project: Path, tmp_path: Path) -> None:
+    proposed = _propose(project, [_part_assets(tmp_path, "C100")], tmp_path / "rev")
+
+    def fine_render(board, png, side):
+        png.write_bytes(_tall_png(4, 100, 119) if "without_model" in png.name else _tall_png(4, 90, 119))
+        return {"status": "ok"}
+
+    result = pa.confirm_adopt_parts(project, proposed["revision_token"], render=fine_render)
+    assert result["status"] == "adopted", result
+    evidence = result["parts"][0]["evidence"]
+    assert evidence["body_above_board_mm"] > 0
+    assert evidence["body_above_board_clipped"] is False
+    assert "body_above_board_at_least_mm" not in evidence
+
+
+def _easyeda_shaped(tmp: Path, lcsc: str) -> dict:
+    """Like an easyeda2kicad footprint: the pads sit away from the footprint origin and the
+    (model ...) carries an XY offset and a rotation about the vertical axis."""
+    part = _part_assets(tmp, lcsc)
+
+    def shape(root: SExp) -> None:
+        for pad in pa._children(root, "pad"):
+            at = pad.find("at")
+            write_layer.set_number(at, 0, float(at.values[0]) + 12.0)
+            write_layer.set_number(at, 1, float(at.values[1]) - 15.0)
+        model = pa._model_nodes(root)[0]
+        model.find("offset").find("xyz").children[:] = [write_layer.number(v) for v in (1.5, -0.8, 0)]
+        model.append(SExp.list("rotate", SExp.list("xyz", 0, 0, 90)))
+
+    _edit_footprint(part, shape)
+    return part
+
+
+@needs_cli
+def test_an_easyeda_shaped_footprint_with_offset_and_rotation_is_adopted_unchanged(project: Path, tmp_path: Path) -> None:
+    part = _easyeda_shaped(tmp_path, "C100")
+    proposed = _propose(project, [part], tmp_path / "rev")
+    assert proposed["status"] == "proposed", proposed
+    result = pa.confirm_adopt_parts(project, proposed["revision_token"])
+    assert result["status"] == "adopted", result
+    assert {c["check"]: c["status"] for c in result["parts"][0]["checks"]}["side_view_render"] == "pass"
+    saved = write_layer.load(tmp_path / "rev" / "lib" / "project_parts.pretty" / "R_C100.kicad_mod")
+    model = pa._model_nodes(saved)[0]
+    assert [float(v) for v in model.find("offset").find("xyz").values] == [1.5, -0.8, 0.0]
+    assert [float(v) for v in model.find("rotate").find("xyz").values] == [0.0, 0.0, 90.0]
+    reach_x, reach_y = pa._pad_extent(saved)
+    assert reach_x > 12.0 and reach_y > 15.0  # the offset pads were really read from the raw (at ...)
+
+
+def test_the_tool_texts_name_the_new_behaviour() -> None:
+    tools = _tools()[1]
+    assert "no pads" in tools["propose_adopt_parts"].description
+    assert "clipped" in tools["confirm_adopt_parts"].description
+    assert "cut-off sink" in tools["confirm_adopt_parts"].description and "is incomplete" in tools["confirm_adopt_parts"].description
+
+
+def _render_with(project: Path, tmp_path: Path, bare: tuple[int, int], with_model: tuple[int, int]) -> dict:
+    proposed = _propose(project, [_part_assets(tmp_path, "C100")], tmp_path / "rev")
+
+    def stub(board, png, side):
+        rows = bare if "without_model" in png.name else with_model
+        png.write_bytes(_tall_png(4, *rows))
+        return {"status": "ok"}
+
+    return pa.confirm_adopt_parts(project, proposed["revision_token"], render=stub)
+
+
+def _render_part(result: dict) -> tuple[dict, dict]:
+    part = result["parts"][0]
+    return next(c for c in part["checks"] if c["check"] == "side_view_render"), part["evidence"]
+
+
+@needs_cli
+def test_a_clipped_sink_is_reported_as_a_lower_bound(project: Path, tmp_path: Path) -> None:
+    # the model runs off the bottom edge of the image: far below the slab, so even the lower bound fails
+    result = _render_with(project, tmp_path, (100, 119), (100, 239))
+    assert result["status"] == "failed", result
+    check, evidence = _render_part(result)
+    assert evidence["body_below_board_clipped"] is True
+    assert "body_below_board_mm" not in evidence
+    assert evidence["body_below_board_at_least_mm"] > 0
+    assert "at least" in check["detail"]
+
+
+@needs_cli
+def test_a_clipped_sink_whose_lower_bound_is_small_is_incomplete_never_pass(project: Path, tmp_path: Path) -> None:
+    # slab rows 230..238; with the model the silhouette ends on the last row (239): 1 px below the
+    # slab is within the limit, but the true sink is unknown
+    result = _render_with(project, tmp_path, (230, 238), (200, 239))
+    assert result["status"] == "incomplete", result
+    check, evidence = _render_part(result)
+    assert check["status"] == "incomplete"
+    assert evidence["body_below_board_clipped"] is True
+    assert "cut off" in check["detail"]
+
+
+@needs_cli
+def test_a_clipped_rise_that_is_too_small_is_incomplete_not_fail(project: Path, tmp_path: Path) -> None:
+    # slab rows 1..20; the model reaches row 0: a 1 px rise that is only a lower bound
+    result = _render_with(project, tmp_path, (1, 20), (0, 20))
+    assert result["status"] == "incomplete", result
+    check, evidence = _render_part(result)
+    assert evidence["body_above_board_clipped"] is True
+    assert "cut off" in check["detail"]
+
+
+@needs_cli
+def test_the_scratch_board_covers_the_offset_pads(tmp_path: Path) -> None:
+    part = _easyeda_shaped(tmp_path, "C100")
+    footprint_file = next(Path(part["footprint_dir"]).glob("*.kicad_mod"))
+    board, _ = pa._scratch_board(tmp_path, footprint_file, ".probe.kicad_pcb", with_model=False)
+    root = write_layer.load(board)
+    xs, ys = [], []
+    for node in pa._children(root, "gr_line"):
+        for key in ("start", "end"):
+            x, y = pa._floats(node.find(key))
+            xs.append(x)
+            ys.append(y)
+    width, height = max(xs) - min(xs), max(ys) - min(ys)
+    fp = pa._children(root, "footprint")[0]
+    reach_x, reach_y = pa._pad_extent(fp)
+    assert reach_x > 12.0 and reach_y > 15.0
+    assert width / 2 >= reach_x and height / 2 >= reach_y  # the footprint sits at the middle

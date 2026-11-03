@@ -978,7 +978,7 @@ def build(mcp: MCPServer) -> list[str]:
             "easyeda2kicad and its installed version. The mandatory symbol properties are Footprint, "
             "Datasheet, LCSC, Source (name and version) and License; a part missing one is rejected. "
             "Nothing is overwritten: a symbol or footprint name already in the library for another part, or "
-            "a model file with other content, rejects the part; a part whose LCSC id is already in the "
+            "a model file with other content, rejects the part, and so does a footprint with no pads; a part whose LCSC id is already in the "
             "library is reported already_adopted and skipped. Then call confirm_adopt_parts with the token."
         ),
         annotations={"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
@@ -995,7 +995,8 @@ def build(mcp: MCPServer) -> list[str]:
             "rise above the board's top face and not sink below its bottom face). Status adopted means every "
             "check passed; failed means a check failed; incomplete means a check could not run (for example "
             "the render): neither moves a revision into place, and incomplete is never to be reported as a "
-            "pass. The render check sees the height profile only: a model shifted sideways or rotated about the "
+            "pass. A body height the render cut off at the image edge is reported as clipped (an at-least figure, "
+            "never a measurement); a cut-off sink, or a cut-off rise below the needed height, is incomplete. The render check sees the height profile only: a model shifted sideways or rotated about the "
             "vertical axis is not caught by it, so tell the user to look at the front and top images in the "
             "revision's adoption_evidence folder before relying on the 3D model. It does not judge whether the "
             "model is the right part. The revision_token is single use and is refused with an error if the "
