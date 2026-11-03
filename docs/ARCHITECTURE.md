@@ -49,7 +49,7 @@ The server (`server.py`) starts with 19 tools and keeps 65 more in ten lazy tool
 - `routing` (6): `propose_route_with_retry` with `backend="freerouting"|"kicad_routing_tools"`, `confirm_route`, `diagnose_placement_congestion`.
 - `diagnostics` (2): renders, `authoritative: false`.
 - `manufacturing` (2): `export_manufacturing_package`, `panelize_board`.
-- `simulation` (2): the `kicad-cli` netlist export and a headless run of the real, pinned ngspice 47.
+- `simulation` (2): the `kicad-cli` netlist export and a headless run of the real, pinned ngspice 47 (optional in the batch gate while the simulation map is parked, issue 40: without it the live ngspice tests skip, as `scripts/known-skips.toml` allows).
 - `copilot` (9): live IPC.
 
 **Core modules:** `write_layer.py` (every KiCad file written; decision 1), `_self_check.py` (reload-and-compare, decision 4), `checkpoint.py` (token, drift check and verify-before-replace, once), `gate_state.py` (the `gate` field every board-state tool returns), `kicad_lock.py` (the lock-file guard, written but not yet wired into the tools), `raw_geometry.py` and `sheet_tree.py` (readers on raw tokens), `kicad_cli.py`.

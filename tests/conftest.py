@@ -45,8 +45,10 @@ def krt_checkout() -> Path:
 
 @pytest.fixture(scope="session")
 def ngspice_exe() -> Path:
-    """The pinned ngspice (``NGSPICE_PATH``, else PATH). Missing: skip with the reason, or fail
-    when ``NGSPICE_REQUIRED`` is set (build ticket 02, spice-simulation; rule in ``tests/_ngspice.py``)."""
+    """The pinned ngspice (``NGSPICE_PATH``, else PATH). Missing: skip with the reason (ngspice is
+    optional in the batch gate while the simulation map is parked, issue 40; known-skips.toml allows
+    those skips), or fail only when ``NGSPICE_REQUIRED`` is set (build ticket 02, spice-simulation;
+    rule in ``tests/_ngspice.py``)."""
     return _ngspice.exe_or_missing()
 
 

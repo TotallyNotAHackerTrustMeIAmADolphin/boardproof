@@ -24,7 +24,10 @@ Environment note: the ngspice subprocess is verified against a real, pinned bina
 (ngspice-47, official Windows build; NGSPICE_PATH points at ngspice_con.exe). The parser is
 pinned by raw `wrdata` files and stdout recorded from that binary
 (tests/fixtures/spice/), and the live tests run it for real: they skip without ngspice in an
-ad-hoc run and fail when NGSPICE_REQUIRED is set (the batch gate; tests/_ngspice.py).
+ad-hoc run and fail only when NGSPICE_REQUIRED is set. The batch gate does not set it: ngspice is
+optional in the gate while the simulation map is parked (owner decision of 2026-10-30, issue 40),
+so without NGSPICE_PATH the live tests skip, and scripts/known-skips.toml allows exactly those
+skips (counted and printed; tests/_ngspice.py).
 `export_spice_netlist` is verified end to end with the real `kicad-cli`.
 
 Evidence-gated throughout, per this project's standing convention: a
