@@ -9,6 +9,9 @@ index changes (commit, part counts, tier moves with a sample, parts added or rem
 ``src/kicad_mcp/sourcing/data/jlcpcb_basic_index.json``. ``Stock`` and ``Price`` are never read into
 the index: upstream rewrites them daily. The library is only read, never modified or executed.
 
+The index also records ``source.commit_date``, the committer date of the source commit (``git show -s
+--format=%cI``, run in the library checkout). If git cannot give it, no date is recorded and the lookup tools say so.
+
 Commit: with the default library the pinned commit is the submodule's gitlink in this repository
 (``git rev-parse HEAD:third_party/JLCPCB-Kicad-Library``), and a checkout that differs from it is
 refused. With ``--library`` you must name the commit with ``--commit`` (40 hex digits).
@@ -140,6 +143,21 @@ def _gitlink_commit() -> tuple[str | None, str]:
     return pinned.stdout.strip(), ""
 
 
+def _commit_date(library: Path, commit: str) -> str | None:
+    """Committer date (ISO 8601) of ``commit`` in the library checkout, or None when git cannot say."""
+    try:
+        done = subprocess.run(
+            ["git", "-C", str(library), "show", "-s", "--format=%cI", commit],
+            capture_output=True, text=True, check=False,
+        )
+    except OSError:
+        return None
+    text = done.stdout.strip()
+    if done.returncode != 0 or jlc.valid_index_date(text) is None:
+        return None
+    return text
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--library", type=Path, default=None, help="library checkout (default: the submodule)")
@@ -169,6 +187,11 @@ def main(argv: list[str] | None = None) -> int:
     if built.get("status") != "ok":
         return _fail(f"the library gave no usable index: {built.get('reason')}")
 
+    commit_date = _commit_date(library, commit)
+    if commit_date:
+        built["source"]["commit_date"] = commit_date
+    print(f"commit date: {commit_date or 'not recorded (git could not give the date of this commit)'}")
+
     target = args.index if args.index is not None else jlc.VENDORED_INDEX_PATH
     old = None
     if target.is_file():
@@ -197,6 +220,7 @@ def main(argv: list[str] | None = None) -> int:
             verified = (
                 back.get("parts") == built["parts"]
                 and (back.get("source") or {}).get("commit") == commit
+                and (back.get("source") or {}).get("commit_date") == commit_date
                 and back.get("counts") == built["counts"]
             )
         if not verified:

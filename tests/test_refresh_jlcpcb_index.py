@@ -236,3 +236,57 @@ def test_the_default_run_reads_the_pin_from_the_gitlink_and_refuses_a_wrong_chec
         assert (commit, problem) == (sha, "")
     else:
         assert commit is None and expected in problem
+
+
+DATE_A = "2026-09-21T10:11:12+00:00"
+
+
+def test_commit_date_is_read_from_git_for_the_named_commit(tmp_path, monkeypatch):
+    """Issue 49: the date comes from `git show -s --format=%cI <commit>` run in the library checkout."""
+    seen = {}
+
+    def fake_run(cmd, **_kw):
+        seen["cmd"] = cmd
+        return subprocess.CompletedProcess(cmd, 0, stdout=DATE_A + "\n", stderr="")
+
+    monkeypatch.setattr(refresh.subprocess, "run", fake_run)
+    assert refresh._commit_date(tmp_path, COMMIT_A) == DATE_A
+    assert seen["cmd"][:3] == ["git", "-C", str(tmp_path)] and COMMIT_A in seen["cmd"] and "--format=%cI" in seen["cmd"]
+
+
+@pytest.mark.parametrize("returncode,stdout", [(128, ""), (0, "not a date\n"), (0, "")])
+def test_commit_date_is_none_when_git_cannot_say(tmp_path, monkeypatch, returncode, stdout):
+    monkeypatch.setattr(refresh.subprocess, "run",
+                        lambda cmd, **_kw: subprocess.CompletedProcess(cmd, returncode, stdout=stdout, stderr="bad"))
+    assert refresh._commit_date(tmp_path, COMMIT_A) is None
+
+
+def test_a_refresh_records_the_commit_date_and_verifies_it(tmp_path, capsys, monkeypatch):
+    monkeypatch.setattr(refresh, "_commit_date", lambda lib, commit: DATE_A)
+    index = _first_index(tmp_path, capsys)
+    assert json.loads(index.read_text(encoding="utf-8"))["source"]["commit_date"] == DATE_A
+
+
+def test_a_refresh_without_a_date_says_so_and_records_none(tmp_path, capsys, monkeypatch):
+    monkeypatch.setattr(refresh, "_commit_date", lambda lib, commit: None)
+    lib = _library(tmp_path / "lib1")
+    index = tmp_path / "index.json"
+    code, out, _err = _run(capsys, "--library", lib, "--commit", COMMIT_A, "--index", index)
+    assert code == 0
+    assert "commit_date" not in json.loads(index.read_text(encoding="utf-8"))["source"]
+    assert "commit date: not recorded" in out
+
+
+def test_the_commit_date_is_part_of_the_write_check(tmp_path, capsys, monkeypatch):
+    monkeypatch.setattr(refresh, "_commit_date", lambda lib, commit: DATE_A)
+    real = refresh.jlc.write_index
+
+    def corrupting_write(payload, path=None):
+        bad = json.loads(json.dumps(payload))
+        bad["source"]["commit_date"] = "1999-01-01T00:00:00+00:00"
+        return real(bad, path)
+
+    monkeypatch.setattr(refresh.jlc, "write_index", corrupting_write)
+    index = tmp_path / "index.json"
+    code, _out, err = _run(capsys, "--library", _library(tmp_path / "lib"), "--commit", COMMIT_A, "--index", index)
+    assert code == 2 and "write_not_verified" in err and not index.exists()

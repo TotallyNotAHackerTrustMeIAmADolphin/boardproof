@@ -619,3 +619,40 @@ def test_search_parts_description_status_claims_match_behaviour():
     assert res["status"] == "provider_error"
     assert res["count"] == 0
     assert res["fallback"]["tool"] == "lookup_jlcpcb_part_tiers"
+
+
+@pytest.mark.parametrize("bad", ["yesterday", "2026-13-45", "20260102", 12345, "2026-01", "x" * 40])
+def test_index_info_reports_a_malformed_date_instead_of_passing_it_through(bad):
+    """Issue 49: a malformed commit_date is neither shown as the date nor silently dropped."""
+    from kicad_mcp.sourcing import jlcpcb_basic as jlc
+
+    payload = {"source": {"commit": "a" * 40, "commit_date": bad}, "parts": [{"lcsc": "C1", "mpn": "X", "tier": "basic"}]}
+    info = jlc.classify_parts(["C2"], index=jlc.JLCPCBBasicIndex(payload))["index"]
+    assert info["date"] is None
+    assert "malformed" in info["date_note"]
+    assert str(bad)[:20] in info["date_note"]
+
+
+@pytest.mark.parametrize("good,shown", [("2026-01-02T03:04:05+00:00", "2026-01-02"), ("2026-01-02T03:04:05Z", "2026-01-02"),
+                                        ("2026-01-02", "2026-01-02")])
+def test_index_info_accepts_iso_dates(good, shown):
+    from kicad_mcp.sourcing import jlcpcb_basic as jlc
+
+    payload = {"source": {"commit": "a" * 40, "commit_date": good}, "parts": [{"lcsc": "C1", "mpn": "X", "tier": "basic"}]}
+    info = jlc.classify_parts(["C2"], index=jlc.JLCPCBBasicIndex(payload))["index"]
+    assert info["date"] == shown and "date_note" not in info
+
+
+def test_search_parts_shows_the_same_index_block_as_lookup_jlcpcb_part_tiers():
+    """Issue 49: search_parts annotation answers from the index, so it names the index (commit, date or none, count)."""
+    from kicad_mcp.sourcing import jlcpcb_basic as jlc
+
+    PROVIDER_REGISTRY.register(_FakeProvider([PartResult(mpn="LM393DR2G", manufacturer="onsemi", lcsc_id="C7955",
+                                                         provider="fake")]))
+    tool = _search_parts_tool()
+    res = tool.fn("lm393")
+    block = res["jlcpcb_lookup"]["index"]
+    tiers = _build_and_get_fns(MCPServer("t2"), sourcing_toolset)["lookup_jlcpcb_part_tiers"](["C7955"])
+    assert block == tiers["index"]
+    assert block["commit"] and block["total_parts"] == len(jlc.load_index())
+    assert " ".join(tool.description.split()).count("jlcpcb_lookup.index") == 1

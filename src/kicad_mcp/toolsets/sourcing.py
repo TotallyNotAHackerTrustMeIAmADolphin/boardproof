@@ -406,8 +406,10 @@ def build(mcp: MCPServer) -> list[str]:
         `jlcpcb_class`) from a local index, so the caller can see which
         candidates avoid JLCPCB's per-part feeder loading fee without a
         second round-trip. A part missing from the index gets a null tier
-        (unknown), never a false "Extended". Pass annotate_jlcpcb=False to
-        skip it.
+        (unknown), never a false "Extended". The index that answered is named
+        in jlcpcb_lookup.index (commit, date or a note that none is recorded,
+        part count), the same block lookup_jlcpcb_part_tiers returns. Pass
+        annotate_jlcpcb=False to skip it.
         """
         if limit <= 0:
             return {"status": "error", "reason": "limit must be > 0"}
@@ -712,7 +714,10 @@ def build(mcp: MCPServer) -> list[str]:
             "(at least one provider failed; see provider_errors) or provider_error "
             "(every provider failed or none is registered: zero items says nothing "
             "about whether the part exists). On partial or provider_error the result "
-            "names a fallback (lookup_jlcpcb_part_tiers, the local JLCPCB tier index)."
+            "names a fallback (lookup_jlcpcb_part_tiers, the local JLCPCB tier index). "
+            "Items are stamped with the JLCPCB tier from that index; jlcpcb_lookup.index "
+            "names the index used (commit, date or a note that none is recorded, part count), "
+            "the same block lookup_jlcpcb_part_tiers returns."
         ),
         annotations={
             "readOnlyHint": True,

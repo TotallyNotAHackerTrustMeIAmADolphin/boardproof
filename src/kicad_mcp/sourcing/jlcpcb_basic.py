@@ -102,6 +102,7 @@ import json
 import os
 import re
 from collections.abc import Iterable, Sequence
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -316,6 +317,20 @@ def _result_for(identifier: str, match_type: str | None, entries: Sequence[dict]
     return base
 
 
+def valid_index_date(raw: Any) -> str | None:
+    """The ``YYYY-MM-DD`` part of an ISO 8601 date or datetime, or None when ``raw`` is not one."""
+    if not isinstance(raw, str):
+        return None
+    text = raw.strip()
+    try:
+        parsed = datetime.fromisoformat(text[:-1] + "+00:00" if text.endswith("Z") else text)
+    except ValueError:
+        return None
+    if len(text) < 10 or text[4] != "-":
+        return None
+    return parsed.date().isoformat()
+
+
 def index_info(idx: JLCPCBBasicIndex) -> dict:
     """Age and size of the index a lookup was answered from.
 
@@ -325,14 +340,19 @@ def index_info(idx: JLCPCBBasicIndex) -> dict:
     """
     commit = idx.source.get("commit")
     raw_date = idx.source.get("commit_date")
-    date = str(raw_date)[:10] if raw_date else None
+    date = valid_index_date(raw_date) if raw_date else None
     info: dict[str, Any] = {
         "date": date,
         "commit": commit,
         "total_parts": len(idx),
         "counts": dict(idx.counts),
     }
-    if date is None:
+    if date is None and raw_date:
+        info["date_note"] = (
+            f"the index records a commit date that is not an ISO 8601 date ({str(raw_date)[:40]!r}): "
+            "malformed, so no date is shown; judge its age from the commit"
+        )
+    elif date is None:
         info["date_note"] = (
             "the index records its upstream commit but not a date (date not recorded); "
             "judge its age from the commit"
@@ -447,6 +467,7 @@ def annotate_part_results(
         "count": len(annotated),
         "summary": summary,
         "index_source": idx.source,
+        "index": index_info(idx),
     }
     if unresolved:
         report["reason"] = (
