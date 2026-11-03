@@ -382,11 +382,13 @@ def _pour_problem(board: Path) -> str | None:
 # --- KiCadRoutingTools ----------------------------------------------------------------------------
 
 
-def parse_gap_facts(board: Path) -> dict:
+def parse_gap_facts(board: Path, timeout: float = 120) -> dict:
     """The KRT_PARSE_GAP check as attempt facts. Report only: it reads the board and never writes it,
-    and a check that cannot run says so in ``krt_parse_gap_check_error`` rather than staying silent."""
+    and a check that cannot run says so in ``krt_parse_gap_check_error`` rather than staying silent.
+    ``timeout`` bounds the KRT parse subprocess (issue 47: the attempt cap, not the parser's own)."""
     try:
-        gaps = krt_tools.krt_parse_gap(krt_tools.raw_pad_counts(board), krt_tools.parsed_pad_counts(board))
+        gaps = krt_tools.krt_parse_gap(
+            krt_tools.raw_pad_counts(board), krt_tools.parsed_pad_counts(board, timeout=timeout))
     except Exception as exc:  # noqa: BLE001 - an unreadable check is a disclosure, not a failed attempt
         return {"krt_parse_gap": [], "krt_parse_gap_check_error": f"{type(exc).__name__}: {exc}"[:500]}
     return {"krt_parse_gap": gaps, "krt_parse_gap_check_error": None}
@@ -407,7 +409,16 @@ def krt_backend() -> rung_runner.Backend:
         if filled:
             return _refuse("input-refused", filled)
 
-        parse_gap = parse_gap_facts(board)  # before the router: what KRT can read of this board
+        # Before the router: what KRT can read of this board. Issue 47: the parse is part of the
+        # attempt, so it is bounded by the cap, its time comes off the router's timeout and it is
+        # charged in router_elapsed_s below.
+        parse_started = time.monotonic()
+        parse_gap = parse_gap_facts(board, timeout=max(1, math.ceil(min(120.0, timeout_s))))
+        parse_s = time.monotonic() - parse_started
+        if timeout_s - parse_s < 1:
+            return {"status": "timeout", "cause": "router-timeout", "router_elapsed_s": parse_s,
+                    "facts": {"error": f"the pad parse used the attempt's {timeout_s:g} s cap", "timeout_s": timeout_s,
+                              **parse_gap}}
         scratch = _scratch(log)
         routed = scratch / board.name
         escalation = params["escalation"]
@@ -425,11 +436,11 @@ def krt_backend() -> rung_runner.Backend:
             run_record = krt_tools.run_kicad_routing_tools(
                 board, routed, escalation=escalation, clearance_mm=clearance_mm,
                 fab_overrides=overrides, grid_step_mm=params.get("grid_step_mm"),
-                max_iterations=params.get("max_iterations"), timeout=max(1, math.ceil(timeout_s)),
+                max_iterations=params.get("max_iterations"), timeout=max(1, math.ceil(timeout_s - parse_s)),
                 advanced_flags=advanced,
             )
         except krt_tools.KicadRoutingToolsTimeout as exc:
-            return {"status": "timeout", "cause": "router-timeout", "router_elapsed_s": exc.elapsed_s,
+            return {"status": "timeout", "cause": "router-timeout", "router_elapsed_s": parse_s + (exc.elapsed_s or 0.0),
                     "facts": {"error": str(exc)[:500], "timeout_s": exc.timeout, **parse_gap}}
         except krt_tools.KicadRoutingToolsError as exc:
             return _refuse("router-failure", str(exc)[:1000], **parse_gap)
@@ -474,7 +485,7 @@ def krt_backend() -> rung_runner.Backend:
         # measured around the router call: a wrapper that under-reports cannot buy time.
         reported = run_record.get("elapsed_s")
         reported = float(reported) if isinstance(reported, (int, float)) else 0.0
-        timing = {"router_elapsed_s": max(reported, measured_router_wall)}
+        timing = {"router_elapsed_s": parse_s + max(reported, measured_router_wall)}
         ok = run_record["exit_code"] in (0, krt_tools.STRICT_SIZES_EXIT_CODE)
         if ok:
             return {"status": "ok", "cause": None, "facts": facts, **timing}

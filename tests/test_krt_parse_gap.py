@@ -105,7 +105,7 @@ def test_the_krt_adapter_reports_a_parse_gap_instead_of_a_silent_skip(stress_boa
     victim = sorted(real)[0]
     assert real[victim] and sum(real[victim]) > 0
     monkeypatch.setattr(krt_tools, "parsed_pad_counts",
-                        lambda pcb: {**krt_tools.raw_pad_counts(pcb), victim: [0]})
+                        lambda pcb, **kw: {**krt_tools.raw_pad_counts(pcb), victim: [0]})
     (tmp_path / "a").mkdir()
     outcome = rung_backends.krt_backend()(stress_board, dict(KRT_BASELINE), 120.0, tmp_path / "a" / "router.log")
     gaps = outcome["facts"]["krt_parse_gap"]
@@ -123,7 +123,7 @@ def test_no_gap_on_a_board_krt_reads_in_full(stress_board, tmp_path):
 
 @needs_krt
 def test_a_check_that_cannot_run_is_reported_not_silent(stress_board, tmp_path, monkeypatch):
-    def boom(pcb):
+    def boom(pcb, **kw):
         raise krt_tools.KicadRoutingToolsError("probe exploded")
 
     monkeypatch.setattr(krt_tools, "parsed_pad_counts", boom)
@@ -134,7 +134,7 @@ def test_a_check_that_cannot_run_is_reported_not_silent(stress_board, tmp_path, 
 
 
 def test_the_check_itself_never_edits_the_board(bare_board, monkeypatch):
-    monkeypatch.setattr(krt_tools, "parsed_pad_counts", lambda pcb: {})  # every footprint a gap
+    monkeypatch.setattr(krt_tools, "parsed_pad_counts", lambda pcb, **kw: {})  # every footprint a gap
     before = _sha(bare_board)
     krt_tools.raw_pad_counts(bare_board)
     facts = rung_backends.parse_gap_facts(bare_board)

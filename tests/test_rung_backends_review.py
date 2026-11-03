@@ -64,6 +64,13 @@ class FakeRouter:
 
 @pytest.fixture
 def fake(monkeypatch):
+    # The pre-router pad parse is charged to router_elapsed_s (issue 47). Stub it so these tests do not
+    # depend on whether the real KiCadRoutingTools parser is installed (it costs real time when present);
+    # the parse charge itself is tested with a controlled clock in test_krt_adapter_wiring.py.
+    monkeypatch.setattr(
+        rung_backends, "parse_gap_facts",
+        lambda board, timeout=120: {"krt_parse_gap": [], "krt_parse_gap_check_error": None})
+
     def install(**kw):
         router = FakeRouter(**kw)
         monkeypatch.setattr(krt_tools, "run_kicad_routing_tools", router)
