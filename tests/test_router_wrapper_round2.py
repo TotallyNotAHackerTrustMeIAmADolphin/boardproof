@@ -70,7 +70,7 @@ def test_plain_negative_numbers_pass(token):
 def test_every_route_flag_in_the_committed_snapshot_has_an_arity():
     route = krt.load_cli_snapshot()["modules"]["route.py"]
     assert sorted(set(route["flags"]) - set(route["arity"])) == []
-    assert set(route["arity"].values()) <= {"0", "1", "+", "*"}
+    assert set(route["arity"].values()) <= {"0", "1", "?", "+", "*"}
 
 
 def test_capture_fails_when_a_flag_has_no_arity(monkeypatch, krt_checkout):

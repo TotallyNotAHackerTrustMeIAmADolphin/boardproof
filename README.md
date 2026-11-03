@@ -25,7 +25,7 @@ What the measurements say (five attempts per backend and rung, official batches,
 
 - **`PASS (necked)`** means the board passed the gate (zero unconnected items, zero error-level DRC violations, all zones filled), but it carries counted necks: tracks narrower than their net class right at a pad entry, which the protocol accepts as "forced" when the pad geometry limits the width (at the 0.2 mm gap between U1's pads, a 0.2 mm track is the widest that keeps the class clearance). The Freerouting boards carry 3 such necks on `+3V3` at U1 pad 4, 2.1476 mm in total. It is a weaker statement than a plain PASS, it is always labelled, and no rung is claimed from it.
 - **The 5 of 5 depends on one open decision.** The first segment of each neck is 0.15 mm wide where the pad would allow 0.2 mm. Under the protocol's current reading that still counts as forced; under a stricter reading all five attempts would FAIL. The owner's decision on a neck below the pad limit is still open (build ticket 111, item 3).
-- KiCadRoutingTools scores 0 of 5 on rung 1 because its parser reads zero pads of footprints whose pad names are unquoted, so it leaves their pads unconnected (build ticket 112, not fixed).
+- KiCadRoutingTools scored 0 of 5 on rung 1 under protocol 6 because version 0.23.1 read the board's 10 unquoted pad names of the USB-C footprint as zero pads. The board and the router checkout have since changed (the checkout is pinned to a newer commit) and no official batch has run on them yet (build ticket 112 holds the guard).
 - Rung 2 cannot pass for any router: the demo's own silkscreen already carries 6 `silk_overlap` errors, which no router can fix (build ticket 106).
 - Rung 3, the 20 A class openMPPT board, is frozen until rungs 1 and 2 pass.
 
@@ -70,7 +70,7 @@ Each tool is found the same way: an environment variable first, then `PATH`, the
 |---|---|---|
 | KiCad 10 `kicad-cli` | **Required.** DRC, ERC, netlists, renders, exports, the gate | `KICAD_CLI_PATH` |
 | KiCad's bundled Python | Freerouting's Specctra export and import; KiKit | `KICAD_PYTHON_PATH` |
-| KiCadRoutingTools v0.23.1 (MIT) | Routing and placement optimisation, run from a checkout (`python build_router.py` builds its router) | `KICAD_ROUTING_TOOLS_PATH`, `KICAD_ROUTING_TOOLS_PYTHON` |
+| KiCadRoutingTools v0.23.7 plus its commit `299ad570` (MIT) | Routing and placement optimisation, run from a checkout (`python build_router.py` builds its router) | `KICAD_ROUTING_TOOLS_PATH`, `KICAD_ROUTING_TOOLS_PYTHON` |
 | Freerouting 2.5.0 jar (GPLv3) and Java 25 | Routing, as a subprocess | `FREEROUTING_JAR_PATH`, `JAVA_PATH` |
 | ngspice 47 (pinned; `ngspice_con.exe` on Windows) | SPICE simulation. **Optional while the simulation map is parked** (owner decision of 2026-10-30, issue 40): the batch gate does not require it, and its live tests skip, counted, when it is absent | `NGSPICE_PATH` |
 | KiKit | Panelisation | `KIKIT_PATH` |

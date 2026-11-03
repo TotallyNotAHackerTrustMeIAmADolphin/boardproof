@@ -486,6 +486,7 @@ _DENIED_FLAGS: dict[str, str] = {
     "--relax-drc-severities": "weakens the DRC the board is graded against",
     "--undo": "reverts router output, not a routing lever",
     "--preview": "produces a preview instead of a routed board",
+    "--quick": "routes to judge, not to ship: skips the stages that finish copper for shipping",
 }
 DEFAULT_POUR_LAYER_COST = 4.0  # KRT inventory: 3.0-6.0 for solid planes; signals 1.0.
 STRICT_SIZES_EXIT_CODE = 3  # documented in `route.py --help`
@@ -644,6 +645,8 @@ def _validate_advanced_flags(advanced_flags: dict[str, Any] | None) -> dict[str,
         n = len(tokens)
         if shape == "0":
             raise ValueError(f"{flag} is a bare switch and takes no value, got {tokens}")
+        if shape == "?" and n != 1:
+            raise ValueError(f"{flag} takes at most one value, got {n}")
         if shape == "1" and n != 1:
             raise ValueError(f"{flag} takes exactly one value, got {n}")
         if shape == "+" and n < 1:
@@ -800,11 +803,11 @@ def check_emitted_flags(snapshot: dict) -> list[dict]:
     return [{"module": "route.py", "flag": f} for f in sorted(emittable_flags() - have)]
 
 
-_USAGE_OPTION = re.compile(r"\[(--[\w-]+)((?: [^\[\]]+)?(?: \[[^\[\]]+\.\.\.\])?)\]")
+_USAGE_OPTION = re.compile(r"\[(--[\w-]+)((?: [^\[\]]+)?(?: \[[^\[\]]+(?:\.\.\.)?\])?)\]")
 
 
 def parse_usage_arity(help_text: str) -> dict[str, str]:
-    """flag -> "0" (bare switch), "1" (one value), "+" (one or more) or "*"
+    """flag -> "0" (bare switch), "1" (one value), "?" (zero or one), "+" (one or more) or "*"
     (zero or more), read from argparse's `usage:` block. Everything before
     `usage:` (shims sometimes print a preamble) is ignored."""
     start = help_text.find("usage:")
@@ -823,7 +826,7 @@ def parse_usage_arity(help_text: str) -> dict[str, str]:
         if not rest:
             arity[flag] = "0"
         elif rest.startswith("["):
-            arity[flag] = "*"
+            arity[flag] = "*" if "..." in rest else "?"  # "[LEVEL]": zero or one value
         elif "[" in rest:
             arity[flag] = "+"
         else:

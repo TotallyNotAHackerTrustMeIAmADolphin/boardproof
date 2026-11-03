@@ -6,7 +6,7 @@ The rule behind the table: a copyleft tool is only ever run as a separate proces
 
 | Component | Licence | How it is used |
 |---|---|---|
-| [KiCadRoutingTools](https://github.com/drandyhaas/KiCadRoutingTools) (KRT), tested with v0.23.1 | MIT | Router and placer. Found at run time through `KICAD_ROUTING_TOOLS_PATH` or KiCad's plugin directory and run as a subprocess from its own checkout. **Not copied** into this repository. Its runtime dependencies (numpy, scipy, shapely, Pillow) are the `krt` extra. |
+| [KiCadRoutingTools](https://github.com/drandyhaas/KiCadRoutingTools) (KRT), tested with v0.23.7 plus its commit `299ad570` | MIT | Router and placer. Found at run time through `KICAD_ROUTING_TOOLS_PATH` or KiCad's plugin directory and run as a subprocess from its own checkout. **Not copied** into this repository. Its runtime dependencies (numpy, scipy, shapely, Pillow) are the `krt` extra. |
 | [Freerouting](https://github.com/freerouting/freerouting) 2.5.0 | GPLv3 | Router. A subprocess; the jar is not in this repository and is never downloaded automatically (`FREEROUTING_JAR_PATH`). It needs Java 25 (`JAVA_PATH`). |
 | [easyeda2kicad](https://github.com/uPesy/easyeda2kicad.py) | AGPL-3.0 | Fetches symbols and footprints by LCSC part number. Optional (`[assets]` extra), invoked only as `python -m easyeda2kicad` in a subprocess, never imported. Fetched files are third-party data whose terms are those of their source (EasyEDA and LCSC); they are written into the user's project. |
 | [kicad-python](https://gitlab.com/kicad/code/kicad-python) (`kipy`) | MIT | Imported lazily for the optional live-IPC `copilot` toolset (`[copilot]` extra). |

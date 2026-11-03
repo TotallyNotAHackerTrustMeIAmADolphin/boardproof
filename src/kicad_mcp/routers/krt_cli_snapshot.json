@@ -1,6 +1,6 @@
 {
  "snapshot_schema": 1,
- "router_version": "0.23.1",
+ "router_version": "0.23.7",
  "captured_from": "route.py --capabilities",
  "modules": {
   "route.py": {
@@ -80,6 +80,7 @@
     "--preview",
     "--preview-png",
     "--proximity-heuristic-factor",
+    "--quick",
     "--relax-drc-severities",
     "--rip-existing-nets",
     "--ripped-route-avoidance-cost",
@@ -188,6 +189,7 @@
     "--preview": "0",
     "--preview-png": "1",
     "--proximity-heuristic-factor": "1",
+    "--quick": "?",
     "--relax-drc-severities": "0",
     "--rip-existing-nets": "+",
     "--ripped-route-avoidance-cost": "1",
@@ -242,6 +244,7 @@
     "--layer-costs",
     "--layers",
     "--min-thickness",
+    "--net-clearances",
     "--nets",
     "--no-bga-zone",
     "--no-fix-drc-settings",

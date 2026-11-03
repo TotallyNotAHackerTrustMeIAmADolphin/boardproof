@@ -79,6 +79,16 @@ def test_parse_usage_arity_on_synthetic_usage():
                                            "--f": "0", "--g": "0"}
 
 
+def test_parse_usage_arity_reads_an_optional_single_value():
+    text = "usage: route.py [-h] [--quick [LEVEL]] [--d [D ...]]\n\nBody"
+    assert krt.parse_usage_arity(text) == {"--quick": "?", "--d": "*"}
+
+
+def test_quick_is_denied_as_an_advanced_flag():
+    with pytest.raises(ValueError, match="denied"):
+        krt._validate_advanced_flags({"--quick": True})
+
+
 # ---- finding 2: pour detection --------------------------------------------
 
 
@@ -308,3 +318,25 @@ def test_missing_snapshot_fails_before_the_router_runs(tmp_path, monkeypatch):
     with pytest.raises(krt.KicadRoutingToolsError, match="snapshot"):
         krt.run_kicad_routing_tools(src, out, timeout=30)
     assert not out.exists(), "router must not have run"
+
+
+def _snapshot_with_optional_value_flag(monkeypatch):
+    """A copy of the pinned snapshot in which --via-cost has arity '?' (an optional single
+    value, like KRT's --quick [LEVEL]); the real '?' flag is denied before its arity is read."""
+    patched = json.loads(json.dumps(krt.load_cli_snapshot()))
+    patched["modules"]["route.py"]["arity"]["--via-cost"] = "?"
+    monkeypatch.setattr(krt, "load_cli_snapshot", lambda path=None: patched)
+
+
+def test_optional_value_flag_refuses_two_values(monkeypatch):
+    _snapshot_with_optional_value_flag(monkeypatch)
+    with pytest.raises(ValueError, match="at most one value, got 2"):
+        krt.build_route_args("a", "b", advanced_flags={"--via-cost": ["1", "2"]})
+
+
+def test_optional_value_flag_takes_a_bare_switch_or_one_value(monkeypatch):
+    _snapshot_with_optional_value_flag(monkeypatch)
+    bare = krt.build_route_args("a", "b", advanced_flags={"--via-cost": True})
+    assert "--via-cost" in bare and bare[bare.index("--via-cost") + 1:][:1] != ["1"]
+    one = krt.build_route_args("a", "b", advanced_flags={"--via-cost": 3})
+    assert one[one.index("--via-cost") + 1] == "3"
