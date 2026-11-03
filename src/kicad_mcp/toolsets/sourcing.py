@@ -36,8 +36,10 @@ from kicad_mcp.sourcing.footprint_gen import list_package_types as _list_package
 
 # Importing this package registers every available provider (LCSCProvider,
 # etc.) into PROVIDER_REGISTRY as a side effect of import -- without this
-# import, search_parts silently has zero providers and always returns
-# no_results, no matter how the providers themselves are implemented.
+# import, search_parts has zero providers, no matter how the providers
+# themselves are implemented. With zero providers it returns status
+# provider_error (never no_results, which means every provider answered and
+# nothing matched) and names the lookup_jlcpcb_part_tiers fallback.
 # (Found by an independent review, 2026-09-02: verified live that
 # build_server() -> PROVIDER_REGISTRY.providers() == [] without this line.)
 import kicad_mcp.sourcing.providers  # noqa: F401

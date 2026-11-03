@@ -571,3 +571,51 @@ def test_lookup_index_info_uses_a_recorded_date_when_the_index_has_one():
     result = jlc.classify_parts(["C2"], index=jlc.JLCPCBBasicIndex(payload))
     assert result["index"]["date"] == "2026-01-02"
     assert result["results"][0]["tier_meaning"].startswith("not in the index of 2026-01-02, 1 parts")
+
+
+def _search_parts_tool():
+    mcp = MCPServer("test")
+    sourcing_toolset.build(mcp)
+    return next(t for t in mcp._tool_manager.list_tools() if t.name == "search_parts")  # type: ignore[attr-defined]
+
+
+def test_search_parts_description_status_claims_match_behaviour():
+    """Issue 44: an LLM reads the search_parts description. Each status it names,
+    and the fallback it promises, must be what the tool really returns."""
+    tool = _search_parts_tool()
+    desc = tool.description
+    for phrase in (
+        "status is ok, no_results (every provider answered and nothing matched), ",
+        "partial (at least one provider failed; see provider_errors) or provider_error ",
+        "(every provider failed or none is registered: zero items says nothing about whether the part exists). ",
+        "On partial or provider_error the result names a fallback (lookup_jlcpcb_part_tiers, the local JLCPCB tier index).",
+    ):
+        assert phrase in " ".join(desc.split())
+
+    # no_results: every provider answered, nothing matched, no fallback offered.
+    PROVIDER_REGISTRY.register(_FakeProvider([]))
+    res = tool.fn("zzz", annotate_jlcpcb=False)
+    assert res["status"] == "no_results"
+    assert "provider_errors" not in res
+    assert "fallback" not in res
+
+    # partial: one provider failed, the other answered; fallback named.
+    PROVIDER_REGISTRY.register(_FailingProvider())
+    res = tool.fn("zzz", annotate_jlcpcb=False)
+    assert res["status"] == "partial"
+    assert res["provider_errors"]
+    assert res["fallback"]["tool"] == "lookup_jlcpcb_part_tiers"
+
+    # provider_error: every provider failed.
+    PROVIDER_REGISTRY._providers.clear()
+    PROVIDER_REGISTRY.register(_FailingProvider())
+    res = tool.fn("zzz", annotate_jlcpcb=False)
+    assert res["status"] == "provider_error"
+    assert res["fallback"]["tool"] == "lookup_jlcpcb_part_tiers"
+
+    # provider_error: none registered (never silent no_results).
+    PROVIDER_REGISTRY._providers.clear()
+    res = tool.fn("zzz", annotate_jlcpcb=False)
+    assert res["status"] == "provider_error"
+    assert res["count"] == 0
+    assert res["fallback"]["tool"] == "lookup_jlcpcb_part_tiers"
