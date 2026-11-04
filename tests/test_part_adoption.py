@@ -794,3 +794,91 @@ def test_the_scratch_board_covers_the_offset_pads(tmp_path: Path) -> None:
     reach_x, reach_y = pa._pad_extent(fp)
     assert reach_x > 12.0 and reach_y > 15.0
     assert width / 2 >= reach_x and height / 2 >= reach_y  # the footprint sits at the middle
+
+
+# --------------------------------------------------------------------------- issue 78: what easyeda2kicad delivers
+
+EASYEDA_NAME = "SOP-4_L4.3-W4.4-P2.54-LS7.0-BL"
+_EASYEDA_MODULE = """(module easyeda2kicad:{name} (layer F.Cu) (tedit 5DC5F6A4)
+  (attr smd)
+  (fp_text reference REF** (at 0 -3.5) (layer F.SilkS) (effects (font (size 1 1) (thickness 0.15))))
+  (fp_text value {name} (at 0 3.5) (layer F.Fab) (effects (font (size 1 1) (thickness 0.15))))
+  (pad 1 smd rect (at -3.5 -1.27) (size 0.9 2) (layers F.Cu F.Paste F.Mask))
+  (pad 2 smd rect (at -3.5 1.27) (size 0.9 2) (layers F.Cu F.Paste F.Mask))
+  (pad 3 smd rect (at 3.5 1.27) (size 0.9 2) (layers F.Cu F.Paste F.Mask))
+  (pad 4 smd rect (at 3.5 -1.27) (size 0.9 2) (layers F.Cu F.Paste F.Mask))
+  (model ${{KISYS3DMOD}}/easyeda2kicad.3dshapes/{name}.wrl (offset (xyz 0 0 0)) (scale (xyz 1 1 1)) (rotate (xyz 0 0 0)))
+)
+"""
+
+
+def _easyeda_delivered(tmp: Path, lcsc: str) -> dict:
+    """The shape easyeda2kicad leaves: an old `(module <lib>:<name> ...)` footprint, and a symbol
+    whose Footprint property reads `<lcsc>:<name>`; four pads and four pins."""
+    part = _part_assets(tmp, lcsc, name="GAQY221S")
+    symbol_path = Path(part["symbol_path"])
+    sym_root = write_layer.load(symbol_path)
+    symbol = pa._children(sym_root, "symbol")[0]
+    for extra in ("3", "4"):
+        symbol.children[-1].append(_pin(extra))
+    write_layer.set_string(next(p for p in pa._children(symbol, "property") if p.get_string(0) == "Footprint"), 1, f"{lcsc}:{EASYEDA_NAME}")
+    symbol_path.unlink()
+    write_layer.save(sym_root, symbol_path)
+    fp_dir = Path(part["footprint_dir"])
+    for old in fp_dir.glob("*.kicad_mod"):
+        old.unlink()
+    model = Path(part["model_3d_dir"]) / "GAQY221S.wrl"
+    root = write_layer.parse_string(_EASYEDA_MODULE.format(name=EASYEDA_NAME))
+    write_layer.save(root, fp_dir / f"{EASYEDA_NAME}.kicad_mod")
+    (model.parent / f"{EASYEDA_NAME}.wrl").write_text(model.read_text(encoding="utf-8"), encoding="utf-8")
+    model.unlink()
+    return part
+
+
+def test_the_fixture_has_the_shape_easyeda2kicad_delivers(tmp_path: Path) -> None:
+    part = _easyeda_delivered(tmp_path, "C7435105")
+    root = write_layer.load(next(Path(part["footprint_dir"]).glob("*.kicad_mod")))
+    assert root.name == "module" and root.get_string(0) == f"easyeda2kicad:{EASYEDA_NAME}"
+    assert root.find("tedit") is not None
+    assert _props_of(Path(part["symbol_path"]), "GAQY221S")["Footprint"] == f"C7435105:{EASYEDA_NAME}"
+
+
+def test_a_library_prefixed_old_format_footprint_is_proposed_and_the_name_change_is_stated(project: Path, tmp_path: Path) -> None:
+    part = _easyeda_delivered(tmp_path, "C7435105")
+    proposed = _propose(project, [part], tmp_path / "rev")
+    assert proposed["status"] == "proposed", proposed
+    entry = proposed["parts"][0]
+    assert entry["footprint"] == EASYEDA_NAME
+    assert "normalised" in _tools()[1]["propose_adopt_parts"].description
+    assert any(
+        "easyeda2kicad:" in n and EASYEDA_NAME in n for n in entry["normalised"]
+    ), entry["normalised"]
+
+
+@needs_cli
+def test_a_library_prefixed_old_format_footprint_is_adopted_and_the_symbol_points_at_the_chosen_library(project: Path, tmp_path: Path) -> None:
+    part = _easyeda_delivered(tmp_path, "C7435105")
+    proposed = _propose(project, [part], tmp_path / "rev", library_name="scbe")
+    assert proposed["status"] == "proposed", proposed
+    result = pa.confirm_adopt_parts(project, proposed["revision_token"])
+    assert result["status"] == "adopted", result
+    assert result["parts"][0]["footprint"] == f"scbe:{EASYEDA_NAME}"
+    assert result["parts"][0]["normalised"], result["parts"][0]
+    assert _props_of(tmp_path / "rev" / "lib" / "scbe.kicad_sym", "GAQY221S")["Footprint"] == f"scbe:{EASYEDA_NAME}"
+    saved = tmp_path / "rev" / "lib" / "scbe.pretty" / f"{EASYEDA_NAME}.kicad_mod"
+    saved_root = write_layer.load(saved)
+    assert saved_root.get_string(0) == EASYEDA_NAME  # no library prefix left in the file
+    assert pa._model_uri(saved_root).startswith("${KIPRJMOD}/lib/scbe.3dshapes/")
+    assert len(pa._pad_numbers(saved_root)) == 4
+
+
+def test_a_footprint_name_with_other_bad_characters_is_still_refused(project: Path, tmp_path: Path) -> None:
+    part = _easyeda_delivered(tmp_path, "C7435105")
+
+    def rename(root: SExp) -> None:
+        write_layer.set_symbol(root, 0, "easyeda2kicad:bad*name")
+
+    _edit_footprint(part, rename)
+    result = _propose(project, [part], tmp_path / "rev")
+    assert result["status"] == "blocked"
+    assert any("cannot be a file name" in p for p in result["parts"][0]["problems"])

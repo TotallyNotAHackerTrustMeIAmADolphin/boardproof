@@ -989,7 +989,10 @@ def build(mcp: MCPServer) -> list[str]:
             "Datasheet, LCSC, Source (name and version) and License; a part missing one is rejected. "
             "Nothing is overwritten: a symbol or footprint name already in the library for another part, or "
             "a model file with other content, rejects the part, and so does a footprint with no pads; a part whose LCSC id is already in the "
-            "library is reported already_adopted and skipped. Then call confirm_adopt_parts with the token."
+            "library is reported already_adopted and skipped. What easyeda2kicad delivers is accepted: a "
+            "footprint named '<library>:<name>' in the old (module ...) format is saved under the bare name, "
+            "and the symbol's Footprint becomes '<adopting library>:<name>'; each part's 'normalised' list "
+            "states every such change. Then call confirm_adopt_parts with the token."
         ),
         annotations={"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
     )

@@ -233,10 +233,20 @@ def _one_footprint(path: Path) -> tuple[SExp, str] | str:
         return f"footprint file {path.name} cannot be read: {exc}"
     if root.name not in ("footprint", "module"):
         return f"{path.name} is not a footprint (root is ({root.name} ...))"
-    name = root.get_string(0)
+    raw = root.get_string(0)
+    # A footprint file carries the bare name; easyeda2kicad writes `<library>:<name>` there. The
+    # prefix names the library it came from, never part of a file name: it is dropped here and the
+    # change is stated in the proposal (``normalised``).
+    name = _bare_footprint_name(raw)
     if not name or _BAD_FILE_CHARS.search(name) or name in (".", ".."):
-        return f"footprint name {name!r} cannot be a file name"
+        return f"footprint name {raw!r} cannot be a file name"
     return root, name
+
+
+def _bare_footprint_name(raw: str | None) -> str | None:
+    if raw and ":" in raw:
+        return raw.partition(":")[2]
+    return raw
 
 
 def _pick_model(directory: Path, footprint: SExp) -> Path | str:
@@ -385,6 +395,24 @@ def _plan_part(
         if (bad := _one_line_problem("symbol name", symbol_name)) is not None:
             problems.append(bad)
         entry.update(symbol=symbol_name, footprint=footprint_name)
+        normalised: list[str] = []
+        raw_name = fp_found[0].get_string(0)
+        if raw_name != footprint_name:
+            normalised.append(
+                f"footprint name {raw_name!r} is saved as {footprint_name!r} (the library prefix is dropped)"
+            )
+        if fp_found[0].name == "module":
+            normalised.append(
+                "the footprint file is in the old (module ...) format: it is kept as it is, and the "
+                "write layer's kicad-cli check accepts it"
+            )
+        source_ref = _properties(sym_found[1]).get("Footprint", "")
+        if source_ref not in _NOT_SET:
+            normalised.append(
+                f"the symbol's Footprint {source_ref!r} is replaced by '<library>:{footprint_name}', "
+                "the library this call adopts into"
+            )
+        entry["normalised"] = normalised
         fp_file = paths["footprints"] / f"{footprint_name}.kicad_mod"
         if symbol_name in existing:
             if lcsc and existing[symbol_name].get("LCSC") == lcsc:
@@ -506,7 +534,7 @@ def propose_adopt_parts(
         "library_name": library_name,
         "library_dir": library_dir,
         "parts": [
-            {k: p[k] for k in ("lcsc_id", "symbol", "footprint", "model", "properties", "sources")} for p in ready
+            {k: p[k] for k in ("lcsc_id", "symbol", "footprint", "model", "properties", "sources", "normalised")} for p in ready
         ],
     }
     try:
@@ -839,6 +867,8 @@ def _write(src: Path, tmp: Path, payload: dict) -> dict:
             model.append(SExp.list("scale", SExp.list("xyz", 1, 1, 1)))
             model.append(SExp.list("rotate", SExp.list("xyz", 0, 0, 0)))
             fp_root.append(model)
+        if fp_root.get_string(0) != fp_name:
+            write_layer.set_string(fp_root, 0, fp_name)
         write_layer.save(fp_root, paths["footprints"] / f"{fp_name}.kicad_mod")
         props = {"Footprint": f"{fp_nick}:{fp_name}", **part["properties"]}
         before = _properties(symbol)
@@ -857,6 +887,7 @@ def _write(src: Path, tmp: Path, payload: dict) -> dict:
                 "model_uri": uri,
                 "model_file": paths["models"] / model_name,
                 "model_source": part["sources"]["model"],
+                "normalised": part.get("normalised", []),
                 "properties": props,
                 "other_properties": {k: v for k, v in before.items() if k not in props},
                 "pins": _pins(symbol),
@@ -1008,6 +1039,7 @@ def _verify(state: dict, render: Callable[[Path, Path, str], dict]) -> dict:
                 "symbol": f"{state['sym_nick']}:{want['symbol']}",
                 "footprint": f"{state['fp_nick']}:{want['footprint']}",
                 "model": uri,
+                "normalised": want["normalised"],
                 "checks": checks,
                 "evidence": evidence,
             }
