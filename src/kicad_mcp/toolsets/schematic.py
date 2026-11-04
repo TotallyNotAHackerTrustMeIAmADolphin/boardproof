@@ -533,6 +533,40 @@ def _netlist_census(sheet: Path, replacement: Path | None = None) -> dict[str, A
     return {"components": len(refs), "refs": refs, "nets": nets}
 
 
+def _clip(text: str, limit: int = 160) -> str:
+    return text if len(text) <= limit else text[: limit - 3] + "..."
+
+
+def _describe_lost_node(label: str, source_root: Any, written_root: Any) -> tuple[str, str]:
+    """``(subject, actual)`` for a top-level node of the source that the written text does not
+    hold unchanged (``label`` as ``_self_check.node_label`` names it): the subject names a
+    symbol by reference and uuid, ``actual`` says whether the node is absent or changed in
+    place and which of its children differ (expected text against the text read back)."""
+    from collections import Counter
+
+    from kicad_mcp import _self_check
+
+    def find(root: Any) -> Any:
+        return next((c for c in root.children if not c.is_atom and _self_check.node_label(c) == label), None)
+
+    src, got = find(source_root), find(written_root)
+    subject = label
+    if src is not None and src.name == "symbol" and (ref := _self_check._reference(src)):
+        subject = f"symbol {ref} ({_self_check._child_value(src, 'uuid')})"
+    if got is None:
+        return subject, "absent from the written text (no node with that uuid)"
+    have, want = Counter(_self_check.node_text(c) for c in got.children), Counter(_self_check.node_text(c) for c in src.children)
+    lost = [c for c in src.children if want[_self_check.node_text(c)] > have[_self_check.node_text(c)]]
+    gained = [c for c in got.children if have[_self_check.node_text(c)] > want[_self_check.node_text(c)]]
+    names = sorted({c.name if not c.is_atom else "atom" for c in lost + gained})
+    expected_text = _clip("; ".join(_self_check.node_text(c) for c in lost))
+    read_text = _clip("; ".join(_self_check.node_text(c) for c in gained))
+    return subject, (
+        f"changed in place: {', '.join(names) or 'unknown part'} differ; expected {expected_text or 'nothing'}, "
+        f"read back {read_text or 'nothing'}"
+    )
+
+
 def _verify_schematic_write(path: Path, written: Path, added_refs: set[str]) -> None:
     """The builder tools' self-check (decision 4, build ticket 38), on the temporary file
     ``written`` before it replaces ``path``; raises ``SchematicWriteNotVerified``.
@@ -547,14 +581,21 @@ def _verify_schematic_write(path: Path, written: Path, added_refs: set[str]) -> 
 
     from kicad_mcp import write_layer
 
-    source_kept, written_kept = _kept_nodes(write_layer.load(path)), _kept_nodes(write_layer.load(written))
+    source_root, written_root = write_layer.load(path), write_layer.load(written)
+    source_kept, written_kept = _kept_nodes(source_root), _kept_nodes(written_root)
     missing = sorted(label for (_text, label), n in (source_kept - written_kept).items() for _ in range(n))
     write_check = {"missing": missing, "unexpected": [], "tolerated": []}
     if missing:
+        details = [_describe_lost_node(label, source_root, written_root) for label in missing]
         raise SchematicWriteNotVerified(
-            f"write_not_verified: {len(missing)} node(s) of {path.name} would not survive the write: "
-            + ", ".join(missing[:10]),
-            [{"file": path.name, "expected": label, "actual": None} for label in missing],
+            f"write_not_verified: check top_level_nodes_unchanged on {path.name}: {len(missing)} node(s) of the sheet "
+            f"would not survive the write ({'; '.join(f'{d[0]}: {d[1]}' for d in details[:5])}"
+            f"{'; and more' if len(details) > 5 else ''})",
+            [
+                {"file": path.name, "check": "top_level_nodes_unchanged", "subject": subject,
+                 "expected": f"{label} present and unchanged", "actual": actual}
+                for label, (subject, actual) in zip(missing, details, strict=True)
+            ],
             write_check,
             None,
         )
@@ -593,6 +634,34 @@ def _verify_schematic_write(path: Path, written: Path, added_refs: set[str]) -> 
         )
 
 
+def _stale_instance_refs(path: Path, old_uuids: Any) -> list[str]:
+    """References of the symbols that were on ``path`` before a call (``old_uuids``) and still carry
+    instance data keyed on the sheet's own uuid although a parent sheet uses the sheet (GitHub issue
+    107): add_symbols re-keys only what it adds and lists these. ``[]`` for the root sheet, a sheet
+    no sheet symbol uses, or a tree that does not read whole."""
+    from kicad_mcp import sheet_authoring, sheet_tree
+
+    try:
+        root_sch = sheet_authoring.find_root(path, None)
+        tree = sheet_tree.walk(root_sch)
+    except Exception:  # noqa: BLE001 - no project around it
+        return []
+    if tree.problems or path.resolve() == Path(root_sch).resolve() or not [u for f, u in tree.uses if f == path.resolve()]:
+        return []
+    sheet = write_layer.load(path)
+    own = "/" + (sheet.find("uuid").get_string(0) if sheet.find("uuid") is not None else "")
+    stale = []
+    for node in sheet.children:
+        if node.is_atom or node.name != "symbol" or node.find("uuid") is None or node.find("uuid").get_string(0) not in old_uuids:
+            continue
+        paths = [p.get_string(0).lower() for i in node.find_children("instances") for pr in i.find_children("project")
+                 for p in pr.find_children("path")]
+        if own.lower() in paths:
+            ref = next((q.get_string(1) for q in node.find_children("property") if q.get_string(0) == "Reference"), None)
+            stale.append(ref or node.find("uuid").get_string(0))
+    return sorted(stale)
+
+
 def _reattach_to_tree(content: str, path: Path) -> str:
     """``content`` (the text about to replace ``path``) with the instance data of the symbols
     keyed on the sheet's own uuid moved to every use path of the project's sheet tree (GitHub
@@ -612,7 +681,17 @@ def _reattach_to_tree(content: str, path: Path) -> str:
     if not uses:
         return content
     node = write_layer.parse_string(content)
-    if not sheet_authoring.rewrite_child_instances(node, Path(root_sch).stem, uses):
+    # Only the symbols this call adds are re-keyed: an old symbol is kept unchanged (the "tools only add"
+    # check refuses a changed one), stale instance data on it is the sheet's own business (GitHub issue 107).
+    try:
+        old = {
+            str(c.find("uuid").values[0])
+            for c in write_layer.load(path).children
+            if not c.is_atom and c.name == "symbol" and c.find("uuid") is not None and c.find("uuid").values
+        }
+    except OSError:
+        old = set()
+    if not sheet_authoring.rewrite_child_instances(node, Path(root_sch).stem, uses, frozenset(old)):
         return content
     return write_layer.serialise(node) + chr(10)
 
@@ -860,7 +939,9 @@ def build(mcp: MCPServer) -> list[str]:
 
         On a sheet that a parent sheet uses (add_sheet_symbols), each new symbol's instance data
         gets the project's name and one path per use of the sheet in the tree; on the root sheet,
-        or a sheet no sheet symbol uses yet, it keeps the sheet's own uuid path.
+        or a sheet no sheet symbol uses yet, it keeps the sheet's own uuid path. Symbols already on
+        the sheet are never re-keyed; those that still carry the sheet's own uuid path are listed
+        in `stale_instance_symbols` (references; empty when none, and also when the sheet tree cannot be read).
 
         Refuses a sheet older than KiCad 8's format (error old_sheet_format, nothing
         written): kicad_tools would rewrite it and drop what it does not model. Before
@@ -930,6 +1011,7 @@ def build(mcp: MCPServer) -> list[str]:
             entry["snapped"] = index in moved if by_spec else None
         return {"status": "ok", "placed": placed, "count": len(placed), "symbols": symbols, "grid": grid,
                 "snapped": snapped_refs,
+                "stale_instance_symbols": _stale_instance_refs(path, before_uuids),
                 "grid_note": "Positions are NOT snapped to the grid unless a spec says \"snap\": true; "
                              "off_grid_pins lists the pin numbers whose point is off the grid. "
                              "Wire by pin with connect_pins."}

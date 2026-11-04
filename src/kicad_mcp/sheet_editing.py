@@ -49,7 +49,7 @@ from typing import Any
 
 from kicad_tools.sexp import SExp
 
-from kicad_mcp import sheet_authoring, sheet_tree, write_layer
+from kicad_mcp import _self_check, sheet_authoring, sheet_tree, write_layer
 from kicad_mcp.sheet_authoring import SheetAuthoringError
 
 GRID = 1.27
@@ -629,8 +629,13 @@ def _expected_verify(new: SExp):
     expected = write_layer.serialise(new, compact=True)
 
     def verify(written: Path) -> None:
-        if write_layer.serialise(write_layer.load(written), compact=True) != expected:
-            raise SheetAuthoringError("write_not_verified", f"{written.name} did not reload as the edited tree; nothing was replaced")
+        reloaded = write_layer.load(written)
+        if write_layer.serialise(reloaded, compact=True) != expected:
+            raise SheetAuthoringError(
+                "write_not_verified",
+                f"check reload_equals_serialised: {written.name} did not reload as the edited tree; nothing was replaced: "
+                + (_self_check.describe_tree_difference(new, reloaded) or "the node order or the header differs"),
+                check="reload_equals_serialised")
 
     return verify
 
@@ -710,7 +715,11 @@ def _run(path: Path, root_sch: str | None, mutate, allow: bool, dry_run: bool) -
     write_layer.save(new, path, verify=_expected_verify(new))
     reloaded = write_layer.load(path)
     if write_layer.serialise(reloaded, compact=True) != write_layer.serialise(new, compact=True):
-        raise SheetAuthoringError("write_not_verified", f"{path.name} does not read back as the edited tree")
+        raise SheetAuthoringError(
+            "write_not_verified",
+            f"check reload_equals_serialised: {path.name} does not read back as the edited tree: "
+            + (_self_check.describe_tree_difference(new, reloaded) or "the node order or the header differs"),
+            check="reload_equals_serialised")
     result["written"] = True
     return result
 

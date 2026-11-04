@@ -121,6 +121,21 @@ def reload_differences(
     return {"missing": labels(missing), "unexpected": labels(unexpected), "tolerated": labels(tolerated)}
 
 
+def describe_tree_difference(expected: Any, actual: Any) -> str:
+    """Which top-level nodes of two parses differ, for a reload check that found them unequal
+    (GitHub issue 107): each named by its label with the text expected against the text read
+    back, at most five. An empty string when the top-level nodes are equal."""
+    want = Counter(node_text(c) for c in expected.children)
+    have = Counter(node_text(c) for c in actual.children)
+    by_text = {node_text(c): c for root in (actual, expected) for c in root.children}
+    parts = []
+    for text in _surplus(want, have)[:5]:
+        parts.append(f"expected {node_label(by_text[text])} as written, not read back")
+    for text in _surplus(have, want)[:5]:
+        parts.append(f"read back {node_label(by_text[text])} that was not written")
+    return "; ".join(parts[:5]) + ("; and more" if len(parts) > 5 else "")
+
+
 def bounded(differences: dict, limit: int = _MAX_LISTED) -> dict:
     """``reload_differences`` for a tool result: each list as ``{count, items}``, at most
     ``limit`` items (decision 9's CHARACTER_LIMIT; a board can add hundreds of net entries)."""

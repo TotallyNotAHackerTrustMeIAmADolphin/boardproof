@@ -31,7 +31,7 @@ from typing import Any
 
 from kicad_tools.sexp import SExp
 
-from kicad_mcp import sheet_tree, write_layer
+from kicad_mcp import _self_check, sheet_tree, write_layer
 
 SCHEMATIC_VERSION = 20260306  # what KiCad 10.0 writes; measured with `kicad-cli sch upgrade`
 GENERATOR = "eeschema"
@@ -203,8 +203,13 @@ def _expected_verify(root: SExp):
     expected = write_layer.serialise(root, compact=True)
 
     def verify(written: Path) -> None:
-        if write_layer.serialise(write_layer.load(written), compact=True) != expected:
-            raise SheetAuthoringError("write_not_verified", f"{written.name} did not reload as the tree that was serialised")
+        reloaded = write_layer.load(written)
+        if write_layer.serialise(reloaded, compact=True) != expected:
+            raise SheetAuthoringError(
+                "write_not_verified",
+                f"check reload_equals_serialised: {written.name} did not reload as the tree that was serialised: "
+                + (_self_check.describe_tree_difference(root, reloaded) or "the node order or the header differs"),
+                check="reload_equals_serialised")
 
     return verify
 
@@ -479,7 +484,7 @@ def interface_mismatches(parent: SExp, child: SExp, sheet_file: str) -> list[str
     return problems
 
 
-def rewrite_child_instances(child: SExp, project: str, new_paths: list[str]) -> int:
+def rewrite_child_instances(child: SExp, project: str, new_paths: list[str], skip_uuids: frozenset[str] = frozenset()) -> int:
     """Point the instance data of every symbol in ``child`` at the sheet use(s) ``new_paths``.
 
     A sheet written alone keys its symbols' ``(instances (project .. (path "/<its own uuid>" ..)))``
@@ -487,10 +492,13 @@ def rewrite_child_instances(child: SExp, project: str, new_paths: list[str]) -> 
     uuid>`` under the project's name, and the project's own check (``sheet_tree.netlist_disagreement``)
     calls the old entries stale. Each entry at the child's own path becomes one entry per new path,
     with its reference, unit and other children kept; entries at any other path are left alone.
-    Returns the number of symbols changed."""
+    Symbols whose uuid is in ``skip_uuids`` are left as they are (add_symbols re-keys only the symbols it
+    adds, GitHub issue 107). Returns the number of symbols changed."""
     own = "/" + (_text(child.find_children("uuid")[0]) if child.find_children("uuid") else "")
     changed = 0
     for symbol in _children_named(child, "symbol"):
+        if skip_uuids and symbol.find_children("uuid") and _text(symbol.find_children("uuid")[0]) in skip_uuids:
+            continue
         for instances in symbol.find_children("instances"):
             moved = []
             for proj in instances.find_children("project"):
