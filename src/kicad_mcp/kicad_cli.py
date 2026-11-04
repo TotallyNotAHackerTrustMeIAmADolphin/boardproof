@@ -246,3 +246,20 @@ def export_svg(input_path: str | Path, output_dir: str | Path, **extra_args: str
             f"stdout: {proc.stdout}\nstderr: {proc.stderr}"
         )
     return output_dir
+
+
+def export_sch_pdf(sch_path: str | Path, out_path: str | Path) -> Path:
+    """Export a ``.kicad_sch`` (all sheets) to one PDF at ``out_path``.
+
+    Used only to rasterise a readable PNG for the diagnostic render
+    (kicad-cli has no PNG export for schematics).
+    """
+    out_path = Path(out_path)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    proc = _run(["sch", "export", "pdf", "-o", str(out_path), str(sch_path)])
+    if proc.returncode != 0 or not out_path.is_file():
+        raise KicadCliError(
+            f"kicad-cli sch export pdf failed (exit {proc.returncode}):\n"
+            f"stdout: {proc.stdout}\nstderr: {proc.stderr}"
+        )
+    return out_path

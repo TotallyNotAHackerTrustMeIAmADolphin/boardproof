@@ -66,3 +66,48 @@ def test_render_schematic_diagnostic_missing_file_is_incomplete_not_an_exception
     result = tools["render_schematic_diagnostic"](str(tmp_path / "does_not_exist.kicad_sch"), str(tmp_path))
     assert result["status"] == "incomplete"
     assert result["authoritative"] is False
+
+
+def test_render_schematic_diagnostic_png_dpi_gives_png_of_requested_size(tmp_path):
+    from PIL import Image
+
+    mcp = MCPServer("test")
+    tools = _build_and_get_fns(mcp, diagnostics_toolset)
+    result = tools["render_schematic_diagnostic"](
+        str(FIXTURES / "simple_led.kicad_sch"), str(tmp_path), png_dpi=200
+    )
+    assert result["status"] == "ok"
+    assert result["authoritative"] is False
+    assert result["png_images"]
+    for img in result["png_images"]:
+        assert Path(img).suffix == ".png"
+        w, h = Image.open(img).size
+        # A4 landscape is 11.69 x 8.27 in; 200 dpi gives about 2339 x 1654 px.
+        assert abs(w - 2339) <= 4 and abs(h - 1654) <= 4
+    assert result["images"]  # the SVG stays
+
+
+def test_render_schematic_diagnostic_default_has_no_png(tmp_path):
+    mcp = MCPServer("test")
+    tools = _build_and_get_fns(mcp, diagnostics_toolset)
+    result = tools["render_schematic_diagnostic"](str(FIXTURES / "simple_led.kicad_sch"), str(tmp_path))
+    assert "png_images" not in result
+
+
+def test_render_schematic_diagnostic_png_dpi_out_of_range_is_incomplete(tmp_path):
+    mcp = MCPServer("test")
+    tools = _build_and_get_fns(mcp, diagnostics_toolset)
+    for bad in (0, 10, 5000):
+        result = tools["render_schematic_diagnostic"](
+            str(FIXTURES / "simple_led.kicad_sch"), str(tmp_path), png_dpi=bad
+        )
+        assert result["status"] == "incomplete"
+        assert "png_dpi" in result["reason"]
+
+
+def test_render_schematic_diagnostic_description_mentions_png_dpi():
+    mcp = MCPServer("test")
+    diagnostics_toolset.build(mcp)
+    desc = {t.name: t.description for t in mcp._tool_manager.list_tools()}["render_schematic_diagnostic"]  # type: ignore[attr-defined]
+    assert "png_dpi" in desc
+    assert "PNG" in desc

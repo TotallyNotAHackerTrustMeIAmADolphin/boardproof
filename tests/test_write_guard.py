@@ -500,6 +500,7 @@ NON_KICAD_RAW = {
     ("routers/kicad_routing_tools.py", "request_graceful_stop"): "a stop-request marker file for a router run",
     ("rung_runner.py", "_write_json"): "run records (JSON) in the ladder's own run directory",
     ("sourcing/jlcpcb_basic.py", "write_index"): "the JLCPCB parts index (JSON), not a KiCad file",
+    ("toolsets/diagnostics.py", "_png_pages"): "diagnostic PNG raster of a schematic, not a KiCad file",
     ("toolsets/manufacturing.py", "_bom_from_root"): "BOM CSV output",
     ("toolsets/simulation.py", "run_spice_simulation"): "SPICE run output file",
 }

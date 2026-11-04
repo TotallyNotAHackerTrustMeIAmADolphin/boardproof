@@ -444,6 +444,13 @@ code = '''footprint.save(output_path)'''
 note = "Footprint.save of a generated .kicad_mod (generator output; decision 1 keeps generators)."
 
 [[high_level_save]]
+file = "toolsets/diagnostics.py"
+function = "_png_pages"
+kind = "save"
+code = '''page.to_image(resolution=dpi).save(str(png))'''
+note = "Pillow image save of a diagnostic PNG raster into the caller's output directory, not a KiCad file (build ticket 83)."
+
+[[high_level_save]]
 file = "toolsets/project.py"
 function = "_project_create"
 kind = "write"
@@ -923,6 +930,10 @@ reaches = [
     "write_layer.py | parse_check | shutil.copyfile",
     "write_layer.py | _commit | os.replace",
 ]
+
+[read_only_tool_writes.render_schematic_diagnostic]
+reason = "Optional PNG raster of the schematic in the caller's output directory (build ticket 83); no KiCad file is written."
+reaches = ["toolsets/diagnostics.py | _png_pages | save"]
 
 [read_only_tool_writes.run_spice_simulation]
 reason = "ngspice run script inside a TemporaryDirectory."

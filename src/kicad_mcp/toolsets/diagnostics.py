@@ -15,7 +15,7 @@ from pathlib import Path
 
 from mcp.server.mcpserver import MCPServer
 
-from kicad_mcp.kicad_cli import KicadCliError, export_svg
+from kicad_mcp.kicad_cli import KicadCliError, export_sch_pdf, export_svg
 
 _PCB_NOTE = (
     "A human-style visual sanity check only, never evidence. pcb_run_drc and "
@@ -45,6 +45,26 @@ def _render(input_path: str | Path, output_dir: str | Path, note: str, **extra_a
     return {"status": "ok", "images": images, "authoritative": False, "note": note}
 
 
+_PNG_DPI_MIN, _PNG_DPI_MAX = 50, 600
+
+
+def _png_pages(sch_path: Path, output_dir: Path, dpi: int) -> list[str]:
+    """Rasterise the schematic's PDF export (one PNG per sheet) at ``dpi``.
+
+    pdfplumber (a declared dependency) drives pypdfium2; no new dependency.
+    """
+    import pdfplumber
+
+    pdf = export_sch_pdf(sch_path, output_dir / f"{sch_path.stem}.pdf")
+    out: list[str] = []
+    with pdfplumber.open(pdf) as doc:
+        for i, page in enumerate(doc.pages, start=1):
+            png = output_dir / f"{sch_path.stem}-page{i}.png"
+            page.to_image(resolution=dpi).save(str(png))
+            out.append(str(png))
+    return out
+
+
 def build(mcp: MCPServer) -> list[str]:
     def render_board_diagnostic(pcb_path: str, output_dir: str, layers: str | None = None) -> dict:
         """Render a .kicad_pcb to SVG for human/vision-assisted sanity checking.
@@ -56,14 +76,30 @@ def build(mcp: MCPServer) -> list[str]:
         kwargs = {"layers": layers} if layers else {}
         return _render(pcb_path, output_dir, _PCB_NOTE, **kwargs)
 
-    def render_schematic_diagnostic(sch_path: str, output_dir: str) -> dict:
+    def render_schematic_diagnostic(sch_path: str, output_dir: str, png_dpi: int | None = None) -> dict:
         """Render a .kicad_sch to SVG for human/vision-assisted sanity checking.
+
+        Optional png_dpi (50-600) also writes one PNG per sheet at that
+        resolution (A4 at 200 dpi is about 2339 x 1654 px) under png_images.
 
         NOT a correctness check -- see sch_run_erc for that. This is for
         catching things ERC can't, e.g. wiring that's electrically valid but
         visually confusing.
         """
-        return _render(sch_path, output_dir, _SCH_NOTE)
+        if png_dpi is not None and not (_PNG_DPI_MIN <= png_dpi <= _PNG_DPI_MAX):
+            return {
+                "status": "incomplete",
+                "reason": f"png_dpi must be between {_PNG_DPI_MIN} and {_PNG_DPI_MAX}, got {png_dpi}",
+                "authoritative": False,
+            }
+        result = _render(sch_path, output_dir, _SCH_NOTE)
+        if png_dpi is None or result["status"] != "ok":
+            return result
+        try:
+            result["png_images"] = _png_pages(Path(sch_path), Path(output_dir), png_dpi)
+        except KicadCliError as exc:
+            return {"status": "incomplete", "reason": str(exc), "authoritative": False}
+        return result
 
     mcp.add_tool(
         render_board_diagnostic,
@@ -92,7 +128,9 @@ def build(mcp: MCPServer) -> list[str]:
         description=(
             "Render a schematic to SVG image(s) as a non-authoritative, human-style "
             "visual sanity check (wiring that is electrically valid but hard to read). Always "
-            "returns authoritative: false: an image is never evidence. sch_run_erc lists ERC "
+            "returns authoritative: false: an image is never evidence. The SVG is A4-sized "
+            "(about 1123 x 794 px); pass png_dpi (50-600, e.g. 200) to also get one PNG per sheet "
+            "at that resolution in png_images. sch_run_erc lists ERC "
             "violations; it is not a verdict either. Only verify_board gives a verdict on the "
             "board."
         ),
