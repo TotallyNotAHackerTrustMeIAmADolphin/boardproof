@@ -107,6 +107,10 @@ _CLAIM_WORD_ALLOWED = {
     ("list_manufacturer_profiles", "the date it was verified"): "a fab profile's source date",
     ("select_component", "a datasheet-verified leader"): "part selection, not the board",
     ("panelize_board", "it never passes an un-panelized board off as a panel"): "negation",
+    ("add_sheet_symbols", "is refused (write_not_verified, naming the instance data)"):
+        "the name of an error code on a refusal, not a claim",
+    ("add_sheet_symbols", "ok: false with code write_not_verified and nothing is changed"):
+        "the name of an error code on a refusal, not a claim",
 }
 
 
