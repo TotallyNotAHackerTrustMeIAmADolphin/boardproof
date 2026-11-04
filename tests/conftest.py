@@ -23,6 +23,8 @@ from pathlib import Path
 import pytest
 
 from tests import _kicad_demos, _krt, _ngspice
+from tests._test_times import pytest_runtest_logfinish as pytest_runtest_logfinish  # issue 65
+from tests._test_times import pytest_runtest_logstart as pytest_runtest_logstart
 
 def pytest_configure(config):
     config.addinivalue_line("markers", _krt.MARKER_HELP)

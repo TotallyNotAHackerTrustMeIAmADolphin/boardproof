@@ -376,6 +376,7 @@ def run_gate(
     res = Result()
     s7 = run_id or sha[:7]
     env = dict(os.environ)
+    env.pop("KICAD_MCP_TEST_TIMES", None)  # the gate sets it for the suite step only (issue 65)
     if env.pop("PYTEST_ADDOPTS", None) is not None:
         say("PYTEST_ADDOPTS is set; ignored for this run")
     env["PYTHONPATH"] = str(root / "src")
@@ -503,8 +504,10 @@ def run_gate(
     cmd = [python, "-m", "pytest", "-m", "not network", "-rfEs", "-p", "no:cacheprovider"]
     out_path = log_dir / f"{s7}.pytest.out"
     say(f"pytest: {' '.join(cmd)} (timeout {int(suite_timeout)} s), output {out_path}")
+    times_path = log_dir / f"{s7}.times.out"  # START/END line per test (issue 65); never a RED reason
+    say(f"per-test times: {times_path}")
     t0 = time.monotonic()
-    rc = runner(cmd, env, root, suite_timeout, out_path)
+    rc = runner(cmd, {**env, "KICAD_MCP_TEST_TIMES": str(times_path)}, root, suite_timeout, out_path)
     say(f"pytest finished in {time.monotonic() - t0:.0f} s with exit code {'TIMEOUT' if rc is None else rc}")
     out = _read(out_path)
 
@@ -854,7 +857,7 @@ LOG_KEEP_RUNS = 100  # beyond the newest 100 runs, a run is removed once it is o
 LOG_MIN_AGE_S = 24 * 3600
 _LOG_FILE = re.compile(  # only files the gate names (fullmatch); anything else is never touched
     r"(?P<run>[0-9a-f]{7}(?:-dirty)?(?:-\d{8}-\d{6}-\d+(?:-\d+)?)?)"
-    r"\.(?:log|(?:import|network|collect|pytest|lint|rerun-\d+)\.out)")
+    r"\.(?:log|(?:import|network|collect|pytest|times|lint|rerun-\d+)\.out)")
 
 
 @dataclass

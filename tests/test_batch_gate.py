@@ -1421,3 +1421,32 @@ def test_main_runs_the_publishability_check_and_goes_red_without_the_variable(re
     rc, lines = run_main(repo, capsys)
     assert rc == 1
     assert "BOARDPROOF_FORBIDDEN_FILE unset" in lines[-1], lines[-1]
+
+
+def test_gate_names_a_times_file_for_the_suite_run_and_prints_its_path(root, monkeypatch):
+    # the outer gate runs this suite with the variable set: an ambient value must not leak to any step
+    monkeypatch.setenv("KICAD_MCP_TEST_TIMES", "/outer/gate/run.times.out")
+    seen = {}
+
+    class Spy(FakeRunner):
+        def __call__(self, cmd, env, cwd, timeout, out_path):
+            if "not network" in cmd:
+                seen["var"] = env.get("KICAD_MCP_TEST_TIMES")
+            elif "KICAD_MCP_TEST_TIMES" in env:
+                seen["leak"] = cmd
+            return super().__call__(cmd, env, cwd, timeout, out_path)
+
+    res, said = run(root, Spy(root))
+    assert res.green, res.reasons
+    assert seen["var"] == str(root.parent / "logs" / "abcdef1.times.out")
+    assert "leak" not in seen
+    assert f"per-test times: {seen['var']}" in said
+
+
+def test_missing_times_file_is_not_red(root):
+    res, _ = run(root, FakeRunner(root))  # the fake runner never writes it
+    assert res.green, res.reasons
+
+
+def test_cleanup_knows_the_times_file():
+    assert gate._LOG_FILE.fullmatch("abcdef1-20261104-101010-42.times.out")
