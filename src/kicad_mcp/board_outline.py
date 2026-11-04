@@ -1160,6 +1160,7 @@ def confirm_board_outline(pcb_path: str | Path, revision_token: str, *, drc: Any
 
     built = checkpoint.build_revision(
         out_dir,
+        source_pcb=src,
         write=lambda tmp: _write(src, tmp, plan),
         verify=lambda tmp, state: _verify(src, state, plan, drc),
         success="built",

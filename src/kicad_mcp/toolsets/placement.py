@@ -621,6 +621,9 @@ def build(mcp: MCPServer) -> list[str]:
         update_footprint_position); one that doesn't and has a "library_id"
         is added (via add_footprint). Never call this once per footprint --
         pass the whole batch.
+
+        Refuses with file_open_in_kicad, naming the lock file, while KiCad holds a lock file for a file
+        it would write; close the file in KiCad, then retry.
         """
         from kicad_tools.schema import PCB
 
@@ -679,6 +682,8 @@ def build(mcp: MCPServer) -> list[str]:
             try:
                 write_layer.save_pcb(board, path)
             except Exception as exc:  # noqa: BLE001
+                if (locked := write_layer.as_lock_refusal(exc)) is not None:
+                    return locked
                 return {"status": "incomplete", "reason": f"placed in-memory but failed to save: {exc}"}
 
         status = "ok" if not errors else ("partial" if (placed or moved) else "error")
@@ -696,6 +701,9 @@ def build(mcp: MCPServer) -> list[str]:
         (a tool whose name implied more than it actually did): the only
         underlying kicad_tools method here is PCB.move_references_to_layer,
         which moves reference-text layer assignment only.
+
+        Refuses with file_open_in_kicad, naming the lock file, while KiCad holds a lock file for a file
+        it would write; close the file in KiCad, then retry.
         """
         from kicad_tools.schema import PCB
 
@@ -713,6 +721,8 @@ def build(mcp: MCPServer) -> list[str]:
                 moved_count += board.move_references_to_layer(layer, pattern=ref)
             write_layer.save_pcb(board, path)
         except Exception as exc:  # noqa: BLE001
+            if (locked := write_layer.as_lock_refusal(exc)) is not None:
+                return locked
             return {"status": "incomplete", "reason": str(exc)}
         return {"status": "ok", "requested": len(refs), "moved_count": moved_count, "layer": layer}
 
@@ -727,6 +737,9 @@ def build(mcp: MCPServer) -> list[str]:
         bounding box on that axis (courtyard-accurate when the footprint
         has real courtyard artwork; falls back to a pad bounding box
         otherwise -- reported per-footprint via "used_courtyard").
+
+        Refuses with file_open_in_kicad, naming the lock file, while KiCad holds a lock file for a file
+        it would write; close the file in KiCad, then retry.
         """
         from kicad_tools.schema import PCB
 
@@ -789,6 +802,8 @@ def build(mcp: MCPServer) -> list[str]:
         try:
             write_layer.save_pcb(board, path)
         except Exception as exc:  # noqa: BLE001
+            if (locked := write_layer.as_lock_refusal(exc)) is not None:
+                return locked
             return {"status": "incomplete", "reason": f"aligned in-memory but failed to save: {exc}"}
         return {"status": "ok", "axis": axis, "edge": edge, "anchor": anchor_ref, "moved": moved}
 
@@ -798,6 +813,9 @@ def build(mcp: MCPServer) -> list[str]:
         between the first and last ref in the list (used as anchors).
         Takes references and works on relative offsets (no coordinates are passed in); it
         reports local positions, relative to origin_mm (see frame in the result).
+
+        Refuses with file_open_in_kicad, naming the lock file, while KiCad holds a lock file for a file
+        it would write; close the file in KiCad, then retry.
         """
         from kicad_tools.schema import PCB
 
@@ -845,6 +863,8 @@ def build(mcp: MCPServer) -> list[str]:
         try:
             write_layer.save_pcb(board, path)
         except Exception as exc:  # noqa: BLE001
+            if (locked := write_layer.as_lock_refusal(exc)) is not None:
+                return locked
             return {"status": "incomplete", "reason": f"distributed in-memory but failed to save: {exc}"}
         return {"status": "ok", "axis": axis, "moved": moved}
 
@@ -859,6 +879,9 @@ def build(mcp: MCPServer) -> list[str]:
         polygon, a legacy arc without a mid point, Edge.Cuts graphics inside a footprint,
         a malformed or unsupported Edge.Cuts item); without any outline coordinates are
         page coordinates.
+
+        Refuses with file_open_in_kicad, naming the lock file, while KiCad holds a lock file for a file
+        it would write; close the file in KiCad, then retry.
         """
         from kicad_tools.schema import PCB
 
@@ -896,6 +919,8 @@ def build(mcp: MCPServer) -> list[str]:
         try:
             write_layer.save_pcb(board, path)
         except Exception as exc:  # noqa: BLE001
+            if (locked := write_layer.as_lock_refusal(exc)) is not None:
+                return locked
             return {"status": "incomplete", "reason": f"snapped in-memory but failed to save: {exc}"}
         return {"status": "ok", "grid_mm": grid_mm, "moved": moved}
 
@@ -910,6 +935,9 @@ def build(mcp: MCPServer) -> list[str]:
         whichever axis they're already predominantly separated on (inferred
         from their current positions, not re-specified) -- pack along the
         axis with greater spread among the given footprints' centers.
+
+        Refuses with file_open_in_kicad, naming the lock file, while KiCad holds a lock file for a file
+        it would write; close the file in KiCad, then retry.
         """
         from kicad_tools.schema import PCB
 
@@ -961,6 +989,8 @@ def build(mcp: MCPServer) -> list[str]:
         try:
             write_layer.save_pcb(board, path)
         except Exception as exc:  # noqa: BLE001
+            if (locked := write_layer.as_lock_refusal(exc)) is not None:
+                return locked
             return {"status": "incomplete", "reason": f"packed in-memory but failed to save: {exc}"}
 
         # Verify via the existing, already-tested collision checker rather
@@ -1068,6 +1098,9 @@ def build(mcp: MCPServer) -> list[str]:
         Consumes the token -- a second confirm with the same token fails.
         Takes references and works on relative offsets (no coordinates are passed in); it
         reports local positions, relative to origin_mm (see frame in the result).
+
+        Refuses with file_open_in_kicad, naming the lock file, while KiCad holds a lock file for a file
+        it would write; close the file in KiCad, then retry.
         """
         from kicad_tools.schema import PCB
 
@@ -1084,11 +1117,15 @@ def build(mcp: MCPServer) -> list[str]:
             refusal = _frame_gate(path, board, strict=True)
             if refusal is not None:
                 return refusal
+            write_layer.check_writable(path)  # before the token is spent: closing KiCad makes it usable again
             _PENDING_PLACEMENTS.pop(revision_token, None)
             for ref, (x, y, rotation) in proposed.items():
                 board.update_footprint_position(ref, x, y, rotation)
             write_layer.save_pcb(board, path)
         except Exception as exc:  # noqa: BLE001
+            if (locked := write_layer.as_lock_refusal(exc)) is not None:
+                _PENDING_PLACEMENTS[revision_token] = entry  # nothing was written: the token stays valid
+                return locked
             return {"status": "incomplete", "reason": f"failed to apply proposal: {exc}", **fields}
         return {"status": "confirmed", "applied": list(proposed.keys()), **fields}
 
@@ -1257,6 +1294,9 @@ def build(mcp: MCPServer) -> list[str]:
         against the result before returning (same pattern as `confirm_route`),
         so the caller immediately knows the applied placement's real
         courtyard/clearance state, not just "some footprints got moved".
+
+        Refuses with file_open_in_kicad, naming the lock file, while KiCad holds a lock file for a file
+        it would write; close the file in KiCad, then retry.
         """
         from kicad_tools.schema import PCB
 
@@ -1273,6 +1313,9 @@ def build(mcp: MCPServer) -> list[str]:
                 board.update_footprint_position(ref, x, y, rotation)
             write_layer.save_pcb(board, path)
         except Exception as exc:  # noqa: BLE001 - evidence-gated verdict
+            if (locked := write_layer.as_lock_refusal(exc)) is not None:
+                _PENDING_PLACEMENTS[revision_token] = entry  # nothing was written: the token stays valid
+                return locked
             return {"status": "incomplete", "reason": f"failed to apply proposal: {exc}"}
 
         from kicad_mcp import kicad_cli
@@ -1394,6 +1437,9 @@ def build(mcp: MCPServer) -> list[str]:
         exactly the kicad_tools.schema.symbol.SymbolInstance.to_sexp()
         failure mode documented in docs/ARCHITECTURE.md; this tool re-verifies
         from disk specifically so it can't repeat that mistake.
+
+        Refuses with file_open_in_kicad, naming the lock file, while KiCad holds a lock file for a file
+        it would write; close the file in KiCad, then retry.
         """
         from kicad_tools.schema import PCB
 
@@ -1439,6 +1485,9 @@ def build(mcp: MCPServer) -> list[str]:
         try:
             write_layer.save_pcb(board, path)
         except Exception as exc:  # noqa: BLE001
+            if (locked := write_layer.as_lock_refusal(exc)) is not None:
+                _PENDING_GRAPHIC_REMOVALS[revision_token] = entry  # nothing was written: the token stays valid
+                return locked
             return {"status": "incomplete", "reason": f"removal computed but failed to save: {exc}"}
 
         # Non-negotiable verification: reload FRESH from disk.
@@ -1498,37 +1547,37 @@ def build(mcp: MCPServer) -> list[str]:
     mcp.add_tool(
         place_footprints,
         name="place_footprints",
-        description="Place or move a batch of footprints on a board in one call (add new ones with a library_id, move existing ones by reference)." + " " + _FRAME_RULE,
+        description=("Place or move a batch of footprints on a board in one call (add new ones with a library_id, move existing ones by reference)." + " " + _FRAME_RULE + " " + write_layer.LOCK_SENTENCE),
         annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
     )
     mcp.add_tool(
         move_reference_designators_to_layer,
         name="move_reference_designators_to_layer",
-        description="Move a batch of footprints' reference-designator silkscreen TEXT to a different layer (e.g. F.Fab) in one call -- does not change which side the footprint itself is mounted on.",
+        description=("Move a batch of footprints' reference-designator silkscreen TEXT to a different layer (e.g. F.Fab) in one call -- does not change which side the footprint itself is mounted on." + " " + write_layer.LOCK_SENTENCE),
         annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
     )
     mcp.add_tool(
         align_footprints,
         name="align_footprints",
-        description="Align a batch of footprints' courtyard edges or centers along a shared X/Y coordinate." + " " + _RELATIVE_RULE,
+        description=("Align a batch of footprints' courtyard edges or centers along a shared X/Y coordinate." + " " + _RELATIVE_RULE + " " + write_layer.LOCK_SENTENCE),
         annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
     )
     mcp.add_tool(
         distribute_footprints,
         name="distribute_footprints",
-        description="Evenly space a batch of footprints along an axis between the first and last given ref." + " " + _RELATIVE_RULE,
+        description=("Evenly space a batch of footprints along an axis between the first and last given ref." + " " + _RELATIVE_RULE + " " + write_layer.LOCK_SENTENCE),
         annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
     )
     mcp.add_tool(
         snap_footprints_to_grid,
         name="snap_footprints_to_grid",
-        description="Snap a batch of footprints' positions to the nearest grid point in one call." + " " + _FRAME_RULE + " The grid is anchored at the outline corner, so snapped parts are not on the editor's absolute grid unless the corner is.",
+        description=("Snap a batch of footprints' positions to the nearest grid point in one call." + " " + _FRAME_RULE + " The grid is anchored at the outline corner, so snapped parts are not on the editor's absolute grid unless the corner is." + " " + write_layer.LOCK_SENTENCE),
         annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
     )
     mcp.add_tool(
         pack_footprints_densely,
         name="pack_footprints_densely",
-        description="Tighten spacing between an aligned row/column of footprints toward a minimum clearance, then re-checked with the placement collision checker, which is not a verdict: only verify_board gives one.",
+        description=("Tighten spacing between an aligned row/column of footprints toward a minimum clearance, then re-checked with the placement collision checker, which is not a verdict: only verify_board gives one." + " " + write_layer.LOCK_SENTENCE),
         annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": False, "openWorldHint": False},
     )
     mcp.add_tool(
@@ -1540,7 +1589,7 @@ def build(mcp: MCPServer) -> list[str]:
     mcp.add_tool(
         confirm_autoplacement,
         name="confirm_autoplacement",
-        description="Apply a previously proposed autoplacement by its revision_token. Consumes the token." + " " + _RELATIVE_RULE,
+        description=("Apply a previously proposed autoplacement by its revision_token. Consumes the token." + " " + _RELATIVE_RULE + " " + write_layer.LOCK_SENTENCE),
         annotations={"readOnlyHint": False, "destructiveHint": True, "idempotentHint": False, "openWorldHint": False},
     )
     mcp.add_tool(
@@ -1552,7 +1601,7 @@ def build(mcp: MCPServer) -> list[str]:
     mcp.add_tool(
         confirm_placement_optimization,
         name="confirm_placement_optimization",
-        description="Apply a previously proposed placement-optimization result by its revision_token. Consumes the token. Applies footprint positions only, then runs one kicad-cli DRC on the result and reports its counts (drc_after); that single run is not the acceptance gate. Only a verify_board PASS may be reported as routed or done.",
+        description=("Apply a previously proposed placement-optimization result by its revision_token. Consumes the token. Applies footprint positions only, then runs one kicad-cli DRC on the result and reports its counts (drc_after); that single run is not the acceptance gate. Only a verify_board PASS may be reported as routed or done." + " " + write_layer.LOCK_SENTENCE),
         annotations={"readOnlyHint": False, "destructiveHint": True, "idempotentHint": False, "openWorldHint": False},
     )
     mcp.add_tool(
@@ -1564,7 +1613,7 @@ def build(mcp: MCPServer) -> list[str]:
     mcp.add_tool(
         confirm_remove_graphic_items,
         name="confirm_remove_graphic_items",
-        description="Apply a previously proposed graphic-item removal by its revision_token. Consumes the token. Re-verifies the result by reloading the saved file fresh before reporting success.",
+        description=("Apply a previously proposed graphic-item removal by its revision_token. Consumes the token. Re-verifies the result by reloading the saved file fresh before reporting success." + " " + write_layer.LOCK_SENTENCE),
         annotations={"readOnlyHint": False, "destructiveHint": True, "idempotentHint": False, "openWorldHint": False},
     )
     return [

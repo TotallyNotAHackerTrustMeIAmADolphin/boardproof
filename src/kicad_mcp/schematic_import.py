@@ -1133,6 +1133,7 @@ def _build_revision(
     sibling, reload and compare, then the move). Every failure leaves nothing behind."""
     return checkpoint.build_revision(
         out_dir,
+        source_pcb=src,
         write=lambda tmp: _build_inner(src, sch, entry, tmp, footprint_dirs, netlist_exporter),
         verify=_verify_revision,
         success="built",

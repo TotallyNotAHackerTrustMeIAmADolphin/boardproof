@@ -34,6 +34,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from kicad_mcp import kicad_lock, write_layer
+
 PROTOCOL_FILE = Path(__file__).with_name("autonomy_protocol.json")
 # The committed, sanitised history of the batches already measured (protocols 2 onward), written
 # once by scripts/export_ladder_results.py. The run directories themselves stay local in the
@@ -658,6 +660,20 @@ def run_rung(
                 protocol_version=protocol_version, protocol_sha=protocol_sha,
                 board_sha256=_safe_sha(board),
             )
+    # A board open in KiCad (GitHub issue 68) is refused before anything is frozen: the human is
+    # editing the file, so a graded run on its saved bytes would not describe the board they have.
+    # Unscored and never pooled, like any refused batch; the lock is named and left alone.
+    try:
+        write_layer.check_project_writable(board)
+    except write_layer.WriteLayerError as exc:
+        lock = write_layer.lock_refusal_result(exc)
+        return _run_not_scored(
+            "refused", rung=rung, backend_name=backend_name, runs_root=runs_root,
+            reason=lock["reason"], plan=plan, now=now, protocol_version=protocol_version,
+            protocol_sha=protocol_sha, board_sha256=_safe_sha(board),
+            extra={"setup": setup or {}, "code": lock["code"], "lock_file": lock["lock_file"],
+                   "locks": lock["locks"], "hint": lock["hint"]},
+        )
     # Repository state is captured before this runner creates a single file.
     repo = (repo_state or (lambda: _git_repo_state(repo_dir, runs_root)))()
     frozen_invariants = invariants(board) if invariants is not None else None
@@ -673,7 +689,12 @@ def run_rung(
     runs_resolved = runs_root.resolve()
 
     def _ignore(directory: str, names: list[str]) -> list[str]:
-        return [n for n in names if (Path(directory) / n).resolve() == runs_resolved]
+        # KiCad lock files stay out of every copy: a copied lock would make each write into the
+        # scratch project refuse (GitHub issue 68). Attempts and reruns copy from this frozen tree.
+        return [
+            n for n in names
+            if kicad_lock.is_lock_name(n) or (Path(directory) / n).resolve() == runs_resolved
+        ]
 
     shutil.copytree(board.parent, frozen_dir, ignore=_ignore)
     frozen_files = _tree_hashes(frozen_dir)

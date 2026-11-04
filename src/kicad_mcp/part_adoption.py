@@ -1056,6 +1056,7 @@ def confirm_adopt_parts(
     renderer = render or kicad_cli_render
     built = checkpoint.build_revision(
         out_dir,
+        source_pcb=src,
         write=lambda tmp: _write(src, tmp, payload),
         verify=lambda tmp, state: _verify(state, renderer),
         success="adopted",

@@ -12,6 +12,7 @@ from typing import Literal
 
 from mcp.server.mcpserver import Context, MCPServer
 
+from kicad_mcp import write_layer
 from kicad_mcp.gate_state import GateState, attach_gate_field
 from kicad_mcp.toolsets.registry import ToolsetRegistry
 
@@ -166,7 +167,10 @@ def build_server() -> MCPServer:
         verdict. pcb_path in the result is the prepared board (same as output_pcb); the board you
         passed in is `source_pcb`.
 
-        parity: "required" or "not_applicable" (give parity_reason), passed to the gate unchanged."""
+        parity: "required" or "not_applicable" (give parity_reason), passed to the gate unchanged.
+
+        Refuses with file_open_in_kicad, naming the lock file, while KiCad holds a lock file for a file
+        it would write; close the file in KiCad, then retry."""
         from kicad_mcp import input_prep
 
         result = input_prep.confirm_input_preparation(
@@ -240,7 +244,10 @@ def build_server() -> MCPServer:
         in total; expect minutes, not seconds. Over the cap a pad is never accepted unproven.
 
         In the result, pcb_path is the new revision (same as output_pcb) and source_pcb is the
-        board you passed in; both gates are stale until verify_board runs on the revision."""
+        board you passed in; both gates are stale until verify_board runs on the revision.
+
+        Refuses with file_open_in_kicad, naming the lock file, while KiCad holds a lock file for a file
+        it would write; close the file in KiCad, then retry."""
         from kicad_mcp import pour_step
 
         result = pour_step.confirm_pour_step(
@@ -340,6 +347,8 @@ def _register_layout_tools(mcp: MCPServer) -> None:
             "schematic's footprints and every pad net, verified by a fresh reload against the "
             "kicad-cli netlist; an unresolved footprint fails the whole confirm and nothing is "
             "written. The revision_token is single use. " + _LAYOUT_ORDER
+            + " "
+            + write_layer.LOCK_SENTENCE
         ),
     )
     def confirm_schematic_import(pcb_path: str, revision_token: str) -> dict:
@@ -400,6 +409,8 @@ def _register_layout_tools(mcp: MCPServer) -> None:
             "on output_pcb. The revision_token is single use. parity: \"required\" or "
             "\"not_applicable\" (give parity_reason), passed to the gate unchanged. "
             + _LAYOUT_ORDER
+            + " "
+            + write_layer.LOCK_SENTENCE
         ),
     )
     def confirm_board_rules(
@@ -456,6 +467,8 @@ def _register_layout_tools(mcp: MCPServer) -> None:
             "outline and mounting holes, verified by a fresh reload and a kicad-cli outline "
             "check; copper pours under a new keepout need refilling before any pour or DRC "
             "figure means anything. The revision_token is single use. " + _LAYOUT_ORDER
+            + " "
+            + write_layer.LOCK_SENTENCE
         ),
     )
     def confirm_board_outline(pcb_path: str, revision_token: str) -> dict:
@@ -494,6 +507,8 @@ def _register_layout_tools(mcp: MCPServer) -> None:
             "Apply a propose_silkscreen_minimums proposal: writes a NEW board revision with the "
             "raised text, verified by a fresh reload against the plan. The revision_token is "
             "single use. " + _LAYOUT_ORDER
+            + " "
+            + write_layer.LOCK_SENTENCE
         ),
     )
     def confirm_silkscreen_minimums(pcb_path: str, revision_token: str) -> dict:

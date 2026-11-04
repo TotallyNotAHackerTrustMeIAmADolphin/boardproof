@@ -72,6 +72,8 @@ from typing import Any
 
 from kicad_tools.sexp import SExp, parse_string
 
+from kicad_mcp import kicad_lock
+
 # Root tag -> the kicad-cli subcommand that loads that file type.
 FILE_KINDS = {
     "kicad_pcb": "pcb",
@@ -132,13 +134,79 @@ def check_text(value: str, *, new: bool = True) -> str:
 class WriteLayerError(RuntimeError):
     """A save that did not happen. ``code`` is machine-readable (``parse_check_failed``,
     ``kicad_cli_unavailable``, ``sub_sheet_missing``, ``unsupported_file``,
-    ``verify_failed``, ``line_break_in_sheet_pin``); ``details`` carries the evidence (exit
-    code, output tail, file, pins)."""
+    ``verify_failed``, ``line_break_in_sheet_pin``, ``file_open_in_kicad``); ``details``
+    carries the evidence (exit code, output tail, file, pins, lock files)."""
 
     def __init__(self, code: str, message: str, **details: Any) -> None:
         super().__init__(f"{code}: {message}")
         self.code = code
         self.details = details
+
+
+# --------------------------------------------------------------------------- KiCad's lock files
+
+# The one sentence every writing tool's description carries (GitHub issue 68; pinned by
+# tests/test_write_guard.py, which also lists the writing tools).
+LOCK_SENTENCE = (
+    "Refuses with file_open_in_kicad, naming the lock file, while KiCad holds a lock file for a file it "
+    "would write; close the file in KiCad, then retry."
+)
+
+
+def check_writable(*paths: str | Path) -> None:
+    """Raise ``WriteLayerError("file_open_in_kicad")`` if a KiCad lock file guards any of
+    ``paths`` (``kicad_lock.guarding_lock_files`` says which lock guards which file; a directory
+    is guarded by every lock inside it). Reads are never checked. Nothing is written, changed or
+    deleted: a stale lock is explained in the message and left for the human to remove. Every
+    writer of a KiCad file or project folder calls this before its first write; the layer's own
+    entry points call it themselves, and ``_commit`` again right before the move."""
+    refusal = kicad_lock.check_writable(list(paths))
+    if refusal is None:
+        return
+    raise WriteLayerError(
+        kicad_lock.CODE,
+        f"{refusal['message']} {refusal['hint']}",
+        file=refusal["file"],
+        lock_file=refusal["lock_file"],
+        locks=refusal["locks"],
+        hint=refusal["hint"],
+    )
+
+
+def check_project_writable(pcb: str | Path) -> None:
+    """Raise ``WriteLayerError("file_open_in_kicad")`` if KiCad holds the lock of THIS project's
+    board (``~<name>.kicad_pcb.lck``) or of its project file (``~<name>.kicad_pro.lck``), by exact
+    name. This is the check for a checkpoint revision: it copies the project into a new directory
+    and writes only there, so only the source's own board and project locks mean the human has the
+    board open. Another project's lock in the same folder, a lock-like name that only starts the
+    same way, a root-schematic lock and a lock inside a backup folder do not (the copy skips every
+    lock file, and no copied file is written in the source). Nothing is deleted or changed."""
+    pcb = Path(pcb)
+    check_writable(pcb, pcb.with_suffix(".kicad_pro"))
+
+
+def as_lock_refusal(exc: BaseException) -> dict[str, Any] | None:
+    """``lock_refusal_result(exc)`` when ``exc`` is the ``file_open_in_kicad`` refusal, else ``None``.
+    A tool that wraps a write in ``except Exception`` calls this first, so every tool answers a lock
+    with the same fields (``status``, ``ok``, ``code``, ``reason``, ``file``, ``lock_file``,
+    ``locks``, ``hint``) instead of the text inside ``reason``."""
+    if isinstance(exc, WriteLayerError) and exc.code == kicad_lock.CODE:
+        return lock_refusal_result(exc)
+    return None
+
+
+def lock_refusal_result(exc: WriteLayerError) -> dict[str, Any]:
+    """The ``ok: false`` tool result for a ``file_open_in_kicad`` refusal."""
+    return {
+        "status": "incomplete",
+        "ok": False,
+        "code": exc.code,
+        "reason": str(exc),
+        "file": exc.details.get("file"),
+        "lock_file": exc.details.get("lock_file"),
+        "locks": exc.details.get("locks"),
+        "hint": exc.details.get("hint"),
+    }
 
 
 # --------------------------------------------------------------------------- numbers, strings
@@ -511,6 +579,7 @@ def save(root: SExp, path: str | Path, *, verify: Callable[[Path], None] | None 
     ``path``. On any failure ``path`` is untouched, the temporary file is removed and the
     error propagates (``WriteLayerError`` for the layer's own checks)."""
     path = Path(path)
+    check_writable(path)
     kind = file_kind(root)
     if kind == "sch" and (pins := _sheet_pins_with_line_breaks(root)):
         raise WriteLayerError(
@@ -553,6 +622,7 @@ def _commit(temp: Path, path: Path, check: Callable[[], Any], verify: Callable[[
         check()
         if verify is not None:
             verify(temp)
+        check_writable(path)  # KiCad may have opened the file while the checks ran
         _retry_sharing_denial(lambda: os.replace(temp, path))
     except BaseException as exc:
         try:
@@ -576,6 +646,7 @@ def save_project(data: dict, path: str | Path, *, verify: Callable[[Path], None]
     parse check for a project file (kicad-cli has none), so a well-formed JSON document KiCad
     does not understand is not caught here."""
     path = Path(path)
+    check_writable(path)
     try:
         text = json.dumps(data, indent=2, allow_nan=False)
     except ValueError as exc:
@@ -610,6 +681,7 @@ def save_bytes(data: bytes, path: str | Path, *, verify: Callable[[Path], None])
     any file exists; its callers are frozen in tests/test_ratchets.py (``SAVE_BYTES_CALLERS``).
     On any failure ``path`` is untouched and the temporary file is removed."""
     path = Path(path)
+    check_writable(path)
     if path.name not in _BYTE_EXACT_FILES:
         raise WriteLayerError(
             "unsupported_file",
@@ -652,6 +724,7 @@ def commit_directory(temp_dir: str | Path, target: str | Path) -> Path:
     ``COMMIT_RETRY_BUDGET_S``; any other error, or a denial that outlasts the budget, is
     raised and ``temp_dir`` stays where it was for the caller to remove."""
     temp_dir, target = Path(temp_dir), Path(target)
+    check_writable(target)
     _retry_sharing_denial(lambda: os.rename(temp_dir, target))
     return target
 

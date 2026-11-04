@@ -70,7 +70,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from kicad_mcp import _self_check, input_prep, kicad_cli, write_layer
+from kicad_mcp import _self_check, input_prep, kicad_cli, kicad_lock, write_layer
 from kicad_mcp import verify_board as gate
 from kicad_mcp.routers import kicad_routing_tools as krt
 
@@ -390,6 +390,8 @@ def _project_fingerprint(pcb_path: Path) -> dict[str, str]:
     for current, dirs, files in os.walk(root):
         dirs[:] = [d for d in dirs if d not in gate._SKIP_DIRS and not d.endswith("-backups")]
         for name in files:
+            if kicad_lock.is_lock_name(name):
+                continue  # KiCad's own lock file: the human opening the board is not a tool's change
             path = Path(current) / name
             found[str(path.relative_to(root))] = _sha256(path)
     return found
@@ -1297,6 +1299,10 @@ def confirm_pour_step(
     problem = input_prep._output_dir_problem(src, out_dir)
     if problem:
         return _result("error", problem)
+    try:  # before the router and its gate runs; the token stays usable once KiCad has closed the board
+        write_layer.check_project_writable(src)
+    except write_layer.WriteLayerError as exc:
+        return {**write_layer.lock_refusal_result(exc), "note": "nothing was written", "original_unchanged": True}
 
     fingerprint_before = _project_fingerprint(src)
     try:
@@ -1493,7 +1499,13 @@ def _carry_over(
     cand_graded, fill, scratch, connectivity_check, min_fill_fraction, drc,
 ) -> dict:
     """Append the candidate's added nodes to a fresh copy of the original, reload it,
-    grade and refill it, check fill and reach, and only then move it into ``out_dir``."""
+    grade and refill it, check fill and reach, and only then move it into ``out_dir``.
+    While KiCad holds a lock file in the source project directory nothing is built
+    (``file_open_in_kicad``, GitHub issue 68)."""
+    try:
+        write_layer.check_project_writable(src)
+    except write_layer.WriteLayerError as exc:
+        return {**write_layer.lock_refusal_result(exc), "note": "nothing was written"}
     from kicad_tools.schema import PCB
 
     missing: list[Path] = []

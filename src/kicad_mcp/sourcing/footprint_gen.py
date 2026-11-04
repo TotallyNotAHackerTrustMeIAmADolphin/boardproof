@@ -40,6 +40,8 @@ from typing import Any, Callable
 from kicad_tools.library import generators as kt_generators
 from kicad_tools.library.footprint import Footprint
 
+from kicad_mcp import write_layer
+
 # package_type -> underlying kicad_tools generator function. Each function's
 # real keyword-argument shape varies (chip takes a size string; soic/qfp/qfn
 # take pins/pitch/body dimensions) -- callers pass whatever kwargs the chosen
@@ -95,6 +97,10 @@ def generate_footprint(package_type: str, output_path: str | Path, **kwargs: Any
         }
 
     output_path = Path(output_path)
+    try:
+        write_layer.check_writable(output_path)
+    except write_layer.WriteLayerError as exc:
+        return write_layer.lock_refusal_result(exc)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     try:

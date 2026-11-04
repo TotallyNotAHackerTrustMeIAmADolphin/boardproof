@@ -38,7 +38,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from kicad_mcp import gate_state, write_layer
+from kicad_mcp import gate_state, kicad_lock, write_layer
 
 if not hasattr(gate_state.GateState, "_fingerprint"):  # the gate field's hashing is reused, not copied
     raise ImportError("checkpoint reuses kicad_mcp.gate_state.GateState._fingerprint, which no longer exists")
@@ -224,7 +224,11 @@ def copy_project(
     suffixes = tuple(skip_suffixes)
 
     def _ignore(directory: str, names: list[str]) -> list[str]:
-        skipped = [n for n in names if n in _SKIP_DIRS or n.endswith("-backups") or (suffixes and n.endswith(suffixes))]
+        skipped = [
+            n
+            for n in names
+            if n in _SKIP_DIRS or n.endswith("-backups") or kicad_lock.is_lock_name(n) or (suffixes and n.endswith(suffixes))
+        ]
         if Path(directory) == source:
             skipped += [n for n in names if n in outputs]
             skipped += [n for n in names if n.endswith(".kicad_pcb") and n != src_pcb.name]
@@ -237,6 +241,7 @@ def copy_project(
 def build_revision(
     out_dir: Path,
     *,
+    source_pcb: Path,
     write: Callable[[Path], Any],
     verify: Callable[[Path, Any], dict],
     success: str,
@@ -245,6 +250,12 @@ def build_revision(
 ) -> dict:
     """Build a new revision in a temporary sibling of ``out_dir``, verify it, then move it into
     place; the source project is only ever read.
+
+    ``source_pcb`` is the board whose project directory ``write`` copies. While KiCad holds the lock
+    file of THIS project's board or project file (exact names, ``write_layer.check_project_writable``,
+    GitHub issue 68) nothing is built: the result is ``ok: false`` with ``code: file_open_in_kicad``
+    naming the lock file, and no directory is made. Another project's lock, a root-schematic lock or
+    a lock inside a backup folder does not refuse. The copy leaves every lock file out.
 
     ``write(tmp)`` copies the project into ``tmp`` (``copy_project``), changes the copy and saves
     it through the write layer; it returns whatever ``verify`` needs. ``verify(tmp, state)``
@@ -258,6 +269,10 @@ def build_revision(
     ``incomplete``. Every failure, a ``BaseException`` included, removes the temporary
     directory and the parent directories this call created."""
     out_dir = Path(out_dir)
+    try:
+        write_layer.check_project_writable(source_pcb)
+    except write_layer.WriteLayerError as exc:
+        return {**write_layer.lock_refusal_result(exc), "note": note}
     missing: list[Path] = []
     probe = out_dir.parent
     while not probe.exists():

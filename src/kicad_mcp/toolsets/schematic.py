@@ -25,6 +25,7 @@ from typing import Any
 
 from mcp.server.mcpserver import MCPServer
 
+from kicad_mcp import write_layer
 from kicad_mcp.kicad_cli import ensure_kicad_cli_on_path, find_kicad_cli
 
 _symbol_dir_checked = False
@@ -614,6 +615,7 @@ def _write_schematic_utf8(sch: Any, path: Path, *, added_refs: set[str] = frozen
     (``write_text`` default, CRLF on Windows). Build ticket 44 moves this onto
     the write layer.
     """
+    write_layer.check_writable(path)  # nothing is touched while KiCad holds the sheet (GitHub issue 68)
     if getattr(sch, "_synthesized_pwr_defs", None):
         # write() would also emit kicad_tools_pwr sidecars, with the platform
         # encoding. This toolset never synthesizes power symbols (add_power
@@ -629,6 +631,7 @@ def _write_schematic_utf8(sch: Any, path: Path, *, added_refs: set[str] = frozen
         if tmp.read_text(encoding="utf-8") != content:
             raise OSError(f"read-back of the written schematic differs from its content; {path.name} left unchanged")
         _verify_schematic_write(path, tmp, set(added_refs))
+        write_layer.check_writable(path)  # KiCad may have opened the sheet while the checks ran
         os.replace(tmp, path)
     finally:
         tmp.unlink(missing_ok=True)
@@ -820,6 +823,9 @@ def build(mcp: MCPServer) -> list[str]:
         aside, which the write may enlarge) and kicad-cli's netlist must keep every
         component and every connection; otherwise the result is ok: false and lists
         each mismatch, and the sheet stays unchanged.
+
+        Refuses with file_open_in_kicad, naming the lock file, while KiCad holds a lock file for a file
+        it would write; close the file in KiCad, then retry.
         """
         path = Path(sch_path)
         if not path.is_file():
@@ -852,6 +858,8 @@ def build(mcp: MCPServer) -> list[str]:
         except SchematicWriteNotVerified as exc:
             return _not_verified_result(exc)
         except Exception as exc:  # noqa: BLE001 - evidence-gated verdict
+            if (locked := write_layer.as_lock_refusal(exc)) is not None:
+                return locked
             return _incomplete(f"could not add symbols: {exc}")
         return {"status": "ok", "placed": placed, "count": len(placed)}
 
@@ -907,6 +915,9 @@ def build(mcp: MCPServer) -> list[str]:
         aside, which the write may enlarge) and kicad-cli's netlist must keep every
         component and every connection; otherwise the result is ok: false and lists
         each mismatch, and the sheet stays unchanged.
+
+        Refuses with file_open_in_kicad, naming the lock file, while KiCad holds a lock file for a file
+        it would write; close the file in KiCad, then retry.
         """
         path = Path(sch_path)
         if not path.is_file():
@@ -957,6 +968,8 @@ def build(mcp: MCPServer) -> list[str]:
             except SchematicWriteNotVerified as exc:
                 return {**_not_verified_result(exc), "errors": errors}
             except Exception as exc:  # noqa: BLE001 - evidence-gated verdict
+                if (locked := write_layer.as_lock_refusal(exc)) is not None:
+                    return locked
                 return _incomplete(f"could not write schematic: {exc}", errors=errors)
         if not added:
             if not specs:
@@ -978,6 +991,9 @@ def build(mcp: MCPServer) -> list[str]:
         aside, which the write may enlarge) and kicad-cli's netlist must keep every
         component and every connection; otherwise the result is ok: false and lists
         each mismatch, and the sheet stays unchanged.
+
+        Refuses with file_open_in_kicad, naming the lock file, while KiCad holds a lock file for a file
+        it would write; close the file in KiCad, then retry.
         """
         path = Path(sch_path)
         if not path.is_file():
@@ -994,6 +1010,8 @@ def build(mcp: MCPServer) -> list[str]:
         except SchematicWriteNotVerified as exc:
             return _not_verified_result(exc)
         except Exception as exc:  # noqa: BLE001 - evidence-gated verdict
+            if (locked := write_layer.as_lock_refusal(exc)) is not None:
+                return locked
             return _incomplete(f"could not add junctions: {exc}")
         return {"status": "ok", "count": len(points)}
 
@@ -1026,6 +1044,9 @@ def build(mcp: MCPServer) -> list[str]:
         aside, which the write may enlarge) and kicad-cli's netlist must keep every
         component and every connection; otherwise the result is ok: false and lists
         each mismatch, and the sheet stays unchanged.
+
+        Refuses with file_open_in_kicad, naming the lock file, while KiCad holds a lock file for a file
+        it would write; close the file in KiCad, then retry.
         """
         path = Path(sch_path)
         if not path.is_file():
@@ -1062,6 +1083,8 @@ def build(mcp: MCPServer) -> list[str]:
         except SchematicWriteNotVerified as exc:
             return _not_verified_result(exc)
         except Exception as exc:  # noqa: BLE001 - evidence-gated verdict
+            if (locked := write_layer.as_lock_refusal(exc)) is not None:
+                return locked
             return _incomplete(f"could not add labels: {exc}")
         return {"status": "ok", "placed": placed, "count": len(placed)}
 
@@ -1071,6 +1094,9 @@ def build(mcp: MCPServer) -> list[str]:
         `mapping` is {reference: footprint_id}. Batch-oriented -- assigns
         every footprint a design needs in one call, not one call per part.
         Before writing, it copies every sheet to the returned `backup_dir`, outside the project.
+
+        Refuses with file_open_in_kicad, naming the lock file, while KiCad holds a lock file for a file
+        it would write; close the file in KiCad, then retry.
         """
         path = Path(sch_path)
         if not path.is_file():
@@ -1089,6 +1115,9 @@ def build(mcp: MCPServer) -> list[str]:
             from kicad_mcp import _self_check, sheet_tree, write_layer
 
             tree = sheet_tree.walk(path)
+            # Before kicad-cli runs (it leaves a .kicad_prl behind) and before the backup: a sheet of
+            # the tree that KiCad holds stops the call with nothing touched (GitHub issue 68).
+            write_layer.check_writable(*tree.files)
             # kicad_tools_writes=True keeps build ticket 26's refusal of a tree reached through
             # KiCad 6's "Sheet file" key, although kicad_tools no longer writes here (ticket 25).
             if (refused := _sheet_tree_refusal(tree, kicad_tools_writes=True) or _backup_root_refusal(tree)) is not None:
@@ -1129,6 +1158,13 @@ def build(mcp: MCPServer) -> list[str]:
                 **tree.report(),
             }
         except write_layer.WriteLayerError as exc:  # str(exc) is "<code>: <message>"
+            if (locked := write_layer.as_lock_refusal(exc)) is not None:
+                return {
+                    **locked,
+                    "written_sheets": [tree.rel(s) for s in written],
+                    "backup_dir": str(backup_dir) if backup_dir is not None else None,
+                    **tree.report(),
+                }
             return _incomplete(
                 f"{exc}; {tree.rel(current) if current else 'no sheet'} was left unchanged",
                 error=exc.code,
@@ -1178,6 +1214,9 @@ def build(mcp: MCPServer) -> list[str]:
         """Automatically renumber duplicate/missing reference designators
         across the whole schematic in one call.
         Before writing, it copies every sheet to the returned `backup_dir`, outside the project.
+
+        Refuses with file_open_in_kicad, naming the lock file, while KiCad holds a lock file for a file
+        it would write; close the file in KiCad, then retry.
         """
         path = Path(sch_path)
         if not path.is_file():
@@ -1198,6 +1237,7 @@ def build(mcp: MCPServer) -> list[str]:
             ensure_kicad_cli_on_path()
             # every placed instance of every sheet, not the root file's symbols only
             before_refs = sorted(ref for ref, _ in sheet_tree.placed_references(tree))
+            write_layer.check_writable(*tree.files)  # before the backup and before the in-place write
             backup_dir = _backup_outside_project(tree)
             exit_code = run_fix_annotation(path, dry_run=False, backup=False)
             if exit_code != 0:
@@ -1205,6 +1245,9 @@ def build(mcp: MCPServer) -> list[str]:
                     f"run_fix_annotation exited with code {exit_code}", backup_dir=str(backup_dir), **tree.report()
                 )
             after_refs = sorted(ref for ref, _ in sheet_tree.placed_references(sheet_tree.walk(path)))
+        except write_layer.WriteLayerError as exc:
+            extra = {"backup_dir": str(backup_dir)} if backup_dir is not None else {}
+            return {**write_layer.lock_refusal_result(exc), **extra}
         except Exception as exc:  # noqa: BLE001 - evidence-gated verdict
             extra = {"backup_dir": str(backup_dir)} if backup_dir is not None else {}
             return _incomplete(f"could not fix annotation: {exc}", **extra)

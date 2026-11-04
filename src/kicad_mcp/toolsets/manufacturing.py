@@ -97,6 +97,7 @@ from typing import Any
 
 from mcp.server.mcpserver import MCPServer
 
+from kicad_mcp import write_layer
 from kicad_mcp.kicad_cli import ensure_kicad_cli_on_path
 
 
@@ -444,6 +445,9 @@ def panelize_board(
     If KiKit isn't installed, this returns `status: "incomplete"` with
     install instructions and produces no output file -- it never copies
     the source board through and calls it a panel.
+
+    Refuses with file_open_in_kicad, naming the lock file, while KiCad holds a lock file for a file
+    it would write; close the file in KiCad, then retry.
     """
     pcb_path = Path(pcb_path)
     output_path = Path(output_path)
@@ -467,6 +471,11 @@ def panelize_board(
                 "status": "incomplete",
                 "reason": f"{name} must be one of {list(allowed)}, got {value!r}",
             }
+
+    try:  # first, before KiKit is looked up: it also writes the project sidecars beside the panel
+        write_layer.check_writable(output_path, output_path.with_suffix(".kicad_pro"))
+    except write_layer.WriteLayerError as exc:
+        return write_layer.lock_refusal_result(exc)
 
     try:
         kikit = find_kikit()
@@ -729,7 +738,7 @@ def build(mcp: MCPServer) -> list[str]:
         panelize_board,
         name="panelize_board",
         description=(
-            "Panelize a single board into a rows x cols production panel using KiKit (MIT), "
+            ("Panelize a single board into a rows x cols production panel using KiKit (MIT), "
             "fully parameterized in ONE call: grid size, board spacing, separation method "
             "('mousebites' or 'vcuts'), tab geometry, framing/rails, tooling holes and "
             "fiducials -- never one call per knob. Requires KiKit installed into KiCad's own "
@@ -741,7 +750,7 @@ def build(mcp: MCPServer) -> list[str]:
             "never passes an un-panelized board off as a panel. Those DRC counts are single "
             "runs for spotting violations the panel added, not the acceptance gate: run "
             "verify_board on the source board, and only its PASS may be reported as routed or "
-            "done."
+            "done." + " " + write_layer.LOCK_SENTENCE)
         ),
         annotations={
             "readOnlyHint": False,

@@ -66,7 +66,7 @@ from kicad_tools.schema import Footprint
 from kicad_tools.sexp import parse_string
 from kicad_tools.sexp.parser import SExp
 
-from kicad_mcp import write_layer
+from kicad_mcp import kicad_lock, write_layer
 
 _TableKind = Literal["sym", "fp"]
 
@@ -750,6 +750,10 @@ def _register_one(project_dir: Path, asset_path: Path, kind: _TableKind, nicknam
         return {"status": "error", "reason": f"{exc}; nothing was written"}
     try:
         problems = _write_table(table, row)
+    except write_layer.WriteLayerError as exc:
+        if exc.code != write_layer.kicad_lock.CODE:
+            raise
+        return write_layer.lock_refusal_result(exc)
     except OSError as exc:
         return _not_replaced(table_path, exc)
     if problems:
@@ -789,6 +793,9 @@ def build(mcp: MCPServer) -> list[str]:
         URIs, never absolute, so the project stays portable across
         machines. Pass whichever of symbol_lib_path/footprint_lib_path is
         relevant; at least one is required.
+
+        Refuses with file_open_in_kicad, naming the lock file, while KiCad holds a lock file for a file
+        it would write; close the file in KiCad, then retry.
         """
         if symbol_lib_path is None and footprint_lib_path is None:
             return {"status": "error", "reason": "at least one of symbol_lib_path/footprint_lib_path is required"}
@@ -800,6 +807,9 @@ def build(mcp: MCPServer) -> list[str]:
         if footprint_lib_path is not None:
             out["footprint"] = _register_one(project_path, Path(footprint_lib_path), "fp", nickname)
 
+        for refused in out.values():
+            if refused.get("code") == kicad_lock.CODE:  # one answer in the one refusal shape; the parts stay listed
+                return {**refused, **out}
         statuses = {v["status"] for v in out.values()}
         out["status"] = "error" if "error" in statuses else ("ok" if "ok" in statuses else "already_present")
         return out
@@ -931,7 +941,7 @@ def build(mcp: MCPServer) -> list[str]:
         register_library_asset,
         name="register_library_asset",
         description=(
-            "Register a symbol/footprint library into the project's local sym-lib-table/fp-lib-table, "
+            ("Register a symbol/footprint library into the project's local sym-lib-table/fp-lib-table, "
             "deduped by real path, always as a ${KIPRJMOD}-relative URI (never absolute) so the project "
             "stays portable across machines. Both symbol_lib_path/footprint_lib_path must live under project_dir. "
             "Adds one row and leaves every existing row byte-for-byte as it was, (disabled) and (hidden) "
@@ -944,7 +954,7 @@ def build(mcp: MCPServer) -> list[str]:
             "(KiCad) holds it open; a permission problem on the folder gives the same code. Nothing was "
             "written: ask the user to close the program and check the folder's permissions, then call "
             "again. Code lib_table_read_only means the table is read-only and "
-            "nothing was written: ask the user to make it writable, then call again."
+            "nothing was written: ask the user to make it writable, then call again." + " " + write_layer.LOCK_SENTENCE)
         ),
         annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
     )
@@ -987,7 +997,7 @@ def build(mcp: MCPServer) -> list[str]:
         confirm_adopt_parts,
         name="confirm_adopt_parts",
         description=(
-            "Apply a propose_adopt_parts proposal: writes a NEW project revision (output_pcb; the source is "
+            ("Apply a propose_adopt_parts proposal: writes a NEW project revision (output_pcb; the source is "
             "never touched) holding the library, both lib-table rows (${KIPRJMOD}-relative), model paths "
             "rewritten to ${KIPRJMOD}/..., and the mandatory properties set. Re-read from a fresh reload, then "
             "checked per part: model_path_project_relative, model_file_present, mandatory_properties and "
@@ -1000,7 +1010,7 @@ def build(mcp: MCPServer) -> list[str]:
             "vertical axis is not caught by it, so tell the user to look at the front and top images in the "
             "revision's adoption_evidence folder before relying on the 3D model. It does not judge whether the "
             "model is the right part. The revision_token is single use and is refused with an error if the "
-            "project or a part file changed since the proposal."
+            "project or a part file changed since the proposal." + " " + write_layer.LOCK_SENTENCE)
         ),
         annotations={"readOnlyHint": False, "destructiveHint": True, "idempotentHint": False, "openWorldHint": False},
     )

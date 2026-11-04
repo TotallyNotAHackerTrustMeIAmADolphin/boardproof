@@ -26,6 +26,7 @@ from typing import Annotated, Literal
 from mcp.server.mcpserver import MCPServer
 from pydantic import BaseModel, ConfigDict, Field, create_model, model_validator
 
+from kicad_mcp import write_layer
 from kicad_mcp.sourcing import PROVIDER_REGISTRY, PartResult
 from kicad_mcp.sourcing import jlcpcb_basic as jlc
 from kicad_mcp.sourcing.asset_fetch import fetch_part_assets as _fetch_part_assets
@@ -675,6 +676,9 @@ def build(mcp: MCPServer) -> list[str]:
         is reported explicitly, not returned as a silent partial success.
         A missing easyeda2kicad package gives status incomplete with the
         install command.
+
+        Refuses with file_open_in_kicad, naming the lock file, while KiCad holds a lock file for a file
+        it would write; close the file in KiCad, then retry.
         """
         return _fetch_part_assets(lcsc_id, output_dir, overwrite=overwrite)
 
@@ -685,6 +689,9 @@ def build(mcp: MCPServer) -> list[str]:
         preferred path, when a maintained ready asset exists. ``params``
         holds the generator's parameters; one the package type does not
         take is refused by name, before anything is written.
+
+        Refuses with file_open_in_kicad, naming the lock file, while KiCad holds a lock file for a file
+        it would write; close the file in KiCad, then retry.
         """
         kwargs = _footprint_kwargs(package_type, params)
         if isinstance(kwargs, str):
@@ -871,7 +878,7 @@ def build(mcp: MCPServer) -> list[str]:
         description=(
             "Retrieve a ready KiCad symbol/footprint/3D model for an LCSC-numbered part via easyeda2kicad. "
             "Prefer resolve_jlcpcb_assets first for JLCPCB Basic/Preferred parts -- no network round-trip needed when a local asset already covers the part. "
-            "If the easyeda2kicad package is missing from the server's Python environment the result is status incomplete with the install command, and nothing is fetched."
+            "If the easyeda2kicad package is missing from the server's Python environment the result is status incomplete with the install command, and nothing is fetched. " + write_layer.LOCK_SENTENCE
         ),
         annotations={
             "readOnlyHint": False,  # writes assets to output_dir
@@ -884,14 +891,14 @@ def build(mcp: MCPServer) -> list[str]:
         generate_footprint,
         name="generate_footprint",
         description=(
-            "Generate a parametric IPC-7351-style footprint (.kicad_mod at output_path) for a part with no "
+            ("Generate a parametric IPC-7351-style footprint (.kicad_mod at output_path) for a part with no "
             "ready asset from fetch_part_assets/resolve_jlcpcb_assets. package_type picks the generator; "
             'params holds its parameters, lengths in mm, e.g. chip: {"size": "0603"}, soic: {"pins": 8}, '
             'sot: {"variant": "SOT-23"}. list_package_types names the required and accepted params of each '
             "package_type. Every generator parameter goes inside params. A name inside params that is unknown, "
             "that the package_type does not take, or that the generator would ignore next to another, is "
             "refused by name and nothing is written; an argument outside params other than package_type and "
-            "output_path is refused by name too, with nothing written."
+            "output_path is refused by name too, with nothing written." + " " + write_layer.LOCK_SENTENCE)
         ),
         annotations={
             "readOnlyHint": False,  # writes output_path

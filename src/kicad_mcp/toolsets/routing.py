@@ -2114,6 +2114,9 @@ def build(mcp: MCPServer) -> list[str]:
         other tools already use, e.g. pcb_validate_proposed_placements).
         Evidence-gated: a spec that fails to add is reported by index,
         the rest still get attempted.
+
+        Refuses with file_open_in_kicad, naming the lock file, while KiCad holds a lock file for a file
+        it would write; close the file in KiCad, then retry.
         """
         path = Path(pcb_path)
         if not path.is_file():
@@ -2144,6 +2147,8 @@ def build(mcp: MCPServer) -> list[str]:
             try:
                 write_layer.save_pcb(board, path)
             except Exception as exc:  # noqa: BLE001 - evidence-gated verdict
+                if (locked := write_layer.as_lock_refusal(exc)) is not None:
+                    return locked
                 return _incomplete(f"traces added in memory but save failed: {exc}", added=added)
 
         status = "complete" if not errors else ("partial" if added else "error")
@@ -2533,6 +2538,9 @@ def build(mcp: MCPServer) -> list[str]:
         A write that is not the routed copy's copper is refused with
         `code: write_not_verified`; the board is unchanged and the token stays
         valid.
+
+        Refuses with file_open_in_kicad, naming the lock file, while KiCad holds a lock file for a file
+        it would write; close the file in KiCad, then retry.
         """
         _evict_stale_pending_routes()
         entry = _PENDING_ROUTES.pop(revision_token, None)
@@ -2568,6 +2576,8 @@ def build(mcp: MCPServer) -> list[str]:
                                        expected_copper=proposal.get("expected_copper"))
         except write_layer.WriteLayerError as exc:
             _PENDING_ROUTES[revision_token] = entry  # nothing was written: the token stays valid
+            if (locked := write_layer.as_lock_refusal(exc)) is not None:
+                return {**locked, "original_unchanged": True}
             return {"status": "error", "ok": False, "code": exc.code, "reason": f"failed to apply proposed route: {exc}",
                     "mismatches": exc.details.get("mismatches", []), "original_unchanged": True}
         except Exception as exc:  # noqa: BLE001 - evidence-gated verdict
@@ -2642,7 +2652,8 @@ def build(mcp: MCPServer) -> list[str]:
         add_traces,
         description=(
             "Add multiple traces to a PCB in one batch call -- never loop this one segment at a time. "
-            "Adding traces checks nothing: only a verify_board PASS may be reported as routed or done."
+            "Adding traces checks nothing: only a verify_board PASS may be reported as routed or done. "
+            + write_layer.LOCK_SENTENCE
         ),
         annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": False, "openWorldHint": False},
     )
@@ -2680,7 +2691,8 @@ def build(mcp: MCPServer) -> list[str]:
             "ses_import_incomplete (KiCad's import skipped items, put copper on no net, ignored polygon "
             "wires, added more copper than the session holds, or a count was unreadable), "
             "arcs_not_applied (the router's arcs are not applied; those connections stay open), "
-            "existing_copper_removed."
+            "existing_copper_removed. "
+            + write_layer.LOCK_SENTENCE
         ),
         annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": False, "openWorldHint": False},
     )

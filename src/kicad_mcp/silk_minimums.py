@@ -395,6 +395,7 @@ def _build_revision(src: Path, out_dir: Path, min_h: float, min_t: float) -> dic
     sibling, reload and compare, then the move). Every failure leaves nothing behind."""
     return checkpoint.build_revision(
         out_dir,
+        source_pcb=src,
         write=lambda tmp: _write(src, tmp, min_h, min_t),
         verify=lambda tmp, state: _verify(state, min_h, min_t),
         success="applied",

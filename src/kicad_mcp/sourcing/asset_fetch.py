@@ -21,6 +21,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from kicad_mcp import write_layer
+
 # lcsc_id may originate from third-party sourcing-provider data -- treat it
 # as untrusted. Security fix (2026-09-02, independent review): the previous
 # `startswith("C")` check let a value like "C:/Windows/Temp/x" through,
@@ -62,6 +64,10 @@ def fetch_part_assets(lcsc_id: str, output_dir: str | Path, *, overwrite: bool =
         }
 
     output_dir = Path(output_dir)
+    try:
+        write_layer.check_writable(output_dir)  # every lock-named entry inside the directory counts
+    except write_layer.WriteLayerError as exc:
+        return write_layer.lock_refusal_result(exc)
     output_dir.mkdir(parents=True, exist_ok=True)
     lib_base = output_dir / lcsc_id
 

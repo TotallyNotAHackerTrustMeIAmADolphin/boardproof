@@ -328,6 +328,7 @@ def _build_revision(src: Path, out_dir: Path) -> dict:
     a failure dict that leaves nothing behind."""
     return checkpoint.build_revision(
         out_dir,
+        source_pcb=src,
         write=lambda tmp: _write(src, tmp),
         verify=_verify,
         success="built",

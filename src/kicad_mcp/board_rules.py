@@ -1190,6 +1190,7 @@ def _expected_readback(wanted: dict, classes: list[dict]) -> dict:
 def _build_revision(src: Path, out_dir: Path, wanted: dict, classes: list[dict]) -> dict:
     return checkpoint.build_revision(
         out_dir,
+        source_pcb=src,
         write=lambda tmp: _write(src, tmp, wanted, classes),
         verify=lambda tmp, state: _verify(src, state, wanted, classes),
         success="built",

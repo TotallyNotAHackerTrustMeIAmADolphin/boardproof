@@ -43,17 +43,21 @@ def _project_create(
             this path. Defaults to False so the common case (a genuinely
             new path) stays a single plain call while an existing project
             is protected by default.
+
+    Refuses with file_open_in_kicad, naming the lock file, while KiCad holds a lock file for a file
+    it would write; close the file in KiCad, then retry.
     """
     from kicad_tools.core.project_file import create_minimal_project
     from kicad_tools.schema import PCB
     from kicad_tools.schematic.models.schematic import Schematic
 
     dir_path = Path(directory)
-    dir_path.mkdir(parents=True, exist_ok=True)
 
     project_path = dir_path / f"{name}.kicad_pro"
     schematic_path = dir_path / f"{name}.kicad_sch"
     pcb_path = dir_path / f"{name}.kicad_pcb"
+    write_layer.check_writable(project_path, schematic_path, pcb_path)  # raises before the directory is made
+    dir_path.mkdir(parents=True, exist_ok=True)
 
     existing = [p for p in (project_path, schematic_path, pcb_path) if p.exists()]
     if existing and not overwrite:
@@ -144,12 +148,20 @@ def _project_open(path: str) -> dict[str, Any]:
     return result
 
 
+PROJECT_CREATE_LOCK_NOTE = (
+    "For this tool the refusal is a tool error (the call fails with the file_open_in_kicad text), not a result dictionary."
+)
+
+
 def build(mcp: MCPServer) -> list[str]:
     """Register this toolset's tools onto `mcp`. Returns the registered tool names."""
     mcp.add_tool(
         _project_create,
         name="project_create",
-        description="Scaffold a new KiCad project: .kicad_pro, blank .kicad_sch, blank .kicad_pcb.",
+        description=(
+            "Scaffold a new KiCad project: .kicad_pro, blank .kicad_sch, blank .kicad_pcb."
+            + " " + write_layer.LOCK_SENTENCE + " " + PROJECT_CREATE_LOCK_NOTE
+        ),
         annotations={
             # archived backlog P1-13: calling this again at an existing path now
             # refuses by default (returns status="error") instead of

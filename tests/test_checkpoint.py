@@ -169,7 +169,7 @@ def test_a_verified_revision_is_moved_into_place_and_the_source_is_untouched(boa
     before = _tree_bytes(board.parent)
     out = tmp_path / "deep" / "rev"
     result = checkpoint.build_revision(
-        out,
+        out, source_pcb=board,
         write=lambda tmp: _write_marker(tmp, board),
         verify=lambda tmp, copied: {"output": copied.name},
         success="built",
@@ -193,7 +193,7 @@ def test_a_failed_self_check_returns_write_not_verified_and_leaves_nothing(board
         )
 
     result = checkpoint.build_revision(
-        out, write=lambda tmp: _write_marker(tmp, board), verify=verify, success="built",
+        out, source_pcb=board, write=lambda tmp: _write_marker(tmp, board), verify=verify, success="built",
         before_verified="unused",
     )
     assert result == {
@@ -218,7 +218,7 @@ def test_a_failed_write_step_is_incomplete_and_leaves_nothing(board: Path, tmp_p
         raise OSError("disk full")
 
     result = checkpoint.build_revision(
-        tmp_path / "a" / "rev", write=write, verify=lambda tmp, state: {}, success="built",
+        tmp_path / "a" / "rev", source_pcb=board, write=write, verify=lambda tmp, state: {}, success="built",
         before_verified="the stand-in failed before a revision was verified", note="custom note",
     )
     assert result == {
@@ -234,7 +234,7 @@ def test_a_step_may_refuse_by_name_with_its_own_status_and_fields(board: Path, t
         raise checkpoint.Failed("incomplete", "kicad-cli did not run", outline_drc={"status": "not_run"})
 
     result = checkpoint.build_revision(
-        tmp_path / "rev", write=lambda tmp: _write_marker(tmp, board), verify=verify, success="built",
+        tmp_path / "rev", source_pcb=board, write=lambda tmp: _write_marker(tmp, board), verify=verify, success="built",
         before_verified="unused",
     )
     assert result == {
@@ -252,7 +252,7 @@ def test_a_move_that_fails_is_incomplete_and_leaves_nothing(board: Path, tmp_pat
 
     monkeypatch.setattr(write_layer, "commit_directory", denied)
     result = checkpoint.build_revision(
-        tmp_path / "rev", write=lambda tmp: _write_marker(tmp, board), verify=lambda tmp, s: {}, success="built",
+        tmp_path / "rev", source_pcb=board, write=lambda tmp: _write_marker(tmp, board), verify=lambda tmp, s: {}, success="built",
         before_verified="unused",
     )
     assert result["status"] == "incomplete"
@@ -264,7 +264,7 @@ def test_an_empty_output_directory_the_caller_made_is_used(board: Path, tmp_path
     out = tmp_path / "rev"
     out.mkdir()
     result = checkpoint.build_revision(
-        out, write=lambda tmp: _write_marker(tmp, board), verify=lambda tmp, s: {}, success="applied",
+        out, source_pcb=board, write=lambda tmp: _write_marker(tmp, board), verify=lambda tmp, s: {}, success="applied",
         before_verified="unused",
     )
     assert result == {"status": "applied"}
@@ -286,7 +286,7 @@ def test_the_mismatch_list_is_bounded(board: Path, tmp_path: Path) -> None:
         raise checkpoint.NotVerified("CRITICAL: many", many)
 
     result = checkpoint.build_revision(
-        tmp_path / "rev", write=lambda tmp: _write_marker(tmp, board), verify=verify, success="built",
+        tmp_path / "rev", source_pcb=board, write=lambda tmp: _write_marker(tmp, board), verify=verify, success="built",
         before_verified="unused",
     )
     assert result["mismatches"]["count"] == 50

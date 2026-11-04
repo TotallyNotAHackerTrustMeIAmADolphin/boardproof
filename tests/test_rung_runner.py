@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from kicad_mcp import rung_runner
+from kicad_mcp import rung_runner, write_layer
 
 BOARD_TEXT = "fake board, version 1\n"
 RULES_TEXT = "fake rules, version 1\n"
@@ -846,3 +846,44 @@ def test_the_timeout_each_backend_call_receives_is_the_cap_clipped_to_the_budget
     # Attempts start at 0, 560, 1120, 1680: 120 s of the 1800 s budget remain at the last.
     assert received == [300, 300, 300, 120]
     assert [a["status"] for a in report["attempts"]] == ["PASS"] * 3 + ["TIMEOUT", "NOT_RUN"]
+
+
+# --- GitHub issue 68: KiCad holds a lock file in the project being graded ------------------
+
+
+def _kicad_lock(target: Path) -> Path:
+    lock = target.with_name(f"~{target.name}.lck")
+    lock.write_bytes(b'{"hostname":"SOMEONE-ELSES-PC","username":"someone"}')
+    return lock
+
+
+@pytest.mark.parametrize("name", ["board.kicad_pcb", "board.kicad_pro"])
+def test_a_run_on_a_board_open_in_kicad_is_refused_before_any_attempt(project, tmp_path, name):
+    write_layer.save_project({}, project / "board.kicad_pro")
+    lock = _kicad_lock(project / name)
+    ran: list = []
+
+    def backend(board, params, timeout_s, log):
+        ran.append(board)
+        return {"status": "ok"}
+
+    report, _ = make_run(project, tmp_path, backend=backend)
+    assert report["status"] == "REFUSED"
+    assert str(lock) in report["reason"] and "KiCad" in report["reason"]
+    assert report["code"] == "file_open_in_kicad" and report["lock_file"] == str(lock)
+    assert ran == [] and report["attempts_run"] == 0 and report["attempts"] == []
+    assert not any(str(p).endswith("project") for p in (tmp_path / "runs").rglob("*") if p.is_dir()), \
+        "no scratch copy of the project was made"
+    assert lock.exists(), "the lock is left where it is"
+
+
+def test_a_lock_that_is_not_this_boards_does_not_refuse_and_no_scratch_copy_holds_a_lock(project, tmp_path):
+    foreign = _kicad_lock(project / "other.kicad_pcb")
+    (project / "sub-backups").mkdir()
+    nested = _kicad_lock(project / "sub-backups" / "board.kicad_pcb")
+    report, _ = make_run(project, tmp_path)
+    assert report.get("status") != "REFUSED", report
+    assert report["attempts_run"] >= 1
+    assert foreign.exists() and nested.exists()
+    copies = [p for p in (tmp_path / "runs").rglob("*") if p.name.startswith("~") and p.name.endswith(".lck")]
+    assert copies == [], "a copy of the project never holds a KiCad lock file"

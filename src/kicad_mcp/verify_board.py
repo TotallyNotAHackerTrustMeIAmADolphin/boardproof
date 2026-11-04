@@ -19,7 +19,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Literal, get_args
 
-from kicad_mcp import kicad_cli, write_layer
+from kicad_mcp import kicad_cli, kicad_lock, write_layer
 
 Parity = Literal["required", "not_applicable"]
 PARITY_MODES: tuple[str, ...] = get_args(Parity)
@@ -58,7 +58,7 @@ def _copy_project(pcb_path: Path, dest: Path) -> Path:
         raise ValueError(f"project directory {source} is too large to copy for grading")
 
     def _ignore(directory: str, names: list[str]) -> list[str]:
-        skipped = [n for n in names if n in _SKIP_DIRS or n.endswith("-backups")]
+        skipped = [n for n in names if n in _SKIP_DIRS or n.endswith("-backups") or kicad_lock.is_lock_name(n)]
         if Path(directory) == source:
             skipped += [n for n in names if n.endswith(".kicad_pcb") and n != pcb_path.name]
         return skipped

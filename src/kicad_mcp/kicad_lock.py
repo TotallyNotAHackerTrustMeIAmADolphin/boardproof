@@ -129,6 +129,9 @@ def _is_lock_name(name: str) -> bool:
     return name.startswith(LOCK_PREFIX) and name.casefold().endswith(f".{LOCK_EXTENSION}") and len(name) > len(LOCK_PREFIX) + len(LOCK_EXTENSION) + 1
 
 
+is_lock_name = _is_lock_name  # public: copies of a project leave lock files behind
+
+
 def _same_place(path: Path) -> str:
     """A spelling-independent key: the resolved parent (8.3 names expanded,
     links followed) plus the entry's own name, which is not followed."""

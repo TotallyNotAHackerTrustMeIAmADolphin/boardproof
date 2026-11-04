@@ -1508,3 +1508,61 @@ def test_on_a_kicad10_board_the_added_net_table_must_reload_as_saved(board, tmp_
     ok = confirm()
     assert ok["status"] == "poured", ok
     assert ok["write_check"]["tolerated"]["count"] == 4 and ok["write_check"]["unexpected"]["count"] == 0
+
+
+# --- GitHub issue 68: KiCad holds a lock file on the source board ----------------------
+
+
+def _kicad_lock(target: Path) -> Path:
+    lock = target.with_name(f"~{target.name}.lck")
+    lock.write_bytes(b'{"hostname":"SOMEONE-ELSES-PC","username":"someone"}')
+    return lock
+
+
+def test_a_locked_source_board_refuses_before_the_router_and_keeps_the_token(board, tmp_path):
+    """The lock is checked first: no router run, no output directory, the token still valid."""
+    token = _propose(board, tmp_path / "o")
+    lock = _kicad_lock(board)
+    calls: list = []
+    drc = fake_drc()
+    baseline = gate.snapshot_rules(board, drc=drc)
+    result = pour_step.confirm_pour_step(
+        board, token, baseline=baseline, router=_spy_router(calls), drc=drc, **PARITY
+    )
+    assert result["code"] == "file_open_in_kicad" and result["lock_file"] == str(lock)
+    assert result["status"] == "incomplete" and result["ok"] is False
+    assert calls == [] and not (tmp_path / "o").exists()
+    lock.unlink()
+    again = pour_step.confirm_pour_step(
+        board, token, baseline=baseline, router=make_fake_router(FULL), drc=drc,
+        fill=fake_fill(tmp_path), connectivity_check=False, **PARITY,
+    )
+    assert again["status"] == "poured", again
+
+
+def test_a_lock_that_appears_while_the_router_runs_is_caught_in_the_carry_over(board, tmp_path):
+    """The carry-over re-checks right before the revision is built: nothing is moved into place."""
+    token = _propose(board, tmp_path / "o")
+    drc = fake_drc()
+    baseline = gate.snapshot_rules(board, drc=drc)
+    inner = make_fake_router(FULL)
+    made: list[Path] = []
+
+    def router_then_kicad_opens_the_board(*args, **kwargs):
+        made.append(_kicad_lock(board))
+        return inner(*args, **kwargs)
+
+    before = project_hashes(board)
+    result = pour_step.confirm_pour_step(
+        board, token, baseline=baseline, router=router_then_kicad_opens_the_board, drc=drc,
+        fill=fake_fill(tmp_path), connectivity_check=False, **PARITY,
+    )
+    assert result["code"] == "file_open_in_kicad" and result["lock_file"] == str(made[0])
+    assert not (tmp_path / "o").exists()
+    assert {k: v for k, v in project_hashes(board).items() if not k.startswith("~")} == before
+    made[0].unlink()
+    again = pour_step.confirm_pour_step(
+        board, token, baseline=baseline, router=inner, drc=drc,
+        fill=fake_fill(tmp_path), connectivity_check=False, **PARITY,
+    )
+    assert again["status"] == "poured", again
