@@ -98,21 +98,23 @@ def ensure_kicad_cli_on_path() -> Path:
 
 
 _TIMEOUT_SECONDS = 900
+REFILL_TIMEOUT_SECONDS = 300  # the stored-fill comparison's refill: a failure is only a note
 
 
-def _run(args: list[str]) -> subprocess.CompletedProcess[str]:
+def _run(args: list[str], timeout: float | None = None) -> subprocess.CompletedProcess[str]:
     cli = find_kicad_cli()
+    limit = _TIMEOUT_SECONDS if timeout is None else timeout
     try:
         return subprocess.run(
             [str(cli), *args],
             capture_output=True,
             text=True,
             check=False,
-            timeout=_TIMEOUT_SECONDS,
+            timeout=limit,
         )
     except subprocess.TimeoutExpired as exc:
         raise KicadCliError(
-            f"kicad-cli timed out after {_TIMEOUT_SECONDS}s: {exc.cmd}"
+            f"kicad-cli timed out after {limit}s: {exc.cmd}"
         ) from exc
 
 
@@ -124,6 +126,7 @@ def _run_report(
     report_name: str,
     extra_args: tuple[str, ...] = (),
     ok_exit_codes: tuple[int, ...] | None = None,
+    timeout: float | None = None,
 ) -> dict:
     input_path = Path(input_path)
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -138,7 +141,7 @@ def _run_report(
             str(out_path),
             str(input_path),
         ]
-        proc = _run(args)
+        proc = _run(args) if timeout is None else _run(args, timeout)
         if ok_exit_codes is not None and proc.returncode not in ok_exit_codes:
             raise KicadCliError(
                 f"kicad-cli {' '.join(subcommand)} exited {proc.returncode} "
@@ -177,6 +180,21 @@ def run_drc(
         # No --exit-code-violations is passed, so a healthy run always exits 0;
         # anything else (1-4) is a crash that must not read as a clean report.
         ok_exit_codes=(0,),
+    )
+
+
+def refill_and_save(pcb_path: str | Path) -> None:
+    """``kicad-cli pcb drc --refill-zones --save-board`` on ``pcb_path``: refills every zone and
+    SAVES the board in place. Call it on a scratch copy only, never on the user's board (the
+    gate compares the copy's fresh fill with the stored fill of the original)."""
+    _run_report(
+        ["pcb", "drc"],
+        pcb_path,
+        severity_all=True,
+        report_name="refill_report.json",
+        extra_args=("--refill-zones", "--save-board"),
+        ok_exit_codes=(0,),
+        timeout=REFILL_TIMEOUT_SECONDS,
     )
 
 

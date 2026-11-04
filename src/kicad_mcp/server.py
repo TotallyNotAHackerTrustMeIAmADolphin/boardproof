@@ -69,8 +69,8 @@ def build_server() -> MCPServer:
         parity_reason: str | None = None,
         baseline: dict | None = None,
     ) -> dict:
-        """The acceptance gate. Grades a board with real kicad-cli (three refilled runs, union of
-        errors) and returns PASS, FAIL or INCOMPLETE plus the COMPLETE per-net unconnected list
+        """The acceptance gate. Grades a board with real kicad-cli (a first kicad-cli run that refills a copy and saves it to compare the stored zone fill, then three
+        refilled DRC runs, union of errors) and returns PASS, FAIL or INCOMPLETE plus the COMPLETE per-net unconnected list
         and the complete violation list. Only a PASS may be reported as routed or done.
 
         parity: "required" (a missing or unannotated schematic, or one with stale instance
@@ -84,7 +84,12 @@ def build_server() -> MCPServer:
         nor excuses a FAIL or INCOMPLETE.
         The verdict grades the board after a refill in a scratch copy, not the fill stored in the
         file: a PASS never means the stored fill is correct. stored_fill (and a note starting
-        "stored fill:") reports zones whose file holds no fill copper on an intended layer."""
+        "stored fill:") reports zones whose file holds no fill copper on an intended layer.
+        stored_fill.comparison compares the stored fill with a fresh refill per zone: matches or
+        stale (within the tolerance it states, with what it did not check). A stale zone is a
+        note too: it never changes the verdict. The statement about the stored fill holds only when
+        the comparison ran: stored_fill.comparison.status partly_compared or not_compared means some
+        zone was not compared (a failed refill, an unreadable fill, or no stored fill), so say so."""
         from kicad_mcp import verify_board as gate
 
         snapshot = gate_state.begin_grading(pcb_path)  # before grading, never after

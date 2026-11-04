@@ -520,6 +520,13 @@ code = '''shutil.copytree(source, dest, ignore=_ignore)'''
 note = "The shared checkpoint helper (build ticket 22): copies the source project INTO the new revision's temporary sibling directory (dest must not exist); the source is only read. Replaces the _copy_project copies in board_outline, board_rules, input_prep and schematic_import."
 
 [[commit]]
+file = "kicad_cli.py"
+function = "refill_and_save"
+kind = "--save-board"
+code = ''''--save-board''''
+note = "Issue 101: verify_board refills a SCRATCH copy (graded-copy temp directory) with kicad-cli pcb drc --refill-zones --save-board to compare its fresh fill with the original's stored fill; the original is only read and never written (tests/test_verify_board_stale_fill.py::test_the_original_is_never_written)."
+
+[[commit]]
 file = "pour_step.py"
 function = "_refilled_copy"
 kind = "--save-board"

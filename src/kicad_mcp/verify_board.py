@@ -666,8 +666,10 @@ def _sheet_load_problems(tree: Any) -> list[str]:
 STORED_FILL_SCOPE = (
     "The verdict grades the board after kicad-cli refilled every zone in a scratch copy; it says "
     "nothing about the fill stored in the file, and a PASS does not mean the stored fill is "
-    "correct. stored_fill reports only whether the file itself carries fill copper on each "
-    "intended layer; it does not compare the stored fill with the refilled one."
+    "correct. stored_fill reports whether the file itself carries fill copper on each intended "
+    "layer (status, zones) and, in stored_fill.comparison, whether that stored fill still matches "
+    "the freshly calculated one (matches or stale per zone, within a stated tolerance). Both are "
+    "notes: neither changes the verdict."
 )
 _MIN_FILL_POINTS = 3
 
@@ -786,6 +788,224 @@ def _stored_fill_problem(zone: dict[str, Any]) -> str:
     return f"{label}: the stored fill could not be determined (intended layers: {layers}); not read as fine"
 
 
+# --- stored fill against the refilled fill (property B, stale detection) -----------
+#
+# kicad-cli refills the zones of a scratch copy and saves it. The stored ``filled_polygon``
+# entries of the original are then compared per zone and layer with the refilled ones, read from
+# the raw S-expression (never ``Zone.polygon``). The refill is not bit-identical across runs and
+# versions, so the comparison is on summary geometry with a stated tolerance, not on points.
+# A result is a note; it never changes the verdict (an open question for the owner).
+
+FILL_AREA_REL_TOL = 0.01  # |stored - refilled| area, as a fraction of the refilled area ...
+FILL_AREA_MAX_TOL_MM2 = 1.0  # ... but never more than this, so a few mm2 on a large pour is stale
+FILL_AREA_ABS_TOL_MM2 = 0.01  # ... or this absolute floor, whichever is larger
+FILL_SHIFT_TOL_MM = 0.05  # bounding box edges and the area-weighted centroid, each axis
+FILL_COMPARISON_TOLERANCE = (
+    f"area within {FILL_AREA_REL_TOL:.0%} of the refilled area, capped at {FILL_AREA_MAX_TOL_MM2} mm2 "
+    f"(and at least {FILL_AREA_ABS_TOL_MM2} mm2), "
+    f"bounding box edges and area-weighted centroid within {FILL_SHIFT_TOL_MM} mm, and the same "
+    "number of fill polygons, per zone and copper layer"
+)
+FILL_COMPARISON_VERDICT_EFFECT = (
+    "none: a stale stored fill is reported as a note and never changes the verdict (PASS, FAIL "
+    "or INCOMPLETE); whether it should is an open question"
+)
+FILL_COMPARISON_NOT_CHECKED = (
+    "the stored fill's own electrical correctness (islands, clearances to other nets, thermal "
+    "spokes)",
+    "differences below the tolerance, and any difference that leaves polygon count, area, bounding "
+    "box and centroid unchanged (the comparison is on those four summaries, not on every point)",
+    "zone settings (fill mode, clearance, thermal gap) other than through their effect on the fill",
+    "keepout rule areas (they carry no fill)",
+    "whether KiCad itself would refill the zone on its next open",
+)
+_Refill = Callable[[Path], None]
+
+
+def kicad_refill_in_place(pcb_path: Path) -> None:
+    """Refill every zone of the SCRATCH copy ``pcb_path`` and save it there (kicad-cli)."""
+    kicad_cli.refill_and_save(pcb_path)
+
+
+def _fill_geometry(zone: Any) -> dict[str, dict[str, Any]]:
+    """Per copper layer: polygon count, area, bounding box and area-weighted centroid of the raw
+    ``filled_polygon`` rings of ``zone`` (a ring with holes is one bridged ring, so the shoelace
+    area is the copper area). Raises ``ValueError`` for a shape it cannot read (an arc, a ring with
+    fewer than 3 points, no layer): unreadable is never equal."""
+    by_layer: dict[str, dict[str, Any]] = {}
+    for fp in zone.find_all("filled_polygon"):
+        layer_node = fp.find("layer")
+        pts = fp.find("pts")
+        if layer_node is None or not layer_node.values or pts is None:
+            raise ValueError("a filled_polygon without a layer or points")
+        if any(child.name != "xy" for child in pts.children):
+            raise ValueError("a filled_polygon with a point that is not (xy x y)")
+        ring = [(float(c.values[0]), float(c.values[1])) for c in pts.find_all("xy")]
+        if len(ring) < _MIN_FILL_POINTS:
+            raise ValueError("a filled_polygon with fewer than 3 points")
+        twice_area = cx = cy = 0.0
+        for (x1, y1), (x2, y2) in zip(ring, ring[1:] + ring[:1], strict=True):
+            cross = x1 * y2 - x2 * y1
+            twice_area += cross
+            cx += (x1 + x2) * cross
+            cy += (y1 + y2) * cross
+        entry = by_layer.setdefault(
+            str(layer_node.values[0]),
+            {"polygons": 0, "area": 0.0, "mx": 0.0, "my": 0.0, "bbox": None},
+        )
+        entry["polygons"] += 1
+        entry["area"] += abs(twice_area) / 2
+        if twice_area:  # first moment of the ring, signed so that its weight is the unsigned area
+            sign = 1.0 if twice_area > 0 else -1.0
+            entry["mx"] += sign * cx / 6
+            entry["my"] += sign * cy / 6
+        xs = [x for x, _ in ring]
+        ys = [y for _, y in ring]
+        box = (min(xs), min(ys), max(xs), max(ys))
+        old = entry["bbox"]
+        entry["bbox"] = box if old is None else (
+            min(old[0], box[0]), min(old[1], box[1]), max(old[2], box[2]), max(old[3], box[3])
+        )
+    for entry in by_layer.values():
+        area = entry["area"]
+        entry["centroid"] = (entry.pop("mx") / area, entry.pop("my") / area) if area else (0.0, 0.0)
+    return by_layer
+
+
+def _layer_difference(stored: dict[str, Any], fresh: dict[str, Any]) -> list[str]:
+    """What differs beyond the tolerance between one layer's stored and refilled fill."""
+    out: list[str] = []
+    if stored["polygons"] != fresh["polygons"]:
+        out.append(f"{stored['polygons']} fill polygons stored, {fresh['polygons']} after the refill")
+    allowed = max(FILL_AREA_ABS_TOL_MM2, min(FILL_AREA_MAX_TOL_MM2, FILL_AREA_REL_TOL * fresh["area"]))
+    if abs(stored["area"] - fresh["area"]) > allowed:
+        out.append(f"area {stored['area']:.3f} mm2 stored, {fresh['area']:.3f} mm2 after the refill")
+    shift = max(
+        *(abs(a - b) for a, b in zip(stored["bbox"], fresh["bbox"], strict=True)),
+        *(abs(a - b) for a, b in zip(stored["centroid"], fresh["centroid"], strict=True)),
+    )
+    if shift > FILL_SHIFT_TOL_MM:
+        out.append(f"outline or centroid moved by up to {shift:.3f} mm")
+    return out
+
+
+def compare_zone_fill(stored_zone: Any, refilled_zone: Any | None, intended: list[str]) -> dict[str, Any]:
+    """``comparison`` of one zone: ``matches`` (every intended layer stored and equal within the
+    tolerance), ``stale`` (a stored layer differs), ``none`` (no stored fill to compare),
+    ``partial`` (the stored layers match, others are missing) or ``not_compared`` (anything
+    unreadable, or the refilled copy has no such zone: never read as fine)."""
+    try:
+        stored = _fill_geometry(stored_zone)
+        if not stored:
+            return {"comparison": "none", "differences": []}
+        if refilled_zone is None:
+            return {"comparison": "not_compared", "differences": ["the refilled copy has no such zone"]}
+        fresh = _fill_geometry(refilled_zone)
+    except (ValueError, IndexError, TypeError) as exc:
+        return {"comparison": "not_compared", "differences": [f"fill not readable: {exc}"]}
+    differences: list[str] = []
+    for layer in sorted(stored):
+        if layer not in fresh:
+            differences.append(f"{layer}: fill stored, none after the refill")
+            continue
+        differences.extend(f"{layer}: {d}" for d in _layer_difference(stored[layer], fresh[layer]))
+    if differences:
+        return {"comparison": "stale", "differences": differences}
+    missing = [layer for layer in intended if layer not in stored]
+    return {"comparison": "partial" if missing else "matches", "differences": []}
+
+
+def _zone_nodes(root: Any) -> dict[str, Any]:
+    """Copper zones by uuid (board-level and footprint-nested), keepouts left out."""
+    nodes = [c for c in root.children if c.name == "zone"]
+    for footprint in root.children:
+        if footprint.name == "footprint":
+            nodes.extend(c for c in footprint.children if c.name == "zone")
+    out: dict[str, Any] = {}
+    for zone in nodes:
+        uuid = zone.find("uuid")
+        if zone.find("keepout") is None and uuid is not None and uuid.values:
+            out[str(uuid.values[0])] = zone
+    return out
+
+
+def _comparison_summary(
+    status: str, zones: list[dict[str, Any]], reason: str | None = None
+) -> dict[str, Any]:
+    return {
+        "status": status,
+        "reason": reason,
+        "tolerance": FILL_COMPARISON_TOLERANCE,
+        "verdict_effect": FILL_COMPARISON_VERDICT_EFFECT,
+        "not_checked": list(FILL_COMPARISON_NOT_CHECKED),
+        "zones": zones,
+    }
+
+
+def stored_fill_comparison(
+    pcb_path: Path, stored_fill: dict[str, Any], refill: _Refill | None
+) -> dict[str, Any]:
+    """Compare the stored fill of ``pcb_path`` with a fresh refill of a scratch copy, per zone.
+
+    Sets ``comparison`` (and ``differences``) on each zone of ``stored_fill`` and returns the
+    summary kept as ``stored_fill["comparison"]``. ``status``: ``stale`` (some zone is),
+    ``matches`` (every copper zone stored and equal), ``partly_compared`` (no stale zone, but
+    some zone has no or a partial stored fill, or was not compared), ``no_copper_zones`` or
+    ``not_compared`` (no refill available or it failed; ``reason`` says why). Never raises."""
+    zones = stored_fill.get("zones", [])
+    if stored_fill.get("status") == "unreadable":
+        return _comparison_summary("not_compared", [], "the stored fill could not be read")
+    if not zones:
+        return _comparison_summary("no_copper_zones", [], "the board has no copper zone")
+    for zone in zones:
+        zone["comparison"] = "none" if not zone["filled_layers"] else "not_compared"
+        zone["differences"] = []
+    if all(z["comparison"] == "none" for z in zones):
+        return _summarise(zones)  # nothing stored, so no refill is needed
+    if refill is None:
+        return _comparison_summary("not_compared", zones, "no refill was run (none supplied)")
+    try:
+        with _graded_copy(pcb_path) as scratch:
+            refill(scratch)
+            fresh = _zone_nodes(write_layer.load(scratch))
+        stored_nodes = _zone_nodes(write_layer.load(pcb_path))
+        for zone in zones:
+            if zone["comparison"] == "none":
+                continue
+            node = stored_nodes.get(zone["uuid"])
+            if node is None:
+                zone["differences"] = ["the zone has no uuid in the original"]
+                continue
+            zone.update(compare_zone_fill(node, fresh.get(zone["uuid"]), zone["intended_layers"]))
+    except Exception as exc:  # noqa: BLE001 - fail closed: a failed refill is never "matches"
+        for zone in zones:
+            zone["comparison"] = "none" if not zone["filled_layers"] else "not_compared"
+            zone["differences"] = []
+        reason = f"the refill or the comparison failed ({type(exc).__name__}: {exc})"
+        return _comparison_summary("not_compared", zones, reason)
+    return _summarise(zones)
+
+
+def _summarise(zones: list[dict[str, Any]]) -> dict[str, Any]:
+    states = {z["comparison"] for z in zones}
+    if "stale" in states:
+        status = "stale"
+    elif states == {"matches"}:
+        status = "matches"
+    else:
+        status = "partly_compared"
+    return _comparison_summary(status, zones)
+
+
+def _stale_note(zone: dict[str, Any]) -> str:
+    label = f"zone {zone['name'] or zone['uuid'] or '?'} (net {zone['net'] or '?'})"
+    return (
+        f"stored fill: {label} is stale: the stored fill differs from a fresh refill beyond "
+        f"the tolerance ({'; '.join(zone['differences'])}); a reader that does not refill sees "
+        "the old copper. This note does not change the verdict"
+    )
+
+
 # --- the gate ----------------------------------------------------------------
 
 
@@ -819,19 +1039,23 @@ def verify_board(
     parity_reason: str | None = None,
     baseline: dict | None = None,
     drc: _Drc | None = None,
+    refill: _Refill | None = None,
 ) -> dict[str, Any]:
     """Grade a board against the acceptance gate.
 
     ``parity`` is mandatory: ``"required"`` or ``"not_applicable"`` (the latter needs
-    ``parity_reason`` and is rejected when a schematic exists). ``drc`` replaces the
-    ``kicad-cli`` subprocess boundary (tests only). Anything that stops a check from
+    ``parity_reason`` and is rejected when a schematic exists). ``drc`` and ``refill`` replace the
+    ``kicad-cli`` subprocess boundary (tests only; with ``drc`` injected and no ``refill`` the
+    stored fill is not compared with a refill). Anything that stops a check from
     running yields ``INCOMPLETE``, never an exception and never a pass; evidence
     already collected still counts (``FAIL`` takes precedence over ``INCOMPLETE``).
     ``notes`` are informational (for example, the units of one part disagree on DNP): never
     a reason, they never change the verdict. ``stored_fill`` reports what the original file
     itself stores as zone fill (property B); the verdict grades the refilled board (property
     A), so a PASS never means the stored fill is correct, and an empty stored fill is a note,
-    never a reason.
+    never a reason. ``stored_fill["comparison"]`` compares the stored fill with a fresh refill per
+    zone (``matches`` or ``stale`` within a stated tolerance, issue 101); it is a note too and
+    never changes the verdict.
     """
     pcb_path = Path(pcb_path)
     run_drc = drc or kicad_cli.run_drc
@@ -839,6 +1063,10 @@ def verify_board(
     notes: list[str] = []  # informational: never a reason, never changes the verdict
     stored_fill = stored_fill_report(pcb_path)
     notes.extend(f"stored fill: {problem}" for problem in stored_fill["problems"])
+    if refill is None and drc is None:
+        refill = kicad_refill_in_place
+    stored_fill["comparison"] = stored_fill_comparison(pcb_path, stored_fill, refill)
+    notes.extend(_stale_note(z) for z in stored_fill["comparison"]["zones"] if z.get("comparison") == "stale")
 
     reports: list[dict] = []
     try:
