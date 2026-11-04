@@ -25,7 +25,7 @@ from typing import Any
 
 from mcp.server.mcpserver import MCPServer
 
-from kicad_mcp import write_layer
+from kicad_mcp import symbol_libs, write_layer
 from kicad_mcp.kicad_cli import ensure_kicad_cli_on_path, find_kicad_cli
 
 _symbol_dir_checked = False
@@ -817,6 +817,12 @@ def build(mcp: MCPServer) -> list[str]:
         unit, in_bom, dnp (optional). Batch-oriented -- never loop this one
         symbol at a time.
 
+        A lib_id's library nickname is resolved as KiCad does: the project's sym-lib-table
+        first (${KIPRJMOD} is the project folder), then the user's global sym-lib-table, then
+        KiCad's own symbol folder; a nickname a table declares is decided by that table. The
+        library file must be named <nickname>.kicad_sym and lie inside the project or the KiCad
+        install. An unknown nickname is refused (nothing written) with the tables searched.
+
         Refuses a sheet older than KiCad 8's format (error old_sheet_format, nothing
         written): kicad_tools would rewrite it and drop what it does not model. Before
         the sheet is replaced, every node it had must be unchanged (the paper size
@@ -835,10 +841,15 @@ def build(mcp: MCPServer) -> list[str]:
         _ensure_kicad_symbol_dir_set()
         if (refused := _old_format_refusal(path)) is not None:
             return refused
+        lib_ids = [spec.get("lib_id") for spec in specs]
+        libs = symbol_libs.resolve_symbol_libraries(path, lib_ids)
+        if libs.problems:
+            return _incomplete(libs.reason)
         try:
             from kicad_tools.schematic.models.schematic import Schematic
 
             sch = Schematic.load(path)
+            symbol_libs.seed_symbol_defs(sch, libs, lib_ids)
             placed = []
             for spec in specs:
                 instance = sch.add_symbol(
@@ -1021,7 +1032,8 @@ def build(mcp: MCPServer) -> list[str]:
 
         Each spec: kind ("label"|"global"|"hier"|"power"|"no_connect"),
         x, y (required); text (required for label/global/hier/power -- for
-        "power" it's the power symbol lib_id, e.g. "power:GND"), rotation,
+        "power" it's the power symbol lib_id, e.g. "power:GND", resolved through the project
+        sym-lib-table, then the global one, then KiCad's folder, as add_symbols does), rotation,
         shape (global/hier label direction), snap (optional bool, default
         True -- see WARNING).
 
@@ -1056,10 +1068,15 @@ def build(mcp: MCPServer) -> list[str]:
         _ensure_kicad_symbol_dir_set()
         if (refused := _old_format_refusal(path)) is not None:
             return refused
+        power_ids = [spec.get("text") for spec in specs if spec.get("kind") == "power"]
+        libs = symbol_libs.resolve_symbol_libraries(path, power_ids)
+        if libs.problems:
+            return _incomplete(libs.reason)
         try:
             from kicad_tools.schematic.models.schematic import Schematic
 
             sch = Schematic.load(path)
+            symbol_libs.seed_symbol_defs(sch, libs, power_ids)
             placed = []
             for spec in specs:
                 kind = spec["kind"]
