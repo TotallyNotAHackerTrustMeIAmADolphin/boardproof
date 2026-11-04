@@ -593,7 +593,33 @@ def _verify_schematic_write(path: Path, written: Path, added_refs: set[str]) -> 
         )
 
 
-def _write_schematic_utf8(sch: Any, path: Path, *, added_refs: set[str] = frozenset()) -> None:
+def _reattach_to_tree(content: str, path: Path) -> str:
+    """``content`` (the text about to replace ``path``) with the instance data of the symbols
+    keyed on the sheet's own uuid moved to every use path of the project's sheet tree (GitHub
+    issue 79), by ``sheet_authoring.rewrite_child_instances``, the rewrite ``add_sheet_symbols``
+    makes. A sheet that is the project's root, is not reached from it, or sits in a tree that
+    does not read whole keeps ``content`` unchanged."""
+    from kicad_mcp import sheet_authoring, sheet_tree, write_layer
+
+    try:
+        root_sch = sheet_authoring.find_root(path, None)
+        tree = sheet_tree.walk(root_sch)
+    except Exception:  # noqa: BLE001 - no project around it: a sheet written alone
+        return content
+    if tree.problems or path.resolve() == Path(root_sch).resolve():
+        return content
+    uses = [use for file, use in tree.uses if file == path.resolve()]
+    if not uses:
+        return content
+    node = write_layer.parse_string(content)
+    if not sheet_authoring.rewrite_child_instances(node, Path(root_sch).stem, uses):
+        return content
+    return write_layer.serialise(node) + chr(10)
+
+
+def _write_schematic_utf8(
+    sch: Any, path: Path, *, added_refs: set[str] = frozenset(), reattach: bool = False
+) -> None:
     """Write a kicad_tools high-level ``Schematic`` to ``path`` as UTF-8.
 
     Replaces ``sch.write(path)`` (build ticket 12). kicad_tools 0.20.0's
@@ -623,6 +649,8 @@ def _write_schematic_utf8(sch: Any, path: Path, *, added_refs: set[str] = frozen
         raise RuntimeError("synthesized power symbols need kicad_tools' sidecar files; not written")
     sch.auto_size_paper()  # what write() does by default
     content = _schematic_text(sch)
+    if reattach:
+        content = _reattach_to_tree(content, path)
     if "\r" in content:  # backstop: the tools refuse \r in their input before this
         raise ValueError("carriage return in the schematic text; kicad_tools would write it unescaped")
     tmp = path.with_name(path.name + ".utf8.tmp")
@@ -823,6 +851,10 @@ def build(mcp: MCPServer) -> list[str]:
         library file must be named <nickname>.kicad_sym and lie inside the project or the KiCad
         install. An unknown nickname is refused (nothing written) with the tables searched.
 
+        On a sheet that a parent sheet uses (add_sheet_symbols), each new symbol's instance data
+        gets the project's name and one path per use of the sheet in the tree; on the root sheet,
+        or a sheet no sheet symbol uses yet, it keeps the sheet's own uuid path.
+
         Refuses a sheet older than KiCad 8's format (error old_sheet_format, nothing
         written): kicad_tools would rewrite it and drop what it does not model. Before
         the sheet is replaced, every node it had must be unchanged (the paper size
@@ -865,7 +897,7 @@ def build(mcp: MCPServer) -> list[str]:
                     dnp=spec.get("dnp", False),
                 )
                 placed.append(instance.reference)
-            _write_schematic_utf8(sch, path, added_refs=set(placed))
+            _write_schematic_utf8(sch, path, added_refs=set(placed), reattach=True)
         except SchematicWriteNotVerified as exc:
             return _not_verified_result(exc)
         except Exception as exc:  # noqa: BLE001 - evidence-gated verdict
@@ -1319,9 +1351,9 @@ def build(mcp: MCPServer) -> list[str]:
         new sheet use's path (parent path plus the sheet symbol's uuid), keeping reference, unit
         and value; the result reports symbols_reattached per sheet. A child whose instance data
         does not match the hierarchy after that is refused (write_not_verified, naming the
-        instance data). Limit: add_symbols on a sheet that is already attached still writes a
-        stale instance path for the new symbols (a known gap, its own ticket); place a sheet's
-        symbols before attaching it.
+        instance data). add_symbols on a sheet that is already attached
+        writes the new symbols' instance data the same way: the project's name and one path per
+        use of the sheet in the tree.
 
         Before any file is written the change is built on a scratch copy and checked: the sheet
         tree must be whole (no missing file, no unreferenced sheet), every pin must have its label

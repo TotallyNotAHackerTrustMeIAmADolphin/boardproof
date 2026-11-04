@@ -489,7 +489,7 @@ def test_both_tools_are_registered_mutating_and_the_text_an_llm_reads_is_pinned(
                    "netlist export must list the sheet", "write_not_verified", "label_direction_mismatch",
                    "sheet_already_referenced", "sheet_file_missing", "symbols_reattached",
                    "rewritten to the project's name and the new sheet use's path", "keeping reference, unit and value",
-                   "still writes a stale instance path"):
+                   "add_symbols on a sheet that is already attached", "one path per use of the sheet in the tree"):
         assert phrase in insert, phrase
     assert tools["create_sheets"].annotations.read_only_hint is False
     assert tools["add_sheet_symbols"].annotations.read_only_hint is False
@@ -612,3 +612,95 @@ def test_degenerate_sheet_file_names_are_refused(blank, name):
     assert _tree(blank) == before
     result = _insert(blank, [_spec(file=name)])
     assert result["ok"] is False and result["code"] == "invalid_spec", result
+
+
+# --------------------------------------------------------------------------- add_symbols on a sheet used in a tree (issue 79)
+
+
+def _attach(blank: Path, name: str = "Sub") -> Path:
+    """An empty sub-sheet made and attached below the root, before any symbol is placed in it."""
+    assert sheet_authoring.create_sheets(str(blank), [{"file": "sub.kicad_sch"}])["status"] == "ok"
+    result = sheet_authoring.add_sheet_symbols(
+        str(blank), [_spec(file="sub.kicad_sch", name=name, pins=[{"name": "A", "direction": "input"}])])
+    assert result["status"] == "ok", result
+    return blank.parent / "sub.kicad_sch"
+
+
+def _use_a_second_time(root_sch: Path, name: str = "Sub2") -> None:
+    """A second sheet symbol of sub.kicad_sch in the root, built through the write layer."""
+    import copy
+    import uuid as uuid_mod
+
+    root = write_layer.load(root_sch)
+    node = copy.deepcopy(_node(root, "sheet")[0])
+    for item in node.find_children("uuid") + [u for p in node.find_children("pin") for u in p.find_children("uuid")]:
+        write_layer.set_string(item, 0, str(uuid_mod.uuid4()))
+    sheetname = [p for p in node.find_children("property") if p.get_string(0) == "Sheetname"][0]
+    write_layer.set_string(sheetname, 1, name)
+    at = node.find_children("at")[0]
+    write_layer.set_number(at, 1, at.get_float(1) + 60)
+    for prop in node.find_children("property"):
+        pat = prop.find_children("at")[0]
+        write_layer.set_number(pat, 0, pat.get_float(0) + 60)
+    for pin in node.find_children("pin"):
+        pat = pin.find_children("at")[0]
+        write_layer.set_number(pat, 0, pat.get_float(0) + 60)
+    path = node.find_children("instances")[0].find_children("project")[0].find_children("path")[0]
+    write_layer.set_string(path, 0, path.get_string(0).rsplit("/", 1)[0] + "/" + node.find_children("uuid")[0].get_string(0))
+    root.children.insert(root.children.index(_node(root, "sheet")[0]) + 1, node)
+    write_layer.save(root, root_sch)
+
+
+def _place(sheet: Path, refs=("R1", "R2")) -> dict:
+    return _tools()["add_symbols"](str(sheet), [
+        {"lib_id": "Device:R", "x": 50.8 + 25.4 * i, "y": 50.8, "ref": ref, "value": "1k"} for i, ref in enumerate(refs)])
+
+
+def _agrees(root_sch: Path) -> list[str]:
+    tree = sheet_tree.walk(root_sch)
+    return sheet_tree.netlist_disagreement(tree, [c["ref"] for c in sheet_tree.netlist_components(root_sch)])
+
+
+def test_add_symbols_on_a_sheet_used_once_writes_the_instance_path_of_that_use(blank):
+    sub = _attach(blank)
+    placed = _place(sub)
+    assert placed["status"] == "ok", placed
+    tree = sheet_tree.walk(blank)
+    (use,) = [p for f, p in tree.uses if f == sub.resolve()]
+    assert _instance_paths(sub) == {"R1": [("demo", use)], "R2": [("demo", use)]}
+    assert _agrees(blank) == []
+
+
+def test_add_symbols_on_a_sheet_used_twice_writes_one_instance_entry_per_use(blank):
+    sub = _attach(blank)
+    _use_a_second_time(blank)
+    tree = sheet_tree.walk(blank)
+    uses = [p for f, p in tree.uses if f == sub.resolve()]
+    assert len(uses) == 2
+    placed = _place(sub)
+    assert placed["status"] == "ok", placed
+    found = _instance_paths(sub)
+    for ref in ("R1", "R2"):
+        assert sorted(found[ref]) == sorted(("demo", u) for u in uses), (ref, found[ref])
+    # no entry is stale; what the check still names is the one reference on both uses (annotation, fix_annotation)
+    lines = _agrees(blank)
+    assert lines, lines
+    assert all("more than one" in line or "listed more than once" in line for line in lines), lines
+
+
+def test_add_symbols_on_the_root_sheet_keeps_its_own_uuid_path(blank):
+    placed = _place(blank)
+    assert placed["status"] == "ok", placed
+    own = "/" + write_layer.load(blank).find_children("uuid")[0].get_string(0)
+    found = _instance_paths(blank)
+    assert {ref: [p for _, p in entries] for ref, entries in found.items()} == {"R1": [own], "R2": [own]}
+    assert _agrees(blank) == []
+
+
+def test_add_symbols_on_a_sheet_not_yet_attached_keeps_its_own_uuid_path(blank):
+    assert sheet_authoring.create_sheets(str(blank), [{"file": "sub.kicad_sch"}])["status"] == "ok"
+    sub = blank.parent / "sub.kicad_sch"
+    placed = _place(sub)
+    assert placed["status"] == "ok", placed
+    own = "/" + write_layer.load(sub).find_children("uuid")[0].get_string(0)
+    assert {ref: [p for _, p in entries] for ref, entries in _instance_paths(sub).items()} == {"R1": [own], "R2": [own]}
