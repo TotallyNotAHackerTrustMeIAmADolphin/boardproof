@@ -78,8 +78,9 @@ def test_find_via_platform_glob_prefers_newest_kicad_version(tmp_path, monkeypat
     assert old != new
 
 
-def test_missing_install_is_actionable(monkeypatch):
+def test_missing_install_is_actionable(monkeypatch, tmp_path):
     monkeypatch.delenv(krt.ENV_PATH, raising=False)
+    monkeypatch.setattr(krt, "REPO_ROOT", tmp_path)  # issue 64: no .tools checkout of this repository in the way
     monkeypatch.setattr(krt, "_PLUGIN_GLOBS", {})
     with pytest.raises(krt.KicadRoutingToolsError, match="KICAD_ROUTING_TOOLS_PATH"):
         krt.find_kicad_routing_tools()

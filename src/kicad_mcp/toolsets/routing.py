@@ -2269,7 +2269,8 @@ def build(mcp: MCPServer) -> list[str]:
         "kicad_routing_tools" (drandyhaas/KiCadRoutingTools, MIT, ~50x
         faster, routes .kicad_pcb directly; `max_passes` is not a KRT
         concept and is ignored). KRT is discovered via KICAD_ROUTING_TOOLS_PATH
-        (a checkout containing py_router/route.py) or KiCad's PCM plugin dir,
+        (a checkout containing py_router/route.py), else .tools/KiCadRoutingTools of the main checkout
+        (restored by `python scripts/setup_krt.py`), else KiCad PCM plugin dir,
         and run with KICAD_ROUTING_TOOLS_PYTHON (default: this interpreter),
         which needs numpy/scipy/shapely/Pillow and KRT's prebuilt grid_router
         binary (`python build_router.py`); anything missing comes back as

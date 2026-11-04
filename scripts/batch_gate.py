@@ -14,7 +14,8 @@ shared ``.venv`` of the main checkout (found through ``git rev-parse --git-commo
 
 RED, never silence, when:
 - the working tree is not clean;
-- ``KICAD_ROUTING_TOOLS_PATH`` is unset or not a directory (the KRT tests would skip);
+- ``KICAD_ROUTING_TOOLS_PATH`` is unset (and ``.tools/KiCadRoutingTools`` is absent) or not a directory (the KRT
+  tests would fail; the reason names ``scripts/setup_krt.py``);
 - ``kicad_mcp.__file__`` does not lie inside this worktree's ``src`` (the suite is then not run);
 - pytest's ``rootdir:`` line is missing or names another directory, or its ``configfile:`` is not
   ``pyproject.toml``, or ``[tool.pytest.ini_options]`` differs from ``EXPECTED_PYTEST_CONFIG``
@@ -103,6 +104,9 @@ COMMIT_MSG = Path("scripts/git-hooks/commit-msg")  # the identity guard (publish
 # suite grows; the timeout follows at about 3x (fork P10).
 SUITE_MEASURED_S = 2545
 SUITE_MEASURED_WHEN = "374c526 on 2026-10-21, several gates in parallel, only other gates known to be running"
+# The default location of the router checkout (issue 64) and the command that restores it.
+KRT_DEFAULT_DIR = Path(".tools") / "KiCadRoutingTools"
+KRT_SETUP_HINT = "restore it with: python scripts/setup_krt.py (clones the pinned checkout into .tools/KiCadRoutingTools and verifies the router binary)"
 SUITE_TIMEOUT_S = 7650
 WAIT_SLICE_S = 5.0  # default_runner checks the wall-clock deadline this often
 IMPORT_TIMEOUT_S = 120
@@ -379,11 +383,20 @@ def run_gate(
     env["KICAD_ROUTING_TOOLS_REQUIRED"] = "1"  # an absent KRT fails its tests, never skips (build ticket 53)
     say(f"env: KICAD_DEMOS_REQUIRED=1 KICAD_ROUTING_TOOLS_REQUIRED=1 PYTHONPATH={env['PYTHONPATH']}")
     krt = env.get("KICAD_ROUTING_TOOLS_PATH")
-    say(f"env: KICAD_ROUTING_TOOLS_PATH={krt if krt else '(unset)'}")
+    default_krt = None if krt else default_krt_dir(root)
+    if default_krt is not None:
+        krt = str(default_krt)  # the default location; the variable, when set, wins
+        env["KICAD_ROUTING_TOOLS_PATH"] = krt
+        say(f"env: KICAD_ROUTING_TOOLS_PATH unset; using the default {krt}")
+    else:
+        say(f"env: KICAD_ROUTING_TOOLS_PATH={krt if krt else '(unset)'}")
     if not krt:
-        res.reasons.append("KICAD_ROUTING_TOOLS_PATH unset (the KRT tests would skip)")
+        res.reasons.append(
+            f"KICAD_ROUTING_TOOLS_PATH unset and {KRT_DEFAULT_DIR.as_posix()} does not exist "
+            f"(the KRT tests would fail); {KRT_SETUP_HINT}"
+        )
     elif not Path(krt).is_dir():
-        res.reasons.append(f"KICAD_ROUTING_TOOLS_PATH is not a directory: {krt}")
+        res.reasons.append(f"KICAD_ROUTING_TOOLS_PATH is not a directory: {krt}; {KRT_SETUP_HINT}")
     # ngspice is optional while the simulation map is parked (owner decision of 2026-10-30, issue 40):
     # absent, the live ngspice tests skip, and scripts/known-skips.toml allows exactly those skips,
     # counted and printed. Any other skip is still RED. NGSPICE_REQUIRED is no longer set here.
@@ -916,6 +929,21 @@ def cleanup_logs(log_dir: Path, current_run: str, say: Callable[[str], None]) ->
         say(f"  not removed (held or locked): {s}")
     if len(c.skipped) > 10:
         say(f"  ... and {len(c.skipped) - 10} more")
+
+
+def default_krt_dir(root: Path) -> Path | None:
+    """The default router checkout: ``.tools/KiCadRoutingTools`` of ``root``, else of the main checkout
+    (``git rev-parse --git-common-dir``, as ``default_python``): ``.tools`` is gitignored, so a linked
+    worktree has none of its own. None when neither exists."""
+    own = root / KRT_DEFAULT_DIR
+    if own.is_dir():
+        return own
+    try:
+        common = Path(_git("rev-parse", "--path-format=absolute", "--git-common-dir", root=root))
+    except (GitError, OSError):
+        return None
+    main = common.parent / KRT_DEFAULT_DIR
+    return main if main.is_dir() else None
 
 
 def default_python(root: Path | None = None) -> str:

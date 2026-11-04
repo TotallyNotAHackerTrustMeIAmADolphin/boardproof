@@ -37,7 +37,7 @@ def pytest_runtest_setup(item):
 
 @pytest.fixture(scope="session")
 def krt_checkout() -> Path:
-    """The KiCadRoutingTools checkout (``KICAD_ROUTING_TOOLS_PATH``, else the KiCad plugin
+    """The KiCadRoutingTools checkout (``KICAD_ROUTING_TOOLS_PATH``, else ``.tools/KiCadRoutingTools``, else the KiCad plugin
     directory), for tests that only read it. Missing: skip with the reason, or fail when
     ``KICAD_ROUTING_TOOLS_REQUIRED`` is set."""
     return _krt.checkout_or_missing()
@@ -68,6 +68,19 @@ def _seams_lifted_for_rung_tests(request, monkeypatch):
 def enforce_seams():
     """Marker fixture: leave the seam policy on for this test."""
     return True
+
+
+@pytest.fixture(autouse=True)
+def _no_default_router_folder_of_this_machine(request, monkeypatch, tmp_path_factory):
+    """Issue 64: ``find_kicad_routing_tools`` falls back to ``.tools/KiCadRoutingTools`` of the
+    repository (or of the main checkout of a linked worktree). A machine that has restored it must not
+    change the tests of "KRT missing" or of the platform glob, so the default-folder discovery looks at
+    an empty directory. Opt-out: the tests that need the real router (``needs_krt``, ``krt_checkout``)."""
+    if request.node.get_closest_marker("needs_krt") or "krt_checkout" in request.fixturenames:
+        return
+    from kicad_mcp.routers import kicad_routing_tools as krt
+
+    monkeypatch.setattr(krt, "REPO_ROOT", tmp_path_factory.mktemp("no-default-krt"))
 
 
 @pytest.fixture(autouse=True)

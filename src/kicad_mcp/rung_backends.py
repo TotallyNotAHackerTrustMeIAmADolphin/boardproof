@@ -115,7 +115,9 @@ def krt_availability() -> dict:
     """Honest availability of KiCadRoutingTools: checkout, interpreter packages, the
     prebuilt Rust router, and the pinned CLI snapshot. A version that differs from the
     snapshot is reported (the run becomes unofficial); a flag the wrapper emits that the
-    snapshot lacks makes the backend unavailable."""
+    snapshot lacks makes the backend unavailable. At the v0.23.8 pin the `grid_router` binary
+    reports 0.23.7 (the crate version was not bumped), so `versions.grid_router` differs from
+    `versions.router` without being a mismatch."""
     try:
         status = krt_tools.check_availability()
     except Exception as exc:  # noqa: BLE001 - availability must never raise

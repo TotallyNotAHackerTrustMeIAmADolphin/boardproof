@@ -45,7 +45,7 @@ def missing(reason: str, env: Mapping[str, str] = os.environ) -> NoReturn:
             pytrace=False,
         )
     pytest.skip(
-        f"KiCadRoutingTools not usable: {reason.rstrip('. ')}. Set KICAD_ROUTING_TOOLS_PATH to the checkout; "
+        f"KiCadRoutingTools not usable: {reason.rstrip('. ')}. Set KICAD_ROUTING_TOOLS_PATH to the checkout, or restore the default one with `python scripts/setup_krt.py`; "
         f"the gate run sets {REQUIRED_FLAG}=1, which makes this a failure"
     )
 

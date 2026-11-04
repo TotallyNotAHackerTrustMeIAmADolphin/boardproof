@@ -223,11 +223,12 @@ def test_run_result_carries_logged_parameters_and_version_check(tmp_path, monkey
 
 
 # ---------------------------------------------------------------------------
-# The pin sees the commit (issue 54): `VERSION` reads 0.23.7 for the v0.23.7 tag and for the
-# commit 234 commits later, so the version text alone cannot tell them apart.
+# The pin sees the commit (issue 54): `VERSION` read 0.23.7 for the v0.23.7 tag and for the earlier
+# pinned commit 234 commits later, so the version text alone could not tell them apart. The pin is
+# now the v0.23.8 release commit (issue 64).
 # ---------------------------------------------------------------------------
 
-PINNED_COMMIT = "299ad57081d303ac60cbc84cd374f6e3800e9158"
+PINNED_COMMIT = "c64c0db25e6cf23afa6769ee05665c7ea22b3ff2"
 OTHER_COMMIT = "0123456789abcdef0123456789abcdef01234567"
 
 
@@ -273,18 +274,18 @@ def test_the_snapshot_pins_the_commit_not_only_the_version():
 
 
 def test_same_version_text_but_another_commit_does_not_match():
-    snapshot = {"router_version": "0.23.7", "router_commit": PINNED_COMMIT}
-    ok = krt.compare_router_version(snapshot, "0.23.7", PINNED_COMMIT)
+    snapshot = {"router_version": "0.23.8", "router_commit": PINNED_COMMIT}
+    ok = krt.compare_router_version(snapshot, "0.23.8", PINNED_COMMIT)
     assert ok["matches"] is True
-    tag = krt.compare_router_version(snapshot, "0.23.7", OTHER_COMMIT)
+    tag = krt.compare_router_version(snapshot, "0.23.8", OTHER_COMMIT)
     assert tag["matches"] is False
     assert PINNED_COMMIT[:8] in tag["message"] and OTHER_COMMIT[:8] in tag["message"]
     assert tag["pinned_commit"] == PINNED_COMMIT and tag["live_commit"] == OTHER_COMMIT
 
 
 def test_an_unknown_commit_does_not_match_a_snapshot_that_pins_one():
-    snapshot = {"router_version": "0.23.7", "router_commit": PINNED_COMMIT}
-    unknown = krt.compare_router_version(snapshot, "0.23.7", None)
+    snapshot = {"router_version": "0.23.8", "router_commit": PINNED_COMMIT}
+    unknown = krt.compare_router_version(snapshot, "0.23.8", None)
     assert unknown["matches"] is False and "commit" in unknown["message"].lower()
     assert "unknown" in unknown["message"].lower()
 
@@ -379,3 +380,15 @@ def test_router_commit_follows_commondir_for_a_worktree_on_a_branch(tmp_path):
     wt.mkdir()
     (wt / ".git").write_text(f"gitdir: {gitdir}\n", encoding="utf-8")
     assert krt.router_commit(wt) == PINNED_COMMIT
+
+
+def test_the_pin_is_the_v0_23_8_release_and_the_binary_version_note_is_recorded():
+    """Issue 64: the checkout is v0.23.8; its prebuilt binary still reports 0.23.7 (the crate version
+    was not bumped), and docs/ARCHITECTURE.md says so next to the pin so nobody reads it as a mismatch."""
+    snapshot = krt.load_cli_snapshot()
+    assert snapshot["router_version"] == "0.23.8"
+    assert snapshot["router_commit"] == PINNED_COMMIT
+    text = (Path(__file__).resolve().parents[1] / "docs/ARCHITECTURE.md").read_text(encoding="utf-8")
+    pin_paragraph = next(p for p in text.splitlines() if p.startswith("- **KRT checkout pinned to"))
+    assert "v0.23.8" in pin_paragraph and PINNED_COMMIT[:8] in pin_paragraph
+    assert "reports `0.23.7`" in pin_paragraph and "not a mismatch" in pin_paragraph

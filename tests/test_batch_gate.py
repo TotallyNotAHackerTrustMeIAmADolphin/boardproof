@@ -414,6 +414,73 @@ def test_routing_tools_path_that_is_no_directory_is_red(root, monkeypatch, tmp_p
     assert any("KICAD_ROUTING_TOOLS_PATH" in r for r in res.reasons)
 
 
+def test_missing_routing_tools_checkout_names_the_setup_script(root, monkeypatch, tmp_path):
+    """Issue 64: the RED reason for a missing router checkout says how to restore it."""
+    monkeypatch.delenv("KICAD_ROUTING_TOOLS_PATH")
+    res, _ = run(root, FakeRunner(root))
+    assert any("scripts/setup_krt.py" in r and ".tools/KiCadRoutingTools" in r for r in res.reasons)
+    monkeypatch.setenv("KICAD_ROUTING_TOOLS_PATH", str(tmp_path / "missing"))
+    res, _ = run(root, FakeRunner(root))
+    assert any("scripts/setup_krt.py" in r for r in res.reasons)
+
+
+def test_unset_routing_tools_path_uses_the_tools_folder_when_it_exists(root, monkeypatch):
+    """Issue 64: the default location is .tools/KiCadRoutingTools of the checkout; the variable wins."""
+    monkeypatch.delenv("KICAD_ROUTING_TOOLS_PATH")
+    (root / ".tools" / "KiCadRoutingTools").mkdir(parents=True)
+    runner = FakeRunner(root)
+    res, said = run(root, runner)
+    assert not any("KICAD_ROUTING_TOOLS_PATH" in r or "setup_krt" in r for r in res.reasons)
+    assert "KiCadRoutingTools" in said and "(unset)" not in said
+
+
+def test_the_variable_wins_over_the_default_folder(root, monkeypatch, tmp_path):
+    """Issue 64 review: with the variable set, the default folder is ignored and the env stays as set."""
+    chosen = tmp_path / "krt"  # made by the fixture; the variable already names it
+    (root / ".tools" / "KiCadRoutingTools").mkdir(parents=True)
+    seen = {}
+
+    class Spy(FakeRunner):
+        def __call__(self, cmd, env, cwd, timeout, out_path):
+            seen["path"] = env.get("KICAD_ROUTING_TOOLS_PATH")
+            return super().__call__(cmd, env, cwd, timeout, out_path)
+
+    res, said = run(root, Spy(root))
+    assert seen["path"] == str(chosen)
+    assert "using the default" not in said
+
+
+def _linked_worktree(tmp_path):
+    def git(*a, cwd):
+        subprocess.run(["git", "-C", str(cwd), "-c", "user.name=t", "-c", "user.email=t@example.org", *a],
+                       check=True, capture_output=True)
+    main = tmp_path / "main"
+    main.mkdir()
+    git("init", "-q", cwd=main)
+    git("commit", "-q", "--allow-empty", "-m", "x", cwd=main)
+    wt = tmp_path / "linked"
+    git("worktree", "add", "-q", "-b", "ticket-x", str(wt), cwd=main)
+    (wt / "src" / "kicad_mcp").mkdir(parents=True)
+    return main, wt
+
+
+def test_a_linked_worktree_finds_the_main_checkouts_router_folder(root, monkeypatch, tmp_path):
+    """Issue 64 review: .tools is gitignored, so a ticket worktree has none; the default is the main checkout's."""
+    monkeypatch.delenv("KICAD_ROUTING_TOOLS_PATH")
+    main, wt = _linked_worktree(tmp_path)
+    (main / ".tools" / "KiCadRoutingTools").mkdir(parents=True)
+    res, said = run(wt, FakeRunner(wt))
+    assert not any("KICAD_ROUTING_TOOLS_PATH" in r or "setup_krt" in r for r in res.reasons), res.reasons
+    assert (main / ".tools" / "KiCadRoutingTools").as_posix() in said.replace("\\", "/")
+
+
+def test_a_linked_worktree_without_any_router_folder_is_red_and_names_the_script(root, monkeypatch, tmp_path):
+    monkeypatch.delenv("KICAD_ROUTING_TOOLS_PATH")
+    main, wt = _linked_worktree(tmp_path)
+    res, _ = run(wt, FakeRunner(wt))
+    assert any("scripts/setup_krt.py" in r for r in res.reasons)
+
+
 def test_unset_ngspice_path_is_not_red(root, monkeypatch):
     """Issue 40: ngspice is optional while the simulation map is parked; its live tests skip, counted."""
     monkeypatch.delenv("NGSPICE_PATH")

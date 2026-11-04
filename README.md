@@ -70,7 +70,7 @@ Each tool is found the same way: an environment variable first, then `PATH`, the
 |---|---|---|
 | KiCad 10 `kicad-cli` | **Required.** DRC, ERC, netlists, renders, exports, the gate | `KICAD_CLI_PATH` |
 | KiCad's bundled Python | Freerouting's Specctra export and import; KiKit | `KICAD_PYTHON_PATH` |
-| KiCadRoutingTools v0.23.7 plus its commit `299ad570` (MIT) | Routing and placement optimisation, run from a checkout (`python build_router.py` builds its router) | `KICAD_ROUTING_TOOLS_PATH`, `KICAD_ROUTING_TOOLS_PYTHON` |
+| KiCadRoutingTools v0.23.8, commit `c64c0db2` (MIT) | Routing and placement optimisation, run from a checkout. `python scripts/setup_krt.py` restores it into `.tools/KiCadRoutingTools` (the default; the variable wins) and fetches its prebuilt router, verified by SHA-256 | `KICAD_ROUTING_TOOLS_PATH`, `KICAD_ROUTING_TOOLS_PYTHON` |
 | Freerouting 2.5.0 jar (GPLv3) and Java 25 | Routing, as a subprocess | `FREEROUTING_JAR_PATH`, `JAVA_PATH` |
 | ngspice 47 (pinned; `ngspice_con.exe` on Windows) | SPICE simulation. **Optional while the simulation map is parked** (owner decision of 2026-10-30, issue 40): the batch gate does not require it, and its live tests skip, counted, when it is absent | `NGSPICE_PATH` |
 | KiKit | Panelisation | `KIKIT_PATH` |

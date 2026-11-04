@@ -138,10 +138,14 @@ INSTALL_BINARY_HINT = (
     "(downloads the prebuilt grid_router binary for this platform/Python; no Rust toolchain needed)"
 )
 INSTALL_CHECKOUT_HINT = (
-    "git clone https://github.com/drandyhaas/KiCadRoutingTools and set "
-    f"{ENV_PATH} to the checkout directory (the one containing py_router/route.py), or install it "
+    "run `python scripts/setup_krt.py` (clones https://github.com/drandyhaas/KiCadRoutingTools at the pinned "
+    "commit into .tools/KiCadRoutingTools of this repository and verifies the router binary), or set "
+    f"{ENV_PATH} to a checkout directory (the one containing py_router/route.py), or install it "
     "through KiCad's Plugin and Content Manager"
 )
+# The default location of the checkout: restored by scripts/setup_krt.py (issue 64). The variable wins.
+REPO_ROOT = Path(__file__).resolve().parents[3]
+DEFAULT_CHECKOUT = Path(".tools") / "KiCadRoutingTools"
 
 # KRT is not a console script and never on PATH: it is either a git checkout
 # (env override) or a PCM install under KiCad's per-version user directory
@@ -228,6 +232,34 @@ class KicadRoutingToolsTimeout(KicadRoutingToolsError):
 # ---------------------------------------------------------------------------
 
 
+def main_checkout_of(root: Path) -> Path | None:
+    """The main checkout when ``root`` is a linked git worktree (its ``.git`` is a file naming
+    ``<main>/.git/worktrees/<name>``), else None. Read from the files, no git process."""
+    marker = Path(root) / ".git"
+    try:
+        if not marker.is_file():
+            return None
+        first = marker.read_text(encoding="utf-8", errors="replace").splitlines()[0]
+    except (OSError, IndexError):
+        return None
+    if not first.startswith("gitdir:"):
+        return None
+    gitdir = Path(first[len("gitdir:"):].strip())
+    if gitdir.parent.name != "worktrees":
+        return None
+    return gitdir.parent.parent.parent
+
+
+def default_checkout_candidates(root: Path) -> list[Path]:
+    """``.tools/KiCadRoutingTools`` of ``root``, then of the main checkout when ``root`` is a linked
+    worktree (``.tools`` is gitignored, so a ticket worktree has none of its own)."""
+    candidates = [Path(root) / DEFAULT_CHECKOUT]
+    main = main_checkout_of(root)
+    if main is not None:
+        candidates.append(main / DEFAULT_CHECKOUT)
+    return candidates
+
+
 def find_kicad_routing_tools() -> Path:
     """Resolve the KiCadRoutingTools checkout/install directory (the one
     containing `py_router/route.py`)."""
@@ -240,6 +272,10 @@ def find_kicad_routing_tools() -> Path:
             f"{ENV_PATH}={env_override!r} does not contain {ROUTE_SCRIPT.as_posix()} -- it must point at "
             "the KiCadRoutingTools checkout directory itself, not at route.py or py_router/"
         )
+
+    for default in default_checkout_candidates(REPO_ROOT):
+        if (default / ROUTE_SCRIPT).is_file():
+            return default
 
     for pattern in _PLUGIN_GLOBS.get(sys.platform, []):
         matches = sorted(glob.glob(os.path.expanduser(pattern)), key=_natural_key, reverse=True)
@@ -820,8 +856,9 @@ def _read_router_commit(root: Path) -> str | None:
 def compare_router_version(snapshot: dict, live_version: str | None, live_commit: str | None = None) -> dict:
     """Version text first, then the commit when the snapshot pins one (a snapshot without a
     `router_commit` compares the version only). A live commit that is unknown or different does
-    not match: the version text is the same for the v0.23.7 tag and the commit pinned in
-    docs/ARCHITECTURE.md."""
+    not match: the version text was the same for the v0.23.7 tag and the commit pinned before
+    v0.23.8 (docs/ARCHITECTURE.md). The v0.23.8 prebuilt binary reports 0.23.7 (the crate version
+    was not bumped); that is not a mismatch with this check, which reads the `VERSION` file."""
     pinned = snapshot.get("router_version")
     if live_version is None:
         return {"matches": False, "pinned": pinned, "live": None,
