@@ -220,11 +220,11 @@ def _bom_from_root(
             f"BOM not produced: root schematic not found: {root}. The root is <board>.kicad_sch "
             "unless schematic_path names the root .kicad_sch."
         )
-    tree = sheet_tree.walk(root)
+    tree = sheet_tree.walk(root)  # tree.parsed: this call's parsed sheets, shared below
     report = tree.report()
     if tree.problems:
         return None, report, f"BOM not produced: the sheet tree of {root.name} is incomplete: " + "; ".join(tree.problems)
-    annotation = gate._annotation_problems(root)  # read only: the gate's own check
+    annotation = gate._annotation_problems_in(root, tree.parsed)  # read only: the gate's own check
     if annotation:
         return None, report, "BOM not produced: " + "; ".join(annotation)
     try:

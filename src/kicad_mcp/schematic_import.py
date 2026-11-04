@@ -51,7 +51,7 @@ from typing import Any
 
 from kicad_mcp import checkpoint, write_layer
 from kicad_mcp import verify_board as gate
-from kicad_mcp.sheet_tree import netlist_disagreement, path_key, placed_instances
+from kicad_mcp.sheet_tree import netlist_disagreement, parsed_sheet, path_key, placed_instances
 from kicad_mcp.sheet_tree import walk as walk_sheet_tree
 
 if not hasattr(gate, "_annotation_problems"):  # the sheet-hierarchy walk is reused, not copied
@@ -508,7 +508,7 @@ def _symbol_facts(tree: Any) -> dict[tuple[str, str], _SymbolFacts]:
     ``(on_board no)``, the rule of ``placed_instances``' ``on_board_only``."""
     out: dict[tuple[str, str], _SymbolFacts] = {}
     for sheet in tree.files:
-        root = _parse(sheet)
+        root = parsed_sheet(tree, sheet)  # the walk's parse: each sheet is parsed once per call
         counts: dict[str, int] = {}
         bodies: dict[str, list[tuple[str, set[str]]]] = {}  # lib -> [(unit, pins)], one per body
         for table in root.find_children("lib_symbols"):
@@ -666,19 +666,21 @@ def _units_text(count: int | None) -> str:
     return "1 unit" if count == 1 else f"{count} units"
 
 
-def _check_schematic(sch_path: Path, netlist: Any, raw: list[dict], nodes: set[tuple[str, str]]) -> None:
+def _check_schematic(sch_path: Path, netlist: Any, raw: list[dict], nodes: set[tuple[str, str]]) -> Any:
     """Fail closed (raise ``_Blocked``) on anything that would make a silently partial or
-    ambiguous import: unannotated or duplicate references, missing sub-sheets, empty netlist."""
+    ambiguous import: unannotated or duplicate references, missing sub-sheets, empty netlist.
+    Returns the walked sheet tree, so the caller does not walk (and parse) the sheets again."""
     refs = [c.reference for c in netlist.components]
     unannotated = sorted(r for r in refs if "?" in r)
-    problems = list(gate._annotation_problems(sch_path))
+    memo: dict[Path, Any] = {}  # this call's parsed sheets, shared by the annotation check and the walk
+    problems = list(gate._annotation_problems_in(sch_path, memo))
     if unannotated:
         problems.insert(0, f"unannotated reference(s): {', '.join(unannotated)}")
     if problems:
         raise _Blocked("schematic is not provably complete and annotated: " + "; ".join(problems))
     if not refs:
         raise _Blocked("the schematic exports no components: refusing an empty import")
-    tree = walk_sheet_tree(sch_path)
+    tree = walk_sheet_tree(sch_path, memo)
     records = _schematic_records(tree)  # read once: every check below works on these
     stale_only = _stale_only_entries(records)
     if stale_only:
@@ -712,6 +714,7 @@ def _check_schematic(sch_path: Path, netlist: Any, raw: list[dict], nodes: set[t
     mismatches = _netlist_mismatches(tree, records, raw, nodes)
     if mismatches:
         raise _Blocked("the sheets and kicad-cli's netlist name a symbol differently: " + "; ".join(mismatches))
+    return tree
 
 
 def _net_table(root: Any) -> dict[int, str]:
@@ -803,7 +806,7 @@ def _plan(
     netlist_exporter: NetlistExporter | None,
 ) -> dict:
     netlist, raw, nodes = _load_netlist(sch_path, netlist_exporter)
-    _check_schematic(sch_path, netlist, raw, nodes)
+    tree = _check_schematic(sch_path, netlist, raw, nodes)
     root = _parse(pcb_path)
     facts = _footprint_facts(root)
     present = set(facts) - {""}
@@ -885,6 +888,7 @@ def _plan(
         "staging": staging,
         "nets": nets,
         "plan_hash": digest,
+        "unreferenced_sheets": list(tree.unreferenced),  # from the walk of this call, not a second one
     }
 
 
@@ -947,7 +951,7 @@ def propose_schematic_import(
         "nets": plan["nets"],
         "net_count": len(plan["nets"]),
         # never read: kicad-cli and the walks start at the root (build ticket 26)
-        "unreferenced_sheets": list(walk_sheet_tree(sch).unreferenced),
+        "unreferenced_sheets": plan["unreferenced_sheets"],
     }
     if plan["unresolved"]:
         return {"status": "blocked", "revision_token": None, "reason": _unresolved_reason(plan["unresolved"]), **base}

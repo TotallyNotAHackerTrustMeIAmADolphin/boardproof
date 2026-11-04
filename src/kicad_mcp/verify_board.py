@@ -326,6 +326,12 @@ def _inside(path: Path, directory: Path) -> bool:
 
 
 def _annotation_problems(root_sheet: Path) -> list[str]:
+    """The public contract (pinned by tests): the call owns a fresh memo of parsed sheets.
+    ``_annotation_problems_in`` takes the memo of a tool call that makes several checks."""
+    return _annotation_problems_in(root_sheet, None)
+
+
+def _annotation_problems_in(root_sheet: Path, parsed: dict[Path, Any] | None) -> list[str]:
     """Reasons the schematic hierarchy is not provably fully annotated (fail closed).
 
     Reads placed symbol instances from the parsed root sheet and every sub-sheet
@@ -336,9 +342,15 @@ def _annotation_problems(root_sheet: Path) -> list[str]:
     pass. Measured on kicad-cli (2026-10-11): parity still runs for numberless, ``R0`` and
     ``#PWR?`` references, so only ``?`` is treated as unannotated. A symbol whose instance
     entries miss its sheet use is a reason too (``_stale_instance_problems``, build ticket 86).
+
+    ``parsed`` is the tool call's memo of parsed sheets (resolved path -> ``kicad_sch``; see
+    ``sheet_tree.walk``): every sheet is parsed at most once per call, here and in the stale
+    check, and one dict passed to several checks of one call shares the parses. Omitted, the
+    check owns a fresh dict. Nothing is kept after the call (issue 71).
     """
     from kicad_tools.sexp.parser import parse_file
 
+    memo: dict[Path, Any] = {} if parsed is None else parsed
     project = root_sheet.stem
     project_dir = root_sheet.parent.resolve()
     problems: list[str] = []
@@ -366,9 +378,12 @@ def _annotation_problems(root_sheet: Path) -> list[str]:
             problems.append(f"sub-sheet file missing: {label}: annotation cannot be verified")
             return
         try:
-            root = parse_file(str(sheet))
-            if getattr(root, "tag", None) != "kicad_sch":
-                raise ValueError("root node is not kicad_sch")
+            root = memo.get(key)
+            if root is None:
+                root = parse_file(str(sheet))
+                if getattr(root, "tag", None) != "kicad_sch":
+                    raise ValueError("root node is not kicad_sch")
+                memo[key] = root
             info = _read_sheet(root, project)
         except Exception as exc:  # noqa: BLE001 - any parse failure must fail closed
             problems.append(
@@ -411,14 +426,14 @@ def _annotation_problems(root_sheet: Path) -> list[str]:
             "schematic not fully annotated: kicad-cli would skip parity silently "
             f"({', '.join(sorted(set(unannotated)))})"
         )
-    problems.extend(_stale_instance_problems(root_sheet))
+    problems.extend(_stale_instance_problems(root_sheet, memo))
     return problems
 
 
 _STALE = "stale instance path"
 
 
-def _stale_instance_problems(root_sheet: Path) -> list[str]:
+def _stale_instance_problems(root_sheet: Path, parsed: dict[Path, Any] | None = None) -> list[str]:
     """Placed symbols whose instance data does not match the sheet hierarchy (build ticket 86).
 
     KiCad 7 and later key a symbol's reference on its sheet use: the ``(instances (project P
@@ -430,19 +445,15 @@ def _stale_instance_problems(root_sheet: Path) -> list[str]:
     ``schematic_import._stale_only_entries`` (0 of 11166 measured sheet uses in 83 roots); a
     stale entry beside a live one is not reported. Symbols without entries (KiCad 6 sheets) are
     not affected. Sheets the walk cannot reach are ``_annotation_problems``' own reasons; this
-    check never raises: a failure is a reason."""
-    from kicad_tools.sexp.parser import parse_file
-
+    check never raises: a failure is a reason. ``parsed`` is the call's memo, as in
+    ``_annotation_problems``."""
     from kicad_mcp import sheet_tree
 
     try:
-        tree = sheet_tree.walk(root_sheet)
-        parsed: dict[Path, Any] = {}
+        tree = sheet_tree.walk(root_sheet, parsed)
         found: list[str] = []
         for sheet, use_path in tree.uses:
-            if sheet not in parsed:
-                parsed[sheet] = parse_file(str(sheet))
-            for symbol in parsed[sheet].find_children("symbol"):
+            for symbol in sheet_tree.parsed_sheet(tree, sheet).find_children("symbol"):
                 entries = [
                     (_node_atom(proj, 0), _node_atom(path, 0), _reference_of(path))
                     for instances in symbol.find_children("instances")

@@ -25,6 +25,7 @@ import re
 from collections import Counter
 from collections.abc import Iterable
 from dataclasses import dataclass
+from dataclasses import field as dataclass_field
 from pathlib import Path
 from typing import Any
 
@@ -44,6 +45,12 @@ class SheetTree:
     problems: tuple[str, ...]
     unreferenced: tuple[str, ...]
     uses: tuple[tuple[Path, str], ...] = ()
+    # The parsed sheets of this walk, by resolved path: the per-call memo (issue 71). The readers of
+    # the tree (``placed_instances``, ``legacy_table_problems``, ``schematic_import._symbol_facts``)
+    # take their parse from here, so a tool call parses each sheet file once. It is a snapshot of
+    # the files as the walk read them: a caller that edits a file and wants the edit walks again.
+    # Nothing is module-level; readers must not mutate the parsed nodes.
+    parsed: dict[Path, Any] = dataclass_field(default_factory=dict, compare=False, repr=False)
 
     @property
     def project_dir(self) -> Path:
@@ -102,12 +109,27 @@ def _parse(path: Path) -> Any:
     return root
 
 
-def walk(root: str | Path) -> SheetTree:
+def parsed_sheet(tree: SheetTree, path: Path) -> Any:
+    """The parse of ``path`` from the tree's memo; parsed (and remembered) when the walk did not
+    read it. Raises as ``_parse`` does for a file that cannot be read."""
+    key = Path(path).resolve()
+    if key not in tree.parsed:
+        tree.parsed[key] = _parse(key)
+    return tree.parsed[key]
+
+
+def walk(root: str | Path, parsed: dict[Path, Any] | None = None) -> SheetTree:
     """Walk the sheet tree from ``root``. Never raises for a bad project: see ``problems``.
 
     Each use of a sheet is visited, so ``uses`` holds one ``(file, instance path)`` per sheet
     instance: the root's ``/<root uuid>``, then ``<parent path>/<sheet node uuid>``, the paths
-    KiCad keys symbol instance data on. Each file is parsed once."""
+    KiCad keys symbol instance data on. Each file is parsed once.
+
+    ``parsed`` is the call's memo (resolved path -> parsed ``kicad_sch``): a caller that makes
+    several checks in one tool call passes one dict to all of them, and a file already in it is not
+    parsed again. Omitted, the walk starts a fresh one. The memo lives as long as the call that made
+    it (it is returned as ``SheetTree.parsed``); a file edited meanwhile is not re-read."""
+    memo: dict[Path, Any] = {} if parsed is None else parsed
     root = Path(root)
     project_dir = root.resolve().parent
     files: list[Path] = []
@@ -130,7 +152,9 @@ def walk(root: str | Path) -> SheetTree:
             problems.append(f"sheet file missing: {label(sheet)}")
         else:
             try:
-                parsed = _parse(sheet)
+                if key not in memo:
+                    memo[key] = _parse(sheet)
+                parsed = memo[key]
             except Exception as exc:  # noqa: BLE001 - any parse failure fails closed
                 problems.append(
                     f"sheet {label(sheet)} could not be parsed as a kicad_sch ({type(exc).__name__}: {exc})"
@@ -187,6 +211,7 @@ def walk(root: str | Path) -> SheetTree:
         problems=tuple(dict.fromkeys(problems)),  # a sheet used twice repeats its problems
         unreferenced=tuple(sorted(unreferenced)),
         uses=tuple(uses),
+        parsed=memo,
     )
 
 
@@ -400,17 +425,16 @@ def placed_instances(
     out symbols marked ``(on_board no)``, which kicad-cli's netlist leaves out too
     (cm5_minima demo)."""
     project = project or tree.root.stem
-    parsed: dict[Path, Any] = {}
     counts: dict[Path, dict[str, int]] = {}
 
     def sheet_of(path: Path) -> Any:
-        if path not in parsed:
-            parsed[path] = _parse(path)
-            counts[path] = _unit_counts(parsed[path])
-        return parsed[path]
+        sheet = parsed_sheet(tree, path)
+        if path not in counts:
+            counts[path] = _unit_counts(sheet)
+        return sheet
 
     root_key = path_key(tree.uses[0][1]) if tree.uses else ()  # None: unproven, refused through unproven_paths
-    legacy_table, _ = _read_legacy_table(tree.uses[0][0]) if tree.uses else ({}, [])
+    legacy_table, _ = _read_legacy_table(tree.uses[0][0], tree) if tree.uses else ({}, [])
 
     out: list[dict[str, str]] = []
     for sheet, use_path in tree.uses:
@@ -529,13 +553,14 @@ def path_key(path: str) -> tuple[str, ...] | None:
     return tuple(out)
 
 
-def _read_legacy_table(root_sheet: Path) -> tuple[dict[tuple[str, ...], tuple[str, str]], list[str]]:
+def _read_legacy_table(root_sheet: Path, tree: SheetTree | None = None) -> tuple[dict[tuple[str, ...], tuple[str, str]], list[str]]:
     """The root's KiCad 6 ``(symbol_instances)`` table as ``path_key -> (reference, unit)``, and
     the keys kicad-cli's reading of which is not proven: a key ``path_key`` rejects, and two
     keys that are the same path (which one wins is not measured)."""
     table: dict[tuple[str, ...], tuple[str, str]] = {}
     problems: list[str] = []
-    for block in _parse(root_sheet).find_children("symbol_instances"):
+    root = parsed_sheet(tree, root_sheet) if tree is not None else _parse(root_sheet)
+    for block in root.find_children("symbol_instances"):
         for entry in block.find_children("path"):
             raw = _atom(entry, 0)
             key = path_key(raw)
@@ -553,7 +578,7 @@ def _read_legacy_table(root_sheet: Path) -> tuple[dict[tuple[str, ...], tuple[st
 def legacy_table_problems(tree: SheetTree) -> list[str]:
     """The root's ``(symbol_instances)`` keys whose reading by kicad-cli is not proven (see
     ``path_key`` and ``_read_legacy_table``); ``[]`` for a tree without such a table."""
-    return _read_legacy_table(tree.uses[0][0])[1] if tree.uses else []
+    return _read_legacy_table(tree.uses[0][0], tree)[1] if tree.uses else []
 
 
 _LIB_UNIT = re.compile(r"_(\d+)_(\d+)$")  # a lib symbol's unit body: <name>_<unit>_<body style>

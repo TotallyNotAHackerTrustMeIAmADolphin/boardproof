@@ -267,7 +267,7 @@ def test_a_stale_check_that_cannot_run_is_a_reason_not_a_pass(tmp_path: Path, mo
         uuid=ROOT_UUID,
     )
 
-    def broken(_root):
+    def broken(_root, parsed=None):
         raise OSError("disk gone")
 
     monkeypatch.setattr(sheet_tree, "walk", broken)
