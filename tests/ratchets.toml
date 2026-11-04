@@ -472,6 +472,13 @@ note = "Copies each sheet of the tree into a new directory under the system temp
 
 [[commit]]
 file = "part_adoption.py"
+function = "_upgraded_footprint"
+kind = "shutil.copyfile"
+code = '''shutil.copyfile(footprint_file, copy)'''
+note = "Issue 80: copies an old-format (module ...) footprint file into a TemporaryDirectory .pretty so kicad-cli fp upgrade can rewrite that COPY to the current format (old fp_arc makes kicad-cli pcb upgrade crash); the scratch copy is read back and discarded, the adopted footprint file is only read."
+
+[[commit]]
+file = "part_adoption.py"
 function = "_write"
 kind = "shutil.copyfile"
 code = '''shutil.copyfile(part['sources']['model'], paths['models'] / model_name)'''

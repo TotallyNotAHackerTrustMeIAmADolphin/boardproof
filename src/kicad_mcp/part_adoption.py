@@ -54,6 +54,7 @@ import re
 import shutil
 import struct
 import subprocess
+import tempfile
 import time
 import zlib
 from collections import Counter
@@ -668,11 +669,36 @@ def _raw_board_thickness(board_root: SExp) -> float:
     return thickness[0] if thickness else BOARD_THICKNESS_DEFAULT_MM
 
 
+def _upgraded_footprint(footprint_file: Path) -> SExp:
+    """The footprint of an old ``(module ...)`` file in the current format. Embedded in a current
+    board as it is, an old ``(fp_arc (start) (end) (angle))`` fails kicad-cli's parse ("Expected
+    'mid'") and kicad-cli 10.0.7 then crashes with 0xC0000005 (issue 80); ``kicad-cli fp upgrade``
+    on a scratch copy rewrites the arcs. The adopted file itself is never touched."""
+    from kicad_mcp.kicad_cli import find_kicad_cli
+
+    cli = find_kicad_cli()
+    with tempfile.TemporaryDirectory(prefix="kicad_mcp_fp_upgrade_") as tmp:
+        pretty = Path(tmp) / "scratch.pretty"
+        pretty.mkdir()
+        copy = pretty / footprint_file.name
+        shutil.copyfile(footprint_file, copy)
+        done = subprocess.run(
+            [str(cli), "fp", "upgrade", "--force", str(pretty)],
+            capture_output=True, text=True, encoding="utf-8", errors="replace",
+            check=False, timeout=RENDER_TIMEOUT_S,
+        )  # fmt: skip
+        if done.returncode != 0:
+            raise RuntimeError(f"kicad-cli fp upgrade exited {done.returncode} on {footprint_file.name}")
+        return write_layer.load(copy)
+
+
 def _scratch_board(project: Path, footprint_file: Path, name: str, *, with_model: bool) -> tuple[Path, float]:
     """A blank board in the project's own folder (so ``${KIPRJMOD}`` is the project) carrying the
     adopted footprint at its middle, saved by the write layer; returns it and its thickness read
     from the raw ``(general (thickness ...))``."""
     footprint = write_layer.load(footprint_file)
+    if footprint.name == "module":
+        footprint = _upgraded_footprint(footprint_file)
     if not with_model:
         for node in _model_nodes(footprint):
             footprint.remove(node)
@@ -728,7 +754,11 @@ def _render_check(
             check["detail"] = f"the render cannot be measured: {exc}"
             return check, evidence
     except Exception as exc:  # noqa: BLE001  (a check that cannot run says so)
-        check["detail"] = f"the render check could not be set up: {type(exc).__name__}: {exc}"
+        check["detail"] = (
+            f"side view could not be rendered: the scratch board for the render could not be made "
+            f"({type(exc).__name__}: {exc}); this is a kicad-cli failure on the scratch board, not a verdict "
+            "on the model file"
+        )
         return check, evidence
     finally:
         for path in project.glob(f".adopt_{lcsc}_*"):  # the boards and the .kicad_prl kicad-cli leaves

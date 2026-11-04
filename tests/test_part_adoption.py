@@ -803,6 +803,8 @@ _EASYEDA_MODULE = """(module easyeda2kicad:{name} (layer F.Cu) (tedit 5DC5F6A4)
   (attr smd)
   (fp_text reference REF** (at 0 -3.5) (layer F.SilkS) (effects (font (size 1 1) (thickness 0.15))))
   (fp_text value {name} (at 0 3.5) (layer F.Fab) (effects (font (size 1 1) (thickness 0.15))))
+  (fp_arc (start -1.52 1.52) (end -1.67 1.52) (angle 359.03) (layer F.SilkS) (width 0.3))
+  (fp_circle (center -1.9 2.67) (end -1.88 2.67) (layer F.SilkS) (width 0.06))
   (pad 1 smd rect (at -3.5 -1.27) (size 0.9 2) (layers F.Cu F.Paste F.Mask))
   (pad 2 smd rect (at -3.5 1.27) (size 0.9 2) (layers F.Cu F.Paste F.Mask))
   (pad 3 smd rect (at 3.5 1.27) (size 0.9 2) (layers F.Cu F.Paste F.Mask))
@@ -882,3 +884,35 @@ def test_a_footprint_name_with_other_bad_characters_is_still_refused(project: Pa
     result = _propose(project, [part], tmp_path / "rev")
     assert result["status"] == "blocked"
     assert any("cannot be a file name" in p for p in result["parts"][0]["problems"])
+
+
+@needs_cli
+def test_an_old_format_footprint_with_arcs_gets_a_scratch_board_kicad_cli_loads(tmp_path: Path) -> None:
+    """Issue 80: an old `(fp_arc (start) (end) (angle))` inside a current board makes kicad-cli
+    pcb upgrade fail to parse ("Expected 'mid'") and crash (0xC0000005); the scratch board
+    carries the footprint upgraded to the current format instead."""
+    part = _easyeda_delivered(tmp_path, "C7435105")
+    footprint_file = next(Path(part["footprint_dir"]).glob("*.kicad_mod"))
+    for with_model in (True, False):
+        board, _ = pa._scratch_board(tmp_path, footprint_file, ".probe.kicad_pcb", with_model=with_model)
+        placed = pa._children(write_layer.load(board), "footprint")[0]
+        assert placed.name == "footprint"
+        assert not pa._children(placed, "fp_arc") or all(a.find("mid") is not None for a in pa._children(placed, "fp_arc"))
+        assert len(pa._pad_numbers(placed)) == 4
+        assert (placed.find("model") is not None) == with_model
+    assert write_layer.load(footprint_file).name == "module"  # the adopted file is untouched
+
+
+@needs_cli
+def test_a_kicad_cli_crash_on_the_scratch_board_is_reported_as_a_crash_not_a_bad_model(project: Path, tmp_path: Path, monkeypatch) -> None:
+    proposed = _propose(project, [_part_assets(tmp_path, "C100")], tmp_path / "rev")
+
+    def crash(*args, **kwargs):
+        raise write_layer.WriteLayerError("parse_check_failed", "kicad-cli pcb upgrade exited 3221225477 (0xC0000005)")
+
+    monkeypatch.setattr(pa, "_scratch_board", crash)
+    result = pa.confirm_adopt_parts(project, proposed["revision_token"])
+    assert result["status"] == "incomplete"
+    detail = result["problems"][0]["detail"]
+    assert "side view could not be rendered" in detail and "0xC0000005" in detail
+    assert "does not parse" not in detail
