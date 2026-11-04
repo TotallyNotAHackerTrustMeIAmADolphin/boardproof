@@ -119,6 +119,7 @@ The server (`server.py`) starts with 19 tools and keeps 65 more in ten lazy tool
 
 ## Known facts and gotchas
 
+- **PDFium (pypdfium2, behind pdfplumber's `to_image`) is not thread-safe and a fault in it ends the whole server process (issue 104).** Two parallel `render_schematic_diagnostic` calls with `png_dpi` died with `Windows fatal exception: access violation` in pypdfium2's `page.render`, and both callers saw `Connection closed`; FastMCP runs sync tools on worker threads. The PNG step now runs in a child process (`python -I src/kicad_mcp/_png_worker.py`, own temp dir, 120 s timeout, killed on timeout) behind a process-wide lock (`png_render.PDFIUM_LOCK`); a crash or timeout gives `refusal: png_render_failed` with the SVGs (and the PDF) still returned. The only other PDFium user is `sourcing/datasheet.py` `_png_bytes` (`inspect_datasheet` page images): it takes the same lock but is not isolated in a child process, so a native fault there can still end the server (open, issue 105). `pdfplumber` text and table extraction is pdfminer, pure Python, and does not touch PDFium. A failed move takes back the PNGs it already moved, but a PNG that already existed under the same name in the output directory is overwritten by the move and is not restored. Pinned by `tests/test_diagnostics_toolset.py`.
 Evidence references are old ticket IDs at `3380b34`, test files, or the maintainers' tickets, cited by number.
 
 **`kicad_tools` (v0.20.x until build ticket 42; v0.23.0 until build ticket 71; v0.24.0 since)**

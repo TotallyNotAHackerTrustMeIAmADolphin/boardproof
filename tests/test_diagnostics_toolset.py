@@ -111,3 +111,239 @@ def test_render_schematic_diagnostic_description_mentions_png_dpi():
     desc = {t.name: t.description for t in mcp._tool_manager.list_tools()}["render_schematic_diagnostic"]  # type: ignore[attr-defined]
     assert "png_dpi" in desc
     assert "PNG" in desc
+
+
+def _schematic_fn():
+    mcp = MCPServer("test")
+    return _build_and_get_fns(mcp, diagnostics_toolset)["render_schematic_diagnostic"]
+
+
+def test_two_concurrent_png_dpi_renders_both_return(tmp_path):
+    """Build ticket 104: two parallel png_dpi calls ended the whole process in PDFium."""
+    import threading
+
+    fn = _schematic_fn()
+    results: dict[int, dict] = {}
+
+    def run(n: int) -> None:
+        results[n] = fn(str(FIXTURES / "simple_led.kicad_sch"), str(tmp_path / f"o{n}"), png_dpi=200)
+
+    threads = [threading.Thread(target=run, args=(n,)) for n in range(2)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(timeout=300)
+    assert set(results) == {0, 1}
+    for r in results.values():
+        assert r["status"] == "ok" and r["png_images"]
+        assert all(Path(p).is_file() for p in r["png_images"])
+
+
+def _fake_worker(tmp_path, body: str):
+    w = tmp_path / "fake_worker.py"
+    w.write_text(body, encoding="utf-8")
+    return w
+
+
+def test_crashing_png_renderer_gives_png_render_failed_and_keeps_svg(tmp_path, monkeypatch):
+    from kicad_mcp import png_render
+
+    monkeypatch.setattr(
+        png_render, "_WORKER", _fake_worker(tmp_path, "import os\nos._exit(139)\n")
+    )
+    out = tmp_path / "out"
+    result = _schematic_fn()(str(FIXTURES / "simple_led.kicad_sch"), str(out), png_dpi=100)
+    assert result["status"] == "incomplete"
+    assert result["refusal"] == "png_render_failed"
+    assert "139" in result["reason"]
+    assert result["images"] and all(p.endswith(".svg") for p in result["images"])
+    assert result["authoritative"] is False
+    assert not list(out.glob("*.png"))
+
+
+def test_hung_png_renderer_is_killed_at_timeout(tmp_path, monkeypatch):
+    from kicad_mcp import png_render
+
+    monkeypatch.setattr(png_render, "_WORKER", _fake_worker(tmp_path, "import time\ntime.sleep(60)\n"))
+    monkeypatch.setattr(png_render, "PNG_TIMEOUT_SECONDS", 1)
+    result = _schematic_fn()(str(FIXTURES / "simple_led.kicad_sch"), str(tmp_path / "out"), png_dpi=100)
+    assert result["refusal"] == "png_render_failed"
+    assert "timed out" in result["reason"]
+    assert result["images"]
+
+
+def test_png_renderer_runs_isolated_and_cleans_its_temp_dir(tmp_path, monkeypatch):
+    import subprocess
+    import tempfile
+
+    from kicad_mcp import png_render
+
+    seen = {}
+    real_run = subprocess.run
+
+    def spy(cmd, **kw):
+        seen["cmd"] = cmd
+        return real_run(cmd, **kw)
+
+    monkeypatch.setattr(png_render.subprocess, "run", spy)
+    monkeypatch.setattr(png_render, "_WORKER", _fake_worker(tmp_path, "import os\nos._exit(3)\n"))
+    before = set(Path(tempfile.gettempdir()).glob("png_render_*"))
+    _schematic_fn()(str(FIXTURES / "simple_led.kicad_sch"), str(tmp_path / "out"), png_dpi=100)
+    assert seen["cmd"][1] == "-I"
+    assert set(Path(tempfile.gettempdir()).glob("png_render_*")) == before
+
+
+def test_datasheet_png_render_holds_the_process_wide_pdfium_lock():
+    """Issue 104: sourcing/datasheet.py's to_image shares the lock with the PNG renderer."""
+    from PIL import Image
+
+    from kicad_mcp.png_render import PDFIUM_LOCK
+    from kicad_mcp.sourcing import datasheet
+
+    held = []
+
+    class Rendered:
+        original = Image.new("RGB", (2, 2))
+
+    class Area:
+        def to_image(self, resolution):
+            held.append(PDFIUM_LOCK.locked())
+            return Rendered()
+
+    assert datasheet._png_bytes(Area()).startswith(bytes.fromhex("89504e470d0a1a0a"))
+    assert held == [True]
+
+
+def _direct(tmp_path, out_name="out"):
+    from kicad_mcp import png_render
+
+    return png_render.render_pdf_pages(tmp_path / "x.pdf", tmp_path / out_name, "s", 100)
+
+
+def test_png_renderer_waits_for_the_pdfium_lock_before_spawning(tmp_path, monkeypatch):
+    import threading
+    import time
+
+    from kicad_mcp import png_render
+
+    spawned = threading.Event()
+    real_run = png_render.subprocess.run
+
+    def spy(cmd, **kw):
+        spawned.set()
+        return real_run(cmd, **kw)
+
+    monkeypatch.setattr(png_render.subprocess, "run", spy)
+    monkeypatch.setattr(png_render, "_WORKER", _fake_worker(tmp_path, "import os\nos._exit(3)\n"))
+    errors = []
+
+    def go():
+        try:
+            _direct(tmp_path)
+        except png_render.PngRenderError as exc:
+            errors.append(exc)
+
+    with png_render.PDFIUM_LOCK:
+        t = threading.Thread(target=go)
+        t.start()
+        time.sleep(1.0)
+        assert not spawned.is_set()
+    t.join(timeout=60)
+    assert spawned.is_set() and len(errors) == 1
+
+
+def test_png_renderer_unusable_output_is_png_render_failed(tmp_path, monkeypatch):
+    import pytest
+
+    from kicad_mcp import png_render
+
+    for i, (body, message) in enumerate(
+        [
+            ("print('[]')\n", "wrote no PNG files"),  # empty page list
+            ("print('garbage')\n", "no usable page list"),  # not JSON
+            ("print('[\"never-written.png\"]')\n", "wrote no PNG files"),  # names a file it never wrote
+            (  # a.png written, b.png named but missing: nothing may be moved
+                "import os,sys\nopen(os.path.join(sys.argv[2],'a.png'),'wb').write(b'x')\n"
+                "print('[\"a.png\",\"b.png\"]')\n",
+                "wrote no PNG files",
+            ),
+        ]
+    ):
+        monkeypatch.setattr(png_render, "_WORKER", _fake_worker(tmp_path, body))
+        with pytest.raises(png_render.PngRenderError, match=message):
+            _direct(tmp_path, f"out{i}")
+
+
+_TWO_PNG_WORKER = (
+    "import sys, json, os\n"
+    "d = sys.argv[2]\n"
+    "for n in ('a.png', 'b.png'):\n"
+    "    open(os.path.join(d, n), 'wb').write(b'x')\n"
+    "print(json.dumps(['a.png', 'b.png']))\n"
+)
+
+
+def test_unwritable_output_dir_is_png_render_failed_not_a_raw_error(tmp_path, monkeypatch):
+    import pytest
+
+    from kicad_mcp import png_render
+
+    monkeypatch.setattr(png_render, "_WORKER", _fake_worker(tmp_path, _TWO_PNG_WORKER))
+    blocker = tmp_path / "file"
+    blocker.write_text("x")
+    with pytest.raises(png_render.PngRenderError):
+        png_render.render_pdf_pages(tmp_path / "x.pdf", blocker / "sub", "s", 100)
+
+
+def test_failed_move_leaves_no_half_moved_png_set(tmp_path, monkeypatch):
+    import shutil
+
+    import pytest
+
+    from kicad_mcp import png_render
+
+    monkeypatch.setattr(png_render, "_WORKER", _fake_worker(tmp_path, _TWO_PNG_WORKER))
+    real_move = shutil.move
+    calls = []
+
+    def flaky(src, dst):
+        calls.append(src)
+        if len(calls) == 2:
+            raise PermissionError("denied")
+        return real_move(src, dst)
+
+    monkeypatch.setattr(png_render.shutil, "move", flaky)
+    out = tmp_path / "out"
+    with pytest.raises(png_render.PngRenderError, match="denied"):
+        png_render.render_pdf_pages(tmp_path / "x.pdf", out, "s", 100)
+    assert not list(out.glob("*.png"))
+
+
+def test_failed_cleanup_unlink_still_surfaces_png_render_error(tmp_path, monkeypatch):
+    import shutil
+
+    import pytest
+
+    from kicad_mcp import png_render
+
+    monkeypatch.setattr(png_render, "_WORKER", _fake_worker(tmp_path, _TWO_PNG_WORKER))
+    real_move = shutil.move
+    calls = []
+
+    def flaky(src, dst):
+        calls.append(src)
+        if len(calls) == 2:
+            raise PermissionError("denied")
+        return real_move(src, dst)
+
+    monkeypatch.setattr(png_render.shutil, "move", flaky)
+    real_unlink = Path.unlink
+
+    def bad_unlink(self, *a, **k):
+        if self.suffix == ".png" and self.parent.name == "out":
+            raise PermissionError("locked")
+        return real_unlink(self, *a, **k)
+
+    monkeypatch.setattr(Path, "unlink", bad_unlink)
+    with pytest.raises(png_render.PngRenderError, match="denied"):
+        png_render.render_pdf_pages(tmp_path / "x.pdf", tmp_path / "out", "s", 100)

@@ -22,6 +22,8 @@ from typing import Any
 import httpx
 import pdfplumber
 
+from kicad_mcp.png_render import PDFIUM_LOCK
+
 _PIN_TABLE_HEADER_RE = re.compile(r"\bpin\b", re.IGNORECASE)
 _RATINGS_HEADER_RE = re.compile(r"absolute maximum rating|maximum rating", re.IGNORECASE)
 _DIMENSION_HEADER_RE = re.compile(r"package|dimension|land pattern|footprint", re.IGNORECASE)
@@ -234,7 +236,9 @@ _PNG_FILTER_NONE = bytes([0])
 def _png_bytes(area: Any) -> bytes:
     """PNG of a pdfplumber page or crop, encoded here (zlib + struct) from the
     rendered RGB pixels, so no image-library save call is needed."""
-    img = area.to_image(resolution=150).original.convert("RGB")
+    # PDFium is not thread-safe (issue 104): one render at a time in the process.
+    with PDFIUM_LOCK:
+        img = area.to_image(resolution=150).original.convert("RGB")
     width, height = img.size
     raw = img.tobytes()
     stride = width * 3

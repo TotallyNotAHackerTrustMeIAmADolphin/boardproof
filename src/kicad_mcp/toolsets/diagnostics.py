@@ -16,6 +16,7 @@ from pathlib import Path
 from mcp.server.mcpserver import MCPServer
 
 from kicad_mcp.kicad_cli import KicadCliError, export_sch_pdf, export_svg
+from kicad_mcp.png_render import PngRenderError, render_pdf_pages
 
 _PCB_NOTE = (
     "A human-style visual sanity check only, never evidence. pcb_run_drc and "
@@ -51,18 +52,11 @@ _PNG_DPI_MIN, _PNG_DPI_MAX = 50, 600
 def _png_pages(sch_path: Path, output_dir: Path, dpi: int) -> list[str]:
     """Rasterise the schematic's PDF export (one PNG per sheet) at ``dpi``.
 
-    pdfplumber (a declared dependency) drives pypdfium2; no new dependency.
+    The raster step runs in a child process (kicad_mcp.png_render): PDFium is not thread-safe
+    and a native crash there must not take the server down (build ticket 104).
     """
-    import pdfplumber
-
     pdf = export_sch_pdf(sch_path, output_dir / f"{sch_path.stem}.pdf")
-    out: list[str] = []
-    with pdfplumber.open(pdf) as doc:
-        for i, page in enumerate(doc.pages, start=1):
-            png = output_dir / f"{sch_path.stem}-page{i}.png"
-            page.to_image(resolution=dpi).save(str(png))
-            out.append(str(png))
-    return out
+    return render_pdf_pages(pdf, output_dir, sch_path.stem, dpi)
 
 
 def build(mcp: MCPServer) -> list[str]:
@@ -99,6 +93,19 @@ def build(mcp: MCPServer) -> list[str]:
             result["png_images"] = _png_pages(Path(sch_path), Path(output_dir), png_dpi)
         except KicadCliError as exc:
             return {"status": "incomplete", "reason": str(exc), "authoritative": False}
+        except PngRenderError as exc:
+            # The SVGs (and the PDF, where kicad-cli wrote it) stay returned.
+            pdf = Path(output_dir) / f"{Path(sch_path).stem}.pdf"
+            refusal = {
+                "status": "incomplete",
+                "refusal": "png_render_failed",
+                "reason": f"png_render_failed: {exc}",
+                "images": result["images"],
+                "authoritative": False,
+            }
+            if pdf.is_file():
+                refusal["pdf"] = str(pdf)
+            return refusal
         return result
 
     mcp.add_tool(

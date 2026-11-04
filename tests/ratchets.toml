@@ -444,11 +444,11 @@ code = '''footprint.save(output_path)'''
 note = "Footprint.save of a generated .kicad_mod (generator output; decision 1 keeps generators)."
 
 [[high_level_save]]
-file = "toolsets/diagnostics.py"
-function = "_png_pages"
+file = "_png_worker.py"
+function = "main"
 kind = "save"
-code = '''page.to_image(resolution=dpi).save(str(png))'''
-note = "Pillow image save of a diagnostic PNG raster into the caller's output directory, not a KiCad file (build ticket 83)."
+code = '''page.to_image(resolution=dpi).save(png)'''
+note = "Pillow image save of a diagnostic PNG raster into the worker's own temp directory, in a child process (issue 104; moved from toolsets/diagnostics.py _png_pages, build ticket 83); not a KiCad file."
 
 [[high_level_save]]
 file = "toolsets/project.py"
@@ -476,6 +476,13 @@ function = "_backup_outside_project"
 kind = "shutil.copy2"
 code = '''shutil.copy2(sheet, dest)'''
 note = "Copies each sheet of the tree into a new directory under the system temp directory before kicad_tools writes (build ticket 26); never onto a project file."
+
+[[commit]]
+file = "png_render.py"
+function = "render_pdf_pages"
+kind = "shutil.move"
+code = '''shutil.move(str(Path(tmp) / name), str(dest))'''
+note = "Issue 104: moves each finished diagnostic PNG from the renderer's own temp directory into the caller's output directory; a PNG raster, never a KiCad file, and the source is scratch."
 
 [[commit]]
 file = "sheet_authoring.py"
@@ -998,7 +1005,7 @@ reaches = [
 
 [read_only_tool_writes.render_schematic_diagnostic]
 reason = "Optional PNG raster of the schematic in the caller's output directory (build ticket 83); no KiCad file is written."
-reaches = ["toolsets/diagnostics.py | _png_pages | save"]
+reaches = ["png_render.py | render_pdf_pages | shutil.move"]
 
 [read_only_tool_writes.run_spice_simulation]
 reason = "ngspice run script inside a TemporaryDirectory."
