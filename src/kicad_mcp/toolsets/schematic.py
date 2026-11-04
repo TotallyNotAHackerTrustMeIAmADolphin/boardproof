@@ -25,7 +25,7 @@ from typing import Any
 
 from mcp.server.mcpserver import MCPServer
 
-from kicad_mcp import symbol_libs, write_layer
+from kicad_mcp import pin_wiring, symbol_libs, write_layer
 from kicad_mcp.kicad_cli import ensure_kicad_cli_on_path, find_kicad_cli
 
 _symbol_dir_checked = False
@@ -842,8 +842,15 @@ def build(mcp: MCPServer) -> list[str]:
         """Place one or more symbols onto an existing schematic in one call.
 
         Each spec: lib_id, x, y, ref (required); value, rotation, footprint,
-        unit, in_bom, dnp (optional). Batch-oriented -- never loop this one
+        unit, in_bom, dnp, snap (optional). Batch-oriented -- never loop this one
         symbol at a time.
+
+        Positions are placed as given (issue 86): the origin is NOT rounded to the 1.27 mm grid
+        unless a spec carries "snap": true, because existing callers place at arbitrary
+        coordinates. The result reads back every symbol and unit that was written, from the raw
+        sheet: `symbols` ({reference, uuid, lib_id, unit, at, rotation, asked, pins [{number,
+        name, x, y}], pin_count, off_grid_pins}), `snapped` (what "snap": true moved), `grid`.
+        Use those pin points, or wire by pin with connect_pins, and do not compute them.
 
         A lib_id's library nickname is resolved as KiCad does: the project's sym-lib-table
         first (${KIPRJMOD} is the project folder), then the user's global sym-lib-table, then
@@ -883,11 +890,20 @@ def build(mcp: MCPServer) -> list[str]:
             sch = Schematic.load(path)
             symbol_libs.seed_symbol_defs(sch, libs, lib_ids)
             placed = []
-            for spec in specs:
+            before_uuids = pin_wiring.symbol_uuids(write_layer.load(path))
+            grid = float(getattr(sch, "grid", 1.27) or 1.27)
+            snapped_refs: list[dict] = []
+            for index, spec in enumerate(specs):
+                x, y = spec["x"], spec["y"]
+                if spec.get("snap", False):  # opt in only: callers place at arbitrary coordinates today
+                    sx, sy = pin_wiring.snap_value(float(x), grid), pin_wiring.snap_value(float(y), grid)
+                    if (sx, sy) != (x, y):
+                        snapped_refs.append({"spec": index, "ref": spec["ref"], "asked": [x, y], "now": [sx, sy]})
+                    x, y = sx, sy
                 instance = sch.add_symbol(
                     lib_id=spec["lib_id"],
-                    x=spec["x"],
-                    y=spec["y"],
+                    x=x,
+                    y=y,
                     ref=spec["ref"],
                     value=spec.get("value"),
                     rotation=spec.get("rotation", 0),
@@ -904,7 +920,19 @@ def build(mcp: MCPServer) -> list[str]:
             if (locked := write_layer.as_lock_refusal(exc)) is not None:
                 return locked
             return _incomplete(f"could not add symbols: {exc}")
-        return {"status": "ok", "placed": placed, "count": len(placed)}
+        symbols = pin_wiring.read_back(write_layer.load(path), before_uuids, grid)
+        # the new symbol nodes come back in the order the specs were written: one per spec
+        by_spec = len(symbols) == len(specs)
+        moved = {r["spec"] for r in snapped_refs}
+        for index, entry in enumerate(symbols):
+            entry["spec"] = index if by_spec else None
+            entry["asked"] = [specs[index]["x"], specs[index]["y"]] if by_spec else None
+            entry["snapped"] = index in moved if by_spec else None
+        return {"status": "ok", "placed": placed, "count": len(placed), "symbols": symbols, "grid": grid,
+                "snapped": snapped_refs,
+                "grid_note": "Positions are NOT snapped to the grid unless a spec says \"snap\": true; "
+                             "off_grid_pins lists the pin numbers whose point is off the grid. "
+                             "Wire by pin with connect_pins."}
 
     def add_wires(sch_path: str, specs: list[dict]) -> dict:
         """Add one or more wires to an existing schematic in one call,
@@ -913,7 +941,7 @@ def build(mcp: MCPServer) -> list[str]:
         Each spec:
           * `p1` [x, y], `p2` [x, y]  (required)
           * `route`: "orthogonal" (default) | "direct".
-          * `snap`: bool, default True -- see WARNING below.
+          * `snap`: bool, default True -- see SNAP below.
           * `first`: "horizontal" | "vertical" (optional) -- force the first
             leg's direction instead of letting the router infer it.
           * `p1_axis` / `p2_axis`: "horizontal" | "vertical" (optional) --
@@ -935,22 +963,21 @@ def build(mcp: MCPServer) -> list[str]:
         same way. Use `"route": "direct"` only when you deliberately want the
         old single-segment behavior.
 
-        WARNING (real bug found and worked around 2026-09-02, see archived backlog):
-        kicad_tools' underlying add_wire() defaults to grid-snapping wire
-        endpoints. If p1/p2 are a pin's *exact* coordinates and that pin
-        isn't itself on-grid, snapping silently moves the wire endpoint off
-        the pin -- the wire is added with no error, but the intended
-        electrical connection never happens (every such pad shows
-        "unconnected" in ERC/netlist export). Pass `"snap": false` in a
-        spec when p1/p2 are exact pin coordinates you need to land on
-        precisely; leave snap on (the default) for general tidy routing
-        between points that don't need to be exact. Each spec's `snap` is
-        forwarded to *every* segment of its route, intermediate corners
-        included -- snapping is per-coordinate and deterministic, so a
-        snapped route stays orthogonal.
+        SNAP (issue 86; behind it the bug of 2026-09-02: kicad_tools' own snap moved a wire end
+        that sat exactly on an off-grid pin off the pin, so the connection never existed). `snap`
+        (default true) rounds p1 and p2 to the 1.27 mm grid, one coordinate at a time, EXCEPT a
+        point within 0.01 mm of something already on the sheet: a pin, a label, a junction, a sheet
+        pin, a no-connect marker or the end of a wire. What is there wins: the point lands exactly on
+        it, on the grid or not (a point that already equals it stays). The result says what
+        happened: `snapped` ({spec, point, asked, now}) for the points the grid moved,
+        `landed_on_pin` for the points moved onto such a connector point, and `grid`. The corners of
+        an L or Z derive from the two end points. With "snap": false NOTHING is moved or rounded,
+        not even next to a pin (for a free wire end that is off the grid on purpose). Take a pin's coordinates from get_symbol_pins, or better wire by pin with
+        connect_pins.
 
-        Returns `count` (specs drawn) and `segments` (wire segments actually
-        emitted, >= count once any spec takes an L or Z path).
+        Returns `count` (specs drawn), `segments` (wire segments actually
+        emitted, >= count once any spec takes an L or Z path), `grid`, `snapped`
+        and `landed_on_pin`.
 
         Refuses a sheet older than KiCad 8's format (error old_sheet_format, nothing
         written): kicad_tools would rewrite it and drop what it does not model. Before
@@ -974,15 +1001,29 @@ def build(mcp: MCPServer) -> list[str]:
 
             sch = Schematic.load(path)
             pin_axes = _pin_axis_index(sch)
+            pins = pin_wiring.connector_points(write_layer.load(path))
         except Exception as exc:  # noqa: BLE001 - evidence-gated verdict
             return _incomplete(f"could not load schematic: {exc}")
+        grid = float(getattr(sch, "grid", 1.27) or 1.27)
 
         added, segments = 0, 0
         errors: list[dict] = []
+        snapped: list[dict] = []
+        landed: list[dict] = []
         for i, spec in enumerate(specs):
             try:
                 p1 = (float(spec["p1"][0]), float(spec["p1"][1]))
                 p2 = (float(spec["p2"][0]), float(spec["p2"][1]))
+                snap_on = bool(spec.get("snap", True))
+                for label, asked in (("p1", p1), ("p2", p2)):
+                    got, how = pin_wiring.land(asked, pins, grid, snap_on)
+                    if how != "unchanged":
+                        (landed if how == "pin" else snapped).append(
+                            {"spec": i, "point": label, "asked": [asked[0], asked[1]], "now": [got[0], got[1]]})
+                    if label == "p1":
+                        p1 = got
+                    else:
+                        p2 = got
                 route = spec.get("route", "orthogonal")
                 if route not in _ROUTE_MODES:
                     raise ValueError(f"unknown route mode {route!r} (expected one of {list(_ROUTE_MODES)})")
@@ -997,9 +1038,10 @@ def build(mcp: MCPServer) -> list[str]:
                         first=spec.get("first"),
                         grid=getattr(sch, "grid", 1.27) or 1.27,
                     )
-                # add_wire_path forwards `snap` to every segment it creates,
-                # intermediate waypoints included -- do NOT drop the kwarg.
-                sch.add_wire_path(*points, snap=spec.get("snap", True))
+                # The end points were landed on a pin or rounded to the grid above (issue 86) and the
+                # route corners derive from them, so kicad_tools must not snap again: it would move a
+                # pin-exact end off an off-grid pin. Do NOT pass snap=True here.
+                sch.add_wire_path(*points, snap=False)
                 segments += len(points) - 1
                 added += 1
             except Exception as exc:  # noqa: BLE001 - evidence-gated, per-spec
@@ -1018,7 +1060,8 @@ def build(mcp: MCPServer) -> list[str]:
             if not specs:
                 return {"status": "ok", "count": 0, "segments": 0}
             return _incomplete("no wires could be added", errors=errors, count=0, segments=0)
-        result = {"status": "partial" if errors else "ok", "count": added, "segments": segments}
+        result = {"status": "partial" if errors else "ok", "count": added, "segments": segments,
+                  "grid": grid, "snapped": snapped, "landed_on_pin": landed}
         if errors:
             result["errors"] = errors
         return result
@@ -1067,20 +1110,15 @@ def build(mcp: MCPServer) -> list[str]:
         "power" it's the power symbol lib_id, e.g. "power:GND", resolved through the project
         sym-lib-table, then the global one, then KiCad's folder, as add_symbols does), rotation,
         shape (global/hier label direction), snap (optional bool, default
-        True -- see WARNING).
+        True -- see SNAP).
 
-        WARNING (real bug found and fixed 2026-09-02, same root cause as
-        add_wires' snap bug in this same module, see archived backlog): every
-        underlying kicad_tools add_label/add_global_label/add_hier_label/
-        add_power/add_no_connect call defaults to grid-snapping its
-        position. If x/y are a pin's *exact* coordinate (as they must be
-        for the label/flag to actually land on that pin's net) and the pin
-        isn't itself on-grid, snapping silently moves it off -- e.g. a
-        power-flag symbol meant to drive a chip's VCC pin ends up on an
-        unconnected phantom net, and ERC reports "Input Power pin not
-        driven by any Output Power pins" with no indication the real cause
-        was a silent position shift. Pass `"snap": false` in a spec when
-        x/y must land exactly on a pin.
+        SNAP (issue 86; behind it the bug of 2026-09-02: kicad_tools' own snap moved a label or
+        power flag that sat exactly on an off-grid pin off the pin, onto a phantom net). `snap`
+        (default true) rounds x and y to the 1.27 mm grid EXCEPT a point within 0.01 mm of something
+        already on the sheet (a pin, label, junction, sheet pin, no-connect marker or wire end): that
+        wins, the item lands exactly on it, on the grid or not. The result lists `snapped` ({spec,
+        asked, now}), `landed_on_pin` and `grid`. With "snap": false NOTHING is moved, not even next
+        to a pin.
 
         Refuses a sheet older than KiCad 8's format (error old_sheet_format, nothing
         written): kicad_tools would rewrite it and drop what it does not model. Before
@@ -1109,12 +1147,21 @@ def build(mcp: MCPServer) -> list[str]:
 
             sch = Schematic.load(path)
             symbol_libs.seed_symbol_defs(sch, libs, power_ids)
+            pins = pin_wiring.connector_points(write_layer.load(path))
+            grid = float(getattr(sch, "grid", 1.27) or 1.27)
             placed = []
-            for spec in specs:
+            snapped: list[dict] = []
+            landed: list[dict] = []
+            for i, spec in enumerate(specs):
                 kind = spec["kind"]
                 x, y = spec["x"], spec["y"]
                 rotation = spec.get("rotation", 0)
-                snap = spec.get("snap", True)
+                # issue 86: the grid applies here and pins win; kicad_tools is told not to snap again
+                got, how = pin_wiring.land((float(x), float(y)), pins, grid, bool(spec.get("snap", True)))
+                if how != "unchanged":
+                    (landed if how == "pin" else snapped).append({"spec": i, "asked": [x, y], "now": [got[0], got[1]]})
+                    x, y = got
+                snap = False
                 if kind == "label":
                     sch.add_label(spec["text"], x, y, rotation=rotation, snap=snap)
                 elif kind == "global":
@@ -1135,7 +1182,7 @@ def build(mcp: MCPServer) -> list[str]:
             if (locked := write_layer.as_lock_refusal(exc)) is not None:
                 return locked
             return _incomplete(f"could not add labels: {exc}")
-        return {"status": "ok", "placed": placed, "count": len(placed)}
+        return {"status": "ok", "placed": placed, "count": len(placed), "grid": grid, "snapped": snapped, "landed_on_pin": landed}
 
     def assign_footprints(sch_path: str, mapping: dict[str, str]) -> dict:
         """Assign footprints to symbols by reference designator in one call.
@@ -1669,6 +1716,63 @@ def build(mcp: MCPServer) -> list[str]:
 
         return sheet_editing.get_symbol_pins(sch_path, references, uuids)
 
+    def connect_pins(
+        sch_path: str, connections: list[dict], snap: bool = True, grid: float = 1.27,
+        allow_connectivity_change: bool = False, dry_run: bool = False, root_sch: str | None = None,
+    ) -> dict:
+        """Wire pins to pins in one call: say which pins, not where they are.
+
+        connections: a list of objects {from, to, via?, net_label?}. `from` and `to` each name one placed pin:
+        "R1.2" (reference.pin) or {ref | uuid, pin, unit?}. pin is the pin number, or its name when that is unique
+        on the symbol; unit picks the placed unit of a multi-unit part (needed when the pin exists in several
+        placed units, else pin_ambiguous); uuid picks one symbol when several share a reference. The tool finds
+        each pin point from the raw symbol and library geometry (rotation, mirror and unit applied, as
+        get_symbol_pins reports them) and draws an orthogonal path of wire segments: straight, an L, a Z (dogleg)
+        or a U (both pins face the same way), the first one that leaves each pin along its own direction (away
+        from the symbol body) and touches nothing. `via`: a list of [x, y] waypoints to choose the path yourself
+        (every leg horizontal or vertical); then the pin directions are not checked, only what the path touches.
+        `net_label`: a net label text placed on the longest segment of the new wire.
+
+        The grid: snap (default true) and grid (default 1.27 mm). A pin point is never moved: it sits where the
+        library puts it, on the grid or not, and the wire ends exactly on it. Only the points the tool chooses
+        itself are rounded to the grid (the dogleg of a Z, the line of a U, via waypoints, the label spot; a
+        waypoint coordinate that equals a pin's is that pin's exact coordinate). Per connection the result lists
+        `snapped` ({axis, asked, now}) and `off_grid_endpoints` (pin points off the grid, kept exact). With snap
+        false nothing the tool chooses is rounded.
+
+        What is checked: the path must not pass over another pin (the result names it), a label, junction,
+        no-connect marker or sheet pin, nor touch a wire (end on route, corner on wire, collinear overlap), also
+        one drawn earlier in the same call; it may cross a wire without touching it (listed as crosses_wires).
+        Another route of the same pair is tried first; when none is clear the call is refused (no_clear_route,
+        blockers listed; no_route when the pin directions allow none; via_not_orthogonal). Symbol bodies are not
+        checked: render the sheet. Two parts side by side whose pins face along the same axis the wrong
+        way round (for example R1.2 leaving down and R2.1 leaving up, R2 beside R1 and level with it)
+        may give no_route or no_clear_route: choose the path with `via` waypoints. A wire end that lands on the middle of another wire gets the junction it needs
+        (junctions_added). A pair already on one net (in the project's netlist, or by an earlier
+        connection of the same call) is not drawn again (already_connected).
+
+        Connectivity: kicad-cli's netlist of the project is read before and after on scratch copies. Every
+        requested pair must end on one net in the edited sheet's netlist; if not, nothing is written and the
+        refusal names the pairs. A net that
+        merges with another that no requested pair asked for, or two differently named nets joined (even when
+        asked for), refuses the call with connectivity_changed (nothing written, the changes listed); pass
+        allow_connectivity_change true when that is meant. dry_run true plans, checks and returns everything
+        (would_connect) and writes nothing. junction_candidates lists points where three or more wire ends or
+        pins meet without a junction (add_junctions draws the dot).
+
+        Refuses unannotated symbols (unannotated_symbol, run fix_annotation first), a pin or symbol that does not
+        exist (not_found, pin_not_found, with the pins listed), a pin the netlist does not list (pin_not_in_netlist),
+        a failed self-check (the sheet unchanged) and a project with a missing, unparseable or
+        cyclic sheet (sheet_tree_incomplete). root_sch names the project's root sheet when sch_path is a sub-sheet
+        and its folder holds several projects. A sheet that a parent uses more than once is not supported (its
+        per-use references differ from the sheet's own).
+
+        Refuses with file_open_in_kicad, naming the lock file, while KiCad holds a lock file for a file
+        it would write; close the file in KiCad, then retry.
+        """
+        return pin_wiring.connect_pins(sch_path, connections, root_sch, snap=snap, grid=grid,
+                                       allow_connectivity_change=allow_connectivity_change, dry_run=dry_run)
+
     def check_connectivity(sch_path: str) -> dict:
         """Check for unconnected pins and connection issues -- a narrower,
         faster check than full ERC (`sch_run_erc` in the `verification`
@@ -1753,7 +1857,7 @@ def build(mcp: MCPServer) -> list[str]:
     }
     mutating_tools = [
         add_symbols, add_wires, add_junctions, add_labels, assign_footprints, fix_annotation, create_sheets, add_sheet_symbols,
-        delete_symbols, delete_wires, delete_labels, delete_junctions, move_symbols, move_labels, set_property_positions,
+        delete_symbols, delete_wires, delete_labels, delete_junctions, move_symbols, move_labels, set_property_positions, connect_pins,
     ]
     read_only_tools = [get_symbol_pins, check_connectivity]
     for tool_fn in mutating_tools:

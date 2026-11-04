@@ -286,6 +286,16 @@ def _editing(tool: str, args: Callable[[Path], tuple]) -> Callable[[Path], Scena
     return make
 
 
+def _connect_pins(tmp_path):
+    """connect_pins (issue 86): a second resistor beside R1, and a U-shaped wire between their first pins."""
+    project = _schematic_project(tmp_path)
+    tools = _tools(schematic_toolset)
+    r1 = tools["get_symbol_pins"](str(project["sch"]), ["R1"])["symbols"][0]
+    x, y = r1["at"][0] + 25.4, r1["at"][1]
+    assert tools["add_symbols"](str(project["sch"]), [{"lib_id": "Device:R", "x": x, "y": y, "ref": "R2", "value": "1k"}])["status"] == "ok"
+    return Scenario(project["sch"], lambda: tools["connect_pins"](str(project["sch"]), [{"from": "R1.1", "to": "R2.1"}]))
+
+
 def _pcb_tool(tool: str, *args: Any) -> Callable[[Path], Scenario]:
     def make(tmp_path):
         pcb = _led(tmp_path)
@@ -332,6 +342,7 @@ SCENARIOS: dict[str, Callable[[Path], Scenario]] = {
     "move_symbols": _editing("move_symbols", lambda p: ([{"references": ["R1"], "offset": [5.08, 0]}],)),
     "move_labels": _editing("move_labels", lambda p: ([{"pattern": "*", "offset": [5.08, 0]}],)),
     "set_property_positions": _editing("set_property_positions", lambda p: ([{"references": ["R1"], "properties": {"Value": {"offset": [3.81, 0]}}}],)),
+    "connect_pins": _connect_pins,
     "place_footprints": _pcb_tool("place_footprints", [{"reference": "R1", "x": 3.0, "y": 4.0}]),
     "move_reference_designators_to_layer": _pcb_tool("move_reference_designators_to_layer", ["R1"], "F.Fab"),
     "align_footprints": _pcb_tool("align_footprints", ["R1", "D1"], "x", "min"),

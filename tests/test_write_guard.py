@@ -351,7 +351,7 @@ WRITING_TOOLS = frozenset({
     "add_symbols", "add_wires", "add_junctions", "add_labels", "assign_footprints", "fix_annotation",
     "create_sheets", "add_sheet_symbols",
     "delete_symbols", "delete_wires", "delete_labels", "delete_junctions", "move_symbols", "move_labels",
-    "set_property_positions",
+    "set_property_positions", "connect_pins",
     "place_footprints", "move_reference_designators_to_layer", "align_footprints", "distribute_footprints",
     "snap_footprints_to_grid", "pack_footprints_densely", "add_traces",
 })

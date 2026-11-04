@@ -58,6 +58,7 @@ def test_build_registers_expected_tools(sch_tools):
         "move_labels",
         "set_property_positions",
         "get_symbol_pins",
+        "connect_pins",
         "check_connectivity",
     }
 
@@ -264,10 +265,12 @@ def test_add_wires_defaults_to_orthogonal_routing(tmp_path, sch_tools):
 def test_add_wires_direct_route_is_still_available(tmp_path, sch_tools):
     dest = tmp_path / "sch.kicad_sch"
     shutil.copy(FIXTURE, dest)
-    result = sch_tools["add_wires"](str(dest), [{"p1": [200, 100], "p2": [230, 130], "route": "direct"}])
+    result = sch_tools["add_wires"](str(dest), [{"p1": [199.39, 99.06], "p2": [229.87, 128.27], "route": "direct"}])
     assert result["status"] == "ok", result
     assert result["segments"] == 1
-    assert (200.0, 100.0, 230.0, 130.0) in _wires(dest)
+    # issue 86: the default now rounds a free point to the 1.27 mm grid, so the points here are on it
+    assert (199.39, 99.06, 229.87, 128.27) in _wires(dest)
+    assert result["snapped"] == [] and result["landed_on_pin"] == []
 
 
 def test_add_wires_axis_aligned_specs_are_unchanged_by_the_new_default(tmp_path, sch_tools):

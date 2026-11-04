@@ -847,6 +847,14 @@ proof = [
     "tests/test_sheet_editing.py::test_move_labels_corrupted_write_is_refused",
 ]
 
+[writing_tool.connect_pins]
+self_check = "reload-verify"
+note = "Issue 86: pin_wiring plans the wires of pin-to-pin connections on a copy of the sheet's tree through sheet_editing.run (staged check that only the reported wires, junctions and labels were added; kicad-cli netlist before and after on scratch copies: every requested pair on one net or write_not_verified, no unrequested merge or named-net join unless allowed), and only then saves through write_layer.save, whose verify reloads the temporary sibling and compares it with the serialised tree before os.replace."
+proof = [
+    "tests/test_pin_wiring.py::test_connect_pins_corrupted_write_is_refused",
+    "tests/test_pin_wiring.py::test_the_netlist_self_check_fires_on_a_wire_that_misses_its_pin",
+]
+
 [writing_tool.set_property_positions]
 self_check = "reload-verify"
 note = "Issue 84: sheet_editing changes a copy of the sheet's tree in memory, checks that every node it did not select is unchanged, compares kicad-cli's netlist of the project before and after on scratch copies (connectivity_changed unless allowed), and only then saves through write_layer.save, whose verify reloads the temporary sibling and compares it with the serialised tree before os.replace."

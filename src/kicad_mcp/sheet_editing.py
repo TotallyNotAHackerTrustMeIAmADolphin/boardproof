@@ -158,11 +158,15 @@ def place(px: float, py: float, rotation: float, mirror: str) -> tuple[float, fl
     return x, -y
 
 
-def pin_positions(root: SExp, symbol: SExp, *, with_type: bool = False) -> list[dict[str, Any]]:
+def pin_positions(root: SExp, symbol: SExp, *, with_type: bool = False, with_exit: bool = False) -> list[dict[str, Any]]:
     """Where the pins of one placed ``symbol`` (a unit of it) sit on the sheet, from the raw
     ``(at ...)`` of the symbol and of the pins in the embedded library symbol. Each entry:
     ``number``, ``name``, ``x``, ``y`` (and ``type``, the electrical type word of the pin, when
-    ``with_type``). An unreadable library symbol gives an empty list."""
+    ``with_type``; and ``exit``, when ``with_exit``: the unit vector ``[dx, dy]`` on the sheet
+    (Y down) along which a wire leaves the pin, away from the symbol body, rounded to the nearest
+    axis). The library angle of a pin is the direction in which its line runs from the connection
+    point into the body, so the wire leaves the opposite way. An unreadable library symbol gives
+    an empty list."""
     lib = _lib_symbol(root, symbol)
     if lib is None:
         return []
@@ -189,6 +193,10 @@ def pin_positions(root: SExp, symbol: SExp, *, with_type: bool = False) -> list[
                      "x": _r(sx + dx), "y": _r(sy + dy)}
             if with_type:
                 entry["type"] = str(pin.children[0].value) if pin.children and pin.children[0].is_atom else ""
+            if with_exit:
+                angle = math.radians(at[0].get_float(2) if len(at[0].children) > 2 else 0.0)
+                ex, ey = place(-math.cos(angle), -math.sin(angle), rot, mirror)
+                entry["exit"] = ([1 if ex > 0 else -1, 0] if abs(ex) >= abs(ey) else [0, 1 if ey > 0 else -1])
             out.append(entry)
     return out
 
@@ -241,8 +249,9 @@ def get_symbol_pins(path: str, references: Any = None, uuids: Any = None) -> dic
 class Sheet:
     """Index of the items of a sheet's root node by kind."""
 
-    def __init__(self, root: SExp) -> None:
+    def __init__(self, root: SExp, nets_before: Any = None) -> None:
         self.root = root
+        self.nets_before = nets_before  # callable -> kicad-cli's netlist of the project before the change (memoised)
         self.symbols = _kids(root, "symbol")
         self.wires = _kids(root, "wire")
         self.junctions = _kids(root, "junction")
@@ -567,6 +576,10 @@ class Outcome:
     changed: set[str] = field(default_factory=set)         # uuids of nodes changed in place
     dangling_before: dict[str, list[str]] = field(default_factory=dict)
     check_nets: bool = True
+    added: set[str] = field(default_factory=set)           # uuids of nodes the call added on purpose
+    compare: Any = None                                    # (before, after, removed_refs) -> changes; default compare_nets
+    post_check: Any = None                                 # (before, after) -> None, raises to refuse (self-check)
+    no_change: bool = False                                # nothing to write: return after the checks
 
 
 def _staged_check(original: SExp, new: SExp, outcome: Outcome) -> None:
@@ -600,7 +613,10 @@ def _staged_check(original: SExp, new: SExp, outcome: Outcome) -> None:
         elif uid not in outcome.changed and new_keyed[uid] != text:
             problems.append(f"{uid} changed but was not selected")
     for uid in new_keyed.keys() - old_keyed.keys():
-        problems.append(f"{uid} is new")
+        if uid not in outcome.added:
+            problems.append(f"{uid} is new")
+    for uid in outcome.added - new_keyed.keys():
+        problems.append(f"{uid} should have been added but is missing")
     if problems:
         raise SheetAuthoringError(
             "write_not_verified", "the edited sheet differs from the original beyond the selection: "
@@ -660,16 +676,25 @@ def _run(path: Path, root_sch: str | None, mutate, allow: bool, dry_run: bool) -
     new = write_layer.load(path)
     if original.name != "kicad_sch":
         raise SheetAuthoringError("invalid_spec", f"{path.name} is not a schematic sheet")
-    outcome: Outcome = mutate(Sheet(new), new)
+    memo: dict[str, dict[str, frozenset]] = {}
+
+    def nets_before() -> dict[str, frozenset]:
+        if "nets" not in memo:
+            memo["nets"] = read_nets(tree, path, None)
+        return memo["nets"]
+
+    outcome: Outcome = mutate(Sheet(new, nets_before), new)
     _staged_check(original, new, outcome)
 
     result: dict[str, Any] = {"status": "ok", "ok": True, "written": False, **outcome.report}
     if standalone:
         result["standalone_sheet"] = True
     if outcome.check_nets:
-        before = read_nets(tree, path, None)
+        before = nets_before()
         after = read_nets(tree, path, new)
-        changes = compare_nets(before, after, outcome.removed_refs)
+        if outcome.post_check is not None:
+            outcome.post_check(before, after)
+        changes = (outcome.compare or compare_nets)(before, after, outcome.removed_refs)
         result["connectivity"] = {"nets_before": len(before), "nets_after": len(after), "changed": bool(changes),
                                   "changes": _bounded(changes)}
         if changes and not allow:
@@ -679,6 +704,8 @@ def _run(path: Path, root_sch: str | None, mutate, allow: bool, dry_run: bool) -
                 "Check the list, then repeat with allow_connectivity_change true if it is meant.",
                 connectivity=result["connectivity"], **{k: v for k, v in outcome.report.items() if k in ("would_delete", "would_move")})
     if dry_run:
+        return result
+    if outcome.no_change:
         return result
     write_layer.save(new, path, verify=_expected_verify(new))
     reloaded = write_layer.load(path)

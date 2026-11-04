@@ -212,3 +212,22 @@ def test_a_tool_that_wrote_one_file_then_was_denied_on_another_does_not_claim_no
     assert result["ok"] is False and result["code"] == "file_busy", result
     assert "nothing changed" not in result["reason"]
     assert "may have changed" in result["reason"]
+
+
+def test_concurrent_connect_pins_and_add_wires_both_land(tmp_path: Path) -> None:
+    tools = _wrapped_tools()
+    sch = _sheet(tmp_path, tools)
+    assert tools["add_symbols"](str(sch), [{"lib_id": "Device:R", "x": 76.2, "y": 50.8, "ref": "R2", "value": "1k"}])["status"] == "ok"
+
+    pins, wires = _together(
+        lambda: tools["connect_pins"](str(sch), [{"from": "R1.1", "to": "R2.1"}]),
+        lambda: tools["add_wires"](str(sch), [{"p1": [20.32, 20.32], "p2": [30.48, 20.32], "route": "direct"}]),
+    )
+
+    assert not isinstance(pins, BaseException), pins
+    assert not isinstance(wires, BaseException), wires
+    assert pins["ok"] is True and pins["written"] is True, pins
+    assert wires["status"] == "ok", wires
+    root = write_layer.load(sch)
+    ends = [e for w in root.children if not w.is_atom and w.name == "wire" for e in [tuple(xy.get_float(i) for i in (0, 1)) for xy in w.find_children("pts")[0].find_children("xy")]]
+    assert (20.32, 20.32) in ends and (50.8, 46.99) in ends and (76.2, 46.99) in ends, "a wire was lost (lost update)"
