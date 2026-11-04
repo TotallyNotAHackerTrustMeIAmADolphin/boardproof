@@ -15,6 +15,7 @@ see archived backlog P1-05 notes.
 
 from __future__ import annotations
 
+import importlib.util
 import re
 import subprocess
 import sys
@@ -29,6 +30,13 @@ from pathlib import Path
 # part number is always "C" followed by digits only.
 _LCSC_ID_RE = re.compile(r"^C\d+$")
 
+# easyeda2kicad is a core dependency (issue 67), still run only as a subprocess. A venv built
+# without it must give this actionable answer, not the raw "No module named" of the child.
+MISSING_MODULE_REASON = (
+    "easyeda2kicad is not installed for this interpreter; install it with "
+    "`python -m pip install \"easyeda2kicad>=1.0.1\"` (or reinstall boardproof) and retry"
+)
+
 
 def fetch_part_assets(lcsc_id: str, output_dir: str | Path, *, overwrite: bool = True) -> dict:
     """Retrieve a KiCad symbol, footprint, and 3D model for an LCSC part
@@ -40,6 +48,18 @@ def fetch_part_assets(lcsc_id: str, output_dir: str | Path, *, overwrite: bool =
     """
     if not _LCSC_ID_RE.match(lcsc_id):
         return {"status": "error", "reason": f"lcsc_id {lcsc_id!r} is not a valid LCSC part number (expected 'C' followed by digits)"}
+
+    # find_spec only locates the module (no import, so no AGPL code is loaded) for the same
+    # interpreter that runs the subprocess below.
+    if importlib.util.find_spec("easyeda2kicad") is None:
+        return {
+            "status": "incomplete",
+            "lcsc_id": lcsc_id,
+            "symbol_path": None,
+            "footprint_dir": None,
+            "model_3d_dir": None,
+            "reason": MISSING_MODULE_REASON,
+        }
 
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)

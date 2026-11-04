@@ -37,6 +37,10 @@ dependencies = [
     "pydantic>=2.0",
     "httpx>=0.27",
     "pdfplumber>=0.11",
+    # easyeda2kicad is AGPL-3.0 (see src/kicad_mcp/sourcing/asset_fetch.py): a core dependency
+    # since issue 67 (fetching symbol, footprint and 3D model by LCSC id is essential), but
+    # invoked only as an arm's-length subprocess (`python -m easyeda2kicad`), never imported.
+    "easyeda2kicad>=1.0.1",
 ]
 
 [project.optional-dependencies]
@@ -47,16 +51,8 @@ dev = [
     # rules, and scripts/lint_gate.py refuses any other version (build ticket 45).
     "ruff==0.17.1",
 ]
-# easyeda2kicad is AGPL-3.0 (see src/kicad_mcp/sourcing/asset_fetch.py) --
-# invoked only as an arm's-length subprocess (`python -m easyeda2kicad`),
-# never imported, and kept as an optional extra rather than a core
-# dependency so installing this package doesn't pull in an AGPL tool by
-# default.
-assets = [
-    "easyeda2kicad>=1.0.1",
-]
 # kicad-python/kipy is MIT (verified from its own LICENSE file, see
-# src/kicad_mcp/ipc/connection.py) -- unlike easyeda2kicad above, it's not
+# src/kicad_mcp/ipc/connection.py) -- it's not
 # excluded from core for licensing reasons. It's optional because it's
 # only useful when copilot (live IPC) mode is wanted; kicad_mcp/ipc/*.py
 # imports it lazily inside functions, so the `copilot` toolset registers

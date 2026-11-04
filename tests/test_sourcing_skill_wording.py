@@ -43,3 +43,15 @@ def test_skill_pins_not_caught_by():
 
 def test_confirm_adopt_parts_description_pins_not_caught_by():
     assert _having("library.py", "Apply a propose_adopt_parts proposal", NOT_CAUGHT + " it")
+
+
+MISSING_PACKAGE = "If `fetch_part_assets` returns `status: incomplete` because the easyeda2kicad package is missing"
+
+
+def test_skill_pins_missing_package_handling():
+    assert MISSING_PACKAGE in SKILL
+    assert "relay the install command from its `reason` to the user and do not fall back to `generate_footprint` silently" in SKILL
+
+
+def test_description_and_skill_agree_on_missing_package():
+    assert _having("sourcing.py", "Retrieve a ready KiCad symbol/footprint/3D model", "status incomplete with the install command")

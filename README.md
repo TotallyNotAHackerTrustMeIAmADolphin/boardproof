@@ -60,7 +60,7 @@ python -m venv .venv
 .venv/Scripts/pip install -e ".[dev,krt]"
 ```
 
-Extras: `dev` (pytest, ruff), `krt` (the runtime dependencies of KiCadRoutingTools: numpy, scipy, shapely, Pillow), `assets` (easyeda2kicad, AGPL-3.0, used as a subprocess only), `copilot` (kicad-python, for the live-IPC adapter).
+easyeda2kicad (AGPL-3.0) is a core dependency, installed with the package and used as a subprocess only, never imported. Extras: `dev` (pytest, ruff), `krt` (the runtime dependencies of KiCadRoutingTools: numpy, scipy, shapely, Pillow), `copilot` (kicad-python, for the live-IPC adapter).
 
 ### External tools
 
@@ -87,7 +87,7 @@ Whether a part is a JLCPCB Basic, Preferred or Extended part is answered from a 
 git submodule update --init --depth 1 third_party/JLCPCB-Kicad-Library
 ```
 
-Without it, asset lookups fall back to `easyeda2kicad` (the `assets` extra) and say so. The server looks for the library in this order: the `KICAD_MCP_JLCPCB_LIBRARY` environment variable, the submodule above, KiCad's third-party directory (a Plugin and Content Manager install). `jlcpcb_library_status` reports what it found and, for an empty or missing submodule, the command above. A new git worktree starts with the submodule empty; set `KICAD_MCP_JLCPCB_LIBRARY` to another checkout's `third_party/JLCPCB-Kicad-Library` to share it. To rebuild the index after moving the pin: `python scripts/refresh_jlcpcb_index.py`.
+Without it, asset lookups fall back to `easyeda2kicad` (a core dependency) and say so. The server looks for the library in this order: the `KICAD_MCP_JLCPCB_LIBRARY` environment variable, the submodule above, KiCad's third-party directory (a Plugin and Content Manager install). `jlcpcb_library_status` reports what it found and, for an empty or missing submodule, the command above. A new git worktree starts with the submodule empty; set `KICAD_MCP_JLCPCB_LIBRARY` to another checkout's `third_party/JLCPCB-Kicad-Library` to share it. To rebuild the index after moving the pin: `python scripts/refresh_jlcpcb_index.py`.
 
 ## MCP client configuration
 

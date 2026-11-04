@@ -673,6 +673,8 @@ def build(mcp: MCPServer) -> list[str]:
         it needs no network round-trip when a local asset already covers
         the part. Evidence-gated: no LCSC match or a conversion failure
         is reported explicitly, not returned as a silent partial success.
+        A missing easyeda2kicad package gives status incomplete with the
+        install command.
         """
         return _fetch_part_assets(lcsc_id, output_dir, overwrite=overwrite)
 
@@ -866,7 +868,11 @@ def build(mcp: MCPServer) -> list[str]:
     mcp.add_tool(
         fetch_part_assets,
         name="fetch_part_assets",
-        description="Retrieve a ready KiCad symbol/footprint/3D model for an LCSC-numbered part via easyeda2kicad. Prefer resolve_jlcpcb_assets first for JLCPCB Basic/Preferred parts -- no network round-trip needed when a local asset already covers the part.",
+        description=(
+            "Retrieve a ready KiCad symbol/footprint/3D model for an LCSC-numbered part via easyeda2kicad. "
+            "Prefer resolve_jlcpcb_assets first for JLCPCB Basic/Preferred parts -- no network round-trip needed when a local asset already covers the part. "
+            "If the easyeda2kicad package is missing from the server's Python environment the result is status incomplete with the install command, and nothing is fetched."
+        ),
         annotations={
             "readOnlyHint": False,  # writes assets to output_dir
             "destructiveHint": False,
