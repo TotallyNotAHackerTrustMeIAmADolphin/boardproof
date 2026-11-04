@@ -259,6 +259,21 @@ def _sch(tool: str, args: Callable[[Path], tuple]) -> Callable[[Path], Scenario]
     return make
 
 
+def _create_sheets(tmp_path):
+    project = _project(tmp_path)
+    tools = _tools(schematic_toolset)
+    return Scenario(project["sch"], lambda: tools["create_sheets"](str(project["sch"]), [{"file": "sensors.kicad_sch"}]))
+
+
+def _add_sheet_symbols(tmp_path):
+    project = _project(tmp_path)
+    tools = _tools(schematic_toolset)
+    assert tools["create_sheets"](str(project["sch"]), [{"file": "sensors.kicad_sch"}])["status"] == "ok"
+    spec = {"file": "sensors.kicad_sch", "name": "Sensors", "x": 101.6, "y": 50.8,
+            "pins": [{"name": "SER", "direction": "input"}]}
+    return Scenario(project["sch"], lambda: tools["add_sheet_symbols"](str(project["sch"]), [spec]))
+
+
 def _pcb_tool(tool: str, *args: Any) -> Callable[[Path], Scenario]:
     def make(tmp_path):
         pcb = _led(tmp_path)
@@ -296,6 +311,8 @@ SCENARIOS: dict[str, Callable[[Path], Scenario]] = {
     "add_labels": _sch("add_labels", lambda p: ([{"kind": "label", "x": 50, "y": 50, "text": "NETA"}],)),
     "assign_footprints": _sch("assign_footprints", lambda p: ({"R1": "Resistor_SMD:R_0603_1608Metric"},)),
     "fix_annotation": _sch("fix_annotation", lambda p: ()),
+    "create_sheets": _create_sheets,
+    "add_sheet_symbols": _add_sheet_symbols,
     "place_footprints": _pcb_tool("place_footprints", [{"reference": "R1", "x": 3.0, "y": 4.0}]),
     "move_reference_designators_to_layer": _pcb_tool("move_reference_designators_to_layer", ["R1"], "F.Fab"),
     "align_footprints": _pcb_tool("align_footprints", ["R1", "D1"], "x", "min"),

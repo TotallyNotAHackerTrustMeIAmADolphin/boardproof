@@ -471,6 +471,27 @@ code = '''shutil.copy2(sheet, dest)'''
 note = "Copies each sheet of the tree into a new directory under the system temp directory before kicad_tools writes (build ticket 26); never onto a project file."
 
 [[commit]]
+file = "sheet_authoring.py"
+function = "_copy_project"
+kind = "shutil.copyfile"
+code = '''shutil.copyfile(source, dest)'''
+note = "Issue 75: copies each sheet of the project tree (and the new child sheets) into a new scratch directory under the system temp directory, where kicad-cli runs ERC and the netlist export and the staged insert is verified before anything real is written; the project is only read, never a target."
+
+[[commit]]
+file = "sheet_authoring.py"
+function = "_copy_project"
+kind = "shutil.copyfile"
+code = '''shutil.copyfile(sibling, scratch / sibling.name)'''
+note = "Issue 75: copies the project file and the two library tables into the same scratch directory, so kicad-cli sees the project settings and libraries; the project is only read."
+
+[[commit]]
+file = "sheet_authoring.py"
+function = "_add_sheet_symbols"
+kind = "shutil.copyfile"
+code = '''shutil.copyfile(p['file'], alone)'''
+note = "Issue 75: copies one child sheet, alone, into the scratch directory so kicad-cli's ERC can measure the violations the child already has unattached (the baseline the staged check compares against); the child is only read and the copy is deleted."
+
+[[commit]]
 file = "part_adoption.py"
 function = "_upgraded_footprint"
 kind = "shutil.copyfile"
@@ -757,6 +778,24 @@ proof = [
     "tests/test_schematic_import.py::test_a_wrong_raw_position_in_the_saved_file_is_caught",
 ]
 note = "Checkpoint module; verifies raw (at), sheet paths and every pad net against the kicad-cli netlist."
+
+[writing_tool.create_sheets]
+self_check = "reload-verify"
+note = "Issue 75: sheet_authoring.create_sheets saves each blank sheet through write_layer.save with a verify that reloads the temporary sibling and compares it with the serialised tree (decision 4), and walks the sheet tree afterwards; if the tree is not whole the new files are removed."
+proof = [
+    "tests/test_sheet_authoring.py::test_the_written_sheet_check_fires_on_a_corrupted_write",
+    "tests/test_sheet_authoring.py::test_create_sheets_removes_what_it_wrote_if_the_tree_is_not_whole_afterwards",
+]
+
+[writing_tool.add_sheet_symbols]
+self_check = "reload-verify"
+note = "Issue 75: sheet_authoring.add_sheet_symbols stages the sheet symbol and the child labels on a scratch copy of the project (each file saved through write_layer.save with a reload-and-compare verify), checks the sheet tree, that every sheet pin has a label of the same name and direction, that kicad-cli's ERC shows no new violation beyond one pin_not_connected per pin and one label_dangling per label, and that the netlist export lists the sheet. Only then are the real files saved (children first); a parent save that fails restores the children."
+proof = [
+    "tests/test_sheet_authoring.py::test_a_new_erc_violation_type_fails_the_insert",
+    "tests/test_sheet_authoring.py::test_pins_and_labels_that_disagree_fail_the_insert",
+    "tests/test_sheet_authoring.py::test_a_netlist_that_does_not_see_the_sheet_fails_the_insert",
+    "tests/test_sheet_authoring.py::test_add_sheet_symbols_corrupted_write_fails_the_insert",
+]
 
 [writing_tool.confirm_board_rules]
 self_check = "reload-verify"

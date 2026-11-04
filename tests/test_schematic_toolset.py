@@ -48,6 +48,8 @@ def test_build_registers_expected_tools(sch_tools):
         "add_labels",
         "assign_footprints",
         "fix_annotation",
+        "create_sheets",
+        "add_sheet_symbols",
         "check_connectivity",
     }
 

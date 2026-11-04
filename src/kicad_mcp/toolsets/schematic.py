@@ -1277,6 +1277,68 @@ def build(mcp: MCPServer) -> list[str]:
             **tree.report(),
         }
 
+    def create_sheets(root_sch: str, specs: list[dict]) -> dict:
+        """Create one or more new, empty sub-sheets (.kicad_sch) inside an existing project in one call.
+
+        root_sch: the project's root sheet. Each spec: file (required; a path relative to the root
+        sheet's folder, forward slashes, ending in .kicad_sch, inside the project), title (optional).
+        The new file is a blank sheet in the format KiCad 10 writes (version 20260306), so add_symbols,
+        add_wires and add_labels can work on it. It is unreferenced until add_sheet_symbols points a
+        sheet symbol at it: the result lists it under awaiting_reference. Refuses (ok: false, a code,
+        nothing written) when the sheet tree of the project is incomplete (a missing, unparseable or
+        cyclic sheet: sheet_tree_incomplete), when a file already exists (sheet_exists) or lies
+        outside the project (sheet_outside_project), or on a malformed spec (invalid_spec).
+
+        Refuses with file_open_in_kicad, naming the lock file, while KiCad holds a lock file for a file
+        it would write; close the file in KiCad, then retry.
+        """
+        from kicad_mcp import sheet_authoring
+
+        return sheet_authoring.create_sheets(root_sch, specs)
+
+    def add_sheet_symbols(parent_sch: str, specs: list[dict], root_sch: str | None = None) -> dict:
+        """Insert one or more hierarchical sheet symbols, with their sheet pins, into a parent sheet
+        in one call, and create the matching hierarchical labels in each child sheet.
+
+        parent_sch: the sheet that receives the symbols. root_sch: the project's root sheet (optional
+        when parent_sch is the root or the only .kicad_pro of the folder names it). Each spec: file
+        (the child sheet, already created with create_sheets and not yet referenced; relative to
+        parent_sch's folder), x, y (mm, top-left corner of the symbol; a multiple of 1.27),
+        pins (required, a list), name (the sheet name; default the file's stem), width (default
+        30.48), height (default fits the pins). Each pin: name, direction (input, output,
+        bidirectional or passive), side (left, right, top or bottom; default left for input,
+        bidirectional and passive, right for output), offset (mm along that border from its start,
+        a multiple of 1.27 strictly inside the border; default the next free 2.54 mm step). Every
+        pin gets a hierarchical label of the same name and direction in the child (a label the
+        child already has with the same name and direction is reused; a different direction is
+        refused: label_direction_mismatch). The result lists each pin's position so a wire can
+        be drawn to it.
+
+        Symbols the child already holds are re-attached: the instance data of each (its project
+        and path, written while the sheet stood alone) is rewritten to the project's name and the
+        new sheet use's path (parent path plus the sheet symbol's uuid), keeping reference, unit
+        and value; the result reports symbols_reattached per sheet. A child whose instance data
+        does not match the hierarchy after that is refused (write_not_verified, naming the
+        instance data). Limit: add_symbols on a sheet that is already attached still writes a
+        stale instance path for the new symbols (a known gap, its own ticket); place a sheet's
+        symbols before attaching it.
+
+        Before any file is written the change is built on a scratch copy and checked: the sheet
+        tree must be whole (no missing file, no unreferenced sheet), every pin must have its label
+        with the same direction, kicad-cli's ERC must show no new violation type beyond the
+        unconnected sheet pins (pin_not_connected) and unconnected labels (label_dangling) the new
+        interface has until it is wired, and kicad-cli's netlist export must list the sheet.
+        Otherwise the result is ok: false with code write_not_verified and nothing is changed.
+        Other refusals (ok: false, a code, nothing written): sheet_tree_incomplete,
+        sheet_file_missing, sheet_already_referenced, parent_not_in_tree, invalid_spec.
+
+        Refuses with file_open_in_kicad, naming the lock file, while KiCad holds a lock file for a file
+        it would write; close the file in KiCad, then retry.
+        """
+        from kicad_mcp import sheet_authoring
+
+        return sheet_authoring.add_sheet_symbols(parent_sch, specs, root_sch)
+
     def check_connectivity(sch_path: str) -> dict:
         """Check for unconnected pins and connection issues -- a narrower,
         faster check than full ERC (`sch_run_erc` in the `verification`
@@ -1359,7 +1421,9 @@ def build(mcp: MCPServer) -> list[str]:
         "idempotentHint": True,
         "openWorldHint": False,
     }
-    mutating_tools = [add_symbols, add_wires, add_junctions, add_labels, assign_footprints, fix_annotation]
+    mutating_tools = [
+        add_symbols, add_wires, add_junctions, add_labels, assign_footprints, fix_annotation, create_sheets, add_sheet_symbols
+    ]
     read_only_tools = [check_connectivity]
     for tool_fn in mutating_tools:
         mcp.add_tool(tool_fn, annotations=dict(_MUTATING_LOCAL))
