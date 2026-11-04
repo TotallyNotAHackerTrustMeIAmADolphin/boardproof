@@ -63,9 +63,11 @@ import os
 import shutil
 import subprocess
 import tempfile
+import threading
 import time
 import uuid
-from collections.abc import Callable
+from collections.abc import Callable, Iterable, Iterator
+from contextlib import contextmanager, ExitStack
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
@@ -192,6 +194,8 @@ def as_lock_refusal(exc: BaseException) -> dict[str, Any] | None:
     ``locks``, ``hint``) instead of the text inside ``reason``."""
     if isinstance(exc, WriteLayerError) and exc.code == kicad_lock.CODE:
         return lock_refusal_result(exc)
+    if isinstance(exc, WriteLayerError) and exc.code == "file_busy":
+        return busy_refusal_result(exc)
     return None
 
 
@@ -206,6 +210,87 @@ def lock_refusal_result(exc: WriteLayerError) -> dict[str, Any]:
         "lock_file": exc.details.get("lock_file"),
         "locks": exc.details.get("locks"),
         "hint": exc.details.get("hint"),
+    }
+
+
+# --------------------------------------------------------------------------- one writer per file
+
+# Two tool calls writing one file at once (add_symbols and add_wires in one response) both read
+# the old sheet, and the second replace dropped the first one's change (GitHub issue 87); a
+# writer with a fixed temporary name also failed with WinError 5. The server serialises its own
+# writers per file: one re-entrant lock per normalised absolute path, held across a whole tool
+# call (read, change, save), so the second call reads what the first wrote.
+_PATH_LOCKS: dict[str, threading.RLock] = {}
+_PATH_LOCKS_GUARD = threading.Lock()
+
+
+def _lock_key(path: str | Path) -> str:
+    return os.path.normcase(os.path.abspath(os.fspath(path)))
+
+
+LOCK_TIMEOUT_S = 60.0  # how long a call waits for another call of this server that is writing the same file
+
+
+@contextmanager
+def path_lock(paths: Iterable[str | Path]) -> Iterator[None]:
+    """Hold the in-process write lock of every path in ``paths`` (taken in sorted order, so two
+    calls naming the same files cannot deadlock; re-entrant, so a tool that calls another tool
+    function does not block itself). It guards against another call of this server only: KiCad
+    and other programs are the lock-file guard's business (``check_writable``). A lock that stays
+    held for ``LOCK_TIMEOUT_S`` (a long call such as a Freerouting run holds it) makes this call
+    give up before it starts: ``WriteLayerError("file_busy")`` with ``never_started`` set, the
+    locks already taken released, nothing read or written."""
+    originals = {_lock_key(p): os.fspath(p) for p in paths}
+    with ExitStack() as stack:
+        for key in sorted(originals):
+            with _PATH_LOCKS_GUARD:
+                lock = _PATH_LOCKS.setdefault(key, threading.RLock())
+            if not lock.acquire(timeout=LOCK_TIMEOUT_S):
+                name = Path(originals[key]).name
+                raise WriteLayerError(
+                    "file_busy",
+                    f"another call of this server has been writing {name} for more than {LOCK_TIMEOUT_S:g} s; "
+                    "this call never started and changed nothing. Retry when the other call has finished.",
+                    file=originals[key],
+                    never_started=True,
+                )
+            stack.callback(lock.release)
+        yield
+
+
+def is_sharing_denial(exc: BaseException) -> bool:
+    """True for the Windows sharing denial (WinError 5 or 32) that outlasted the retry budget."""
+    return isinstance(exc, PermissionError) and getattr(exc, "winerror", None) in _SHARING_DENIED
+
+
+def replace_file(temp: str | Path, path: str | Path) -> None:
+    """``os.replace(temp, path)`` with the layer's retry of a transient sharing denial. One that
+    outlasts the budget raises ``WriteLayerError("file_busy")``: ``path`` is untouched."""
+    try:
+        _retry_sharing_denial(lambda: os.replace(temp, path))
+    except PermissionError as exc:
+        if not is_sharing_denial(exc):
+            raise
+        raise WriteLayerError("file_busy", f"{Path(path).name} stayed busy ({exc}); nothing changed", file=str(path)) from exc
+
+
+def busy_refusal_result(exc: BaseException) -> dict[str, Any]:
+    """The ``ok: false`` result for ``file_busy``. A ``WriteLayerError`` (``replace_file``: the
+    one file provably untouched; the lock timeout: the call never started) keeps its own text. A
+    bare sharing-denial ``PermissionError`` that escaped a tool says only what is known: a
+    multi-file tool may have written other files before it."""
+    if isinstance(exc, WriteLayerError):
+        return {"status": "incomplete", "ok": False, "code": "file_busy", "reason": str(exc),
+                "file": exc.details.get("file")}
+    return {
+        "status": "incomplete",
+        "ok": False,
+        "code": "file_busy",
+        "reason": (
+            f"file_busy: another program kept a file open for more than {COMMIT_RETRY_BUDGET_S:g} s, so a replace "
+            f"was refused ({exc}); other files this tool had already written may have changed, so check the files "
+            "before retrying."
+        ),
     }
 
 

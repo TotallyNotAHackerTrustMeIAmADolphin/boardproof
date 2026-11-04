@@ -605,6 +605,13 @@ note = "The write layer's commit (build ticket 42, decision 1): the temporary si
 
 [[commit]]
 file = "write_layer.py"
+function = "replace_file"
+kind = "os.replace"
+code = '''os.replace(temp, path)'''
+note = "GitHub issue 87 (moved here from toolsets/schematic.py _write_schematic_utf8, build ticket 12: the read-back-checked UTF-8 temporary sibling over the caller's .kicad_sch after _verify_schematic_write passed, build ticket 38; reached only from the four mutating schematic tools). The move retries a transient Windows sharing denial through _retry_sharing_denial and a denial that outlasts the budget becomes the file_busy refusal with the file untouched. Folds into _commit with ticket 44."
+
+[[commit]]
+file = "write_layer.py"
 function = "parse_check"
 kind = "shutil.copyfile"
 code = '''shutil.copyfile(written, copy)'''
@@ -624,12 +631,6 @@ kind = "shutil.copyfile"
 code = '''shutil.copyfile(source, copy)'''
 note = "Copies each sub-sheet a schematic loads INTO the parse check's scratch directory, to check it on its own."
 
-[[commit]]
-file = "toolsets/schematic.py"
-function = "_write_schematic_utf8"
-kind = "os.replace"
-code = '''os.replace(tmp, path)'''
-note = "Build ticket 12: puts the read-back-checked UTF-8 temporary sibling over the caller's .kicad_sch, after _verify_schematic_write passed (build ticket 38). Reached only from the four mutating schematic tools; the target is the sch_path they were asked to edit. Moves to the write layer (ticket 44)."
 
 [[commit]]
 file = "toolsets/schematic.py"

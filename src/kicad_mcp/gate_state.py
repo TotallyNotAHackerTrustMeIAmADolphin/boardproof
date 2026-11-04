@@ -347,8 +347,11 @@ def attach_gate_field(fn, annotations: Any, state: GateState):
     The wrapper keeps the original signature, name and docstring (FastMCP builds
     the tool schema from them) and adds nothing to the arguments.
     """
+    import contextlib
     import functools
     import inspect
+
+    from kicad_mcp import write_layer
 
     read_only = bool(
         (annotations.get("readOnlyHint") if isinstance(annotations, dict)
@@ -388,6 +391,13 @@ def attach_gate_field(fn, annotations: Any, state: GateState):
             out["gates"] = state.gate_fields(boards)
         return out
 
+    def _write_serialised(arguments: dict):
+        """The per-file write lock across the whole call of a mutating tool (issue 87)."""
+        if read_only:
+            return contextlib.nullcontext()
+        named = [p for name in _MUTATION_ARGS for p in _str_paths(arguments.get(name))]
+        return write_layer.path_lock(named)
+
     def _mark_mutation(arguments: dict, result: Any) -> None:
         if read_only:
             return
@@ -420,7 +430,16 @@ def attach_gate_field(fn, annotations: Any, state: GateState):
             arguments = _bind(args, kwargs)
             result = None
             try:
-                result = fn(*args, **kwargs)
+                with _write_serialised(arguments):
+                    result = fn(*args, **kwargs)
+            except write_layer.WriteLayerError as exc:
+                if read_only or exc.code != "file_busy" or not exc.details.get("never_started"):
+                    raise
+                result = write_layer.busy_refusal_result(exc)
+            except PermissionError as exc:
+                if read_only or not write_layer.is_sharing_denial(exc):
+                    raise
+                result = write_layer.busy_refusal_result(exc)
             finally:
                 _mark_mutation(arguments, result)
             return _finish(arguments, result)

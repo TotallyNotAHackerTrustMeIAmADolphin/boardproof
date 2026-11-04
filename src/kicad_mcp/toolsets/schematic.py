@@ -660,7 +660,7 @@ def _write_schematic_utf8(
             raise OSError(f"read-back of the written schematic differs from its content; {path.name} left unchanged")
         _verify_schematic_write(path, tmp, set(added_refs))
         write_layer.check_writable(path)  # KiCad may have opened the sheet while the checks ran
-        os.replace(tmp, path)
+        write_layer.replace_file(tmp, path)  # retries a transient sharing denial, then file_busy
     finally:
         tmp.unlink(missing_ok=True)
 
