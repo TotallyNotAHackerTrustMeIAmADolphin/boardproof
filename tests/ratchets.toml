@@ -805,6 +805,55 @@ proof = [
     "tests/test_sheet_authoring.py::test_add_sheet_symbols_corrupted_write_fails_the_insert",
 ]
 
+[writing_tool.delete_symbols]
+self_check = "reload-verify"
+note = "Issue 84: sheet_editing changes a copy of the sheet's tree in memory, checks that every node it did not select is unchanged, compares kicad-cli's netlist of the project before and after on scratch copies (connectivity_changed unless allowed), and only then saves through write_layer.save, whose verify reloads the temporary sibling and compares it with the serialised tree before os.replace."
+proof = [
+    "tests/test_sheet_editing.py::test_delete_symbols_corrupted_write_is_refused",
+]
+
+[writing_tool.delete_wires]
+self_check = "reload-verify"
+note = "Issue 84: sheet_editing changes a copy of the sheet's tree in memory, checks that every node it did not select is unchanged, compares kicad-cli's netlist of the project before and after on scratch copies (connectivity_changed unless allowed), and only then saves through write_layer.save, whose verify reloads the temporary sibling and compares it with the serialised tree before os.replace."
+proof = [
+    "tests/test_sheet_editing.py::test_delete_wires_corrupted_write_is_refused",
+]
+
+[writing_tool.delete_labels]
+self_check = "reload-verify"
+note = "Issue 84: sheet_editing changes a copy of the sheet's tree in memory, checks that every node it did not select is unchanged, compares kicad-cli's netlist of the project before and after on scratch copies (connectivity_changed unless allowed), and only then saves through write_layer.save, whose verify reloads the temporary sibling and compares it with the serialised tree before os.replace."
+proof = [
+    "tests/test_sheet_editing.py::test_delete_labels_corrupted_write_is_refused",
+]
+
+[writing_tool.delete_junctions]
+self_check = "reload-verify"
+note = "Issue 84: sheet_editing changes a copy of the sheet's tree in memory, checks that every node it did not select is unchanged, compares kicad-cli's netlist of the project before and after on scratch copies (connectivity_changed unless allowed), and only then saves through write_layer.save, whose verify reloads the temporary sibling and compares it with the serialised tree before os.replace."
+proof = [
+    "tests/test_sheet_editing.py::test_delete_junctions_corrupted_write_is_refused",
+]
+
+[writing_tool.move_symbols]
+self_check = "reload-verify"
+note = "Issue 84: sheet_editing changes a copy of the sheet's tree in memory, checks that every node it did not select is unchanged, compares kicad-cli's netlist of the project before and after on scratch copies (connectivity_changed unless allowed), and only then saves through write_layer.save, whose verify reloads the temporary sibling and compares it with the serialised tree before os.replace."
+proof = [
+    "tests/test_sheet_editing.py::test_move_symbols_corrupted_write_is_refused",
+]
+
+[writing_tool.move_labels]
+self_check = "reload-verify"
+note = "Issue 84: sheet_editing changes a copy of the sheet's tree in memory, checks that every node it did not select is unchanged, compares kicad-cli's netlist of the project before and after on scratch copies (connectivity_changed unless allowed), and only then saves through write_layer.save, whose verify reloads the temporary sibling and compares it with the serialised tree before os.replace."
+proof = [
+    "tests/test_sheet_editing.py::test_move_labels_corrupted_write_is_refused",
+]
+
+[writing_tool.set_property_positions]
+self_check = "reload-verify"
+note = "Issue 84: sheet_editing changes a copy of the sheet's tree in memory, checks that every node it did not select is unchanged, compares kicad-cli's netlist of the project before and after on scratch copies (connectivity_changed unless allowed), and only then saves through write_layer.save, whose verify reloads the temporary sibling and compares it with the serialised tree before os.replace."
+proof = [
+    "tests/test_sheet_editing.py::test_set_property_positions_corrupted_write_is_refused",
+]
+
 [writing_tool.confirm_board_rules]
 self_check = "reload-verify"
 proof = [

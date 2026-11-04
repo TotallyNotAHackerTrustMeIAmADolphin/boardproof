@@ -111,6 +111,16 @@ _CLAIM_WORD_ALLOWED = {
         "the name of an error code on a refusal, not a claim",
     ("add_sheet_symbols", "ok: false with code write_not_verified and nothing is changed"):
         "the name of an error code on a refusal, not a claim",
+    ("delete_symbols", "(write_not_verified, the sheet unchanged)"):
+        "the name of an error code on a refusal, not a claim",
+    ("delete_wires", "(write_not_verified, the sheet unchanged)"):
+        "the name of an error code on a refusal, not a claim",
+    ("delete_labels", "(write_not_verified, the sheet unchanged)"):
+        "the name of an error code on a refusal, not a claim",
+    ("delete_junctions", "(write_not_verified, the sheet unchanged)"):
+        "the name of an error code on a refusal, not a claim",
+    ("move_symbols", "(write_not_verified, the sheet unchanged)"):
+        "the name of an error code on a refusal, not a claim",
 }
 
 

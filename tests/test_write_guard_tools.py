@@ -274,6 +274,18 @@ def _add_sheet_symbols(tmp_path):
     return Scenario(project["sch"], lambda: tools["add_sheet_symbols"](str(project["sch"]), [spec]))
 
 
+def _editing(tool: str, args: Callable[[Path], tuple]) -> Callable[[Path], Scenario]:
+    """An editing tool (issue 84) on the one-resistor sheet, with R1, a junction, a free wire and a label to work on."""
+    def make(tmp_path):
+        project = _schematic_project(tmp_path)
+        tools = _tools(schematic_toolset)
+        assert tools["add_junctions"](str(project["sch"]), [[120.65, 80.01]])["status"] == "ok"
+        assert tools["add_wires"](str(project["sch"]), [{"p1": [20.32, 20.32], "p2": [30.48, 20.32], "route": "direct"}])["status"] == "ok"
+        assert tools["add_labels"](str(project["sch"]), [{"kind": "label", "x": 25.4, "y": 20.32, "text": "LBL"}])["status"] == "ok"
+        return Scenario(project["sch"], lambda: tools[tool](str(project["sch"]), *args(project["sch"])))
+    return make
+
+
 def _pcb_tool(tool: str, *args: Any) -> Callable[[Path], Scenario]:
     def make(tmp_path):
         pcb = _led(tmp_path)
@@ -313,6 +325,13 @@ SCENARIOS: dict[str, Callable[[Path], Scenario]] = {
     "fix_annotation": _sch("fix_annotation", lambda p: ()),
     "create_sheets": _create_sheets,
     "add_sheet_symbols": _add_sheet_symbols,
+    "delete_symbols": _editing("delete_symbols", lambda p: ([{"references": ["R1"]}],)),
+    "delete_wires": _editing("delete_wires", lambda p: ([{"region": [0, 0, 300, 300]}],)),
+    "delete_labels": _editing("delete_labels", lambda p: ([{"pattern": "*"}],)),
+    "delete_junctions": _editing("delete_junctions", lambda p: ([{"region": [0, 0, 300, 300]}],)),
+    "move_symbols": _editing("move_symbols", lambda p: ([{"references": ["R1"], "offset": [5.08, 0]}],)),
+    "move_labels": _editing("move_labels", lambda p: ([{"pattern": "*", "offset": [5.08, 0]}],)),
+    "set_property_positions": _editing("set_property_positions", lambda p: ([{"references": ["R1"], "properties": {"Value": {"offset": [3.81, 0]}}}],)),
     "place_footprints": _pcb_tool("place_footprints", [{"reference": "R1", "x": 3.0, "y": 4.0}]),
     "move_reference_designators_to_layer": _pcb_tool("move_reference_designators_to_layer", ["R1"], "F.Fab"),
     "align_footprints": _pcb_tool("align_footprints", ["R1", "D1"], "x", "min"),

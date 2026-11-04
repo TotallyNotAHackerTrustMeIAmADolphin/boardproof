@@ -50,6 +50,13 @@ def test_build_registers_expected_tools(sch_tools):
         "fix_annotation",
         "create_sheets",
         "add_sheet_symbols",
+        "delete_symbols",
+        "delete_wires",
+        "delete_labels",
+        "delete_junctions",
+        "move_symbols",
+        "move_labels",
+        "set_property_positions",
         "check_connectivity",
     }
 

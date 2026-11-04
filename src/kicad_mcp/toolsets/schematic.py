@@ -1371,6 +1371,278 @@ def build(mcp: MCPServer) -> list[str]:
 
         return sheet_authoring.add_sheet_symbols(parent_sch, specs, root_sch)
 
+    def delete_symbols(
+        sch_path: str, selectors: list[dict], allow_connectivity_change: bool = False,
+        remove_dangling: bool = False, dry_run: bool = False, root_sch: str | None = None,
+    ) -> dict:
+        """Delete placed symbols (parts and power symbols) from a sheet in one call.
+
+        Selectors (`selectors`, a list of objects; the keys of one object must all match, the objects are
+        joined): references (symbol references; every unit), uuids, pattern (shell pattern on the reference, case sensitive), region [x1, y1, x2, y2] (the symbol's origin inside it, mm), lib_id. A selector that selects nothing, or a listed reference or uuid that does not exist on
+        the sheet, refuses the whole call (selector_matched_nothing, not_found; nothing written).
+
+        Connectivity: before anything is written, kicad-cli's netlist of the project is read from a scratch
+        copy before and after the change and compared net by net. A split net, two nets merged, a pin left
+        with nothing else on its net, a renamed net or a vanished named net refuses the call with
+        connectivity_changed (nothing written; the changes are listed under connectivity). Pass
+        allow_connectivity_change true when that is meant; the result then lists the changes. The pins of
+        deleted symbols are not counted, only what their going does to the rest. dry_run true computes and
+        returns everything and writes nothing.
+
+        Dangling items: the result lists under dangling_after the wires with an end that touches
+        nothing, the junctions where fewer than three wire ends or pins meet, and the labels that
+        touch no wire and no pin, as far as this delete made them so (dangling_before_untouched counts
+        those that were already there). Default is report only; remove_dangling true also removes the
+        dangling wires and junctions this delete made (repeatedly, until none is left; listed under
+        dangling_removed), never labels. The removals are part of the connectivity comparison.
+
+        Refuses a failed self-check (write_not_verified, the sheet unchanged) and a project whose sheet
+        tree cannot be read (sheet_tree_incomplete). root_sch names the project's root sheet when sch_path
+        is a sub-sheet and its folder holds several projects; a sheet no sheet symbol uses yet is checked
+        alone. Instance data of the symbols is never touched.
+
+        Refuses with file_open_in_kicad, naming the lock file, while KiCad holds a lock file for a file
+        it would write; close the file in KiCad, then retry.
+
+        Returns deleted (reference, uuid, lib_id, at), count, dangling_after, dangling_removed, connectivity (nets_before,
+        nets_after, changed, changes) and written.
+        """
+        from kicad_mcp import sheet_editing
+
+        return sheet_editing.delete("symbol", sch_path, selectors, root_sch, remove_dangling=remove_dangling,
+                                    allow_connectivity_change=allow_connectivity_change, dry_run=dry_run)
+
+    def delete_wires(
+        sch_path: str, selectors: list[dict], allow_connectivity_change: bool = False,
+        remove_dangling: bool = False, dry_run: bool = False, root_sch: str | None = None,
+    ) -> dict:
+        """Delete wire segments from a sheet in one call.
+
+        Selectors (`selectors`, a list of objects; the keys of one object must all match, the objects are
+        joined): uuids, region [x1, y1, x2, y2] (both ends inside it), net (every wire joined, wire to wire on this sheet, to a label with that text). A selector that selects nothing, or a listed uuid or net that does not exist on
+        the sheet, refuses the whole call (selector_matched_nothing, not_found; nothing written).
+
+        Connectivity: before anything is written, kicad-cli's netlist of the project is read from a scratch
+        copy before and after the change and compared net by net. A split net, two nets merged, a pin left
+        with nothing else on its net, a renamed net or a vanished named net refuses the call with
+        connectivity_changed (nothing written; the changes are listed under connectivity). Pass
+        allow_connectivity_change true when that is meant; the result then lists the changes. The pins of
+        deleted symbols are not counted, only what their going does to the rest. dry_run true computes and
+        returns everything and writes nothing.
+
+        Dangling items: the result lists under dangling_after the wires with an end that touches
+        nothing, the junctions where fewer than three wire ends or pins meet, and the labels that
+        touch no wire and no pin, as far as this delete made them so (dangling_before_untouched counts
+        those that were already there). Default is report only; remove_dangling true also removes the
+        dangling wires and junctions this delete made (repeatedly, until none is left; listed under
+        dangling_removed), never labels. The removals are part of the connectivity comparison.
+
+        Refuses a failed self-check (write_not_verified, the sheet unchanged) and a project whose sheet
+        tree cannot be read (sheet_tree_incomplete). root_sch names the project's root sheet when sch_path
+        is a sub-sheet and its folder holds several projects; a sheet no sheet symbol uses yet is checked
+        alone. Instance data of the symbols is never touched.
+
+        Refuses with file_open_in_kicad, naming the lock file, while KiCad holds a lock file for a file
+        it would write; close the file in KiCad, then retry.
+
+        Returns deleted (uuid, points), count, dangling_after, dangling_removed, connectivity (nets_before,
+        nets_after, changed, changes) and written.
+        """
+        from kicad_mcp import sheet_editing
+
+        return sheet_editing.delete("wire", sch_path, selectors, root_sch, remove_dangling=remove_dangling,
+                                    allow_connectivity_change=allow_connectivity_change, dry_run=dry_run)
+
+    def delete_labels(
+        sch_path: str, selectors: list[dict], allow_connectivity_change: bool = False,
+        remove_dangling: bool = False, dry_run: bool = False, root_sch: str | None = None,
+    ) -> dict:
+        """Delete net labels, global labels and hierarchical labels from a sheet in one call.
+
+        Selectors (`selectors`, a list of objects; the keys of one object must all match, the objects are
+        joined): texts (exact label texts), uuids, pattern (shell pattern on the text), region [x1, y1, x2, y2], kind (label, global or hier). A selector that selects nothing, or a listed text or uuid that does not exist on
+        the sheet, refuses the whole call (selector_matched_nothing, not_found; nothing written).
+
+        Connectivity: before anything is written, kicad-cli's netlist of the project is read from a scratch
+        copy before and after the change and compared net by net. A split net, two nets merged, a pin left
+        with nothing else on its net, a renamed net or a vanished named net refuses the call with
+        connectivity_changed (nothing written; the changes are listed under connectivity). Pass
+        allow_connectivity_change true when that is meant; the result then lists the changes. The pins of
+        deleted symbols are not counted, only what their going does to the rest. dry_run true computes and
+        returns everything and writes nothing.
+
+        Dangling items: the result lists under dangling_after the wires with an end that touches
+        nothing, the junctions where fewer than three wire ends or pins meet, and the labels that
+        touch no wire and no pin, as far as this delete made them so (dangling_before_untouched counts
+        those that were already there). Default is report only; remove_dangling true also removes the
+        dangling wires and junctions this delete made (repeatedly, until none is left; listed under
+        dangling_removed), never labels. The removals are part of the connectivity comparison.
+
+        Refuses a failed self-check (write_not_verified, the sheet unchanged) and a project whose sheet
+        tree cannot be read (sheet_tree_incomplete). root_sch names the project's root sheet when sch_path
+        is a sub-sheet and its folder holds several projects; a sheet no sheet symbol uses yet is checked
+        alone. Instance data of the symbols is never touched.
+
+        Refuses with file_open_in_kicad, naming the lock file, while KiCad holds a lock file for a file
+        it would write; close the file in KiCad, then retry.
+
+        Returns deleted (text, kind, uuid, at), count, dangling_after, dangling_removed, connectivity (nets_before,
+        nets_after, changed, changes) and written.
+        """
+        from kicad_mcp import sheet_editing
+
+        return sheet_editing.delete("label", sch_path, selectors, root_sch, remove_dangling=remove_dangling,
+                                    allow_connectivity_change=allow_connectivity_change, dry_run=dry_run)
+
+    def delete_junctions(
+        sch_path: str, selectors: list[dict], allow_connectivity_change: bool = False,
+        remove_dangling: bool = False, dry_run: bool = False, root_sch: str | None = None,
+    ) -> dict:
+        """Delete junction dots from a sheet in one call.
+
+        Selectors (`selectors`, a list of objects; the keys of one object must all match, the objects are
+        joined): uuids, region [x1, y1, x2, y2], points ([[x, y], ...] exact positions), net (junctions on the wires of that net). A selector that selects nothing, or a listed uuid or point that does not exist on
+        the sheet, refuses the whole call (selector_matched_nothing, not_found; nothing written).
+
+        Connectivity: before anything is written, kicad-cli's netlist of the project is read from a scratch
+        copy before and after the change and compared net by net. A split net, two nets merged, a pin left
+        with nothing else on its net, a renamed net or a vanished named net refuses the call with
+        connectivity_changed (nothing written; the changes are listed under connectivity). Pass
+        allow_connectivity_change true when that is meant; the result then lists the changes. The pins of
+        deleted symbols are not counted, only what their going does to the rest. dry_run true computes and
+        returns everything and writes nothing.
+
+        Dangling items: the result lists under dangling_after the wires with an end that touches
+        nothing, the junctions where fewer than three wire ends or pins meet, and the labels that
+        touch no wire and no pin, as far as this delete made them so (dangling_before_untouched counts
+        those that were already there). Default is report only; remove_dangling true also removes the
+        dangling wires and junctions this delete made (repeatedly, until none is left; listed under
+        dangling_removed), never labels. The removals are part of the connectivity comparison.
+
+        Refuses a failed self-check (write_not_verified, the sheet unchanged) and a project whose sheet
+        tree cannot be read (sheet_tree_incomplete). root_sch names the project's root sheet when sch_path
+        is a sub-sheet and its folder holds several projects; a sheet no sheet symbol uses yet is checked
+        alone. Instance data of the symbols is never touched.
+
+        Refuses with file_open_in_kicad, naming the lock file, while KiCad holds a lock file for a file
+        it would write; close the file in KiCad, then retry.
+
+        Returns deleted (uuid, at), count, dangling_after, dangling_removed, connectivity (nets_before,
+        nets_after, changed, changes) and written.
+        """
+        from kicad_mcp import sheet_editing
+
+        return sheet_editing.delete("junction", sch_path, selectors, root_sch, remove_dangling=remove_dangling,
+                                    allow_connectivity_change=allow_connectivity_change, dry_run=dry_run)
+
+    def move_symbols(
+        sch_path: str, moves: list[dict], move_wires: bool = True, snap: bool = True, grid: float = 1.27,
+        allow_connectivity_change: bool = False, dry_run: bool = False, root_sch: str | None = None,
+    ) -> dict:
+        """Move placed symbols on a sheet in one call, absolute or relative.
+
+        moves: a list of objects; each holds selector keys (all must match) and exactly one of `to`
+        [x, y] (absolute position of the symbol's origin, mm; the selector must pick exactly one symbol
+        node) or `offset` [dx, dy] (relative, mm, any number of symbols). Selector keys: references, uuids,
+        pattern (shell pattern on the reference), region [x1, y1, x2, y2] (the symbol's origin inside it),
+        lib_id. A reference the sheet does not have, or a selector that selects nothing, refuses the call
+        (not_found, selector_matched_nothing). A symbol may be picked by one move only.
+
+        move_wires (default true): the wire ends, junctions, labels and no-connect markers that sit
+        exactly on a moved symbol's pin move with it by the same offset, so the wiring follows. A wire
+        whose other end stays becomes slanted when the move is not along it: the result lists those
+        wires under slanted, and every dragged item with its old and new position under followed. With
+        move_wires false nothing attached moves (and the connectivity comparison below will usually
+        refuse the call).
+
+        snap (default true) and grid (default 1.27 mm): the new position of each symbol's origin is
+        rounded to the grid; moved lists what was asked and what it became (snapped), and snapped lists
+        the uuids that changed by it. The symbol's property texts move by the same offset; instance data
+        (references and unit paths, on the root sheet or on a sheet a parent sheet uses) is not touched.
+
+        Returns moved: per symbol, reference, uuid, from, to, asked, snapped and pins (number, name, x, y:
+        the pin positions on the sheet after the move, read from the raw symbol and library geometry, so a
+        wire can be drawn to them), followed, slanted, connectivity and written.
+
+        Connectivity: before anything is written, kicad-cli's netlist of the project is read from a
+        scratch copy before and after the change and compared net by net. A split net, two nets merged, a
+        pin left alone on its net, a renamed net or a vanished named net refuses the call with
+        connectivity_changed (nothing written; the changes are listed under connectivity). Pass
+        allow_connectivity_change true when that is meant. dry_run true computes and returns everything and
+        writes nothing.
+
+        Refuses a failed self-check (write_not_verified, the sheet unchanged), two moved items at one wire
+        end that move differently (ambiguous_drag) and a project with a missing, unparseable or cyclic
+        sheet (sheet_tree_incomplete). root_sch names the project's root sheet when sch_path is a sub-sheet and
+        its folder holds several projects.
+
+        Refuses with file_open_in_kicad, naming the lock file, while KiCad holds a lock file for a file
+        it would write; close the file in KiCad, then retry.
+        """
+        from kicad_mcp import sheet_editing
+
+        return sheet_editing.move("symbol", sch_path, moves, root_sch, move_wires=move_wires, snap=snap, grid=grid,
+                                  allow_connectivity_change=allow_connectivity_change, dry_run=dry_run)
+
+    def move_labels(
+        sch_path: str, moves: list[dict], move_wires: bool = True, snap: bool = True, grid: float = 1.27,
+        allow_connectivity_change: bool = False, dry_run: bool = False, root_sch: str | None = None,
+    ) -> dict:
+        """Move net labels, global labels and hierarchical labels on a sheet in one call, absolute or relative.
+
+        moves: a list of objects; each holds selector keys (all must match) and one of `to` [x, y]
+        (absolute, mm; the selector must pick exactly one label) or `offset` [dx, dy] (relative, mm), and
+        optionally `angle` (0, 90, 180 or 270, the label's text direction). Selector keys: texts (exact
+        label texts), uuids, pattern (shell pattern on the text), region [x1, y1, x2, y2], kind (label,
+        global or hier). A label may be picked by one move only.
+
+        move_wires (default true): wire ends, junctions and no-connect markers that sit exactly on the
+        label's old position move with it, as for move_symbols (followed and slanted in the result). snap
+        (default true) and grid (default 1.27 mm) round the new position; moved lists what was asked and
+        what it became.
+
+        A label moved off its wire changes the net's name: the connectivity comparison (netlist before and
+        after on a scratch copy, as in move_symbols) refuses that with connectivity_changed unless
+        allow_connectivity_change is true. dry_run true computes and returns everything and writes nothing.
+        Returns moved (text, uuid, from, to, asked, snapped), followed, slanted, connectivity and written.
+
+        Refuses with file_open_in_kicad, naming the lock file, while KiCad holds a lock file for a file
+        it would write; close the file in KiCad, then retry.
+        """
+        from kicad_mcp import sheet_editing
+
+        return sheet_editing.move("label", sch_path, moves, root_sch, move_wires=move_wires, snap=snap, grid=grid,
+                                  allow_connectivity_change=allow_connectivity_change, dry_run=dry_run)
+
+    def set_property_positions(
+        sch_path: str, items: list[dict], dry_run: bool = False, root_sch: str | None = None,
+    ) -> dict:
+        """Set the position, angle and justification of the property texts (Reference, Value, Footprint,
+        Datasheet, any other field) of placed symbols in one call, for example to move texts off bodies
+        and pins.
+
+        items: a list of objects; each holds symbol selector keys (references, uuids, pattern, region
+        [x1, y1, x2, y2], lib_id; all must match) and `properties`: {property name: change}. A change is an
+        object with `offset` [dx, dy] (mm from the symbol's origin; works for any number of symbols, so one
+        item can place the Reference of every R*) or `at` [x, y] (absolute, exactly one symbol), and
+        optionally `angle` (0, 90, 180 or 270, as KiCad stores it for the text) and `justify` (words from
+        left, right, top, bottom, mirror, for example "left bottom"; "" removes it). A property the symbol
+        does not have is refused (property_not_found).
+
+        Returns updated: per symbol and property, the text's at, angle and justify, the symbol's at and its
+        pins (number, name, x, y), so the texts can be put clear of them. The flag fields_autoplaced is
+        removed from each edited symbol, because its texts are no longer where KiCad's auto-placement put
+        them. No net can change, so no netlist comparison is made; the staged check (nothing but the
+        selected symbols differs) and the reload check of the write apply. dry_run true returns what would
+        be set and writes nothing.
+
+        Refuses with file_open_in_kicad, naming the lock file, while KiCad holds a lock file for a file
+        it would write; close the file in KiCad, then retry.
+        """
+        from kicad_mcp import sheet_editing
+
+        return sheet_editing.set_property_positions(sch_path, items, root_sch, dry_run=dry_run)
+
     def check_connectivity(sch_path: str) -> dict:
         """Check for unconnected pins and connection issues -- a narrower,
         faster check than full ERC (`sch_run_erc` in the `verification`
@@ -1454,7 +1726,8 @@ def build(mcp: MCPServer) -> list[str]:
         "openWorldHint": False,
     }
     mutating_tools = [
-        add_symbols, add_wires, add_junctions, add_labels, assign_footprints, fix_annotation, create_sheets, add_sheet_symbols
+        add_symbols, add_wires, add_junctions, add_labels, assign_footprints, fix_annotation, create_sheets, add_sheet_symbols,
+        delete_symbols, delete_wires, delete_labels, delete_junctions, move_symbols, move_labels, set_property_positions,
     ]
     read_only_tools = [check_connectivity]
     for tool_fn in mutating_tools:
