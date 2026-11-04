@@ -1643,6 +1643,32 @@ def build(mcp: MCPServer) -> list[str]:
 
         return sheet_editing.set_property_positions(sch_path, items, root_sch, dry_run=dry_run)
 
+    def get_symbol_pins(sch_path: str, references: list[str] | None = None, uuids: list[str] | None = None) -> dict:
+        """Read the pins of placed symbols: absolute sheet coordinates, name and electrical type, for
+        wiring by pin instead of by hand-computed offsets. Read-only; writes nothing.
+
+        references: a list of reference strings (shell patterns allowed, "*" for every placed symbol on
+        this sheet; child sheets are not followed). uuids: a list of symbol uuids, which picks exactly
+        one placed symbol even when several share a reference such as "R?". Give at least one of the two;
+        the selectors are ORed. A reference, pattern or uuid that matches nothing refuses the whole call
+        (not_found, listed).
+
+        Returns symbols, one entry per placed symbol (a multi-unit part such as an op-amp gives one entry
+        per unit placed, each with its `unit`): reference (the sheet's own Reference property; on a sheet
+        used more than once it is not the per-use reference), uuid, lib_id, unit, at [x, y], rotation, mirror
+        and pins, a list of {number, name, type, x, y}. x and y are where a wire end or label must sit to
+        connect to that pin (mm, sheet coordinates, Y down), computed from the raw (at ...) of the symbol
+        and of the pin in the library symbol embedded in the sheet, with the symbol's rotation and
+        mirror applied (rotate, then mirror); the maths is covered by tests against kicad-cli's netlist. type is
+        the pin's electrical type from the library (passive, input, output, power_in, ...). A symbol whose
+        library symbol is missing from the sheet comes back with no pins and a warning. A pin sits on its
+        listed point whether or not that point is on the 1.27 mm grid: pass snap false to add_wires and
+        add_labels when using it.
+        """
+        from kicad_mcp import sheet_editing
+
+        return sheet_editing.get_symbol_pins(sch_path, references, uuids)
+
     def check_connectivity(sch_path: str) -> dict:
         """Check for unconnected pins and connection issues -- a narrower,
         faster check than full ERC (`sch_run_erc` in the `verification`
@@ -1729,7 +1755,7 @@ def build(mcp: MCPServer) -> list[str]:
         add_symbols, add_wires, add_junctions, add_labels, assign_footprints, fix_annotation, create_sheets, add_sheet_symbols,
         delete_symbols, delete_wires, delete_labels, delete_junctions, move_symbols, move_labels, set_property_positions,
     ]
-    read_only_tools = [check_connectivity]
+    read_only_tools = [get_symbol_pins, check_connectivity]
     for tool_fn in mutating_tools:
         mcp.add_tool(tool_fn, annotations=dict(_MUTATING_LOCAL))
     for tool_fn in read_only_tools:

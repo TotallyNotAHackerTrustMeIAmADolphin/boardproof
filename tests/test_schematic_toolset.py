@@ -57,6 +57,7 @@ def test_build_registers_expected_tools(sch_tools):
         "move_symbols",
         "move_labels",
         "set_property_positions",
+        "get_symbol_pins",
         "check_connectivity",
     }
 

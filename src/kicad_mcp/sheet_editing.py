@@ -158,10 +158,11 @@ def place(px: float, py: float, rotation: float, mirror: str) -> tuple[float, fl
     return x, -y
 
 
-def pin_positions(root: SExp, symbol: SExp) -> list[dict[str, Any]]:
+def pin_positions(root: SExp, symbol: SExp, *, with_type: bool = False) -> list[dict[str, Any]]:
     """Where the pins of one placed ``symbol`` (a unit of it) sit on the sheet, from the raw
     ``(at ...)`` of the symbol and of the pins in the embedded library symbol. Each entry:
-    ``number``, ``name``, ``x``, ``y``. An unreadable library symbol gives an empty list."""
+    ``number``, ``name``, ``x``, ``y`` (and ``type``, the electrical type word of the pin, when
+    ``with_type``). An unreadable library symbol gives an empty list."""
     lib = _lib_symbol(root, symbol)
     if lib is None:
         return []
@@ -184,9 +185,54 @@ def pin_positions(root: SExp, symbol: SExp) -> list[dict[str, Any]]:
             dx, dy = place(at[0].get_float(0), at[0].get_float(1), rot, mirror)
             name = pin.find_children("name")
             number = pin.find_children("number")
-            out.append({"number": number[0].get_string(0) if number else "", "name": name[0].get_string(0) if name else "",
-                        "x": _r(sx + dx), "y": _r(sy + dy)})
+            entry = {"number": number[0].get_string(0) if number else "", "name": name[0].get_string(0) if name else "",
+                     "x": _r(sx + dx), "y": _r(sy + dy)}
+            if with_type:
+                entry["type"] = str(pin.children[0].value) if pin.children and pin.children[0].is_atom else ""
+            out.append(entry)
     return out
+
+
+def get_symbol_pins(path: str, references: Any = None, uuids: Any = None) -> dict[str, Any]:
+    """Read-only (issue 92): the pins of every placed symbol whose Reference property matches one
+    of ``references`` (shell patterns allowed, ``"*"`` for all on this sheet) or whose uuid is in
+    ``uuids`` (selectors are ORed; at least one must be non-empty), one entry per placed symbol,
+    so a multi-unit part gives one entry per unit placed. Positions are the ``pin_positions``
+    maths on the raw ``(at ...)`` nodes; nothing is written and no lock is taken."""
+    try:
+        file = Path(path)
+        if not file.is_file():
+            raise SheetAuthoringError("file_not_found", f"sheet not found: {file}")
+        references = [] if references is None else references
+        uuids = [] if uuids is None else uuids
+        for name, value in (("references", references), ("uuids", uuids)):
+            if not isinstance(value, list) or not all(isinstance(r, str) and r for r in value):
+                raise SheetAuthoringError("invalid_spec", f"{name} must be a list of non-empty strings")
+        if not references and not uuids:
+            raise SheetAuthoringError("invalid_spec", "give references (shell patterns allowed) or uuids, at least one non-empty")
+        root = write_layer.load(file)
+        if root.name != "kicad_sch":
+            raise SheetAuthoringError("invalid_spec", f"{file.name} is not a schematic sheet")
+        placed = [s for s in _kids(root, "symbol") if s.find_children("lib_id")]
+        missing = [r for r in references if not any(fnmatch.fnmatchcase(_ref(s), r) for s in placed)]
+        missing += [u for u in uuids if not any(_uuid(s) == u for s in placed)]
+        if missing:
+            raise SheetAuthoringError("not_found", f"no placed symbol on this sheet matches: {', '.join(map(repr, missing))}", not_found=missing)
+        out = []
+        for symbol in placed:
+            if not (_uuid(symbol) in uuids or any(fnmatch.fnmatchcase(_ref(symbol), r) for r in references)):
+                continue
+            x, y, rot = _at(symbol)
+            unit = (symbol.find_children("unit")[0].get_int(0) if symbol.find_children("unit") else 1) or 1
+            lib_id = symbol.find_children("lib_id")[0].get_string(0)
+            pins = pin_positions(root, symbol, with_type=True)
+            out.append({"reference": _ref(symbol), "uuid": _uuid(symbol), "lib_id": lib_id, "unit": unit,
+                        "at": _round_pt(x, y), "rotation": rot, "mirror": _mirror(symbol), "pins": pins,
+                        "pin_count": len(pins), **({} if pins else {"warning": "the sheet holds no library symbol with pins for this lib_id"})})
+        out.sort(key=lambda e: (e["reference"], e["unit"], e["uuid"]))
+        return {"status": "ok", "ok": True, "count": len(out), "symbols": out}
+    except SheetAuthoringError as exc:
+        return sheet_authoring.refusal(exc)
 
 
 # --------------------------------------------------------------------------- the sheet's items

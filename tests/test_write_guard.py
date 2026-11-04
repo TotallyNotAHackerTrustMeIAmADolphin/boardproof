@@ -374,7 +374,7 @@ NOT_WRITING_TOOLS = {
     "fetch_datasheet": "writes a PDF", "inspect_datasheet": "reads a PDF, writes PNG crops",
     "list_package_types": "read-only", "render_board_diagnostic": "writes an image from a kicad-cli export",
     "render_schematic_diagnostic": "writes an image", "check_project_portability": "read-only",
-    "validate_klc": "read-only", "propose_adopt_parts": "dry run on scratch copies", "check_connectivity": "read-only",
+    "validate_klc": "read-only", "propose_adopt_parts": "dry run on scratch copies", "check_connectivity": "read-only", "get_symbol_pins": "read-only",
     "propose_autoplacement": "dry run", "propose_placement_optimization": "trial copies in scratch",
     "propose_remove_graphic_items": "dry run", "export_manufacturing_package": "writes fab outputs, no design file",
     "diagnose_placement_congestion": "read-only", "get_unrouted_nets": "read-only",

@@ -534,3 +534,123 @@ def test_positions_change_but_instance_data_is_untouched_on_an_attached_sheet(tm
     assert sheet_tree.netlist_disagreement(tree, [c["ref"] for c in comps]) == []
     # and the same call without root_sch finds the project from the folder
     assert tools["delete_labels"](str(child), [{"texts": ["X"]}])["code"] == "not_found"
+
+
+# --------------------------------------------------------------------------- get_symbol_pins (issue 92)
+
+
+def _mirror_symbols(sch: Path, mirrors: dict[str, str]) -> None:
+    """Give the placed symbols named in ``mirrors`` (reference -> x or y) a (mirror ..) node, through the write layer."""
+    root = write_layer.load(sch)
+    for node in [c for c in root.children if not c.is_atom and c.name == "symbol" and c.find_children("lib_id")]:
+        mirror = mirrors.get(sheet_editing._ref(node))
+        if mirror:
+            at = node.find_children("at")[0]
+            node.children.insert(node.children.index(at) + 1, write_layer.SExp.list("mirror", write_layer.symbol(mirror)))
+    write_layer.save(root, sch)
+
+
+def test_get_symbol_pins_positions_agree_with_the_netlist_for_rotations_mirrors_units_and_extends(tmp_path, tools):
+    """A label on each reported pin point puts that very pin on the label's net in kicad-cli's netlist.
+    Covers Device:R in four rotations, mirrored R, a three-unit LM324 (units 1, 2 and the power unit 5),
+    a BC547, a connector and Device:Filter_EMI_C (a symbol that extends another)."""
+    made = project_toolset._project_create(str(tmp_path / "gsp"), "gsp")
+    sch = Path(made["schematic_path"])
+    specs = [{"lib_id": "Device:R", "x": 25.4 + 20.32 * i, "y": 25.4, "ref": f"R{i + 1}", "value": "1k", "rotation": rot}
+             for i, rot in enumerate((0, 90, 180, 270))]
+    specs += [{"lib_id": "Device:R", "x": 25.4 + 20.32 * i, "y": 50.8, "ref": f"R{i + 5}", "value": "1k", "rotation": rot}
+              for i, rot in enumerate((0, 90, 180, 270))]
+    specs += [{"lib_id": "Amplifier_Operational:LM324", "x": 30.48 + 40.64 * (u - 1), "y": 101.6, "ref": "U1", "value": "LM324", "unit": u}
+              for u in (1, 2, 5)]
+    specs += [{"lib_id": "Transistor_BJT:BC547", "x": 30.48, "y": 152.4, "ref": "Q1", "value": "BC547", "rotation": 90},
+              {"lib_id": "Connector_Generic:Conn_01x04", "x": 76.2, "y": 152.4, "ref": "J1", "value": "Conn", "rotation": 180},
+              {"lib_id": "Device:Filter_EMI_C", "x": 121.92, "y": 152.4, "ref": "FL1", "value": "EMI", "rotation": 270}]
+    assert tools["add_symbols"](str(sch), specs)["status"] == "ok"
+    _mirror_symbols(sch, {"R5": "x", "R6": "y", "R7": "x", "R8": "y", "Q1": "y", "FL1": "x"})
+
+    got = tools["get_symbol_pins"](str(sch), ["*"])
+    assert got["status"] == "ok" and got["ok"] is True, got
+    by_ref = {}
+    for entry in got["symbols"]:
+        by_ref.setdefault(entry["reference"], []).append(entry)
+    assert sorted(by_ref) == sorted({s["ref"] for s in specs})
+    assert sorted(e["unit"] for e in by_ref["U1"]) == [1, 2, 5]
+    labels, expected = [], {}
+    for entry in got["symbols"]:
+        for pin in entry["pins"]:
+            text = f"{entry['reference']}_u{entry['unit']}_{pin['number']}"
+            labels.append({"kind": "label", "x": pin["x"], "y": pin["y"], "text": text, "snap": False})
+            expected[text] = (entry["reference"], pin["number"])
+    assert len(labels) >= 8 * 2 + 3 + 3 + 3 + 4 + 2
+    assert tools["add_labels"](str(sch), labels)["status"] == "ok"
+    nets = _nets(sch)
+    for text, node in expected.items():
+        assert node in nets.get("/" + text, frozenset()), f"{text}: {sorted(n for n in nets if text in n)}"
+
+
+def test_get_symbol_pins_reports_name_type_and_the_raw_library_facts(tmp_path, tools):
+    made = project_toolset._project_create(str(tmp_path / "gsp2"), "gsp2")
+    sch = Path(made["schematic_path"])
+    assert tools["add_symbols"](str(sch), [
+        {"lib_id": "Device:R", "x": 50.8, "y": 50.8, "ref": "R1", "value": "1k"},
+        {"lib_id": "Amplifier_Operational:LM324", "x": 101.6, "y": 50.8, "ref": "U1", "value": "LM324", "unit": 5},
+        {"lib_id": "Transistor_BJT:BC547", "x": 152.4, "y": 50.8, "ref": "Q1", "value": "BC547"},
+    ])["status"] == "ok"
+    got = tools["get_symbol_pins"](str(sch), ["R1", "U*", "Q1"])
+    pins = {e["reference"]: {p["number"]: p for p in e["pins"]} for e in got["symbols"]}
+    assert pins["R1"]["1"]["name"] in ("", "~")  # the library's unnamed pin, as the sheet stores it
+    assert {k: pins["R1"]["1"][k] for k in ("number", "type", "x", "y")} == {"number": "1", "type": "passive", "x": 50.8, "y": 46.99}
+    assert pins["R1"]["2"]["y"] == 54.61
+    assert {p["type"] for p in pins["U1"].values()} == {"power_in"}
+    assert sorted(pins["U1"]) == ["11", "4"]
+    assert {p["name"] for p in pins["Q1"].values()} == {"B", "C", "E"}
+    assert {p["type"] for p in pins["Q1"].values()} == {"input", "passive"}
+    assert {e["reference"]: e["at"] for e in got["symbols"]}["R1"] == [50.8, 50.8]
+
+
+def test_get_symbol_pins_is_read_only_batch_and_refuses_a_missing_reference(sheet, tools):
+    before = _bytes(sheet)
+    both = tools["get_symbol_pins"](str(sheet), ["R1", "C1"])
+    assert [e["reference"] for e in both["symbols"]] == ["C1", "R1"] and both["count"] == 2
+    missing = tools["get_symbol_pins"](str(sheet), ["R1", "R99", "X*"])
+    assert missing["ok"] is False and set(missing["not_found"]) == {"R99", "X*"}
+    assert tools["get_symbol_pins"](str(sheet), [])["ok"] is False
+    assert tools["get_symbol_pins"]("/no/such.kicad_sch", ["R1"])["ok"] is False
+    assert _bytes(sheet) == before
+
+
+def test_get_symbol_pins_is_registered_read_only():
+    mcp = MCPServer("test")
+    schematic_toolset.build(mcp)
+    tool = next(t for t in mcp._tool_manager.list_tools() if t.name == "get_symbol_pins")  # type: ignore[attr-defined]
+    assert tool.annotations.read_only_hint is True
+
+
+def test_get_symbol_pins_selects_by_uuid_even_for_two_symbols_with_one_reference(tmp_path, tools):
+    made = project_toolset._project_create(str(tmp_path / "gsp3"), "gsp3")
+    sch = Path(made["schematic_path"])
+    assert tools["add_symbols"](str(sch), [
+        {"lib_id": "Device:R", "x": 50.8, "y": 50.8, "ref": "R?", "value": "1k"},
+        {"lib_id": "Device:R", "x": 76.2, "y": 50.8, "ref": "R?", "value": "2k"},
+    ])["status"] == "ok"
+    uuids = [sheet_editing._uuid(s) for s in _nodes(sch, "symbol") if s.find_children("lib_id")]
+    assert len(set(uuids)) == 2
+    one = tools["get_symbol_pins"](str(sch), [], uuids=[uuids[1]])
+    assert one["ok"] is True and [e["uuid"] for e in one["symbols"]] == [uuids[1]]
+    assert one["symbols"][0]["at"] == [76.2, 50.8]
+    ored = tools["get_symbol_pins"](str(sch), ["R?"], uuids=[uuids[0]])
+    assert ored["count"] == 2
+    before = _bytes(sch)
+    bad = tools["get_symbol_pins"](str(sch), [], uuids=[uuids[0], "no-such-uuid"])
+    assert bad["ok"] is False and bad["not_found"] == ["no-such-uuid"] and _bytes(sch) == before
+    assert tools["get_symbol_pins"](str(sch), [])["ok"] is False
+
+
+def test_get_symbol_pins_without_the_embedded_library_symbol_gives_no_pins_and_a_warning(sheet, tools):
+    root = write_layer.load(sheet)
+    table = next(c for c in root.children if not c.is_atom and c.name == "lib_symbols")
+    table.children[:] = [c for c in table.children if c.is_atom or c.get_string(0) != "Device:R"]
+    write_layer.save(root, sheet)
+    got = tools["get_symbol_pins"](str(sheet), ["R1", "C1"])
+    by = {e["reference"]: e for e in got["symbols"]}
+    assert by["R1"]["pins"] == [] and "warning" in by["R1"] and by["C1"]["pins"]
