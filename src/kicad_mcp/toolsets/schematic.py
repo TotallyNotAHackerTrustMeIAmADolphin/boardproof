@@ -634,6 +634,38 @@ def _verify_schematic_write(path: Path, written: Path, added_refs: set[str]) -> 
         )
 
 
+def _power_reference(number: int) -> str:
+    """A power symbol's reference as KiCad writes it: ``#PWR01`` .. ``#PWR099``, then ``#PWR0100`` and up
+    (kicad_tools' own ``#PWR{n:02d}`` gave ``#PWR604``, issue 121)."""
+    return f"#PWR{number:02d}" if number < 100 else f"#PWR0{number}"
+
+
+def _highest_power_number(path: Path) -> int:
+    """The highest ``#PWR<n>`` number among the symbols of ``path`` and of every sheet of the project's
+    tree (``0`` when there is none), so a power symbol added next gets a reference new tree-wide."""
+    import re
+
+    from kicad_mcp import sheet_authoring, sheet_tree
+
+    files = [path]
+    try:
+        tree = sheet_tree.walk(sheet_authoring.find_root(path, None))
+        if not tree.problems and path.resolve() in {Path(f).resolve() for f in tree.files}:
+            files = list(tree.files)
+    except Exception:  # noqa: BLE001 - a sheet written alone
+        pass
+    highest = 0
+    for file in files:
+        for node in write_layer.load(Path(file)).children:
+            if node.is_atom or node.name != "symbol":
+                continue
+            for prop in node.find_children("property"):
+                match = re.fullmatch(r"#PWR0*(\d+)", prop.get_string(1)) if prop.get_string(0) == "Reference" else None
+                if match:
+                    highest = max(highest, int(match.group(1)))
+    return highest
+
+
 def _stale_instance_refs(path: Path, old_uuids: Any) -> list[str]:
     """References of the symbols that were on ``path`` before a call (``old_uuids``) and still carry
     instance data keyed on the sheet's own uuid although a parent sheet uses the sheet (GitHub issue
@@ -1212,7 +1244,9 @@ def build(mcp: MCPServer) -> list[str]:
         Each spec: kind ("label"|"global"|"hier"|"power"|"no_connect"),
         x, y (required); text (required for label/global/hier/power -- for
         "power" it's the power symbol lib_id, e.g. "power:GND", resolved through the project
-        sym-lib-table, then the global one, then KiCad's folder, as add_symbols does), rotation,
+        sym-lib-table, then the global one, then KiCad's folder, as add_symbols does; the symbol is placed as
+        add_symbols places a power lib_id, so its instance data is the same: the project's name and the
+        use path(s) on an attached sheet, and a reference #PWR01.. that is new in the whole sheet tree), rotation,
         shape (global/hier label direction), snap (optional bool, default
         True -- see SNAP).
 
@@ -1253,6 +1287,7 @@ def build(mcp: MCPServer) -> list[str]:
             symbol_libs.seed_symbol_defs(sch, libs, power_ids)
             pins = pin_wiring.connector_points(write_layer.load(path))
             grid = float(getattr(sch, "grid", 1.27) or 1.27)
+            next_power = _highest_power_number(path)
             placed = []
             snapped: list[dict] = []
             landed: list[dict] = []
@@ -1273,13 +1308,17 @@ def build(mcp: MCPServer) -> list[str]:
                 elif kind == "hier":
                     sch.add_hier_label(spec["text"], x, y, shape=spec.get("shape", "input"), rotation=rotation, snap=snap)
                 elif kind == "power":
-                    sch.add_power(spec["text"], x, y, rotation=rotation, snap=snap)
+                    # issue 121: placed exactly as add_symbols places a power lib_id (same instance data:
+                    # the project's name, the sheet-tree use paths), with a reference that is new tree-wide.
+                    next_power += 1
+                    sch.add_symbol(lib_id=spec["text"], x=x, y=y, ref=_power_reference(next_power),
+                                   rotation=rotation, snap=snap)
                 elif kind == "no_connect":
                     sch.add_no_connect(x, y, snap=snap)
                 else:
                     return {"status": "error", "reason": f"unknown label kind: {kind!r}"}
                 placed.append(kind)
-            _write_schematic_utf8(sch, path)
+            _write_schematic_utf8(sch, path, reattach=True)
         except SchematicWriteNotVerified as exc:
             return _not_verified_result(exc)
         except Exception as exc:  # noqa: BLE001 - evidence-gated verdict
