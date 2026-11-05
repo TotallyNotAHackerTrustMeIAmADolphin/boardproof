@@ -59,14 +59,19 @@ The playbook is `docs/playbook/AGENT-WORKFLOW-PLAYBOOK.md`; this project's answe
 
 **Tests (fork P6, P11)**
 - For this project, this file and the project fork override the generic playbook's rules on
-  background commands (A1, the resources table's background-jobs row, the sub-agent template): the
-  batch gate runs in the background as below; every other command runs in the foreground.
-- Targeted test runs: from the worktree root, in the foreground under `timeout`, never as a
-  background command:
+  background commands (A1, the resources table's background-jobs row, the sub-agent template):
+  targeted test runs and the batch gate run in the background as below; every other command runs
+  in the foreground.
+- Targeted test runs (coordinator decision of 2026-11-05, pending owner confirmation in issue 148: the
+  foreground limit is 10 minutes and a run killed by it prints no summary line) go in SMALL SEPARATE runs (each aimed at under about 20 minutes), in the
+  background (`run_in_background`) with their own log outside the worktree, waiting for the
+  completion notification (no sleep loops), each printing its own summary line (a run killed by a
+  timeout prints none). From the worktree root:
   `PYTHONPATH=<worktree>/src "<main checkout>/.venv/Scripts/python.exe" -m pytest <paths>`,
   without `-q` for counted runs. A result counts only if `kicad_mcp.__file__` lies inside your
   worktree and pytest's `rootdir:` line names it; report both. Set
-  `KICAD_ROUTING_TOOLS_PATH` as your prompt says.
+  `KICAD_ROUTING_TOOLS_PATH` as your prompt says. While a batch gate runs, start no more than 2 other
+  runs (the gate's timing basis, fork P11, assumes few other runs).
 - While working: your targeted tests plus `tests/test_ratchets.py`.
 - At the end: the batch gate, `python <worktree>/scripts/batch_gate.py`, on a clean committed
   tree. It runs the full suite and the linter with all the worktree checks, takes about 43 minutes
@@ -96,7 +101,12 @@ The playbook is `docs/playbook/AGENT-WORKFLOW-PLAYBOOK.md`; this project's answe
 **Git**
 - Commit on your branch in green slices, each message ending with the trailer lines from your
   prompt. Fixes are new commits on top: never amend, never rebase once a review started.
-- Do not merge, push or touch `main` unless your prompt says so. Never force-push and never delete
+- Order before hand-back: (1) finish the fixes, (2) merge local `main` into your ticket branch
+  (`git merge main`, no rebase, no force; this is allowed and counts as the prompt's merge
+  instruction, merging into `main` stays forbidden), (3) rerun the targeted tests on the merged tree,
+  (4) the batch gate where one applies, on a clean tree, (5) hand back the head sha, which is the
+  gated sha.
+- Do not merge into `main`, push or touch `main` unless your prompt says so. Never force-push and never delete
   `main`: the `git-guardrails` hook (`scripts/git_guardrails.py`) blocks it, and you never look for
   a way around a blocked command; report it. None of the commands in playbook section 8, item 6.
   Undo your own edit with `git diff > <scratch>/undo.patch` and `git apply -R`.

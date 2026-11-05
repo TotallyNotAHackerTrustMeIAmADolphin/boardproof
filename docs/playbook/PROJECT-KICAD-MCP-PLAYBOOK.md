@@ -4,7 +4,13 @@ Fork of `AGENT-WORKFLOW-PLAYBOOK.md` in this folder (the version of 2026-10-11 w
 856 lines). It cites that file by section and copies nothing: the general file wins on general
 rules, this file on project values. Except: P6 and P11 override A1, the resources table's
 background-jobs row and the sub-agent template for the batch gate, which runs in the background
-(build ticket 66). `CLAUDE.md` (hard rules) wins over both.
+(build ticket 66), and for targeted test runs, which go in small separate background runs
+(coordinator decision of 2026-11-05, pending owner confirmation in issue 148: the foreground limit
+is 10 minutes and a run killed by it prints no summary line). The fork also overrides A2 and every
+generic rule that has the reviewer work in a `git archive` export: a reviewer works in its own
+detached git worktree of the reviewed sha (`.claude/agents/reviewer.md`), because an export has no
+`.git` and fails `test_docs_layout` and `test_skills_tracked` falsely. `CLAUDE.md` (hard rules)
+wins over both.
 
 ## Section 0: P1-P17
 
@@ -63,10 +69,10 @@ background-jobs row and the sub-agent template for the batch gate, which runs in
 > is no `.scratch/` to link or copy, because the planning lives in the issues. Tickets that share
 > files run in sequence, even when neither blocks the other. Every sub-agent runs its own tests before it reports.
 
-> **Project rule P6: Test, lint, environment.** `.venv/Scripts/python.exe -m pytest -q <paths> 2>&1 |
-> tail -15`, never `pytest.exe` (collection fails on `from tests. ...` imports; build ticket 33);
+> **Project rule P6: Test, lint, environment.** `.venv/Scripts/python.exe -m pytest <paths>`, in the background
+> with its own log, then read the summary line at the end of the log (`tail -15`), never `pytest.exe` (collection fails on `from tests. ...` imports; build ticket 33);
 > full suite adds `-m "not network"`, and the gate run sets `KICAD_DEMOS_REQUIRED=1` and `KICAD_ROUTING_TOOLS_REQUIRED=1` (P11).
-> Targeted test runs in the foreground, with timeouts; the batch gate (P11) runs in the background
+> Targeted test runs in small separate background runs (each aimed at under about 20 minutes, own log, own summary line, wait for the notification); the batch gate (P11) runs in the background
 > (`.claude/agents/builder.md`, Tests). **In a worktree, test the worktree's own code** (and drop `-q`, which hides
 > the `rootdir:` line): run from the worktree
 > root with the shared interpreter by absolute path, `<main checkout>/.venv/Scripts/python.exe`,
@@ -247,12 +253,14 @@ background-jobs row and the sub-agent template for the batch gate, which runs in
   the self-check (verify before replace, `write_not_verified`) and the drift guard (`drift_detected`,
   `file_open_in_kicad`) once built (docs/ARCHITECTURE.md decisions 4 and 12); every mutation through the
   write layer (decision 1; until build ticket 42 lands, its interim rule); the `ToolsetBuilder` and `SourcingProvider` contracts where relevant;
-  targeted tests in the foreground and the batch gate in the background (`.claude/agents/builder.md`,
+  targeted tests in small separate background runs and the batch gate in the background (`.claude/agents/builder.md`,
   Tests, which with this fork overrides the generic A1 and sub-agent template); one genuine line of
   encouragement.
-- **Every reviewer prompt adds:** scratch-copy-only mutation testing (copy src, tests,
-  pyproject.toml, fixtures into the scratchpad, `PYTHONPATH=<copy>/src`, verify `kicad_mcp.__file__`
-  points into the copy before trusting a result; never modify the working tree), real `kicad-cli`
+- **Every reviewer prompt adds:** mutation testing in the reviewer's own review worktree (a
+  detached git worktree of the reviewed sha, never the builder's worktree and never a `git archive`
+  export; `PYTHONPATH=<review worktree>/src`, verify `kicad_mcp.__file__` points into the review
+  worktree before trusting a result; restore with `git checkout -- .` after each mutation, only
+  after the run's completion notification), real `kicad-cli`
   where the claim is about KiCad behaviour, and the findings the reference module needed. The
   verdict, the reviewed commit and the review text go into the ticket. Each BLOCKS finding becomes
   a failing test before its fix; a FOLLOW-UP's test is written in its own ticket.
@@ -321,6 +329,81 @@ background-jobs row and the sub-agent template for the batch gate, which runs in
 - **Measurement protocol:** the first OFFICIAL scored batch per (rung, backend, protocol sha) is the
   reported one; unofficial batches are shown beside it and never fill the slot; no re-run to improve
   an outcome; Freerouting reported UNAVAILABLE rather than invented.
+
+## Fail-open checklist for sheet writing tools
+
+Several of the schematic tickets of 2026-11-05 (issues 111, 118, 120 and others) needed extra
+review rounds for one family of defects: a writing tool reports success while KiCad ignores or
+overrides the edit. The builder probes each item below with real `kicad-cli` on a `tmp_path` copy
+built through `kicad_tools` before hand-back, and the reviewer checks the same list. "Probe" means:
+build the case, run the tool, run `kicad-cli sch export netlist` and `kicad-cli sch erc` on the
+result, and compare with what the tool returned. A test pins what `kicad-cli` reports, never what
+the builder guessed.
+
+1. **Multi-unit part.** Use a part with several units (for example an LM324, units 1 to 5). Edit
+   it by reference and by each unit's own uuid. The test shows the edit reaches exactly the
+   addressed unit, a key such as mirror or position is not collapsed across units because they
+   share a reference, and a field KiCad reads from one unit only (Value, LCSC) is checked in the
+   netlist, not in the file. Across sheets KiCad's pick of a multi-unit part's properties is
+   undetermined (only on one sheet it is the lowest placed unit, docs/ARCHITECTURE.md, build
+   ticket 50 entry), so a test must not pin "lowest" across sheets.
+2. **Same reference on another sheet, and a sheet in a subfolder.** Put the same reference (or
+   another unit of the part) on a second sheet of the tree, and open a child sheet that lives in a
+   subfolder, each with and without `root_sch`. The test shows the tool finds the root (or refuses
+   with a true reason) and resolves the reference across the whole tree. Lock order: a call never
+   waits for a file above its own parent (it locks the parent and the child files of its sheet
+   symbols, in hierarchy order; the rule is the comment at the lock in `sheet_pins._run`). A test
+   shows a call on a child does not wait for a lock held on its parent's parent.
+3. **Hidden pins and power symbols.** A hidden `power_in` pin is tied by name and is not open;
+   a power symbol sets a net by its value. The test shows the tool's open/unconnected verdict
+   equals what ERC and the netlist say for these pins.
+4. **`lib_name` symbols.** A placed symbol whose `lib_name` differs from its `lib_id` (a local
+   copy in `lib_symbols`). The test shows the tool finds its pins and library data through
+   `lib_name`, or refuses.
+5. **Every self-check key and guard has a red test.** Each key of a self-check (reference, unit,
+   uuid) and each guard line (drift, connectivity, refusal) has a test that goes red when that
+   one line is broken. Run the mutation yourself (delete or invert the line, see the test fail,
+   restore) and report it. A guard without such a test counts as absent. A tool that deletes has a
+   self-check too (item 14).
+6. **No-op and refusal write nothing.** For a no-op request and for every refusal, the test
+   compares the file bytes (and the mtime where a lock matters) before and after.
+7. **Do not say ok when KiCad did not follow.** After the write, read back what `kicad-cli`
+   reports (netlist, ERC, the field or position in the exported data) and return `ok` only if it
+   matches the request. A mismatch returns `ok: false` with `write_not_verified`. Anything the
+   tool cannot read back is refused or returned with its real code (`write_not_verified`, `connectivity_changed`), never `ok`.
+8. **Net members.** No-connect markers and local power symbols change which pins count as members
+   of a net (issue 143). The test shows the tool's net membership equals the netlist with such a
+   marker or symbol present.
+9. **Label scope.** Local, global and child-sheet (hierarchical) labels connect differently and
+   across the hierarchy (issue 114, label renames). The test shows a label of each scope on the right sheet and
+   across a sheet pin, against the netlist.
+10. **Text input classes.** Line breaks, Unicode separators and leading or trailing whitespace in
+    names and texts (issue 144). The test feeds each class and shows it is refused or kept as
+    KiCad reads it back.
+11. **Reason and tool text are true.** A refusal reason or a sentence of the tool text that is
+    false for a case the tool does handle is a finding (issue 140). The test or review reads each
+    reason against a case that reaches it.
+12. **Spec guard versus base.** A spec guard that now refuses a form the base accepted is a
+    regression unless the ticket says so (issue 146). Run the base's accepted forms against the new
+    guard.
+13. **Unreadable tree.** An unreadable tree file or an undiscoverable root refuses or notes it,
+    and never silently falls back to one sheet (issues 141, 120).
+14. **Delete has a self-check.** A tool that deletes verifies the result (the object is gone, the
+    rest is unchanged, the netlist follows) before it replaces the file, and has a corrupted-write
+    test.
+
+**Second fail-open of the same family:** the design is the finding. A denylist or a special case
+per input is replaced by refusing everything not proven (this section extends the rule under "What
+a finding blocks"; build ticket 67, round 3).
+
+Load: targeted runs raise the machine load, and the batch gate's timing basis (P11) assumes few
+other runs. While a gate runs, start no more than 2 other runs.
+
+The dispatch templates are `docs/playbook/briefs/builder.md` and `docs/playbook/briefs/reviewer.md`;
+the coordinator pastes and fills them in. The rule for the reviewer's worktree is in
+`.claude/agents/reviewer.md` and repeated word for word in the reviewer template.
+`tests/test_playbook_briefs.py` checks that the templates exist and carry these items and the
+hand-back rules.
 
 ## Evidence (incidents, 2026-10-11)
 

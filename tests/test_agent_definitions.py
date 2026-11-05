@@ -35,9 +35,13 @@ REQUIRED = {
         # review round 1: the reads CLAUDE.md requires, never skipped
         "`docs/CONTEXT.md`, `docs/ARCHITECTURE.md`, `docs/ROADMAP.md` and `docs/TESTING.md`",
         "scripts/known-skips.toml",
-        # build ticket 66: targeted runs stay in the foreground; the gate (about 23 minutes, beyond
-        # the Bash tool's 600 s limit) runs in the background and is waited for
-        "Targeted test runs: from the worktree root, in the foreground under `timeout`, never as a background command",  # noqa: E501
+        # build ticket 148 (coordinator decision of 2026-11-05, pending owner confirmation in
+        # issue 148): targeted runs are small separate background runs; the foreground limit is 10
+        # minutes and a run killed by it prints no summary line
+        "coordinator decision of 2026-11-05, pending owner confirmation in issue 148",
+        ") go in SMALL SEPARATE runs (each aimed at under about 20 minutes), in the background (`run_in_background`) with their own log outside the worktree, waiting for the completion notification (no sleep loops), each printing its own summary line",  # noqa: E501
+        "(1) finish the fixes, (2) merge local `main` into your ticket branch (`git merge main`, no rebase, no force;",  # noqa: E501
+        "merging into `main` stays forbidden), (3) rerun the targeted tests on the merged tree",
         "the batch gate, `python <worktree>/scripts/batch_gate.py`, on a clean committed tree",
         "the harness notifies you when it exits",
         "no polling, no `sleep`",
@@ -69,8 +73,8 @@ REQUIRED = {
         "After a RED, fix it in new commits and post the updated Answer as a new comment, then run the gate again on the new head",  # noqa: E501
     ],
     "reviewer": [
-        "git -C",
-        "archive",
+        "git worktree add --detach",
+        "never in the builder's worktree and never in a `git archive` export",
         "kicad_mcp.__file__",
         "rootdir:",
         "Mutation",
@@ -79,7 +83,9 @@ REQUIRED = {
         "verify_board",
         "lint_gate.py",
         # review round 1: the lint gate runs ruff from the interpreter that starts it
-        '.venv/Scripts/python.exe" <export>/scripts/lint_gate.py',
+        '.venv/Scripts/python.exe" <review worktree>/scripts/lint_gate.py',
+        "restore with `git checkout -- .` after each",
+        "Judge the sha you were given",
         "CLEAN",
         # owner 2026-10-21: every finding is classed by the fork's "What a finding blocks" rule
         "BLOCKS or FOLLOW-UP",
@@ -218,12 +224,18 @@ def test_gate_bullet_runs_in_the_background_and_never_in_the_foreground():
     assert "foreground" not in bullet.lower()
 
 
-def test_targeted_runs_stay_in_the_foreground():
+def test_targeted_runs_are_small_separate_background_runs():
     _, body = _parse(AGENTS / "builder.md")
-    targeted = [b for b in _top_level_bullets(body) if b.startswith("- Targeted test runs:")]
+    targeted = [b for b in _top_level_bullets(body) if b.startswith("- Targeted test runs")]
     assert len(targeted) == 1
-    assert "in the foreground under `timeout`, never as a background command" in targeted[0]
-    assert "run_in_background" not in targeted[0]
+    assert "`run_in_background`" in targeted[0]
+    assert "never as a background command" not in targeted[0]
+
+
+def test_reviewer_does_not_use_an_export():
+    _, body = _parse(AGENTS / "reviewer.md")
+    assert "your own export" not in body
+    assert "<export>" not in body
 
 
 def test_anchors_survive_a_harmless_reflow():
@@ -252,12 +264,12 @@ def _fork() -> str:
     "anchor",
     [
         # P6
-        "Targeted test runs in the foreground, with timeouts; the batch gate (P11) runs in the background",  # noqa: E501
+        "Targeted test runs in small separate background runs (each aimed at under about 20 minutes, own log, own summary line, wait for the notification); the batch gate (P11) runs in the background",  # noqa: E501
         # P11
         "run by the builder at the end of its ticket and by the coordinator before a merge",
         "so it runs in the background (`.claude/agents/builder.md`, Tests)",
         # the builder dispatch template
-        "targeted tests in the foreground and the batch gate in the background",
+        "targeted tests in small separate background runs and the batch gate in the background",
     ],
 )
 def test_fork_playbook_agrees_on_background_gate(anchor):
@@ -324,13 +336,37 @@ def test_claude_md_points_to_the_finding_rule():
     assert _norm("Each finding becomes a failing test before its fix") not in text
 
 
+def test_fork_header_names_targeted_runs_and_the_reviewer_worktree():
+    header = _fork().split("## Section 0", 1)[0]
+    assert _norm("and for targeted test runs, which go in small separate background runs") in header
+    assert _norm("coordinator decision of 2026-11-05, pending owner confirmation in issue 148") in header
+    assert _norm("The fork also overrides A2 and every generic rule that has the reviewer work in a `git archive` export") in header  # noqa: E501
+    assert _norm("a reviewer works in its own detached git worktree of the reviewed sha") in header
+
+
+def test_fork_reviewer_prompt_rule_names_the_review_worktree():
+    fork = _fork()
+    assert "scratch-copy-only" not in fork
+    bullet = fork.split("**Every reviewer prompt adds:**", 1)[1].split("- **", 1)[0]
+    assert _norm("mutation testing in the reviewer's own review worktree") in bullet
+    assert "`git checkout -- .`" in bullet
+    # P6's example uses the background form, not the foreground pipe
+    assert "pytest -q <paths> 2>&1 | tail -15" not in fork
+
+
+def test_no_unrecorded_owner_decision_claim():
+    # The targeted-run rule is a coordinator decision pending owner confirmation (issue 148).
+    for path in [*AGENTS.glob("*.md"), FORK, *(FORK.parent / "briefs").glob("*.md")]:
+        assert "owner decision" not in _norm(path.read_text(encoding="utf-8")).lower(), path
+
+
 def test_fork_header_names_the_background_gate_exception():
     # Fix round 2, finding 1: both headers let the general file win on general rules, so A1
     # (and its "rerun in the foreground" nudge) would still win without this exception.
     header = _fork().split("## Section 0", 1)[0]
     assert _norm(
         "Except: P6 and P11 override A1, the resources table's background-jobs row and the "
-        "sub-agent template for the batch gate, which runs in the background (build ticket 66)."
+        "sub-agent template for the batch gate, which runs in the background (build ticket 66)"
     ) in header
 
 
