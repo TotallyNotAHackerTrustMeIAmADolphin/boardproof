@@ -349,7 +349,7 @@ WRITING_TOOLS = frozenset({
     "confirm_placement_optimization", "confirm_remove_graphic_items", "confirm_route",
     "project_create", "generate_footprint", "register_library_asset", "fetch_part_assets", "panelize_board",
     "add_symbols", "add_wires", "add_junctions", "add_labels", "assign_footprints", "fix_annotation",
-    "create_sheets", "add_sheet_symbols",
+    "create_sheets", "add_sheet_symbols", "add_sheet_pins", "remove_sheet_pins", "move_sheet_pins",
     "delete_symbols", "delete_wires", "delete_labels", "delete_junctions", "move_symbols", "move_labels",
     "set_property_positions", "connect_pins",
     "place_footprints", "move_reference_designators_to_layer", "align_footprints", "distribute_footprints",

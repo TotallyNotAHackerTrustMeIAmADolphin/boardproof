@@ -274,6 +274,19 @@ def _add_sheet_symbols(tmp_path):
     return Scenario(project["sch"], lambda: tools["add_sheet_symbols"](str(project["sch"]), [spec]))
 
 
+def _sheet_pins(tool: str, specs: list[dict]) -> Callable[[Path], Scenario]:
+    """A sheet-pin tool (issue 89) on a root with a Sensors sheet symbol holding the pin SER; the child holds its label."""
+    def make(tmp_path):
+        project = _project(tmp_path)
+        tools = _tools(schematic_toolset)
+        assert tools["create_sheets"](str(project["sch"]), [{"file": "sensors.kicad_sch"}])["status"] == "ok"
+        spec = {"file": "sensors.kicad_sch", "name": "Sensors", "x": 101.6, "y": 50.8, "height": 25.4,
+                "pins": [{"name": "SER", "direction": "input"}]}
+        assert tools["add_sheet_symbols"](str(project["sch"]), [spec])["status"] == "ok"
+        return Scenario(project["sch"], lambda: tools[tool](str(project["sch"]), specs))
+    return make
+
+
 def _editing(tool: str, args: Callable[[Path], tuple]) -> Callable[[Path], Scenario]:
     """An editing tool (issue 84) on the one-resistor sheet, with R1, a junction, a free wire and a label to work on."""
     def make(tmp_path):
@@ -335,6 +348,9 @@ SCENARIOS: dict[str, Callable[[Path], Scenario]] = {
     "fix_annotation": _sch("fix_annotation", lambda p: ()),
     "create_sheets": _create_sheets,
     "add_sheet_symbols": _add_sheet_symbols,
+    "add_sheet_pins": _sheet_pins("add_sheet_pins", [{"sheet": "Sensors", "pins": [{"name": "OE_N", "direction": "output"}]}]),
+    "remove_sheet_pins": _sheet_pins("remove_sheet_pins", [{"sheet": "Sensors", "pins": ["SER"]}]),
+    "move_sheet_pins": _sheet_pins("move_sheet_pins", [{"sheet": "Sensors", "pins": [{"name": "SER", "offset": 7.62}]}]),
     "delete_symbols": _editing("delete_symbols", lambda p: ([{"references": ["R1"]}],)),
     "delete_wires": _editing("delete_wires", lambda p: ([{"region": [0, 0, 300, 300]}],)),
     "delete_labels": _editing("delete_labels", lambda p: ([{"pattern": "*"}],)),

@@ -819,6 +819,30 @@ proof = [
     "tests/test_sheet_authoring.py::test_add_sheet_symbols_corrupted_write_fails_the_insert",
 ]
 
+[writing_tool.add_sheet_pins]
+self_check = "reload-verify"
+note = "Issue 89: sheet_pins changes copies of the parent sheet's tree (and, for a hierarchical label added or removed, the child's) in memory, checks that every top-level node it did not select is unchanged (the sheet symbol differs only in its pins, the child only in the planned hierarchical labels, instance data included), saves them into a scratch copy of the project where the sheet tree, the pin and label agreement and kicad-cli's ERC census are checked and kicad-cli's netlist is compared before and after (connectivity_changed unless allowed), and only then saves through write_layer.save, whose verify reloads the temporary sibling and compares it with the serialised tree before os.replace; the children are written first and restored if the parent save fails."
+proof = [
+    "tests/test_sheet_pins.py::test_the_reload_check_fires_on_a_corrupted_write_of_the_child_or_the_parent",
+    "tests/test_sheet_pins.py::test_the_staged_check_fires_when_the_change_touches_more_than_it_selected",
+    "tests/test_sheet_pins.py::test_the_erc_check_fires_on_a_new_violation_type",
+]
+
+[writing_tool.remove_sheet_pins]
+self_check = "reload-verify"
+note = "Issue 89: sheet_pins changes copies of the parent sheet's tree (and, for a hierarchical label added or removed, the child's) in memory, checks that every top-level node it did not select is unchanged (the sheet symbol differs only in its pins, the child only in the planned hierarchical labels, instance data included), saves them into a scratch copy of the project where the sheet tree, the pin and label agreement and kicad-cli's ERC census are checked and kicad-cli's netlist is compared before and after (connectivity_changed unless allowed), and only then saves through write_layer.save, whose verify reloads the temporary sibling and compares it with the serialised tree before os.replace; the children are written first and restored if the parent save fails."
+proof = [
+    "tests/test_sheet_pins.py::test_a_remove_and_a_move_corrupted_write_is_refused",
+    "tests/test_sheet_pins.py::test_the_geometry_check_and_the_netlist_comparison_each_refuse_on_their_own",
+]
+
+[writing_tool.move_sheet_pins]
+self_check = "reload-verify"
+note = "Issue 89: sheet_pins changes copies of the parent sheet's tree (and, for a hierarchical label added or removed, the child's) in memory, checks that every top-level node it did not select is unchanged (the sheet symbol differs only in its pins, the child only in the planned hierarchical labels, instance data included), saves them into a scratch copy of the project where the sheet tree, the pin and label agreement and kicad-cli's ERC census are checked and kicad-cli's netlist is compared before and after (connectivity_changed unless allowed), and only then saves through write_layer.save, whose verify reloads the temporary sibling and compares it with the serialised tree before os.replace; the children are written first and restored if the parent save fails."
+proof = [
+    "tests/test_sheet_pins.py::test_a_remove_and_a_move_corrupted_write_is_refused",
+]
+
 [writing_tool.delete_symbols]
 self_check = "reload-verify"
 note = "Issue 84: sheet_editing changes a copy of the sheet's tree in memory, checks that every node it did not select is unchanged, compares kicad-cli's netlist of the project before and after on scratch copies (connectivity_changed unless allowed), and only then saves through write_layer.save, whose verify reloads the temporary sibling and compares it with the serialised tree before os.replace."

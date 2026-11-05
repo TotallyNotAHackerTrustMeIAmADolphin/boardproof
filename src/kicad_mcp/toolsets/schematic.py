@@ -1500,6 +1500,105 @@ def build(mcp: MCPServer) -> list[str]:
 
         return sheet_authoring.add_sheet_symbols(parent_sch, specs, root_sch)
 
+    def add_sheet_pins(
+        parent_sch: str, specs: list[dict], root_sch: str | None = None,
+        allow_connectivity_change: bool = False, dry_run: bool = False,
+    ) -> dict:
+        """Add sheet pins to sheet symbols that are already on a parent sheet, in one call, and create
+        (or reuse) the matching hierarchical labels in the child sheets. add_sheet_symbols only takes
+        sheet files no sheet symbol uses yet; this is for the symbol that already exists.
+
+        parent_sch: the sheet that holds the sheet symbols. root_sch: the project's root sheet (optional
+        when parent_sch is the root or the only .kicad_pro of the folder names it). Each spec: sheet (the
+        sheet name; a uuid also matches) or uuid, and pins (a non-empty list). Each pin: name, direction
+        (input, output, bidirectional, tri_state or passive), side (left, right, top or bottom; default
+        left, right for output), offset (mm along that edge from its start; snapped so the pin sits on the
+        1.27 mm grid of the page, strictly inside the edge; default the next free 2.54 mm step). A pin
+        never lands on another pin.
+
+        The child sheet gets one hierarchical label per pin, of the same name and direction: a label it
+        already has with that name and direction is reused (the result says created or reused, with the
+        label's position in the child); a label of the same name with another direction is refused:
+        label_direction_mismatch. A pin name the sheet symbol already has is refused: duplicate_pin_name.
+
+        The result lists, per sheet symbol and pin, side, offset and at: the pin's absolute position on
+        the parent sheet. get_symbol_pins and connect_pins cannot address a sheet pin (it has no reference
+        or pin number); draw to the listed point with add_wires, which lands a point within 0.01 mm of a
+        sheet pin exactly on it.
+
+        Before anything is written the change is built on scratch copies and checked: every node the call
+        did not select is unchanged (the child sheet's symbols and their instance data included),
+        kicad-cli's ERC shows no violation type the project did not show before besides one unconnected
+        pin (pin_not_connected) per new pin and one dangling label (label_dangling) per created label,
+        and kicad-cli's netlist before and after is compared net by net. A new pin that lands on a wire
+        end, label or symbol pin is a connectivity change: connectivity_changed, nothing written, unless
+        allow_connectivity_change is true. dry_run true computes and returns everything and writes nothing.
+        Other refusals (ok: false, a code, nothing written): sheet_not_found, pin_off_edge,
+        pin_position_taken, no_room_on_edge, sheet_file_shared, invalid_spec.
+
+        Refuses with file_open_in_kicad, naming the lock file, while KiCad holds a lock file for a file
+        it would write; close the file in KiCad, then retry.
+        """
+        from kicad_mcp import sheet_pins
+
+        return sheet_pins.add_sheet_pins(parent_sch, specs, root_sch, allow_connectivity_change=allow_connectivity_change, dry_run=dry_run)
+
+    def remove_sheet_pins(
+        parent_sch: str, specs: list[dict], root_sch: str | None = None, remove_child_labels: bool = False,
+        allow_connectivity_change: bool = False, dry_run: bool = False,
+    ) -> dict:
+        """Remove sheet pins from sheet symbols on a parent sheet, in one call. A sheet symbol may end up
+        with no pins.
+
+        Each spec: sheet (the sheet name; a uuid also matches) or uuid, and pins (exact pin names) and/or
+        pattern (a shell pattern on the pin names). A name that is not a pin, or a pattern that matches
+        none, refuses the whole call: pin_not_found.
+
+        The hierarchical label of each pin in the child sheet is LEFT as it is, unless remove_child_labels
+        is true; a label with no pin is an ERC error (hier_label_mismatch) until it is removed or its pin
+        is added again (add_sheet_pins reuses it). The result says left, removed or absent per pin.
+
+        A pin with something attached (a wire end, label, junction or symbol pin exactly on it; with
+        remove_child_labels also on the child's label) is a connectivity change: connectivity_changed,
+        nothing written, the attached items listed, unless allow_connectivity_change is true. The netlist
+        before and after is compared net by net as well. dry_run true computes and returns everything and
+        writes nothing. A sheet file that several sheet symbols use is refused with remove_child_labels
+        (sheet_file_shared).
+
+        Refuses with file_open_in_kicad, naming the lock file, while KiCad holds a lock file for a file
+        it would write; close the file in KiCad, then retry.
+        """
+        from kicad_mcp import sheet_pins
+
+        return sheet_pins.remove_sheet_pins(parent_sch, specs, root_sch, remove_child_labels=remove_child_labels,
+                                            allow_connectivity_change=allow_connectivity_change, dry_run=dry_run)
+
+    def move_sheet_pins(
+        parent_sch: str, specs: list[dict], root_sch: str | None = None,
+        allow_connectivity_change: bool = False, dry_run: bool = False,
+    ) -> dict:
+        """Move sheet pins of sheet symbols on a parent sheet along their edge or to another side, in one
+        call. Each spec: sheet (the sheet name; a uuid also matches) or uuid, and pins, a list of objects
+        {name, side?, offset?}: side is left, right, top or bottom (default the pin's own), offset is mm
+        along that edge from its start (snapped to the 1.27 mm grid of the page, strictly inside the edge;
+        without it a pin that changes side takes the next free 2.54 mm step). At least one of side and
+        offset is required. A pin never lands on another pin; pin_position_taken, pin_off_edge,
+        no_room_on_edge and pin_not_found refuse the whole call. The pin keeps its name, direction and
+        uuid; its angle and text justification follow the side. The child sheet is not touched.
+
+        A wire is NOT dragged along: a pin that has something attached at its old point (a wire end,
+        label, junction or symbol pin) is a connectivity change, and so is a new point that lands on such
+        an item: connectivity_changed, nothing written, the items listed, unless allow_connectivity_change
+        is true. The netlist before and after is compared net by net as well. dry_run true computes and
+        returns everything and writes nothing. The result lists each pin's old and new absolute position.
+
+        Refuses with file_open_in_kicad, naming the lock file, while KiCad holds a lock file for a file
+        it would write; close the file in KiCad, then retry.
+        """
+        from kicad_mcp import sheet_pins
+
+        return sheet_pins.move_sheet_pins(parent_sch, specs, root_sch, allow_connectivity_change=allow_connectivity_change, dry_run=dry_run)
+
     def delete_symbols(
         sch_path: str, selectors: list[dict], allow_connectivity_change: bool = False,
         remove_dangling: bool = False, dry_run: bool = False, root_sch: str | None = None,
@@ -1939,6 +2038,7 @@ def build(mcp: MCPServer) -> list[str]:
     }
     mutating_tools = [
         add_symbols, add_wires, add_junctions, add_labels, assign_footprints, fix_annotation, create_sheets, add_sheet_symbols,
+        add_sheet_pins, remove_sheet_pins, move_sheet_pins,
         delete_symbols, delete_wires, delete_labels, delete_junctions, move_symbols, move_labels, set_property_positions, connect_pins,
     ]
     read_only_tools = [get_symbol_pins, check_connectivity]

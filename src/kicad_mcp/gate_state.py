@@ -330,7 +330,7 @@ class GateState:
 # -- tool wrapping -----------------------------------------------------------
 _BOARD_ARGS = ("pcb_path",)
 _BOARD_LIST_ARGS = ("pcb_paths",)
-_MUTATION_ARGS = ("pcb_path", "sch_path", "project_dir", "path")
+_MUTATION_ARGS = ("pcb_path", "sch_path", "project_dir", "path", "parent_sch")
 
 
 def _str_paths(value: Any) -> list[str]:

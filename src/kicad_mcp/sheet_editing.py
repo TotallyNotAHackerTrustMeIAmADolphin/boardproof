@@ -500,15 +500,22 @@ def read_nets(tree: sheet_tree.SheetTree, sheet: Path, replacement: SExp | None)
     """kicad-cli's netlist of the project, from a scratch copy of the tree in which ``sheet``
     holds ``replacement`` (when given): net name -> the ``(reference, pin)`` nodes on it,
     unannotated (``?``) references left out."""
-    from kicad_tools.sexp.parser import parse_file
-
-    from kicad_mcp import kicad_cli
-
     with tempfile.TemporaryDirectory(prefix="kicad-mcp-sheet-edit-") as tmp:
         scratch = Path(tmp) / "p"
         root = sheet_authoring._copy_project(tree, [], scratch)
         if replacement is not None:
             sheet_authoring._save(replacement, scratch / sheet.resolve().relative_to(tree.project_dir))
+        return nets_from(root)
+
+
+def nets_from(root: Path) -> dict[str, frozenset]:
+    """kicad-cli's netlist of the project whose root sheet is ``root`` (a scratch copy: the CLI
+    writes beside it): net name -> the ``(reference, pin)`` nodes on it, unannotated references left out."""
+    from kicad_tools.sexp.parser import parse_file
+
+    from kicad_mcp import kicad_cli
+
+    with tempfile.TemporaryDirectory(prefix="kicad-mcp-sheet-net-") as tmp:
         parsed = parse_file(str(kicad_cli.export_netlist(root, Path(tmp) / "check.net")))
     nets: dict[str, frozenset] = {}
     for block in parsed.find_children("nets"):
