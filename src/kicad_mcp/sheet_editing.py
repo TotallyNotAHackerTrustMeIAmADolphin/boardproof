@@ -265,9 +265,10 @@ def get_symbol_pins(path: str, references: Any = None, uuids: Any = None) -> dic
 class Sheet:
     """Index of the items of a sheet's root node by kind."""
 
-    def __init__(self, root: SExp, nets_before: Any = None) -> None:
+    def __init__(self, root: SExp, nets_before: Any = None, erc_for: Any = None) -> None:
         self.root = root
         self.nets_before = nets_before  # callable -> kicad-cli's netlist of the project before the change (memoised)
+        self.erc_for = erc_for  # callable(tree or None) -> kicad-cli's ERC census of the project with that sheet tree (None: as it is on disk)
         self.symbols = _kids(root, "symbol")
         self.wires = _kids(root, "wire")
         self.junctions = _kids(root, "junction")
@@ -359,8 +360,9 @@ _SELECTOR_KEYS = {
     "wire": {"uuids", "region", "net"},
     "label": {"texts", "uuids", "pattern", "region", "kind"},
     "junction": {"uuids", "region", "net", "points"},
+    "no_connect": {"uuids", "region", "points", "references", "pins"},
 }
-_LIST_KEYS = {"references", "uuids", "texts", "points"}
+_LIST_KEYS = {"references", "uuids", "texts", "points", "pins"}
 
 
 def _region(value: Any, where: str) -> tuple[float, float, float, float]:
@@ -416,8 +418,37 @@ def _check_selectors(kind: str, selectors: Any) -> list[dict]:
     return selectors
 
 
+def _marker_pins(sheet: Sheet, sel: dict, i: int, missing: list[str]) -> dict[tuple[float, float], str]:
+    """For a no-connect selector with ``references`` and ``pins``: the pin points (raw library
+    ``(at ...)`` maths) of those pins, point -> "REF.PIN". A reference that matches no placed symbol,
+    a pin the matched symbols do not have, and a pin with no marker on its point go into ``missing``."""
+    if "references" not in sel or "pins" not in sel:
+        raise SheetAuthoringError("invalid_spec", f"selectors[{i}]: references and pins go together (a reference plus the pin numbers whose marker is meant)")
+    for key in ("references", "pins"):
+        if not all(isinstance(v, str) and v for v in sel[key]):
+            raise SheetAuthoringError("invalid_spec", f"selectors[{i}].{key} must be a list of non-empty strings")
+    placed = [s for s in sheet.symbols if s.find_children("lib_id")]
+    found: dict[tuple[float, float], str] = {}
+    matched_pins: set[str] = set()
+    for pattern in sel["references"]:
+        nodes = [s for s in placed if fnmatch.fnmatchcase(_ref(s), pattern)]
+        if not nodes:
+            missing.append(f"reference {pattern!r}")
+        for node in nodes:
+            for pin in pin_positions(sheet.root, node):
+                if pin["number"] in sel["pins"]:
+                    matched_pins.add(pin["number"])
+                    found[(pin["x"], pin["y"])] = f"{_ref(node)}.{pin['number']}"
+    missing += [f"pin {n!r} on {sel['references']!r}" for n in sel["pins"] if n not in matched_pins]
+    marked = [_at(n)[:2] for n in sheet.no_connects]
+    for pt, label in found.items():
+        if not any(_same(pt, m) for m in marked):
+            missing.append(f"no-connect marker on pin {label}")
+    return found
+
+
 def select(sheet: Sheet, kind: str, selectors: Any) -> list[SExp]:
-    """The nodes of ``kind`` ("symbol", "wire", "label" or "junction") the ``selectors`` pick.
+    """The nodes of ``kind`` ("symbol", "wire", "label", "junction" or "no_connect") the ``selectors`` pick.
 
     A selector is an object; all keys in it must match (AND), and the selectors are joined (OR).
     Keys: ``references`` (symbol references; every unit), ``texts`` (label texts, exact),
@@ -425,15 +456,20 @@ def select(sheet: Sheet, kind: str, selectors: Any) -> list[SExp]:
     ``region`` ([x1, y1, x2, y2] in mm: a symbol's, label's or junction's own position inside it;
     a wire only when both ends are), ``lib_id``, ``kind`` (label, global or hier), ``net`` (the
     wires, or junctions on them, joined wire to wire to a label of that text on this sheet),
-    ``points`` (junction positions). Raises ``not_found`` for a listed reference, text, uuid,
+    ``points`` (junction or marker positions), and for ``no_connect`` ``references`` plus ``pins`` (the
+    markers sitting on those pins of those symbols). Raises ``not_found`` for a listed reference, text, uuid,
     net or point that matches nothing, and ``selector_matched_nothing`` for a selector that
     selects nothing."""
     selectors = _check_selectors(kind, selectors)
-    nodes = {"symbol": sheet.symbols, "wire": sheet.wires, "label": sheet.labels, "junction": sheet.junctions}[kind]
+    nodes = {"symbol": sheet.symbols, "wire": sheet.wires, "label": sheet.labels, "junction": sheet.junctions,
+             "no_connect": sheet.no_connects}[kind]
     chosen: list[SExp] = []
     missing: list[str] = []
     for i, sel in enumerate(selectors):
         region = _region(sel["region"], f"selectors[{i}]") if "region" in sel else None
+        by_pin: dict[tuple[float, float], str] | None = None
+        if kind == "no_connect" and ("references" in sel or "pins" in sel):
+            by_pin = _marker_pins(sheet, sel, i, missing)
         net_wires = _net_wires(sheet, sel["net"]) if "net" in sel else None
         if net_wires is not None and not net_wires:
             missing.append(f"net {sel['net']!r}")
@@ -455,10 +491,12 @@ def select(sheet: Sheet, kind: str, selectors: Any) -> list[SExp]:
                 ids = {"texts": name}
                 if "kind" in sel and node.name != LABEL_KINDS[sel["kind"]]:
                     continue
-            elif kind == "junction":
+            elif kind in ("junction", "no_connect"):
                 name = ""
                 x, y, _a = _at(node)
                 ids = {}
+                if by_pin is not None and not any(_same((x, y), pt) for pt in by_pin):
+                    continue
             else:
                 name = ""
                 ends = _wire_ends(node)
@@ -491,7 +529,7 @@ def select(sheet: Sheet, kind: str, selectors: Any) -> list[SExp]:
             if "uuids" in sel:
                 hit[_uuid(node)] += 1
         for key in ("references", "texts", "uuids"):
-            if key in sel:
+            if key in sel and not (key == "references" and by_pin is not None):
                 missing += [f"{key[:-1]} {v!r}" for v in sel[key] if hit[v] == 0]
         if "points" in sel:
             missing += [f"point {p!r}" for p in sel["points"] if not any(
@@ -739,7 +777,23 @@ def _run(path: Path, root_sch: str | None, mutate, allow: bool, dry_run: bool) -
             memo["nets"] = read_nets(tree, path, None)
         return memo["nets"]
 
-    outcome: Outcome = mutate(Sheet(new, nets_before), new)
+    erc_memo: dict[str, Any] = {}
+
+    def erc_for(replacement: SExp | None) -> Any:
+        """kicad-cli's ERC census of the project from a scratch copy, with ``replacement`` in the place of this sheet."""
+        if replacement is None and "old" in erc_memo:
+            return erc_memo["old"]
+        with tempfile.TemporaryDirectory(prefix="kicad-mcp-sheet-erc-") as tmp:
+            scratch = Path(tmp) / "p"
+            copied = sheet_authoring._copy_project(tree, [], scratch)
+            if replacement is not None:
+                sheet_authoring._save(replacement, scratch / path.resolve().relative_to(tree.project_dir))
+            census = sheet_authoring.erc_census(copied)
+        if replacement is None:
+            erc_memo["old"] = census
+        return census
+
+    outcome: Outcome = mutate(Sheet(new, nets_before, erc_for), new)
     _staged_check(original, new, outcome)
 
     result: dict[str, Any] = {"status": "ok", "ok": True, "written": False, **outcome.report}
@@ -827,13 +881,14 @@ def delete(kind: str, path: str, selectors: list[dict], root_sch: str | None, *,
                 _remove(root, doomed)
                 now = Sheet(root)
             new_dangling, preexisting = _dangling_report(before, now)
-        plural = {"symbol": "symbols", "wire": "wires", "label": "labels", "junction": "junctions"}[kind]
+        plural = {"symbol": "symbols", "wire": "wires", "label": "labels", "junction": "junctions", "no_connect": "no-connect markers"}[kind]
         outcome.report = {
             "deleted": listed, "count": len(listed),
             "dangling_after": {k: v for k, v in new_dangling.items()},
             "dangling_removed": removed_extra,
             "dangling_before_untouched": preexisting,
             "dangling_note": ("dangling wires and junctions the delete made were removed; labels are never removed" if remove_dangling
+                              else "report only: nothing is removed besides the markers" if kind == "no_connect"
                               else f"report only: pass remove_dangling true to remove dangling wires and junctions left by deleting {plural}"),
         }
         return outcome

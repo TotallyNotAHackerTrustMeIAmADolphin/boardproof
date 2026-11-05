@@ -894,6 +894,21 @@ proof = [
     "tests/test_pin_wiring.py::test_the_netlist_self_check_fires_on_a_wire_that_misses_its_pin",
 ]
 
+[writing_tool.add_no_connects]
+self_check = "reload-verify"
+note = "Issue 113: no_connects selects open pins from kicad-cli's netlist and places markers on a copy of the sheet's tree through sheet_editing.run (staged check that only the reported markers were added; netlist before and after on scratch copies; ERC before and after must show exactly as many fewer pin_not_connected as pins were marked, else write_not_verified), and only then saves through write_layer.save, whose verify reloads the temporary sibling and compares it with the serialised tree before os.replace."
+proof = [
+    "tests/test_no_connects.py::test_add_no_connects_corrupted_write_is_refused",
+    "tests/test_no_connects.py::test_the_erc_self_check_fires_on_a_marker_that_misses_its_pin",
+]
+
+[writing_tool.delete_no_connects]
+self_check = "reload-verify"
+note = "Issue 113: sheet_editing.delete selects the markers on a copy of the sheet's tree, checks that every node it did not select is unchanged, compares kicad-cli's netlist of the project before and after on scratch copies (connectivity_changed unless allowed), and only then saves through write_layer.save, whose verify reloads the temporary sibling and compares it with the serialised tree before os.replace."
+proof = [
+    "tests/test_no_connects.py::test_delete_no_connects_corrupted_write_is_refused",
+]
+
 [writing_tool.set_text]
 self_check = "reload-verify"
 note = "Issue 114: sheet_editing.set_text changes the text atom of labels and free text objects on a copy of the sheet's tree in memory, checks that every node it did not select is unchanged, compares kicad-cli's netlist of the project before and after on scratch copies when a label is renamed (connectivity_changed unless allowed), and only then saves through write_layer.save, whose verify reloads the temporary sibling and compares it with the serialised tree before os.replace."

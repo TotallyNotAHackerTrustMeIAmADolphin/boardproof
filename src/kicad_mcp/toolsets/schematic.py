@@ -1928,6 +1928,87 @@ def build(mcp: MCPServer) -> list[str]:
         return sheet_editing.delete("junction", sch_path, selectors, root_sch, remove_dangling=remove_dangling,
                                     allow_connectivity_change=allow_connectivity_change, dry_run=dry_run)
 
+    def add_no_connects(
+        sch_path: str, selectors: list[dict] | None = None, allow_connectivity_change: bool = False,
+        dry_run: bool = False, root_sch: str | None = None,
+    ) -> dict:
+        """Put no-connect markers on pins, by reference and pin, in one call.
+
+        Selectors (`selectors`, a list of objects): references (symbol references, shell patterns allowed)
+        and/or uuids, plus pins: a list of pin numbers (strings, as get_symbol_pins lists them) or
+        "unconnected" (the default). With "unconnected" the marker goes on every open pin of the picked
+        symbols. With no selectors at all, every placed symbol of this sheet is picked (child sheets are not
+        followed). A reference, uuid or pin number that does not exist refuses the whole call (not_found).
+
+        Open means: kicad-cli's netlist of the project lists the pin alone on an automatically named
+        unconnected-(..) net. The netlist decides, not the geometry: a wire that runs over a pin without
+        ending there joins nothing, so that pin is open. "unconnected" leaves out pins whose electrical type is
+        no_connect and power symbols and flags (references that start with #). Hidden pins of one name are
+        tied by KiCad into a shared net, so they sit in a net with other pins and are not listed open; a hidden
+        pin on an open net would be marked. A pin named explicitly that is wired, labelled or tied to another pin (including a
+        hidden pin of the same name) is refused as pin_connected, a hidden pin as pin_hidden, a pin of a power symbol as
+        power_symbol_pin (nothing written).
+        A pin that already has a marker on its point is skipped and listed under already_marked.
+
+        The marker sits exactly on the pin point, computed from the raw (at ...) of the symbol and of the pin
+        in the embedded library symbol (rotation, mirror and unit applied). Marked pins no longer show as
+        pin_not_connected in ERC.
+
+        Checks before anything is written: the netlist of the project, read from a scratch copy before and
+        after, must show no change (a marker joins nothing; connectivity_changed otherwise, unless
+        allow_connectivity_change), and kicad-cli's ERC of the project before and after must show exactly as
+        many fewer pin_not_connected as pins were marked and no violation type that grew; otherwise the call is
+        refused as write_not_verified and the sheet is unchanged. dry_run true computes and returns everything
+        (would_add) and writes nothing. A sheet used more than once and an unannotated reference are refused
+        as pin_not_in_netlist. root_sch names the project's root sheet when sch_path is a sub-sheet and its
+        folder holds several projects. Instance data and every other node are never touched.
+
+        Refuses with file_open_in_kicad, naming the lock file, while KiCad holds a lock file for a file it
+        would write; close the file in KiCad, then retry.
+
+        Returns added (reference, pin, name, type, at, uuid; two pins on one point share one marker and its
+        uuid, the second entry has marker "shared with another pin on the same point"), count, already_marked,
+        silenced_other_erc (count and pins of the types input and power_in: a marker also silences
+        pin_not_driven or power_pin_not_driven for that pin), connected_pins_left_alone,
+        connectivity (nets_before, nets_after, changed, changes) and written.
+        """
+        from kicad_mcp import no_connects
+
+        return no_connects.add_no_connects(sch_path, selectors, root_sch, allow_connectivity_change=allow_connectivity_change, dry_run=dry_run)
+
+    def delete_no_connects(
+        sch_path: str, selectors: list[dict], allow_connectivity_change: bool = False,
+        dry_run: bool = False, root_sch: str | None = None,
+    ) -> dict:
+        """Delete no-connect markers from a sheet in one call.
+
+        Selectors (`selectors`, a list of objects; the keys of one object must all match, the objects are
+        joined): uuids, region [x1, y1, x2, y2] (the marker's point inside it), points ([[x, y], ...] exact
+        positions), or references plus pins (the markers sitting on those pin numbers of those symbols;
+        shell patterns allowed in references, the two keys go together). A selector that selects nothing, a
+        listed uuid, point, reference or pin that does not exist on the sheet, or a pin without a marker,
+        refuses the whole call (selector_matched_nothing, not_found; nothing written).
+
+        A marker joins nothing, so the netlist of the project does not change; it is still read from a
+        scratch copy before and after and compared net by net (connectivity_changed unless
+        allow_connectivity_change). The pins become open again and ERC reports them as pin_not_connected.
+        dry_run true computes and returns everything (would_delete) and writes nothing.
+
+        Refuses a failed self-check (write_not_verified, the sheet unchanged) and a project whose sheet tree
+        cannot be read (sheet_tree_incomplete). root_sch names the project's root sheet when sch_path is a
+        sub-sheet and its folder holds several projects. Instance data and every other node are never touched.
+
+        Refuses with file_open_in_kicad, naming the lock file, while KiCad holds a lock file for a file it
+        would write; close the file in KiCad, then retry.
+
+        Returns deleted (uuid, at), count, dangling_after, connectivity (nets_before, nets_after, changed,
+        changes) and written.
+        """
+        from kicad_mcp import sheet_editing
+
+        return sheet_editing.delete("no_connect", sch_path, selectors, root_sch, remove_dangling=False,
+                                    allow_connectivity_change=allow_connectivity_change, dry_run=dry_run)
+
     def move_symbols(
         sch_path: str, moves: list[dict], move_wires: bool = True, snap: bool = True, grid: float = 1.27,
         allow_connectivity_change: bool = False, dry_run: bool = False, root_sch: str | None = None,
@@ -2314,6 +2395,7 @@ def build(mcp: MCPServer) -> list[str]:
         add_symbols, add_wires, add_junctions, add_labels, assign_footprints, fix_annotation, create_sheets, add_sheet_symbols,
         add_sheet_pins, remove_sheet_pins, move_sheet_pins,
         delete_symbols, delete_wires, delete_labels, delete_junctions, move_symbols, move_labels, set_text, set_property_positions, connect_pins, replace_symbols,
+        add_no_connects, delete_no_connects,
     ]
     read_only_tools = [get_symbol_pins, check_connectivity]
     for tool_fn in mutating_tools:

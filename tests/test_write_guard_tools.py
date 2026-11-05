@@ -309,6 +309,14 @@ def _connect_pins(tmp_path):
     return Scenario(project["sch"], lambda: tools["connect_pins"](str(project["sch"]), [{"from": "R1.1", "to": "R2.1"}]))
 
 
+def _delete_no_connects(tmp_path):
+    """delete_no_connects (issue 113): a marker on the first pin of R1, deleted by reference and pin."""
+    project = _schematic_project(tmp_path)
+    tools = _tools(schematic_toolset)
+    assert tools["add_no_connects"](str(project["sch"]), [{"references": ["R1"], "pins": ["1"]}])["status"] == "ok"
+    return Scenario(project["sch"], lambda: tools["delete_no_connects"](str(project["sch"]), [{"references": ["R1"], "pins": ["1"]}]))
+
+
 def _pcb_tool(tool: str, *args: Any) -> Callable[[Path], Scenario]:
     def make(tmp_path):
         pcb = _led(tmp_path)
@@ -360,6 +368,8 @@ SCENARIOS: dict[str, Callable[[Path], Scenario]] = {
     "set_text": _editing("set_text", lambda p: ([{"kind": "label", "old_text": "LBL", "text": "LBL2"}], True)),
     "set_property_positions": _editing("set_property_positions", lambda p: ([{"references": ["R1"], "properties": {"Value": {"offset": [3.81, 0]}}}],)),
     "connect_pins": _connect_pins,
+    "add_no_connects": _editing("add_no_connects", lambda p: ([{"references": ["R1"]}],)),
+    "delete_no_connects": _delete_no_connects,
     "replace_symbols": _editing("replace_symbols", lambda p: ([{"reference": "R1", "lib_id": "Device:R_Small"}],)),
     "place_footprints": _pcb_tool("place_footprints", [{"reference": "R1", "x": 3.0, "y": 4.0}]),
     "move_reference_designators_to_layer": _pcb_tool("move_reference_designators_to_layer", ["R1"], "F.Fab"),
