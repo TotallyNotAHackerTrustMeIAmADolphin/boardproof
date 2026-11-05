@@ -117,7 +117,7 @@ def read_back(root: SExp, before: set[str], grid: float = GRID) -> list[dict[str
         pins = [{"number": p["number"], "name": p["name"], "x": p["x"], "y": p["y"]} for p in se.pin_positions(root, sym)]
         out.append({
             "reference": se._ref(sym), "uuid": uid, "lib_id": sym.find_children("lib_id")[0].get_string(0),
-            "unit": int(unit[0].get_float(0)) if unit else 1, "at": [x, y], "rotation": rot,
+            "unit": int(unit[0].get_float(0)) if unit else 1, "at": [x, y], "rotation": rot, "mirror": se._mirror(sym),
             "pins": pins, "pin_count": len(pins),
             "off_grid_pins": [p["number"] for p in pins if not (on_grid(p["x"], grid) and on_grid(p["y"], grid))],
         })

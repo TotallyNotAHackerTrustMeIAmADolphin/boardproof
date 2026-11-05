@@ -18,6 +18,7 @@ is evidence-gated: a failure is reported as `{"status": "incomplete"/
 from __future__ import annotations
 
 import dataclasses
+import math
 import enum
 import os
 from pathlib import Path
@@ -728,8 +729,96 @@ def _reattach_to_tree(content: str, path: Path) -> str:
     return write_layer.serialise(node) + chr(10)
 
 
+_ADD_SYMBOL_KEYS = frozenset({"lib_id", "x", "y", "ref", "value", "rotation", "footprint", "unit", "in_bom", "dnp", "snap", "mirror"})
+_MIRROR_AXES = ("x", "y")
+
+
+def _symbol_spec_refusal(specs: Any) -> dict | None:
+    """Why ``specs`` (add_symbols input) is refused before anything is read or written (GitHub issue 111), or None.
+
+    Unknown keys are refused by name (a mistyped ``mirrr`` used to be dropped without a word); ``lib_id``, ``x``,
+    ``y`` and ``ref`` are required; ``mirror`` is "x", "y" or "" (none)."""
+    from kicad_mcp import sheet_authoring
+
+    def refuse(message: str) -> dict:
+        return sheet_authoring.refusal(sheet_authoring.SheetAuthoringError("invalid_spec", message + "; nothing was written"))
+
+    if not isinstance(specs, list):
+        return refuse("specs must be a list of objects")
+    mirrors: dict[tuple[str, int], str] = {}
+    for i, spec in enumerate(specs):
+        if not isinstance(spec, dict):
+            return refuse(f"specs[{i}] must be an object, got {spec!r}")
+        unknown = sorted(str(k) for k in set(spec) - _ADD_SYMBOL_KEYS)
+        if unknown:
+            return refuse(f"specs[{i}] has unknown key(s) {', '.join(map(repr, unknown))}; the keys are {sorted(_ADD_SYMBOL_KEYS)}")
+        missing = [k for k in ("lib_id", "x", "y", "ref") if k not in spec]
+        if missing:
+            return refuse(f"specs[{i}] lacks required key(s) {', '.join(missing)}")
+        for key in ("x", "y"):
+            if isinstance(spec[key], bool) or not isinstance(spec[key], (int, float)) or not math.isfinite(spec[key]):
+                return refuse(f"specs[{i}].{key} must be a finite number in mm, got {spec[key]!r}")
+        for key in ("lib_id", "ref"):
+            if not isinstance(spec[key], str) or not spec[key]:
+                return refuse(f"specs[{i}].{key} must be a non-empty string, got {spec[key]!r}")
+        rotation = spec.get("rotation", 0)
+        if isinstance(rotation, bool) or not isinstance(rotation, (int, float)) or rotation not in (0, 90, 180, 270):
+            return refuse(f"specs[{i}].rotation must be 0, 90, 180 or 270, got {rotation!r}")
+        unit = spec.get("unit", 1)
+        if isinstance(unit, bool) or not isinstance(unit, int) or unit < 1:
+            return refuse(f"specs[{i}].unit must be a whole number from 1, got {unit!r}")
+        mirror = spec.get("mirror", "")
+        if not (isinstance(mirror, str) and mirror in ("", *_MIRROR_AXES)):
+            return refuse(f"specs[{i}].mirror must be \"x\", \"y\" or \"\" (none), got {mirror!r}")
+        asked = mirrors.setdefault((spec["ref"], unit), mirror)
+        if asked != mirror:
+            return refuse(f"specs[{i}] places {spec['ref']} unit {unit} again with a different mirror ({asked!r} before, {mirror!r} now)")
+    return None
+
+
+def _unit_of(node: Any) -> int:
+    unit = node.find_children("unit")
+    return (int(unit[0].get_float(0)) if unit else 1) or 1
+
+
+def _apply_mirrors(root: Any, mirrors: dict[tuple[str, int], str], old_uuids: set[str]) -> None:
+    """Give the symbol nodes this call added (reference in ``mirrors``, uuid not in ``old_uuids``) a
+    ``(mirror x|y)`` node right after ``(at ..)``, where KiCad writes it, through the write layer."""
+    from kicad_mcp import sheet_editing
+
+    for node in root.children:
+        if node.is_atom or node.name != "symbol" or not node.find_children("lib_id") or not node.find_children("uuid"):
+            continue
+        axis = mirrors.get((sheet_editing._ref(node), _unit_of(node)), "")
+        if not axis or node.find_children("uuid")[0].get_string(0) in old_uuids or node.find_children("mirror"):
+            continue
+        at = node.find_children("at")[0]
+        node.children.insert(node.children.index(at) + 1, write_layer.SExp.list("mirror", write_layer.symbol(axis)))
+
+
+def _check_mirrors(content: str, mirrors: dict[tuple[str, int], str], old_uuids: set[str]) -> None:
+    """Self-check (decision 4): the text about to be written holds the mirror each new symbol was asked for."""
+    from kicad_mcp import sheet_editing
+
+    root = write_layer.parse_string(content)
+    found = {
+        (sheet_editing._ref(n), _unit_of(n)): (n.find_children("mirror")[0].children[0].value if n.find_children("mirror") else "")
+        for n in root.children
+        if not n.is_atom and n.name == "symbol" and n.find_children("lib_id") and n.find_children("uuid")
+        and n.find_children("uuid")[0].get_string(0) not in old_uuids
+    }
+    wrong = [{"reference": f"{ref} unit {unit}", "expected": axis, "actual": found.get((ref, unit))}
+             for (ref, unit), axis in mirrors.items() if axis and found.get((ref, unit)) != axis]
+    if wrong:
+        raise SchematicWriteNotVerified(
+            f"the mirror of {len(wrong)} new symbol(s) did not survive into the text; the sheet was left unchanged",
+            [{"file": "sheet", "check": "mirror", "subject": w["reference"], "expected": w["expected"], "actual": w["actual"]} for w in wrong],
+            {"missing": [w["reference"] for w in wrong], "unexpected": [], "tolerated": []}, None)
+
+
 def _write_schematic_utf8(
-    sch: Any, path: Path, *, added_refs: set[str] = frozenset(), reattach: bool = False
+    sch: Any, path: Path, *, added_refs: set[str] = frozenset(), reattach: bool = False,
+    mirrors: dict[tuple[str, int], str] | None = None, old_uuids: set[str] = frozenset(),
 ) -> None:
     """Write a kicad_tools high-level ``Schematic`` to ``path`` as UTF-8.
 
@@ -762,6 +851,11 @@ def _write_schematic_utf8(
     content = _schematic_text(sch)
     if reattach:
         content = _reattach_to_tree(content, path)
+    if mirrors and any(mirrors.values()):  # GitHub issue 111: kicad_tools' add_symbol has no mirror parameter
+        node = write_layer.parse_string(content)
+        _apply_mirrors(node, mirrors, set(old_uuids))
+        content = write_layer.serialise(node) + chr(10)
+        _check_mirrors(content, mirrors, set(old_uuids))
     if "\r" in content:  # backstop: the tools refuse \r in their input before this
         raise ValueError("carriage return in the schematic text; kicad_tools would write it unescaped")
     tmp = path.with_name(path.name + ".utf8.tmp")
@@ -975,13 +1069,20 @@ def build(mcp: MCPServer) -> list[str]:
         """Place one or more symbols onto an existing schematic in one call.
 
         Each spec: lib_id, x, y, ref (required); value, rotation, footprint,
-        unit, in_bom, dnp, snap (optional). Batch-oriented -- never loop this one
+        unit, in_bom, dnp, snap, mirror (optional). Batch-oriented -- never loop this one
         symbol at a time.
+
+        mirror (issue 111): "x", "y" or "" (none; the default). KiCad applies the rotation first and
+        then the mirror: "y" flips the symbol left to right (a connector's pins that were on its left
+        are on its right, each pin keeping its row), "x" flips it top to bottom. It is stored as
+        (mirror x|y) after (at ..) and read back in `symbols` as `mirror`, with the pin points already
+        transformed. A key that is not listed, a missing required key, a non-numeric x or y or any other
+        mirror value is refused as invalid_spec naming it (nothing written).
 
         Positions are placed as given (issue 86): the origin is NOT rounded to the 1.27 mm grid
         unless a spec carries "snap": true, because existing callers place at arbitrary
         coordinates. The result reads back every symbol and unit that was written, from the raw
-        sheet: `symbols` ({reference, uuid, lib_id, unit, at, rotation, asked, pins [{number,
+        sheet: `symbols` ({reference, uuid, lib_id, unit, at, rotation, mirror, asked, pins [{number,
         name, x, y}], pin_count, off_grid_pins}), `snapped` (what "snap": true moved), `grid`.
         Use those pin points, or wire by pin with connect_pins, and do not compute them.
 
@@ -1010,6 +1111,8 @@ def build(mcp: MCPServer) -> list[str]:
         path = Path(sch_path)
         if not path.is_file():
             return _incomplete(f"file not found: {sch_path}")
+        if (refused := _symbol_spec_refusal(specs)) is not None:
+            return refused
         if (refused := _refuse_carriage_returns(specs, "specs")) is not None:
             return refused
         _ensure_kicad_symbol_dir_set()
@@ -1048,7 +1151,8 @@ def build(mcp: MCPServer) -> list[str]:
                     dnp=spec.get("dnp", False),
                 )
                 placed.append(instance.reference)
-            _write_schematic_utf8(sch, path, added_refs=set(placed), reattach=True)
+            _write_schematic_utf8(sch, path, added_refs=set(placed), reattach=True,
+                                  mirrors={(spec["ref"], spec.get("unit", 1)): spec.get("mirror", "") for spec in specs}, old_uuids=before_uuids)
         except SchematicWriteNotVerified as exc:
             return _not_verified_result(exc)
         except Exception as exc:  # noqa: BLE001 - evidence-gated verdict
@@ -1840,7 +1944,9 @@ def build(mcp: MCPServer) -> list[str]:
         move_wires (default true): the wire ends, junctions, labels and no-connect markers that sit
         exactly on a moved symbol's pin move with it by the same offset, so the wiring follows. A wire
         whose other end stays becomes slanted when the move is not along it: the result lists those
-        wires under slanted, and every dragged item with its old and new position under followed. With
+        wires under slanted, and every dragged item with its old and new position under followed. A
+        mirrored symbol ((mirror x|y), set by add_symbols) is moved like any other: its pins are read with
+        rotation and mirror applied, so the wires on them follow; the mirror itself is kept. With
         move_wires false nothing attached moves (and the connectivity comparison below will usually
         refuse the call).
 
