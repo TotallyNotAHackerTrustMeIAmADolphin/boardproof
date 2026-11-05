@@ -53,6 +53,16 @@ candidate and is still RED. A known-red entry matches by test id only: a known-r
 for a new reason still counts as known.
 
 The verdict is the last line: ``BATCH GATE <sha7>: GREEN`` or ``BATCH GATE <sha7>: RED (...)``.
+``--workers N`` (N from 1 to 4, default 1, build ticket 154) runs the suite step with pytest-xdist,
+``-n N --dist load`` on the command line (never ``addopts``; ``EXPECTED_PYTEST_CONFIG`` is unchanged),
+and nothing else changes at the default. xdist prints ``N workers [M items]`` (M = selected tests)
+instead of the ``collected`` line and no deselected count, so under workers the gate requires that
+line with exactly N workers and an M equal to the full collection less the network-marked tests (a
+``deselected`` part in the summary must be 0 or the network count); skip, failure and summary lines
+keep their serial shapes, and every RED condition above holds. The parallel mode has its own measured
+basis and timeout (``SUITE_MEASURED_PARALLEL_S``, ``SUITE_TIMEOUT_PARALLEL_S``, not yet measured on a quiet
+machine, so the timeout equals the serial one; ``--timeout`` overrides), and the printed line names the mode. Reruns stay serial. The per-test times
+file (issue 65) is one file per worker, ``<run>.times-gwN.out``: the controller writes none.
 Exit code 0 for GREEN, 1 for RED (2 for a bad argument). The first lines give the expected duration
 and the worst case (``worst_case_s``; builder.md's outer ``timeout`` lies above it). Full output:
 the log printed at the start; each run's files are named ``<sha7>[-dirty]-<date>-<time>-<pid>``,
@@ -108,6 +118,21 @@ SUITE_MEASURED_WHEN = "374c526 on 2026-10-21, several gates in parallel, only ot
 KRT_DEFAULT_DIR = Path(".tools") / "KiCadRoutingTools"
 KRT_SETUP_HINT = "restore it with: python scripts/setup_krt.py (clones the pinned checkout into .tools/KiCadRoutingTools and verifies the router binary)"
 SUITE_TIMEOUT_S = 7650
+# The parallel mode (``--workers N``, build ticket 154, stage 2 of issue 70): pytest-xdist ``-n N
+# --dist load``. NO quiet-machine parallel run is logged yet. The only full run, 3ea6b3c/d4900c2 on
+# 2026-11-05, took 3772 s with other agents' tests running (serial f82764e: 3694 s, also loaded), so
+# no speed-up is shown; the 2.05x of the issue 70 trial was measured on file subsets. Until a run on a
+# quiet machine is logged, the parallel mode is never given less time than the serial one.
+# TO RE-BASE: run ``batch_gate.py --workers 4`` alone on a quiet machine (no other pytest or
+# kicad-cli process), take "pytest finished in N s" from its log, set SUITE_MEASURED_PARALLEL_S to the
+# slowest such N, set SUITE_TIMEOUT_PARALLEL_S to about 3x it (fork P10), set
+# SUITE_MEASURED_PARALLEL_QUIET to True, and update docs/TESTING.md and fork P11 to the same figures.
+SUITE_MEASURED_PARALLEL_S = 3772
+SUITE_MEASURED_PARALLEL_QUIET = False
+SUITE_MEASURED_PARALLEL_WHEN = (
+    "one loaded-machine run, no speed-up shown; re-base after a quiet-machine run")
+SUITE_TIMEOUT_PARALLEL_S = 7650
+MAX_WORKERS = 4  # more gives nothing (trial: -n 8 no gain) and one -n 4 run needs about 4-7 GB of RAM
 WAIT_SLICE_S = 5.0  # default_runner checks the wall-clock deadline this often
 IMPORT_TIMEOUT_S = 120
 COLLECT_TIMEOUT_S = 300
@@ -172,6 +197,9 @@ _ROOTDIR = re.compile(r"^rootdir: (.+?)(?:, (?:configfile|testpaths|inifile): .*
 _CONFIGFILE = re.compile(r"(?:^|, )configfile: (\S+?)(?:,|\s*$)")
 _COLLECTED = re.compile(r"^collected (\d+) items?\b.*$")
 _COLLECT_ONLY = re.compile(r"^(\d+)(?:/(\d+))? tests? collected\b")
+# pytest-xdist 3.8.0 (dsession.get_workers_status_line) prints "created: 4/4 workers" and then
+# "4 workers [51 items]" in place of pytest's "collected N items" line; the items are the SELECTED ones.
+_WORKERS = re.compile(r"^(\d+) workers? \[(\d+) items?\]\s*$")
 _FINAL = re.compile(r"^=+ (.*\bin [\d.]+s\b.*?) =+\s*$")
 _TICKET = re.compile(r"#.*\bticket\s+\d+", re.I)
 
@@ -226,6 +254,16 @@ def collected_line(output: str) -> str | None:
     for line in output.splitlines():
         if _COLLECTED.match(line):
             return line.strip()
+    return None
+
+
+def workers_line(output: str) -> tuple[int, int] | None:
+    """(workers, selected items) from pytest-xdist's ``N workers [M items]`` line, else None. The
+    progress lines before it (``created: 4/4 workers``, ``collecting: ...``) are not this shape."""
+    for line in output.splitlines():
+        m = _WORKERS.match(line)
+        if m:
+            return int(m.group(1)), int(m.group(2))
     return None
 
 
@@ -371,12 +409,15 @@ def run_gate(
     run_id: str | None = None,
     clock: Callable[[], float] = time.monotonic,
     publish_check: Callable[..., list[str]] | None = None,
+    workers: int = 1,
 ) -> Result:
-    """``run_id`` prefixes every output file in ``log_dir`` (default: the sha7)."""
+    """``run_id`` prefixes every output file in ``log_dir`` (default: the sha7). ``workers`` above 1
+    runs the suite with pytest-xdist ``-n workers --dist load`` and reads its output shapes."""
     res = Result()
     s7 = run_id or sha[:7]
     env = dict(os.environ)
     env.pop("KICAD_MCP_TEST_TIMES", None)  # the gate sets it for the suite step only (issue 65)
+    env.pop("KICAD_MCP_TEST_TIMES_ROLE", None)  # an outer run's role (tests/_test_times.py) is never inherited
     if env.pop("PYTEST_ADDOPTS", None) is not None:
         say("PYTEST_ADDOPTS is set; ignored for this run")
     env["PYTHONPATH"] = str(root / "src")
@@ -466,6 +507,7 @@ def run_gate(
     rc = runner([python, "-m", "pytest", "--collect-only", "-q", "-m", "network", "-p", "no:cacheprovider"],
                 env, root, COLLECT_TIMEOUT_S, net_out)
     network = None
+    all_total = None  # the full collection's test count, for the parallel mode's selection check
     for line in _read(net_out).splitlines():
         m = _COLLECT_ONLY.match(line.strip())
         if m:
@@ -484,6 +526,10 @@ def run_gate(
     rc = runner([python, "-m", "pytest", "--collect-only", "-q", "-rs", "-p", "no:cacheprovider"],
                 env, root, COLLECT_TIMEOUT_S, all_out)
     collected_text = _read(all_out)
+    for line in collected_text.splitlines():
+        m = _COLLECT_ONLY.match(line.strip())
+        if m:
+            all_total = int(m.group(2) or m.group(1))
     collected_files = {line.split("::", 1)[0].replace("\\", "/") for line in collected_text.splitlines()
                        if "::" in line and not line.startswith(("SKIPPED", "FAILED", "ERROR"))}
     collected_files |= {f for f, _ in skip_counts(collected_text)}
@@ -502,10 +548,14 @@ def run_gate(
 
     # The suite.
     cmd = [python, "-m", "pytest", "-m", "not network", "-rfEs", "-p", "no:cacheprovider"]
+    if workers > 1:  # on the command line, never addopts: EXPECTED_PYTEST_CONFIG stays as reviewed
+        cmd += ["-n", str(workers), "--dist", "load"]
     out_path = log_dir / f"{s7}.pytest.out"
     say(f"pytest: {' '.join(cmd)} (timeout {int(suite_timeout)} s), output {out_path}")
     times_path = log_dir / f"{s7}.times.out"  # START/END line per test (issue 65); never a RED reason
-    say(f"per-test times: {times_path}")
+    say(f"per-test times: {times_path}"
+        + (f" (with workers one file per worker: {times_path.name.removesuffix('.out')}-gwN.out)"
+           if workers > 1 else ""))
     t0 = time.monotonic()
     rc = runner(cmd, {**env, "KICAD_MCP_TEST_TIMES": str(times_path)}, root, suite_timeout, out_path)
     say(f"pytest finished in {time.monotonic() - t0:.0f} s with exit code {'TIMEOUT' if rc is None else rc}")
@@ -524,21 +574,44 @@ def run_gate(
     say(f"configfile: {cf or '(none)'}")
     if cf != "pyproject.toml":
         res.reasons.append(f"configfile is {cf or 'missing'}, not pyproject.toml")
-    coll = collected_line(out)
-    say(f"collected: {coll or '(no collected line)'}")
     summary = final_summary(out)
-    say(f"summary: {summary or '(no final summary line)'}")
-    if coll is None:
-        res.reasons.append("no collected line")
+    selected = None
+    if workers > 1:
+        # xdist prints no "collected" line and no deselected count (observed, pytest-xdist 3.8.0): the
+        # selected count is the workers line's, checked against the full collection less the
+        # network-marked tests, both counted by the two separate collection runs above.
+        wl = workers_line(out)
+        say(f"workers line: {f'{wl[0]} workers [{wl[1]} items]' if wl else '(no workers line)'}")
+        say(f"summary: {summary or '(no final summary line)'}")
+        if wl is None:
+            res.reasons.append(f"no workers line (pytest-xdist did not start {workers} workers)")
+        else:
+            started, selected = wl
+            if started != workers:
+                res.reasons.append(f"pytest started {started} workers, not {workers}")
+            if network is None or all_total is None:
+                res.reasons.append("the selection cannot be checked: the full or the network collection is unreadable")
+            elif selected != all_total - network:
+                res.reasons.append(f"{selected} tests selected by the workers, but {all_total} collected less"
+                                   f" {network} network-marked is {all_total - network}")
+            deselected = summary_count(summary, "deselected") if summary is not None else 0
+            if network is not None and deselected not in (0, network):
+                res.reasons.append(f"{deselected} deselected, but {network} tests are marked network")
     else:
-        total, deselected, selected = collected_counts(coll)
-        if network is not None and deselected != network:
-            res.reasons.append(f"{deselected} deselected, but {network} tests are marked network")
-        if summary is not None and rc in (0, 1):
-            ran = sum(summary_count(summary, w) for w in ("passed", "failed", "skipped", "xfailed", "xpassed"))
-            errors = summary_count(summary, "errors?")
-            if ran > selected or ran + errors < selected:
-                res.reasons.append(f"{selected} tests selected, but {ran} ran ({errors} errors)")
+        coll = collected_line(out)
+        say(f"collected: {coll or '(no collected line)'}")
+        say(f"summary: {summary or '(no final summary line)'}")
+        if coll is None:
+            res.reasons.append("no collected line")
+        else:
+            total, deselected, selected = collected_counts(coll)
+            if network is not None and deselected != network:
+                res.reasons.append(f"{deselected} deselected, but {network} tests are marked network")
+    if selected is not None and summary is not None and rc in (0, 1):
+        ran = sum(summary_count(summary, w) for w in ("passed", "failed", "skipped", "xfailed", "xpassed"))
+        errors = summary_count(summary, "errors?")
+        if ran > selected or ran + errors < selected:
+            res.reasons.append(f"{selected} tests selected, but {ran} ran ({errors} errors)")
     if summary is not None and summary_count(summary, "passed") == 0:
         res.reasons.append("nothing passed")
 
@@ -857,7 +930,7 @@ LOG_KEEP_RUNS = 100  # beyond the newest 100 runs, a run is removed once it is o
 LOG_MIN_AGE_S = 24 * 3600
 _LOG_FILE = re.compile(  # only files the gate names (fullmatch); anything else is never touched
     r"(?P<run>[0-9a-f]{7}(?:-dirty)?(?:-\d{8}-\d{6}-\d+(?:-\d+)?)?)"
-    r"\.(?:log|(?:import|network|collect|pytest|times|lint|rerun-\d+)\.out)")
+    r"\.(?:log|(?:import|network|collect|pytest|times|lint|rerun-\d+)\.out|times-gw\d+\.out)")
 
 
 @dataclass
@@ -999,25 +1072,47 @@ def _timeout(text: str) -> float:
     return value
 
 
-def expected_duration(suite_timeout: float) -> str:
-    """The line a waiting agent reads to know when a run has hung (fork P11)."""
+def _workers(text: str) -> int:
+    try:
+        value = int(text)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"not a whole number: {text}") from None
+    if not 1 <= value <= MAX_WORKERS:
+        raise argparse.ArgumentTypeError(f"must be from 1 to {MAX_WORKERS}: {text}")
+    return value
+
+
+def expected_duration(suite_timeout: float, workers: int = 1) -> str:
+    """The line a waiting agent reads to know when a run has hung (fork P11). It names the mode."""
     worst = worst_case_s(suite_timeout)
+    tail = (f"the suite times out at {int(suite_timeout)} s and the gate ends at worst about {round(worst / 60)} min"
+            " after its start. A run still going after that has hung: stop it and escalate"
+            " (fork playbook P11, docs/TESTING.md)")
+    if workers > 1:
+        quiet = "" if SUITE_MEASURED_PARALLEL_QUIET else "; not yet measured on a quiet machine"
+        return (f"expected duration: --workers {workers} (pytest-xdist -n {workers} --dist load): no expected"
+                f" duration yet (pytest took {SUITE_MEASURED_PARALLEL_S} s in {SUITE_MEASURED_PARALLEL_WHEN}{quiet});"
+                f" {tail}")
     return (f"expected duration: about {round((SUITE_MEASURED_S + OVERHEAD_S) / 60)} min (pytest took up to"
-            f" {SUITE_MEASURED_S} s, {SUITE_MEASURED_WHEN}); the suite times out at"
-            f" {int(suite_timeout)} s and the gate ends at worst about {round(worst / 60)} min after its start."
-            " A run still going after that has hung: stop it and escalate (fork playbook P11, docs/TESTING.md)")
+            f" {SUITE_MEASURED_S} s, {SUITE_MEASURED_WHEN}); {tail}")
 
 
 def main(argv: list[str] | None = None, *, root: Path = ROOT, runner: Runner = default_runner) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--python", help="interpreter for pytest and lint (default: the shared .venv)")
-    ap.add_argument("--timeout", type=_timeout, default=SUITE_TIMEOUT_S,
-                    help=f"suite timeout in seconds (default {SUITE_TIMEOUT_S}, about 3x the slowest measured suite with only other gates known to be running; enforced on the wall clock)")
+    ap.add_argument("--timeout", type=_timeout, default=None,
+                    help=f"suite timeout in seconds (default {SUITE_TIMEOUT_S}, about 3x the slowest measured suite with only other gates known to be running; enforced on the wall clock;"
+                         f" with --workers above 1 the default is {SUITE_TIMEOUT_PARALLEL_S})")
+    ap.add_argument("--workers", type=_workers, default=1,
+                    help=f"run the suite with pytest-xdist (-n N --dist load), N from 1 to {MAX_WORKERS} (default 1: the"
+                         " serial gate, unchanged); about 4-7 GB of RAM at 4, so no other 4-worker run at the same time")
     ap.add_argument("--publishable-only", action="store_true",
                     help="run only the publishability check over the tracked files (for a push); prints"
                          " PUBLISHABLE: OK or PUBLISHABLE: RED (...) and exits 0 or 1")
     ap.add_argument("--log-dir", type=Path, default=Path(tempfile.gettempdir()) / "kicad-mcp-batch-gate")
     args = ap.parse_args(argv)
+    if args.timeout is None:
+        args.timeout = SUITE_TIMEOUT_S if args.workers == 1 else SUITE_TIMEOUT_PARALLEL_S
 
     if args.publishable_only:
         reasons = check_publishable_tracked(root, args.python or sys.executable, print)
@@ -1075,7 +1170,10 @@ def main(argv: list[str] | None = None, *, root: Path = ROOT, runner: Runner = d
     say(f"batch gate: worktree {root}, HEAD {sha}")
     say(f"interpreter: {python}")
     say(f"log: {log_path}")
-    say(expected_duration(args.timeout))
+    say(expected_duration(args.timeout, args.workers))
+    if args.workers > 1:
+        say(f"workers: {args.workers} (pytest-xdist -n {args.workers} --dist load; about 4-7 GB of RAM at 4:"
+            " no other 4-worker run at the same time)")
     pre_push, identity = hook_states(root)
     say(f"pre-push guard: {pre_push}")
     say(f"identity guard (commit-msg hook): {identity}")
@@ -1099,7 +1197,8 @@ def main(argv: list[str] | None = None, *, root: Path = ROOT, runner: Runner = d
     res = run_gate(root=root, sha=sha, dirty=dirty, python=python, known_red_text=known_text,
                    known_skips_text=skips_text, tracked_tests=tracked,
                    pyproject_text=pyproject_text,
-                   runner=runner, log_dir=args.log_dir, say=say, suite_timeout=args.timeout, run_id=run_id)
+                   runner=runner, log_dir=args.log_dir, say=say, suite_timeout=args.timeout, run_id=run_id,
+                   workers=args.workers)
     # The tree is read again last: an edit, commit or checkout during the run makes it void (ticket 70).
     res.reasons += recheck_tree(root, sha, dirty, say)
     verdict = "GREEN" if res.green else f"RED ({'; '.join(res.reasons)})"

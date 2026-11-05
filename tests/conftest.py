@@ -25,6 +25,7 @@ import pytest
 from tests import _kicad_demos, _krt, _ngspice
 from tests._test_times import pytest_runtest_logfinish as pytest_runtest_logfinish  # issue 65
 from tests._test_times import pytest_runtest_logstart as pytest_runtest_logstart
+from tests._test_times import pytest_sessionstart as pytest_sessionstart  # issue 154: xdist controller writes none
 
 def pytest_configure(config):
     config.addinivalue_line("markers", _krt.MARKER_HELP)

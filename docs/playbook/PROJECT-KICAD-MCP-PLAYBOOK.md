@@ -185,6 +185,14 @@ wins over both.
 > `EXPECTED_PYTEST_CONFIG` in the script, or when a tracked `tests/test_*.py` file is missing from
 > a full `--collect-only` run. Adding a skip entry, raising a maximum or changing the pytest
 > configuration needs a ticket and a review, like a known red.
+> **Parallel option (build ticket 154).** `batch_gate.py --workers N` (N from 1 to 4, default 1 = all of
+> the above unchanged) runs the suite with `-n N --dist load` (pytest-xdist) on the command line, never in
+> `addopts`. It reads xdist's `N workers [M items]` line in place of the `collected` line and checks M
+> against the full collection less the network-marked tests (xdist prints no deselected count); every RED
+> condition above holds. Its own basis and timeout are `SUITE_MEASURED_PARALLEL_S` (3772 s, one
+> loaded-machine run, no speed-up shown) and `SUITE_TIMEOUT_PARALLEL_S` (7650 s, the serial timeout until a
+> quiet-machine run is logged); the gate prints no expected duration for the mode ("not yet measured on a
+> quiet machine"), only the worst case, and names the mode. Run no other 4-worker run at the same time (4-7 GB of RAM).
 > **Known reds are only the entries of `scripts/known-red.txt`**, each naming its owning ticket (an
 > entry without one turns the gate RED). Adding an entry needs its own ticket and an adversarial
 > review; any failure not on the list blocks the merge or commit. Entries match by test id only: a
