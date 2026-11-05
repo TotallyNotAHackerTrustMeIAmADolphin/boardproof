@@ -6,6 +6,7 @@ sending every coordinate again. This module holds the batch tools that change a 
 - ``delete_symbols`` / ``delete_wires`` / ``delete_labels`` / ``delete_junctions``
 - ``move_symbols`` / ``move_labels``
 - ``set_property_positions`` (position, angle and justification of a symbol's property texts)
+- ``replace_symbols`` (issue 112: a placed symbol becomes another lib_id in place; the checks are at the function)
 
 Decision 1 (docs/ARCHITECTURE.md): nothing here edits KiCad text. A sheet is loaded with
 ``write_layer.load`` into ``kicad_tools``' low-level ``SExp`` tree, changed by removing nodes and
@@ -587,26 +588,54 @@ class Outcome:
     compare: Any = None                                    # (before, after, removed_refs) -> changes; default compare_nets
     post_check: Any = None                                 # (before, after) -> None, raises to refuse (self-check)
     no_change: bool = False                                # nothing to write: return after the checks
+    lib_added: set[str] = field(default_factory=set)       # names of lib_symbols entries the call added on purpose (issue 112)
+    lib_removed: set[str] = field(default_factory=set)     # names of lib_symbols entries the call dropped on purpose
 
 
 def _staged_check(original: SExp, new: SExp, outcome: Outcome) -> None:
     """Every top-level node the call did not mean to touch is unchanged; deleted nodes are gone;
     changed nodes are still there. Raises ``write_not_verified`` (nothing is written yet)."""
-    def table(root: SExp) -> tuple[dict[str, str], Counter]:
+    track_lib = bool(outcome.lib_added or outcome.lib_removed)
+
+    def table(root: SExp) -> tuple[dict[str, str], Counter, dict[str, list[str]]]:
         keyed: dict[str, str] = {}
         plain: Counter = Counter()
+        libs: dict[str, list[str]] = {}
         for child in root.children:
             if child.is_atom:
                 plain[write_layer.serialise(child, compact=True)] += 1
+            elif track_lib and child.name == "lib_symbols":
+                for entry in child.children:
+                    if not entry.is_atom and entry.name == "symbol":
+                        libs.setdefault(entry.get_string(0) or "", []).append(write_layer.serialise(entry, compact=True))
+                    else:
+                        plain[write_layer.serialise(entry, compact=True)] += 1
             elif _uuid(child) and child.name != "lib_symbols":
                 keyed[_uuid(child)] = write_layer.serialise(child, compact=True)
             else:
                 plain[write_layer.serialise(child, compact=True)] += 1
-        return keyed, plain
+        return keyed, plain, libs
 
-    old_keyed, old_plain = table(original)
-    new_keyed, new_plain = table(new)
+    old_keyed, old_plain, old_libs = table(original)
+    new_keyed, new_plain, new_libs = table(new)
     problems = []
+    if track_lib:
+        for name in outcome.lib_removed:
+            if name in new_libs:
+                problems.append(f"library symbol {name} should be dropped but is still there")
+        for name in outcome.lib_added:
+            if name not in new_libs:
+                problems.append(f"library symbol {name} should have been added but is missing")
+        for name, text in old_libs.items():
+            if name in outcome.lib_removed:
+                continue
+            if name not in new_libs:
+                problems.append(f"library symbol {name} is gone but was not selected")
+            elif new_libs[name] != text:
+                problems.append(f"library symbol {name} changed")
+        for name in new_libs.keys() - old_libs.keys():
+            if name not in outcome.lib_added:
+                problems.append(f"library symbol {name} is new")
     if old_plain != new_plain:
         problems.append("a node without a uuid (title block, library symbols, paper, ...) changed")
     for uid in outcome.deleted:
@@ -1017,4 +1046,318 @@ def set_property_positions(path: str, items: list[dict], root_sch: str | None, *
     result = run(path, root_sch, mutate, allow_connectivity_change=False, dry_run=dry_run)
     if result.get("ok") and dry_run:
         result["would_update"] = result.pop("updated")
+    return result
+
+
+# --------------------------------------------------------------------------- replace_symbols (issue 112)
+
+_NO_NUMBER = ("", "~")
+_REPLACE_KEYS = {"reference", "uuid", "lib_id", "pin_map"}
+
+
+def _placed(sheet: Sheet) -> list[SExp]:
+    return [s for s in sheet.symbols if s.find_children("lib_id")]
+
+
+def _lib_name_of(symbol: SExp) -> str:
+    lib = symbol.find_children("lib_name")
+    if lib:
+        return lib[0].get_string(0) or ""
+    return symbol.find_children("lib_id")[0].get_string(0) or ""
+
+
+def _unit_of(symbol: SExp) -> int:
+    return (symbol.find_children("unit")[0].get_int(0) if symbol.find_children("unit") else 1) or 1
+
+
+def _library_units(entry: SExp) -> set[int]:
+    """The unit numbers a library symbol draws (from its ``<name>_<unit>_<style>`` children; 0 is shared)."""
+    units: set[int] = set()
+    for sub in _kids(entry, "symbol"):
+        parts = (sub.get_string(0) or "").rsplit("_", 2)
+        if len(parts) == 3 and parts[1].isdigit() and parts[2].isdigit():
+            units.add(int(parts[1]))
+    return units
+
+
+def _load_library_entry(sheet_path: Path, lib_id: str) -> list[SExp]:
+    """The embeddable ``(symbol "Lib:Name" ...)`` node of ``lib_id`` read from its library file (the
+    project's tables first, then KiCad's own folder), the same source ``add_symbols`` seeds from."""
+    from kicad_tools.schematic.models.symbol import SymbolDef
+
+    from kicad_mcp import symbol_libs
+
+    resolution = symbol_libs.resolve_symbol_libraries(sheet_path, [lib_id])
+    if resolution.problems:
+        raise SheetAuthoringError("lib_unresolved", f"cannot resolve {lib_id!r}: {resolution.reason}; nothing was written", lib_id=lib_id)
+    nick = lib_id.split(":", 1)[0]
+    folders = [resolution.files[nick].parent] if nick in resolution.files else symbol_libs.kicad_symbol_dirs()
+    last: Exception | None = None
+    for folder in folders:
+        try:
+            nodes = SymbolDef.from_library(lib_id, lib_paths=[folder]).to_sexp_nodes()
+        except Exception as exc:  # noqa: BLE001 - reported as a refusal naming the library
+            last = exc
+            continue
+        if nodes:
+            return nodes
+    raise SheetAuthoringError("lib_unresolved", f"cannot read {lib_id!r} from its library: {last}; nothing was written", lib_id=lib_id)
+
+
+def _attached(sheet: Sheet, point: tuple[float, float], own: SExp) -> list[str]:
+    """What sits exactly on ``point`` besides the pins of ``own``: wire ends, labels, junctions,
+    no-connect markers, other symbols' pins and sheet pins. A wire that only runs over it joins nothing."""
+    found = []
+    for wire in sheet.wires:
+        ends = _wire_ends(wire)
+        if ends and (_same(ends[0], point) or _same(ends[-1], point)):
+            found.append(f"wire {_uuid(wire)}")
+    for group, nodes in (("label", sheet.labels), ("junction", sheet.junctions), ("no_connect", sheet.no_connects)):
+        for node in nodes:
+            x, y, _a = _at(node)
+            if _same((x, y), point):
+                found.append(f"{group} {_uuid(node)}")
+    for sym in sheet.symbols:
+        if sym is own or not sym.find_children("lib_id"):
+            continue
+        for pin in pin_positions(sheet.root, sym):
+            if _same((pin["x"], pin["y"]), point):
+                found.append(f"pin {_ref(sym)}.{pin['number']}")
+    for node in sheet.sheets:
+        for pin in _kids(node, "pin"):
+            x, y, _a = _at(pin)
+            if _same((x, y), point):
+                found.append(f"sheet pin {pin.get_string(0)}")
+    return found
+
+
+def _pair_pins(old: list[dict], new: list[dict], pin_map: dict[str, str], who: str) -> tuple[list[tuple[dict, dict]], list[dict]]:
+    """Pair the old pins with the new ones: the explicit ``pin_map`` (old number -> new number) first,
+    then the same pin number, then, for a pin that has no number, the same pin name. Returns the pairs
+    and the old pins with no counterpart."""
+    old_numbers = {p["number"] for p in old}
+    new_by_number: dict[str, dict] = {}
+    for p in new:
+        new_by_number.setdefault(p["number"], p)
+    new_by_name: dict[str, dict] = {}
+    for p in new:
+        if p["number"] in _NO_NUMBER:
+            new_by_name.setdefault(p["name"], p)
+    bad_keys = sorted(k for k in pin_map if k not in old_numbers)
+    if bad_keys:
+        raise SheetAuthoringError("invalid_pin_map", f"{who}: pin_map names pins the old symbol does not have: {bad_keys} (it has {sorted(old_numbers)}); nothing was written")
+    bad_values = sorted(v for v in pin_map.values() if v not in new_by_number)
+    if bad_values:
+        raise SheetAuthoringError("invalid_pin_map", f"{who}: pin_map names pins the new symbol does not have: {bad_values} (it has {sorted(new_by_number)}); nothing was written")
+    if len(set(pin_map.values())) != len(pin_map):
+        raise SheetAuthoringError("invalid_pin_map", f"{who}: pin_map sends two old pins to one new pin; nothing was written")
+    pairs: list[tuple[dict, dict]] = []
+    unmapped: list[dict] = []
+    taken = set(pin_map.values())
+    taken_ids: set[int] = set()
+    for o in old:
+        if o["number"] in pin_map:
+            target = new_by_number[pin_map[o["number"]]]
+        elif o["number"] not in _NO_NUMBER and o["number"] in new_by_number and o["number"] not in taken:
+            target = new_by_number[o["number"]]
+            taken.add(o["number"])
+        elif o["number"] in _NO_NUMBER and o["name"] in new_by_name and id(new_by_name[o["name"]]) not in taken_ids:
+            target = new_by_name[o["name"]]
+            taken_ids.add(id(target))
+        else:
+            unmapped.append(o)
+            continue
+        pairs.append((o, target))
+    return pairs, unmapped
+
+
+def _check_replace_specs(replacements: Any) -> list[dict]:
+    if not isinstance(replacements, list) or not replacements:
+        raise SheetAuthoringError("invalid_spec", "replacements must be a non-empty list of {reference | uuid, lib_id, pin_map?} objects")
+    for i, spec in enumerate(replacements):
+        if not isinstance(spec, dict):
+            raise SheetAuthoringError("invalid_spec", f"replacements[{i}] must be an object")
+        unknown = sorted(set(spec) - _REPLACE_KEYS)
+        if unknown:
+            raise SheetAuthoringError("invalid_spec", f"replacements[{i}] has unknown keys {unknown}; allowed: {sorted(_REPLACE_KEYS)}")
+        if ("reference" in spec) == ("uuid" in spec):
+            raise SheetAuthoringError("invalid_spec", f"replacements[{i}] needs exactly one of reference and uuid")
+        for key in ("reference", "uuid", "lib_id"):
+            if key in spec and not (isinstance(spec[key], str) and spec[key]):
+                raise SheetAuthoringError("invalid_spec", f"replacements[{i}].{key} must be a non-empty string")
+        if "lib_id" not in spec or ":" not in spec["lib_id"]:
+            raise SheetAuthoringError("invalid_spec", f"replacements[{i}].lib_id must be of the form Library:Symbol")
+        pm = spec.get("pin_map", {})
+        if not isinstance(pm, dict) or not all(isinstance(k, str) and isinstance(v, str) and k and v for k, v in pm.items()):
+            raise SheetAuthoringError("invalid_spec", f"replacements[{i}].pin_map must map old pin numbers to new pin numbers (strings)")
+    return replacements
+
+
+def _uses(sheet: Sheet, name: str) -> list[str]:
+    return [_ref(s) for s in _placed(sheet) if _lib_name_of(s) == name]
+
+
+def _swap_symbol_library(node: SExp, lib_id: str, new_numbers: list[str], pin_uuids: dict[str, str]) -> None:
+    """The only change to the placed symbol: its ``lib_id`` (and ``lib_name``, which would keep naming the old
+    entry), and its ``(pin "n" (uuid ..))`` list, which follows the new library symbol's pins."""
+    import uuid as _uuidlib
+
+    write_layer.set_string(node.find_children("lib_id")[0], 0, lib_id)
+    for stale in node.find_children("lib_name"):
+        _remove(node, [stale])
+    old_pins = _kids(node, "pin")
+    if old_pins:
+        anchor = node.children.index(old_pins[0])
+    elif node.find_children("instances"):
+        anchor = node.children.index(node.find_children("instances")[0])
+    else:
+        anchor = len(node.children)
+    _remove(node, old_pins)
+    fresh = [SExp.list("pin", write_layer.string(n), SExp.list("uuid", write_layer.string(pin_uuids.get(n) or str(_uuidlib.uuid4())))) for n in new_numbers]
+    node.children[anchor:anchor] = fresh
+
+
+def _swap_check(node: SExp, before: list[str], lib_id: str, who: str) -> None:
+    """Self-check: every child of the placed symbol except ``lib_id``, ``lib_name`` and the pin list is byte-equal to before."""
+    now = [write_layer.serialise(c, compact=True) for c in node.children if c.is_atom or c.name not in ("lib_id", "lib_name", "pin")]
+    if now != before or node.find_children("lib_id")[0].get_string(0) != lib_id:
+        raise SheetAuthoringError(
+            "write_not_verified", f"check symbol_children_unchanged: {who}: the replaced symbol differs from the original beyond lib_id, lib_name and pins; nothing was written",
+            check="symbol_children_unchanged", subject=who)
+
+
+def replace_symbols(path: str, replacements: Any, root_sch: str | None, *, allow_connectivity_change: bool, dry_run: bool) -> dict[str, Any]:
+    """Replace placed symbols by another ``lib_id`` in place (issue 112): same uuid, reference, position, rotation,
+    mirror, unit, properties and instance data; the embedded library symbol is added (or reused) and the old one
+    dropped when no other symbol uses it. Wires are never dragged."""
+
+    def mutate(sheet: Sheet, root: SExp) -> Outcome:
+        specs = _check_replace_specs(replacements)
+        placed = _placed(sheet)
+        table = next(iter(_kids(root, "lib_symbols")), None)
+        if table is None:
+            raise SheetAuthoringError("invalid_spec", "the sheet has no lib_symbols table")
+        chosen: list[tuple[SExp, dict]] = []
+        seen: set[str] = set()
+        for i, spec in enumerate(specs):
+            if "uuid" in spec:
+                hits = [s for s in placed if _uuid(s) == spec["uuid"]]
+            else:
+                hits = [s for s in placed if _ref(s) == spec["reference"]]
+            label = spec.get("uuid") or spec.get("reference")
+            if not hits:
+                raise SheetAuthoringError("not_found", f"replacements[{i}]: no placed symbol on this sheet matches {label!r}; nothing was written", not_found=[label])
+            if len(hits) > 1:
+                raise SheetAuthoringError("ambiguous_reference", f"replacements[{i}]: {label!r} matches {len(hits)} placed symbols; select one by uuid; nothing was written")
+            node = hits[0]
+            if _uuid(node) in seen:
+                raise SheetAuthoringError("invalid_spec", f"replacements[{i}]: {_ref(node)} ({_uuid(node)}) is picked twice")
+            seen.add(_uuid(node))
+            others = [s for s in placed if s is not node and _ref(s) == _ref(node) and _unit_of(s) != _unit_of(node)]
+            if others:
+                raise SheetAuthoringError(
+                    "multi_unit_symbol", f"{_ref(node)} has other units placed on this sheet (units {sorted(_unit_of(s) for s in others)}); "
+                    "replace_symbols changes one placed unit per symbol, so a multi-unit part would be left half replaced; nothing was written")
+            chosen.append((node, spec))
+
+        outcome = Outcome()
+        report: list[dict] = []
+        extras: list[dict] = []
+        unmapped_wired: list[dict] = []
+        old_names: list[str] = []
+        added: dict[str, str] = {}  # lib_id -> "added" | "reused"
+        for node, spec in chosen:
+            ref, uid, lib_id = _ref(node), _uuid(node), spec["lib_id"]
+            who = f"{ref} ({uid})"
+            old_lib_id = node.find_children("lib_id")[0].get_string(0)
+            if lib_id == old_lib_id:
+                raise SheetAuthoringError("same_lib_id", f"{who} already uses {lib_id}; nothing was written")
+            old_pins = pin_positions(root, node, with_type=True)
+            old_name = _lib_name_of(node)
+            if lib_id not in added:
+                if any(e.get_string(0) == lib_id for e in _kids(table, "symbol")):
+                    added[lib_id] = "reused"
+                else:
+                    for entry in _load_library_entry(Path(path), lib_id):
+                        table.children.append(entry)
+                        outcome.lib_added.add(entry.get_string(0) or lib_id)
+                    added[lib_id] = "added"
+            entry = next((e for e in _kids(table, "symbol") if e.get_string(0) == lib_id), None)
+            if entry is None:
+                raise SheetAuthoringError("lib_unresolved", f"the library file of {lib_id!r} has no symbol of that name; nothing was written", lib_id=lib_id)
+            unit = _unit_of(node)
+            if unit not in _library_units(entry) and not (unit == 1 and not _library_units(entry)):
+                raise SheetAuthoringError("unit_missing", f"{who} is unit {unit} but {lib_id} has units {sorted(_library_units(entry) - {0})}; nothing was written")
+            snapshot = [write_layer.serialise(c, compact=True) for c in node.children if c.is_atom or c.name not in ("lib_id", "lib_name", "pin")]
+            old_pin_uuids = {p.get_string(0): _uuid(p) for p in _kids(node, "pin")}
+            # swap first with no pin list, then read the new pin points with the maths get_symbol_pins uses
+            _swap_symbol_library(node, lib_id, [], {})
+            new_pins = pin_positions(root, node, with_type=True)
+            pairs, unmapped = _pair_pins(old_pins, new_pins, spec.get("pin_map", {}), who)
+            keep_uuid = {n["number"]: old_pin_uuids[o["number"]] for o, n in pairs if old_pin_uuids.get(o["number"])}
+            _swap_symbol_library(node, lib_id, [p["number"] for p in new_pins], keep_uuid)
+            _swap_check(node, snapshot, lib_id, who)
+            outcome.changed.add(uid)
+
+            for o in unmapped:
+                found = _attached(sheet, (o["x"], o["y"]), node)
+                if found:
+                    unmapped_wired.append({"reference": ref, "pin": o["number"], "name": o["name"], "at": [o["x"], o["y"]], "attached": found[:5]})
+            pair_report = []
+            for o, n in pairs:
+                found = _attached(sheet, (o["x"], o["y"]), node)
+                moved = not _same((o["x"], o["y"]), (n["x"], n["y"]))
+                pair_report.append({"old_pin": o["number"], "new_pin": n["number"], "name": n["name"], "was": [o["x"], o["y"]], "now": [n["x"], n["y"]],
+                                    "wired": bool(found), "moved": moved})
+                if found and moved:
+                    extras.append({"type": "pin_moved", "reference": ref, "old_pin": o["number"], "new_pin": n["number"],
+                                   "was": [o["x"], o["y"]], "now": [n["x"], n["y"]], "attached": found[:5],
+                                   "note": "the wires stay where they are; the new pin is not on them"})
+            paired_new = {n["number"] for _o, n in pairs}
+            for n in new_pins:
+                if n["number"] in paired_new:
+                    continue
+                found = _attached(sheet, (n["x"], n["y"]), node)
+                if found:
+                    extras.append({"type": "new_pin_attached", "reference": ref, "pin": n["number"], "at": [n["x"], n["y"]], "attached": found[:5]})
+            if old_name not in old_names:
+                old_names.append(old_name)
+            x, y, rot = _at(node)
+            report.append({
+                "reference": ref, "uuid": uid, "old_lib_id": old_lib_id, "lib_id": lib_id, "library_symbol": added[lib_id],
+                "at": _round_pt(x, y), "rotation": rot, "mirror": _mirror(node), "unit": unit,
+                "pin_map": pair_report,
+                "unmapped_old_pins": [{"pin": o["number"], "name": o["name"], "at": [o["x"], o["y"]]} for o in unmapped],
+                "pins": new_pins,
+            })
+        if unmapped_wired and not allow_connectivity_change:
+            raise SheetAuthoringError(
+                "pin_unmapped", f"{len(unmapped_wired)} wired pin(s) of the old symbol have no counterpart on the new one "
+                f"(first: {unmapped_wired[0]['reference']}.{unmapped_wired[0]['pin']}); give a pin_map, or repeat with "
+                "allow_connectivity_change true if dropping them is meant; nothing was written", unmapped=unmapped_wired[:MAX_LISTED])
+        dropped, kept = [], []
+        for name in old_names:
+            if name in added:
+                continue
+            entry = next((e for e in _kids(table, "symbol") if e.get_string(0) == name), None)
+            if entry is None:
+                continue
+            users = _uses(sheet, name)
+            if users:
+                kept.append({"library_symbol": name, "still_used_by": users[:MAX_LISTED]})
+            else:
+                _remove(table, [entry])
+                outcome.lib_removed.add(name)
+                dropped.append(name)
+        outcome.report = {
+            "replaced": report, "count": len(report), "dropped_library_symbols": dropped, "kept_library_symbols": kept,
+            "unmapped_wired_pins": unmapped_wired,
+            "note": "uuid, reference, position, rotation, mirror, unit, properties and instance data are unchanged; wires are not moved, "
+                    "so a wired pin whose counterpart lies elsewhere is reported as connectivity_changed"}
+        outcome.compare = lambda before, after, removed: [*extras, *compare_nets(before, after, removed)]
+        return outcome
+
+    result = run(path, root_sch, mutate, allow_connectivity_change=allow_connectivity_change, dry_run=dry_run)
+    if result.get("ok") and dry_run:
+        result["would_replace"] = result.pop("replaced")
     return result

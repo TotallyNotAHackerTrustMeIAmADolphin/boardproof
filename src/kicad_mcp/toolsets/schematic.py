@@ -1932,6 +1932,52 @@ def build(mcp: MCPServer) -> list[str]:
 
         return sheet_editing.set_property_positions(sch_path, items, root_sch, dry_run=dry_run)
 
+    def replace_symbols(
+        sch_path: str, replacements: list[dict], allow_connectivity_change: bool = False,
+        dry_run: bool = False, root_sch: str | None = None,
+    ) -> dict:
+        """Replace placed symbols by another library symbol in one call, for example a placeholder by the
+        final part, keeping what the sheet already has: the uuid, the reference, the position, the
+        rotation, the mirror, the unit, the property texts and the instance data stay as they are.
+
+        replacements: a list of objects {reference | uuid, lib_id, pin_map}. reference (exact, one placed
+        symbol; use uuid when several share a reference such as "R?") or uuid picks the symbol; lib_id is
+        the new Library:Symbol, read from the project's symbol library table or KiCad's own folder (or
+        reused when the sheet already embeds it); pin_map is optional: {old pin number: new pin number}
+        for pins whose numbers differ. Without a pin_map pins are paired by pin number (by pin name for a
+        pin that has no number). A part with several units placed on the sheet is refused
+        (multi_unit_symbol); so is a unit the new symbol does not have (unit_missing).
+
+        The embedded library symbol is rewritten: the new one is added, and the old one is dropped only
+        when no other symbol on the sheet still uses it (kept_library_symbols says which stayed).
+
+        Wires are never moved. A wired pin of the old symbol with no counterpart on the new one refuses
+        the call as pin_unmapped (nothing written, the pins listed) unless allow_connectivity_change is
+        true. A wired pin whose counterpart lies at another point, and a new pin that lands on a wire
+        end, label, junction or other pin, refuse it as connectivity_changed with the old and new
+        positions in the list. Before anything is written, kicad-cli's netlist of the project is read
+        from a scratch copy before and after the change and compared net by net; a split net, two nets
+        merged, a pin left alone on its net, a renamed net or a vanished named net refuses it as
+        connectivity_changed too. Pass allow_connectivity_change true only when that is meant. dry_run
+        true computes and returns everything and writes nothing.
+
+        Returns replaced: per symbol, reference, uuid, old_lib_id, lib_id, library_symbol (added or
+        reused), at, rotation, mirror, unit, pin_map (old and new pin, was and now positions, wired,
+        moved), unmapped_old_pins and pins (the new pins: number, name, type, x, y, read from the raw
+        symbol and library geometry, so a wire can be drawn to them), plus dropped_library_symbols,
+        kept_library_symbols, connectivity and written. With dry_run the list is called would_replace.
+
+        Refuses a failed self-check (write_not_verified, the sheet unchanged) and a project with a
+        missing, unparseable or cyclic sheet (sheet_tree_incomplete). root_sch names the project's root
+        sheet when sch_path is a sub-sheet and its folder holds several projects.
+
+        Refuses with file_open_in_kicad, naming the lock file, while KiCad holds a lock file for a file
+        it would write; close the file in KiCad, then retry.
+        """
+        from kicad_mcp import sheet_editing
+
+        return sheet_editing.replace_symbols(sch_path, replacements, root_sch, allow_connectivity_change=allow_connectivity_change, dry_run=dry_run)
+
     def get_symbol_pins(sch_path: str, references: list[str] | None = None, uuids: list[str] | None = None) -> dict:
         """Read the pins of placed symbols: absolute sheet coordinates, name and electrical type, for
         wiring by pin instead of by hand-computed offsets. Read-only; writes nothing.
@@ -2115,7 +2161,7 @@ def build(mcp: MCPServer) -> list[str]:
     mutating_tools = [
         add_symbols, add_wires, add_junctions, add_labels, assign_footprints, fix_annotation, create_sheets, add_sheet_symbols,
         add_sheet_pins, remove_sheet_pins, move_sheet_pins,
-        delete_symbols, delete_wires, delete_labels, delete_junctions, move_symbols, move_labels, set_property_positions, connect_pins,
+        delete_symbols, delete_wires, delete_labels, delete_junctions, move_symbols, move_labels, set_property_positions, connect_pins, replace_symbols,
     ]
     read_only_tools = [get_symbol_pins, check_connectivity]
     for tool_fn in mutating_tools:

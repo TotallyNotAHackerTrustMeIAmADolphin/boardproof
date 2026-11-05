@@ -62,6 +62,7 @@ def test_build_registers_expected_tools(sch_tools):
         "set_property_positions",
         "get_symbol_pins",
         "connect_pins",
+        "replace_symbols",
         "check_connectivity",
     }
 

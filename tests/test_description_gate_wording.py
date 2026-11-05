@@ -121,6 +121,8 @@ _CLAIM_WORD_ALLOWED = {
         "the name of an error code on a refusal, not a claim",
     ("move_symbols", "(write_not_verified, the sheet unchanged)"):
         "the name of an error code on a refusal, not a claim",
+    ("replace_symbols", "(write_not_verified, the sheet unchanged)"):
+        "the name of an error code on a refusal, not a claim",
 }
 
 

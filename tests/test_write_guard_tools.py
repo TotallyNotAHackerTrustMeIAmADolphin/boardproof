@@ -359,6 +359,7 @@ SCENARIOS: dict[str, Callable[[Path], Scenario]] = {
     "move_labels": _editing("move_labels", lambda p: ([{"pattern": "*", "offset": [5.08, 0]}],)),
     "set_property_positions": _editing("set_property_positions", lambda p: ([{"references": ["R1"], "properties": {"Value": {"offset": [3.81, 0]}}}],)),
     "connect_pins": _connect_pins,
+    "replace_symbols": _editing("replace_symbols", lambda p: ([{"reference": "R1", "lib_id": "Device:R_Small"}],)),
     "place_footprints": _pcb_tool("place_footprints", [{"reference": "R1", "x": 3.0, "y": 4.0}]),
     "move_reference_designators_to_layer": _pcb_tool("move_reference_designators_to_layer", ["R1"], "F.Fab"),
     "align_footprints": _pcb_tool("align_footprints", ["R1", "D1"], "x", "min"),
