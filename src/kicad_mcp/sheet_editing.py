@@ -159,13 +159,25 @@ def place(px: float, py: float, rotation: float, mirror: str) -> tuple[float, fl
     return x, -y
 
 
-def pin_positions(root: SExp, symbol: SExp, *, with_type: bool = False, with_exit: bool = False) -> list[dict[str, Any]]:
+def _pin_hidden(pin: SExp) -> bool:
+    """True when a library pin is invisible: ``(hide yes)`` (KiCad 8 and later) or a bare ``hide`` atom."""
+    for child in pin.children:
+        if child.is_atom and str(child.value) == "hide":
+            return True
+        if not child.is_atom and child.name == "hide":
+            return not child.children or str(child.children[0].value) != "no"
+    return False
+
+
+def pin_positions(
+    root: SExp, symbol: SExp, *, with_type: bool = False, with_exit: bool = False, with_hidden: bool = False
+) -> list[dict[str, Any]]:
     """Where the pins of one placed ``symbol`` (a unit of it) sit on the sheet, from the raw
     ``(at ...)`` of the symbol and of the pins in the embedded library symbol. Each entry:
     ``number``, ``name``, ``x``, ``y`` (and ``type``, the electrical type word of the pin, when
     ``with_type``; and ``exit``, when ``with_exit``: the unit vector ``[dx, dy]`` on the sheet
     (Y down) along which a wire leaves the pin, away from the symbol body, rounded to the nearest
-    axis). The library angle of a pin is the direction in which its line runs from the connection
+    axis; and ``hidden``, when ``with_hidden``: the library pin carries ``(hide yes)`` or a bare ``hide``). The library angle of a pin is the direction in which its line runs from the connection
     point into the body, so the wire leaves the opposite way. An unreadable library symbol gives
     an empty list."""
     lib = _lib_symbol(root, symbol)
@@ -194,6 +206,8 @@ def pin_positions(root: SExp, symbol: SExp, *, with_type: bool = False, with_exi
                      "x": _r(sx + dx), "y": _r(sy + dy)}
             if with_type:
                 entry["type"] = str(pin.children[0].value) if pin.children and pin.children[0].is_atom else ""
+            if with_hidden:
+                entry["hidden"] = _pin_hidden(pin)
             if with_exit:
                 angle = math.radians(at[0].get_float(2) if len(at[0].children) > 2 else 0.0)
                 ex, ey = place(-math.cos(angle), -math.sin(angle), rot, mirror)

@@ -2071,6 +2071,9 @@ def build(mcp: MCPServer) -> list[str]:
 
         Reads every sheet's raw nodes. unconnected_pins lists pins with nothing on them: no wire end, other
         pin, label or sheet pin, and no junction with a wire passing over it; a wire that only runs over a pin joins nothing, so that pin is listed.
+        An invisible power_in pin of an ordinary symbol (KiCad joins it to the net of its pin name without a wire)
+        is not listed when that name has another member on the same sheet: another such pin (wired or not), an attached power
+        symbol of that value or a label of that text on that sheet; a lone one is listed, as ERC does.
         A pin with a no-connect marker on it (or an electrical type no_connect) is not a finding and is listed
         apart in no_connect_pins (via says which). connection_issues has possible_floating_wire for a wire end
         that touches no pin, sheet pin, label, junction, no-connect marker or second wire end; its description
