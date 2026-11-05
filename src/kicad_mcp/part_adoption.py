@@ -77,6 +77,20 @@ EVIDENCE_DIR = "adoption_evidence"
 URI_PREFIX = "${KIPRJMOD}/"
 MIN_RISE_MM = 0.1
 MAX_SINK_MM = 0.1
+# What MAX_SINK_MM measures: how far the model's silhouette reaches below the board's bottom face
+# (the render with the model against the bare board). On an SMD part nothing may: a lead below the
+# slab means the model is upside down or offset in Z. A footprint with plated thru_hole pads has
+# pin tails that legitimately stand out below the bottom face, from 0.3 mm (a radial capacitor) to
+# 8 mm (a vertical TO-220), so the depth says nothing there. What tells a tail from a shifted body
+# is its width: a tail is narrow (it fits in its pad), a body is wide. For such a footprint the
+# widest row of the silhouette below the bottom face may be as wide as the footprint's own thru_hole
+# pads laid side by side along the view axis (the union of their X extents) plus TAIL_MARGIN_MM.
+# Not caught: a body that sits on the top face and is shifted down by less than the board's thickness
+# (it is still inside the slab), and a connector whose plated tabs and pins are so wide that the bound
+# exceeds the shifted body (the Molex 9346520x RJ45 shifted 5 mm: widest row 16.3 mm against 17.3 mm).
+TAIL_MARGIN_MM = 0.3
+TAIL_MARGIN_PX = 2  # anti-aliasing at the edge of a pin; also the number of stray pixels tolerated
+THT_BOARD_MIN_MM = 40.0
 MIN_RISE_PX = 2
 BOARD_THICKNESS_DEFAULT_MM = 1.6
 RENDER_TIMEOUT_S = 120
@@ -152,6 +166,47 @@ def _pad_numbers(footprint: SExp) -> list[str]:
 
 def _model_nodes(footprint: SExp) -> list[SExp]:
     return _children(footprint, "model")
+
+
+def _tail_intervals_mm(footprint: SExp) -> list[tuple[float, float]] | None:
+    """The X ranges, relative to the footprint origin, covered by its plated through-hole pads (merged
+    where they overlap), from the raw ``(at x y [angle])`` and ``(size w h)``; ``None`` when the
+    footprint has no ``thru_hole`` pad (``np_thru_hole`` mounting holes carry no pin). A pad turned
+    by ``angle`` covers ``|w cos| + |h sin|``. X is the front view's horizontal axis."""
+    spans: list[tuple[float, float]] = []
+    for pad in _children(footprint, "pad"):
+        if len(pad.children) < 2 or pad.children[1].value != "thru_hole":
+            continue
+        at, size = _floats(pad.find("at")), _floats(pad.find("size"))
+        if not at or len(at) < 2 or not size:
+            continue
+        angle = math.radians(at[2]) if len(at) > 2 else 0.0
+        half = (abs(size[0] * math.cos(angle)) + abs(size[-1] * math.sin(angle))) / 2
+        spans.append((at[0] - half, at[0] + half))
+    if not spans:
+        return None
+    spans.sort()
+    merged = [spans[0]]
+    for start, end in spans[1:]:
+        if start > merged[-1][1]:
+            merged.append((start, end))
+        else:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], end))
+    return merged
+
+
+def _tail_span_mm(footprint: SExp) -> float | None:
+    """The total width of ``_tail_intervals_mm`` (``None`` for an SMD footprint)."""
+    intervals = _tail_intervals_mm(footprint)
+    return None if intervals is None else sum(hi - lo for lo, hi in intervals)
+
+
+def _board_width_mm(footprint: SExp) -> float:
+    """The width of the scratch board ``_scratch_board`` makes around the footprint."""
+    # a through-hole part gets a wider board, which lowers the render's scale so that pin tails up to
+    # about 8 mm (a vertical TO-220) stay inside the image instead of being cut off at its edge
+    smallest = THT_BOARD_MIN_MM if _tail_intervals_mm(footprint) is not None else 20.0
+    return max(smallest, math.ceil(2 * _pad_extent(footprint)[0] + 10))
 
 
 def _model_uri(footprint: SExp) -> str | None:
@@ -562,8 +617,8 @@ class _Unreadable(Exception):
     pass
 
 
-def _read_png_alpha_rows(path: Path) -> list[bool]:
-    """For each row of an 8-bit RGBA PNG: whether any pixel has alpha above zero. Raises
+def _read_png_alpha_rows(path: Path) -> list[bytes]:
+    """For each row of an 8-bit RGBA PNG: one byte per pixel, 1 where alpha is above zero. Raises
     ``_Unreadable`` for anything else (palette, 16-bit, interlaced, no alpha channel)."""
     data = path.read_bytes()
     if data[:8] != b"\x89PNG\r\n\x1a\n":
@@ -592,7 +647,7 @@ def _read_png_alpha_rows(path: Path) -> list[bool]:
     if len(raw) != height * (stride + 1):
         raise _Unreadable("PNG data has the wrong size")
     previous = bytearray(stride)
-    rows: list[bool] = []
+    rows: list[bytes] = []
     for y in range(height):
         offset = y * (stride + 1)
         kind_byte = raw[offset]
@@ -618,7 +673,7 @@ def _read_png_alpha_rows(path: Path) -> list[bool]:
                 line[i] = (line[i] + pred) & 255
         elif kind_byte != 0:
             raise _Unreadable(f"PNG filter type {kind_byte} is unknown")
-        rows.append(any(line[3::4]))
+        rows.append(bytes(1 if a else 0 for a in line[3::4]))
         previous = line
     return rows
 
@@ -629,15 +684,15 @@ def _silhouette(path: Path) -> tuple[int, int]:
     return _silhouette_rows(path)[:2]
 
 
-def _silhouette_rows(path: Path) -> tuple[int, int, int]:
-    """``(first row, last row, image height)`` of the opaque pixels; same refusals as ``_silhouette``."""
+def _silhouette_rows(path: Path) -> tuple[int, int, int, list[bytes]]:
+    """``(first row, last row, image height, opaque-pixel flags per row)``; same refusals as ``_silhouette``."""
     rows = _read_png_alpha_rows(path)
-    filled = [i for i, r in enumerate(rows) if r]
+    filled = [i for i, r in enumerate(rows) if any(r)]
     if not filled:
         raise _Unreadable("the render is empty")
     if filled[0] == 0 and filled[-1] == len(rows) - 1 and len(filled) == len(rows):
         raise _Unreadable("the render has no transparent background, so the silhouette cannot be measured")
-    return filled[0], filled[-1], len(rows)
+    return filled[0], filled[-1], len(rows), rows
 
 
 def kicad_cli_render(board: Path, png: Path, side: str) -> dict:
@@ -703,7 +758,7 @@ def _scratch_board(project: Path, footprint_file: Path, name: str, *, with_model
         for node in _model_nodes(footprint):
             footprint.remove(node)
     reach_x, reach_y = _pad_extent(footprint)
-    width = max(20.0, math.ceil(2 * reach_x + 10))
+    width = _board_width_mm(footprint)
     height = max(20.0, math.ceil(2 * reach_y + 10))
     board = PCB.create(width=width, height=height, center=False)
     at = SExp.list("at")
@@ -736,6 +791,7 @@ def _render_check(
         "top": rel + top.name,
     }
     try:
+        tail_span_mm = _tail_span_mm(write_layer.load(footprint_file))
         with_board, thickness = _scratch_board(project, footprint_file, f".adopt_{lcsc}_with.kicad_pcb", with_model=True)
         bare_board, _ = _scratch_board(project, footprint_file, f".adopt_{lcsc}_without.kicad_pcb", with_model=False)
         for board, png, side in ((with_board, front, "front"), (bare_board, baseline, "front")):
@@ -748,8 +804,8 @@ def _render_check(
             evidence["top"] = None
             evidence["top_note"] = f"not made: {top_result.get('reason')}"
         try:
-            with_top, with_bottom, with_height = _silhouette_rows(front)
-            bare_top, bare_bottom, _ = _silhouette_rows(baseline)
+            with_top, with_bottom, with_height, with_widths = _silhouette_rows(front)
+            bare_top, bare_bottom, _, _ = _silhouette_rows(baseline)
         except _Unreadable as exc:
             check["detail"] = f"the render cannot be measured: {exc}"
             return check, evidence
@@ -789,18 +845,41 @@ def _render_check(
         "the render is cut off at the image edge, so the {what} is only a lower bound and the check cannot "
         "decide: use a taller render or look at the saved images"
     )
-    if sink_mm > max(MAX_SINK_MM, MIN_RISE_PX / px_per_mm):
+    wide_detail = None
+    if tail_span_mm is not None:
+        # A pin tail is narrow, a shifted body is wide: below the bottom face the silhouette may be
+        # no wider than the footprint's through-hole pads laid side by side (plus a margin).
+        below = [sum(flags) for flags in with_widths[bare_bottom + 1 :]]
+        widest_px = max(below, default=0)
+        bound_mm = tail_span_mm + TAIL_MARGIN_MM
+        bound_px = bound_mm * px_per_mm + TAIL_MARGIN_PX
+        evidence["widest_row_below_board_mm"] = round(widest_px / px_per_mm, 3)
+        evidence["tail_width_bound_mm"] = round(bound_mm, 3)
+        if widest_px > bound_px:
+            row = bare_bottom + 1 + below.index(widest_px)
+            wide_detail = (
+                f"the model is {widest_px / px_per_mm:.2f} mm wide at {(row - bare_bottom) / px_per_mm:.2f} mm "
+                f"below the board's bottom face{clip_note}, wider than the {bound_mm:.2f} mm that the "
+                f"footprint's through-hole pads cover side by side ({tail_span_mm:.2f} mm plus "
+                f"{TAIL_MARGIN_MM:.1f} mm): a pin tail is narrow, so this is a body mounted offset in Z (or "
+                "not the part of this footprint)"
+            )
+    if tail_span_mm is None and sink_mm > max(MAX_SINK_MM, MIN_RISE_PX / px_per_mm):
         # a lower bound that already exceeds the limit is a valid fail
         check.update(
             status="fail",
-            detail=f"the model reaches {sink_text} below the board's bottom face{clip_note}: it is mounted "
-            "upside down or offset in Z",
+            detail=f"the model reaches {sink_text} below the board's bottom face{clip_note}, more than the "
+            f"{MAX_SINK_MM:.1f} mm an SMD footprint allows: it is mounted upside down or offset in Z",
         )
+    elif wide_detail is not None:
+        check.update(status="fail", detail=wide_detail)
     elif sink_clipped:
         # within the limit as a lower bound only: the true sink may exceed it
         check.update(
             status="incomplete",
-            detail=f"the model reaches at least {sink_mm:.2f} mm below the bottom face; "
+            detail=f"the model reaches at least {sink_mm:.2f} mm below the bottom face"
+            + ("" if tail_span_mm is None else ", narrow as far as the render shows (pin tails)")
+            + "; "
             + cut_off.format(what="sink"),
         )
     elif rise_mm < need_mm and rise_clipped:

@@ -916,3 +916,274 @@ def test_a_kicad_cli_crash_on_the_scratch_board_is_reported_as_a_crash_not_a_bad
     detail = result["problems"][0]["detail"]
     assert "side view could not be rendered" in detail and "0xC0000005" in detail
     assert "does not parse" not in detail
+
+
+
+# ------------------------------------------------- through-hole parts (issue 116)
+#
+# A pin tail may be as deep as the part needs (0.3 mm of a radial capacitor to 8 mm of a vertical
+# TO-220) but it is narrow; a body shifted below the board is wide. For a footprint with thru_hole
+# pads the check bounds the width of the silhouette below the bottom face, not how deep it goes. What a silhouette cannot see: a body that sits on the top
+# face and is shifted down by less than the board's thickness is still inside the slab.
+
+BODY = (
+    "Transform {{ translation 0 0 {z} children [ Shape {{ appearance Appearance {{ material Material "
+    "{{ diffuseColor 0.8 0.1 0.1 }} }} geometry Box {{ size {w} {w} {h} }} }} ] }}\n"
+)
+PIN = (
+    "Transform {{ translation {x} 0 {z} children [ Shape {{ appearance Appearance {{ material Material "
+    "{{ diffuseColor 0.8 0.8 0.1 }} }} geometry Box {{ size {w} {w} {h} }} }} ] }}\n"
+)
+
+
+def _pinned_model(*, tail_mm: float, shift_mm: float = 0.0) -> str:
+    """A 3 mm wide, 0.4 mm high body on the top face and one 0.3 mm wide pin in the middle (where the
+    chip footprint's pads meet) from the body down to ``tail_mm`` below the bottom face; the whole
+    model moved ``shift_mm`` down. KiCad measures z from the board's top face, the bottom face is at -1.6."""
+    pin_bottom = -1.6 - tail_mm
+    k = 1 / 2.54  # a VRML unit is 0.1 inch in KiCad
+    return (
+        "#VRML V2.0 utf8\nGroup { children [\n"
+        + BODY.format(z=(0.2 - shift_mm) * k, w=3 * k, h=0.4 * k)
+        + PIN.format(x=0, z=((0.2 + pin_bottom) / 2 - shift_mm) * k, h=(0.2 - pin_bottom) * k, w=0.3 * k)
+        + "] }\n"
+    )
+
+
+def _through_hole(part: dict, only: int | None = None) -> dict:
+    def shape(root: SExp) -> None:
+        for index, pad in enumerate(pa._children(root, "pad")):
+            if only is None or index == only:
+                pad.children[1] = write_layer.symbol("thru_hole")
+                pad.append(SExp.list("drill", 0.3))
+
+    _edit_footprint(part, shape)
+    return part
+
+
+def _pinned_part(
+    tmp: Path, *, tail_mm: float, shift_mm: float = 0.0, through_hole: bool = True, only: int | None = None
+) -> dict:
+    part = _part_assets(tmp, "C100", model_text=_pinned_model(tail_mm=tail_mm, shift_mm=shift_mm))
+    return _through_hole(part, only) if through_hole else part
+
+
+def _confirm(project: Path, tmp_path: Path, part: dict) -> dict:
+    proposed = _propose(project, [part], tmp_path / "rev")
+    return pa.confirm_adopt_parts(project, proposed["revision_token"])
+
+
+@needs_cli
+@pytest.mark.parametrize("tail_mm", [0.3, 1.45, 8.0])
+def test_a_through_hole_part_is_adopted_whatever_the_depth_of_its_pin_tails(
+    project: Path, tmp_path: Path, tail_mm: float
+) -> None:
+    # 1.45 mm is the RJ45 of issue 116; 8 mm is a vertical TO-220
+    result = _confirm(project, tmp_path, _pinned_part(tmp_path, tail_mm=tail_mm))
+    assert result["status"] == "adopted", result
+    check, evidence = _render_part(result)
+    assert check["status"] == "pass"
+    assert evidence["body_below_board_mm"] > tail_mm * 0.8
+    assert evidence["widest_row_below_board_mm"] <= evidence["tail_width_bound_mm"]
+
+
+@needs_cli
+def test_an_smd_part_with_pin_tails_is_still_refused_by_depth(project: Path, tmp_path: Path) -> None:
+    result = _confirm(project, tmp_path, _pinned_part(tmp_path, tail_mm=1.45, through_hole=False))
+    assert result["status"] == "failed", result
+    detail = result["problems"][0]["detail"]
+    assert "below the board" in detail and "SMD" in detail
+
+
+@needs_cli
+@pytest.mark.parametrize("tail_mm", [0.5, 1.45])
+def test_a_through_hole_body_shifted_below_the_board_is_refused(project: Path, tmp_path: Path, tail_mm: float) -> None:
+    # shifted 2.5 mm: the 3 mm wide body now reaches 0.9 mm below the bottom face
+    result = _confirm(project, tmp_path, _pinned_part(tmp_path, tail_mm=tail_mm, shift_mm=2.5))
+    assert result["status"] == "failed", result
+    detail = result["problems"][0]["detail"]
+    assert "mm wide at" in detail and "offset in Z" in detail and "mm below the board's bottom face" in detail
+
+
+@needs_cli
+def test_a_mixed_footprint_passes_a_narrow_tail_and_refuses_a_shifted_body(project: Path, tmp_path: Path) -> None:
+    # pad 1 is a plated tab (thru_hole), pad 2 stays smd
+    narrow = _confirm(project, tmp_path, _pinned_part(tmp_path, tail_mm=1.0, only=0))
+    assert narrow["status"] == "adopted", narrow
+    shifted = _confirm(project, tmp_path / "s", _pinned_part(tmp_path / "s", tail_mm=1.0, shift_mm=2.5, only=0))
+    assert shifted["status"] == "failed", shifted
+    assert "mm wide at" in shifted["problems"][0]["detail"]
+
+
+def _pad(number: str, kind: str, x: float, w: float, h: float, angle: float | None = None) -> SExp:
+    at = SExp.list("at", x, 0) if angle is None else SExp.list("at", x, 0, angle)
+    return SExp.list(
+        "pad", write_layer.string(number), write_layer.symbol(kind), write_layer.symbol("rect"), at, SExp.list("size", w, h)
+    )
+
+
+def _footprint_of(*pads: SExp) -> SExp:
+    return SExp.list("footprint", write_layer.string("F"), *pads)
+
+
+def test_the_tail_intervals_are_the_x_extents_of_the_thru_hole_pads() -> None:
+    assert pa._tail_intervals_mm(_footprint_of(_pad("1", "smd", 0, 1, 1))) is None
+    assert pa._tail_intervals_mm(_footprint_of(_pad("1", "np_thru_hole", 0, 3, 3))) is None
+    two = _footprint_of(_pad("1", "thru_hole", 0, 1.6, 1.6), _pad("2", "thru_hole", 5, 1.6, 1.6))
+    assert pa._tail_intervals_mm(two) == [(-0.8, 0.8), (4.2, 5.8)]
+    # overlapping pads merge
+    overlap = _footprint_of(_pad("1", "thru_hole", 0, 2, 1), _pad("2", "thru_hole", 1, 2, 1))
+    assert pa._tail_intervals_mm(overlap) == [(-1.0, 2.0)]
+    # a pad turned by 90 degrees covers its height along X
+    assert pa._tail_intervals_mm(_footprint_of(_pad("1", "thru_hole", 0, 3, 1, 90))) == [(pytest.approx(-0.5), pytest.approx(0.5))]
+    # mixed: only the plated pad counts
+    mixed = _footprint_of(_pad("1", "smd", 0, 4, 1), _pad("2", "thru_hole", 9, 1.5, 1.5))
+    assert pa._tail_intervals_mm(mixed) == [(8.25, 9.75)]
+    assert pa._tail_span_mm(two) == pytest.approx(3.2)
+
+
+def _rows_png(widths: dict[int, int], width: int = 640, height: int = 240) -> bytes:
+    """A PNG whose row ``y`` has ``widths[y]`` opaque pixels, from the left."""
+    rows = [bytes([200, 0, 0, 255]) * widths.get(y, 0) + bytes(4 * (width - widths.get(y, 0))) for y in range(height)]
+    return _png(width, height, rows, [0] * height)
+
+
+def _width_render(project: Path, tmp_path: Path, below_px: int, *, only: int | None = None, last_row: int = 125):
+    """A THT chip footprint (``only``: just that pad plated); the bare slab on rows 100..119 (12.5 px
+    per mm for the 1.6 mm board), the model's rows 120..``last_row`` ``below_px`` wide. Returns
+    ``(result, bound_px)``."""
+    part = _through_hole(_part_assets(tmp_path, "C100"), only)
+    footprint = write_layer.load(next(Path(part["footprint_dir"]).glob("*.kicad_mod")))
+    bound_px = (pa._tail_span_mm(footprint) + pa.TAIL_MARGIN_MM) * 12.5 + pa.TAIL_MARGIN_PX
+    proposed = _propose(project, [part], tmp_path / "rev")
+
+    def stub(board, png, side):
+        slab = {y: 400 for y in range(100, 120)}
+        if "without_model" in png.name:
+            png.write_bytes(_rows_png(slab))
+        else:
+            rows = {**slab, **{y: 10 for y in range(90, 100)}}
+            rows.update({y: below_px for y in range(120, last_row + 1)})
+            png.write_bytes(_rows_png(rows))
+        return {"status": "ok"}
+
+    return pa.confirm_adopt_parts(project, proposed["revision_token"], render=stub), bound_px
+
+
+@needs_cli
+@pytest.mark.parametrize("only", [None, 0])
+def test_the_width_bound_passes_at_the_bound_and_fails_one_pixel_above(project: Path, tmp_path: Path, only: int | None) -> None:
+    _, bound_px = _width_render(project, tmp_path / "probe", 1, only=only)
+    at_bound, _ = _width_render(project, tmp_path / "a", int(bound_px), only=only)
+    assert at_bound["status"] == "adopted", at_bound
+    above, _ = _width_render(project, tmp_path / "b", int(bound_px) + 1, only=only)
+    assert above["status"] == "failed", above
+    detail = above["problems"][0]["detail"]
+    assert "mm wide at" in detail and "side by side" in detail and "offset in Z" in detail
+
+
+@needs_cli
+def test_only_the_plated_pads_count_towards_the_width_bound(project: Path, tmp_path: Path) -> None:
+    _, bound_both = _width_render(project, tmp_path / "p1", 1)
+    _, bound_one = _width_render(project, tmp_path / "p2", 1, only=0)
+    assert bound_one < bound_both - 5
+    between = int((bound_one + bound_both) / 2)
+    assert _width_render(project, tmp_path / "x", between)[0]["status"] == "adopted"
+    assert _width_render(project, tmp_path / "y", between, only=0)[0]["status"] == "failed"
+
+
+@needs_cli
+def test_a_clipped_render_with_a_wide_row_fails_and_a_narrow_one_is_incomplete(project: Path, tmp_path: Path) -> None:
+    _, bound_px = _width_render(project, tmp_path / "probe", 1)
+    wide, _ = _width_render(project, tmp_path / "w", int(bound_px) + 5, last_row=239)
+    assert wide["status"] == "failed", wide
+    assert "lower bound" in wide["problems"][0]["detail"]
+    narrow, _ = _width_render(project, tmp_path / "n", 3, last_row=239)
+    assert narrow["status"] == "incomplete", narrow
+    assert "cut off" in narrow["problems"][0]["detail"]
+
+
+# real parts of the stock KiCad libraries (skipped where they are not installed)
+
+
+def _stock_dir() -> Path | None:
+    try:
+        from kicad_mcp.kicad_cli import find_kicad_cli
+
+        root = Path(find_kicad_cli()).resolve().parent.parent / "share" / "kicad"
+    except Exception:  # noqa: BLE001
+        return None
+    return root if (root / "footprints").is_dir() and (root / "3dmodels").is_dir() else None
+
+
+STOCK_PARTS = [
+    "Connector_RJ.pretty/RJ45_Molex_9346520x_Horizontal",
+    "Connector_RJ.pretty/RJ45_Pulse_JK0654219NL_Horizontal",
+    "Package_DIP.pretty/DIP-8_W7.62mm",
+    "Connector_PinHeader_2.54mm.pretty/PinHeader_1x04_P2.54mm_Vertical",
+    "Capacitor_THT.pretty/CP_Radial_D5.0mm_P2.50mm",
+    "Connector_BarrelJack.pretty/BarrelJack_CUI_PJ-063AH_Horizontal",
+    "TerminalBlock_Phoenix.pretty/TerminalBlock_Phoenix_MKDS-1,5-10-5.08_1x10_P5.08mm_Horizontal",
+    "Package_TO_SOT_THT.pretty/TO-126-3_Vertical",
+    "Package_TO_SOT_THT.pretty/TO-220-3_Vertical",
+    "Package_TO_SOT_THT.pretty/TO-220-3_Horizontal_TabDown",
+    "Package_TO_SOT_THT.pretty/TO-3",
+]
+
+
+def _stock_render_check(tmp_path: Path, name: str, shift_mm: float) -> dict:
+    import re
+    import shutil
+
+    stock = _stock_dir()
+    if stock is None:
+        pytest.skip("the stock KiCad libraries are not installed")
+    original = stock / "footprints" / f"{name}.kicad_mod"
+    found = re.search(r'\(model\s+"?([^"\s)]+)"?', original.read_text(encoding="utf8"))
+    models = str(stock / "3dmodels")
+    source = Path(found.group(1).replace("${KICAD10_3DMODEL_DIR}", models).replace("${KICAD9_3DMODEL_DIR}", models))
+    if not source.is_file():
+        pytest.skip(f"the 3D model of {name} is not installed")
+    shutil.copy(source, tmp_path / ("m" + source.suffix))
+    footprint_file = tmp_path / "fp.kicad_mod"
+    shutil.copy(original, footprint_file)
+    footprint = write_layer.load(footprint_file)
+    write_layer.set_string(pa._model_nodes(footprint)[0], 0, "${KIPRJMOD}/m" + source.suffix)
+    if shift_mm:
+        z = pa._model_nodes(footprint)[0].find("offset").find("xyz")
+        x, y, z0 = (float(v) for v in z.values)
+        z.children[:] = [write_layer.number(v) for v in (x, y, z0 - shift_mm)]
+    footprint_file.unlink()
+    write_layer.save(footprint, footprint_file)
+    check, _ = pa._render_check(tmp_path, "X", footprint_file, pa.kicad_cli_render)
+    return check
+
+
+@needs_cli
+@pytest.mark.parametrize("name", STOCK_PARTS)
+def test_stock_through_hole_parts_pass_unshifted(tmp_path: Path, name: str) -> None:
+    check = _stock_render_check(tmp_path, name, 0.0)
+    assert check["status"] == "pass", check
+
+
+# Shifted down far enough that the body is below the bottom face, the part is refused by width, or is
+# incomplete where the tall model then fills the whole render (never a pass). The shift needed depends
+# on how high the body stands above the top face (the TO-220 stands on 4 mm of lead). Known gap, not
+# pinned here: the Molex 9346520x RJ45 shifted 5 mm passes (its plated tabs make the bound 17.3 mm,
+# the shifted body shows 15 to 16 mm).
+STOCK_SHIFT_MM = {name: 5.0 for name in STOCK_PARTS if "9346520x" not in name}
+STOCK_SHIFT_MM["Package_TO_SOT_THT.pretty/TO-220-3_Vertical"] = 9.0
+
+
+@needs_cli
+@pytest.mark.parametrize("name", sorted(STOCK_SHIFT_MM))
+def test_stock_through_hole_parts_shifted_below_the_board_are_never_adopted(tmp_path: Path, name: str) -> None:
+    check = _stock_render_check(tmp_path, name, STOCK_SHIFT_MM[name])
+    assert check["status"] in {"fail", "incomplete"}, check
+    if check["status"] == "fail":
+        assert "mm wide at" in check["detail"]
+
+
+def test_the_tool_text_names_the_through_hole_rule() -> None:
+    text = _tools()[1]["confirm_adopt_parts"].description
+    assert "0.1 mm for an SMD" in text and "thru_hole" in text and "wide" in text
