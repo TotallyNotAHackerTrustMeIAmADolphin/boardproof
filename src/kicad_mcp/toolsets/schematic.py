@@ -25,7 +25,7 @@ from typing import Any
 
 from mcp.server.mcpserver import MCPServer
 
-from kicad_mcp import pin_wiring, symbol_libs, write_layer
+from kicad_mcp import connectivity_check, pin_wiring, symbol_libs, write_layer
 from kicad_mcp.kicad_cli import ensure_kicad_cli_on_path, find_kicad_cli
 
 _symbol_dir_checked = False
@@ -912,6 +912,28 @@ def _axis_at(index: list[tuple[Point, str | None]], point: Point, tol: float = _
         if abs(pos[0] - point[0]) <= tol and abs(pos[1] - point[1]) <= tol:
             return axis
     return None
+
+
+
+def _refine_connectivity(tree: Any, root_path: Path, unconnected: list, issues: list, missing: list):
+    """Replace the unconnected pins and floating-wire findings of ``kicad_tools`` by the raw reading
+    of ``connectivity_check`` and drop power symbols from ``missing`` (they are never in a netlist)."""
+    found: list[dict] = []
+    marked: list[dict] = []
+    kept_issues: list = []
+    power: set[tuple[str, str]] = set()
+    root_resolved = root_path.resolve()
+    for sheet in tree.files:
+        name = "" if sheet.resolve() == root_resolved else sheet.name
+        raw = write_layer.load(sheet)
+        sub_found, sub_marked = connectivity_check.unconnected_pins(raw, name, unconnected)
+        found += sub_found
+        marked += sub_marked
+        kept_issues += connectivity_check.refine_issues(raw, [i for i in issues if getattr(i, "sheet", "") == name], name)
+        power |= {(name, ref) for ref in connectivity_check.power_symbol_references(raw)}
+    kept_issues += [i for i in issues if getattr(i, "sheet", "") not in {("" if s.resolve() == root_resolved else s.name) for s in tree.files}]
+    missing = [m for m in missing if (m.sheet, m.reference) not in power]
+    return found, marked, kept_issues, missing
 
 
 def build(mcp: MCPServer) -> list[str]:
@@ -1961,6 +1983,14 @@ def build(mcp: MCPServer) -> list[str]:
         before running full ERC. Neither check is a verdict: a clean result
         here or from ERC says nothing about the board, and only verify_board
         gives one.
+
+        Reads every sheet's raw nodes. unconnected_pins lists pins with nothing on them: no wire end, other
+        pin, label or sheet pin, and no junction with a wire passing over it; a wire that only runs over a pin joins nothing, so that pin is listed.
+        A pin with a no-connect marker on it (or an electrical type no_connect) is not a finding and is listed
+        apart in no_connect_pins (via says which). connection_issues has possible_floating_wire for a wire end
+        that touches no pin, sheet pin, label, junction, no-connect marker or second wire end; its description
+        says whether the end lies on the middle of another wire (a junction is missing there). Power symbols
+        (library symbol flagged power, whatever the library's name) are never in missing_from_netlist.
         """
         path = Path(sch_path)
         if not path.is_file():
@@ -2005,6 +2035,11 @@ def build(mcp: MCPServer) -> list[str]:
                 issues += [
                     dataclasses.replace(i, sheet=sheet.name) if hasattr(i, "sheet") else i for i in sub_issues
                 ]
+            # kicad_tools' wire graph knows nothing of no-connect markers, direct pin-to-pin touches,
+            # wire ends on pins and project-library power symbols (issue 109): re-read each sheet raw.
+            unconnected, no_connect_pins, issues, missing_from_netlist = _refine_connectivity(
+                tree, path, unconnected, issues, missing_from_netlist
+            )
         except Exception as exc:  # noqa: BLE001 - evidence-gated verdict
             return _incomplete(f"connectivity check could not complete: {exc}")
         return {
@@ -2013,6 +2048,8 @@ def build(mcp: MCPServer) -> list[str]:
             "status": "ok",
             "unconnected_pins": _to_jsonable(unconnected),
             "unconnected_count": len(unconnected),
+            "no_connect_pins": no_connect_pins,
+            "no_connect_count": len(no_connect_pins),
             "connection_issues": _to_jsonable(issues),
             "missing_from_netlist": _to_jsonable(missing_from_netlist),
         }
