@@ -20,6 +20,8 @@ from pathlib import Path
 
 PNG_TIMEOUT_SECONDS = 120
 _WORKER = Path(__file__).with_name("_png_worker.py")
+_CROP_WORKER = Path(__file__).with_name("_png_crop_worker.py")
+_PNG_IEND = bytes.fromhex("0000000049454e44ae426082")  # last chunk of every whole PNG
 # One lock for every PDFium user in the process (also sourcing/datasheet.py's to_image).
 PDFIUM_LOCK = threading.Lock()
 
@@ -67,3 +69,60 @@ def render_pdf_pages(pdf: str | Path, output_dir: str | Path, stem: str, dpi: in
                     pass  # the refusal below still names the original failure
             raise PngRenderError(f"PNG files could not be written to {output_dir}: {exc}") from exc
         return [str(p) for p in moved]
+
+
+class RegionRender:
+    """Result of :func:`render_pdf_regions`: ``images[k]`` is the PNG bytes of region ``k`` or None;
+    ``failures`` maps a failed region's index to its reason (every None has one)."""
+
+    def __init__(self, count: int) -> None:
+        self.images: list[bytes | None] = [None] * count
+        self.failures: dict[int, str] = {}
+
+
+def render_pdf_regions(
+    pdf: str | Path, regions: list[tuple[int, tuple[float, float, float, float] | None]], dpi: int
+) -> RegionRender:
+    """Render ``[(page_number, bbox_or_None), ...]`` of ``pdf`` to PNG bytes in a child process.
+
+    Same isolation as :func:`render_pdf_pages` (``python -I``, timeout, process-wide lock). Never
+    raises for a render problem: a crash, timeout or Python error of the child leaves the regions
+    that were finished (a whole region file survives a later crash; a truncated one is rejected) and gives every other region
+    a reason in ``failures``, so nothing is dropped silently."""
+    out = RegionRender(len(regions))
+    if not regions:
+        return out
+    with PDFIUM_LOCK, tempfile.TemporaryDirectory(prefix="png_render_") as tmp:
+        payload = json.dumps([[p, list(b) if b is not None else None] for p, b in regions])
+        cmd = [sys.executable, "-I", str(_CROP_WORKER), str(pdf), tmp, str(int(dpi)), payload]
+        child_errors: dict[str, str] = {}
+        fault: str | None = None
+        try:
+            proc = subprocess.run(
+                cmd, capture_output=True, text=True, check=False, timeout=PNG_TIMEOUT_SECONDS
+            )
+            if proc.returncode != 0:
+                tail = (proc.stderr or "").strip().splitlines()[-3:]
+                fault = f"PNG renderer exited with code {proc.returncode}" + (
+                    ": " + " | ".join(tail) if tail else ""
+                )
+            else:
+                try:
+                    child_errors = {str(k): str(v) for k, v in json.loads(proc.stdout)["errors"].items()}
+                except (ValueError, TypeError, KeyError, AttributeError):
+                    fault = "PNG renderer printed no usable result"
+        except subprocess.TimeoutExpired:
+            fault = f"PNG renderer timed out after {PNG_TIMEOUT_SECONDS}s"
+        except OSError as exc:
+            fault = f"PNG renderer could not start: {exc}"
+        for k in range(len(regions)):
+            png = Path(tmp) / f"region-{k}.png"
+            try:
+                data = png.read_bytes() if png.is_file() else b""
+            except OSError:
+                data = b""
+            if data.startswith(b"\x89PNG") and data.endswith(_PNG_IEND):
+                out.images[k] = data
+            else:
+                out.failures[k] = child_errors.get(str(k)) or fault or "PNG renderer wrote no PNG for this region"
+    return out

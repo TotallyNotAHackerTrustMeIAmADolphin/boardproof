@@ -13,16 +13,14 @@ the same shape toolsets/verification.py already uses -- the ambiguous
 from __future__ import annotations
 
 import re
-import struct
 import unicodedata
-import zlib
 from pathlib import Path
 from typing import Any
 
 import httpx
 import pdfplumber
 
-from kicad_mcp.png_render import PDFIUM_LOCK
+from kicad_mcp.png_render import render_pdf_regions
 
 _PIN_TABLE_HEADER_RE = re.compile(r"\bpin\b", re.IGNORECASE)
 _RATINGS_HEADER_RE = re.compile(r"absolute maximum rating|maximum rating", re.IGNORECASE)
@@ -186,6 +184,14 @@ def inspect_datasheet(
         }
         if package is not None:
             result["pin_numbering"] = _package_pin_numbering(pdf_path, package, image_dir)
+            failed = result["pin_numbering"].get("page_images_failed")
+            if failed:
+                # Never silent (issue 105): the tables stay, the status says the images are missing.
+                result["status"] = "incomplete"
+                result["refusal"] = "png_render_failed"
+                result["reason"] = "png_render_failed: " + "; ".join(
+                    f"page {f['page']}: {f['reason']}" for f in failed
+                )
         return result
     except Exception as exc:  # noqa: BLE001 -- pdfplumber can raise on malformed PDFs; report, don't crash
         return {"status": "incomplete", "reason": f"extraction failed: {exc}"}
@@ -229,31 +235,9 @@ _PIN_ID_RE = re.compile(r"^(\d{1,3}|[A-Z]{1,2}\d{1,2})$")
 _MAX_IMAGE_PAGES = 4
 
 
-_PNG_SIGNATURE = bytes.fromhex("89504e470d0a1a0a")
-_PNG_FILTER_NONE = bytes([0])
-
-
-def _png_bytes(area: Any) -> bytes:
-    """PNG of a pdfplumber page or crop, encoded here (zlib + struct) from the
-    rendered RGB pixels, so no image-library save call is needed."""
-    # PDFium is not thread-safe (issue 104): one render at a time in the process.
-    with PDFIUM_LOCK:
-        img = area.to_image(resolution=150).original.convert("RGB")
-    width, height = img.size
-    raw = img.tobytes()
-    stride = width * 3
-    scan = b"".join(_PNG_FILTER_NONE + raw[y * stride : (y + 1) * stride] for y in range(height))
-
-    def chunk(tag: bytes, data: bytes) -> bytes:
-        body = tag + data
-        return struct.pack(">I", len(data)) + body + struct.pack(">I", zlib.crc32(body) & 0xFFFFFFFF)
-
-    return (
-        _PNG_SIGNATURE
-        + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0))
-        + chunk(b"IDAT", zlib.compress(scan, 6))
-        + chunk(b"IEND", b"")
-    )
+# Page images are rendered in a child process (png_render.render_pdf_regions, issue 105):
+# PDFium is not thread-safe and a native fault in it would end the server.
+_IMAGE_DPI = 150
 
 
 def _clean(cell: object) -> str:
@@ -497,6 +481,8 @@ def _package_pin_numbering(pdf_path: Path, package: str, image_dir: str | Path |
         if image_dir is not None:
             out = Path(image_dir)
             out.mkdir(parents=True, exist_ok=True)
+            regions: list[tuple[int, tuple[float, float, float, float] | None]] = []
+            crops: list[str] = []
             for page_no in shown:
                 page = pdf.pages[page_no - 1]
                 if _large_images(page):
@@ -506,18 +492,29 @@ def _package_pin_numbering(pdf_path: Path, package: str, image_dir: str | Path |
                         min(max(i["x1"] for i in page.images), page.width),
                         min(max(i["bottom"] for i in page.images), page.height),
                     )
-                    area, crop = page.crop(bbox), "images"
+                    regions.append((page_no, bbox))
+                    crops.append("images")
                 else:
-                    area, crop = page, "full_page"
-                dest = _write_png_without_replacing(out, f"{pdf_path.stem}_p{page_no}", _png_bytes(area))
+                    regions.append((page_no, None))
+                    crops.append("full_page")
+            rendered = render_pdf_regions(pdf_path, regions, _IMAGE_DPI)
+            failed_images: list[dict[str, Any]] = []
+            for k, page_no in enumerate(shown):
+                data = rendered.images[k]
+                if data is None:
+                    failed_images.append({"page": page_no, "reason": rendered.failures.get(k, "no image")})
+                    continue
+                dest = _write_png_without_replacing(out, f"{pdf_path.stem}_p{page_no}", data)
                 images.append(
                     {
                         "page": page_no,
                         "path": str(dest),
-                        "crop": crop,
+                        "crop": crops[k],
                         "package_named_on_page": page_no in mention_pages,
                     }
                 )
+            if failed_images:
+                base["page_images_failed"] = failed_images
         else:
             reason += "; pass image_dir to get rendered page images"
         return {**base, "machine_extracted": False, "pins": [], "reason": reason, "page_images": images}

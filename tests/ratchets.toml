@@ -34,6 +34,14 @@ note = "Byte-for-byte restore of the original .kicad_pro after a KRT run; compar
 read_only_reach = "KRT runs only on trial copies in this codebase (propose_route_with_retry, propose_placement_optimization, the rung backends), so this restores the trial copy's own .kicad_pro, never the caller's. A read-only tool may reach this KiCad-file write and no other."
 
 [[raw_write]]
+file = "_png_crop_worker.py"
+function = "main"
+kind = "open"
+code = '''open(os.path.join(out_dir, f'region-{k}.png'), 'wb')'''
+kicad_file = false
+note = "Issue 105: the datasheet page-image child process writes each rendered region PNG into its own temp directory (png_render.render_pdf_regions reads it back and deletes the directory); not a KiCad file."
+
+[[raw_write]]
 file = "sourcing/datasheet.py"
 function = "_write_png_without_replacing"
 kind = "open"

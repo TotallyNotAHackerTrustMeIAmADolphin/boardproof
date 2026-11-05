@@ -187,31 +187,14 @@ def test_png_renderer_runs_isolated_and_cleans_its_temp_dir(tmp_path, monkeypatc
 
     monkeypatch.setattr(png_render.subprocess, "run", spy)
     monkeypatch.setattr(png_render, "_WORKER", _fake_worker(tmp_path, "import os\nos._exit(3)\n"))
-    before = set(Path(tempfile.gettempdir()).glob("png_render_*"))
+    # A private temp directory: other tests (and other xdist workers) create png_render_* directories in the shared one.
+    scoped = tmp_path / "scoped_tmp"
+    scoped.mkdir()
+    monkeypatch.setattr(tempfile, "tempdir", str(scoped))
+    before = set(scoped.glob("png_render_*"))
     _schematic_fn()(str(FIXTURES / "simple_led.kicad_sch"), str(tmp_path / "out"), png_dpi=100)
     assert seen["cmd"][1] == "-I"
-    assert set(Path(tempfile.gettempdir()).glob("png_render_*")) == before
-
-
-def test_datasheet_png_render_holds_the_process_wide_pdfium_lock():
-    """Issue 104: sourcing/datasheet.py's to_image shares the lock with the PNG renderer."""
-    from PIL import Image
-
-    from kicad_mcp.png_render import PDFIUM_LOCK
-    from kicad_mcp.sourcing import datasheet
-
-    held = []
-
-    class Rendered:
-        original = Image.new("RGB", (2, 2))
-
-    class Area:
-        def to_image(self, resolution):
-            held.append(PDFIUM_LOCK.locked())
-            return Rendered()
-
-    assert datasheet._png_bytes(Area()).startswith(bytes.fromhex("89504e470d0a1a0a"))
-    assert held == [True]
+    assert set(scoped.glob("png_render_*")) == before
 
 
 def _direct(tmp_path, out_name="out"):
