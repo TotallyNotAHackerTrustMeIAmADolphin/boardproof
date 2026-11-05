@@ -287,6 +287,20 @@ def _sheet_pins(tool: str, specs: list[dict]) -> Callable[[Path], Scenario]:
     return make
 
 
+def _sync_sheet_pins(tmp_path):
+    """sync_sheet_pins (issue 110) on a root whose Sensors child holds a hierarchical label OE_N that the sheet symbol has no pin for."""
+    project = _project(tmp_path)
+    tools = _tools(schematic_toolset)
+    assert tools["create_sheets"](str(project["sch"]), [{"file": "sensors.kicad_sch"}])["status"] == "ok"
+    spec = {"file": "sensors.kicad_sch", "name": "Sensors", "x": 101.6, "y": 50.8, "height": 25.4,
+            "pins": [{"name": "SER", "direction": "input"}]}
+    assert tools["add_sheet_symbols"](str(project["sch"]), [spec])["status"] == "ok"
+    made = tools["add_labels"](str(project["sch"].parent / "sensors.kicad_sch"),
+                               [{"kind": "hier", "x": 25.4, "y": 40.64, "text": "OE_N", "shape": "output", "snap": False}])
+    assert made["status"] == "ok", made
+    return Scenario(project["sch"], lambda: tools["sync_sheet_pins"](str(project["sch"])))
+
+
 def _editing(tool: str, args: Callable[[Path], tuple]) -> Callable[[Path], Scenario]:
     """An editing tool (issue 84) on the one-resistor sheet, with R1, a junction, a free wire and a label to work on."""
     def make(tmp_path):
@@ -359,6 +373,7 @@ SCENARIOS: dict[str, Callable[[Path], Scenario]] = {
     "add_sheet_pins": _sheet_pins("add_sheet_pins", [{"sheet": "Sensors", "pins": [{"name": "OE_N", "direction": "output"}]}]),
     "remove_sheet_pins": _sheet_pins("remove_sheet_pins", [{"sheet": "Sensors", "pins": ["SER"]}]),
     "move_sheet_pins": _sheet_pins("move_sheet_pins", [{"sheet": "Sensors", "pins": [{"name": "SER", "offset": 7.62}]}]),
+    "sync_sheet_pins": _sync_sheet_pins,
     "delete_symbols": _editing("delete_symbols", lambda p: ([{"references": ["R1"]}],)),
     "delete_wires": _editing("delete_wires", lambda p: ([{"region": [0, 0, 300, 300]}],)),
     "delete_labels": _editing("delete_labels", lambda p: ([{"pattern": "*"}],)),

@@ -225,10 +225,28 @@ def _text(node: SExp, index: int = 0) -> str:
 # --------------------------------------------------------------------------- create_sheets
 
 
+def _spec_files(folder: Path, specs: Any) -> list[Path]:
+    """The ``file`` of every spec as a path under ``folder``, for the lock only: a spec that is not valid is refused
+    later, by the validation that needs the sheet tree."""
+    if not isinstance(specs, list):
+        return []
+    out = []
+    for spec in specs:
+        name = spec.get("file") if isinstance(spec, dict) else None
+        if isinstance(name, str) and name:
+            out.append((folder / name).resolve())
+    return out
+
+
 def create_sheets(root_sch: str, specs: list[dict]) -> dict[str, Any]:
     """Create each ``{"file": "sub.kicad_sch", "title": optional}`` of ``specs`` as a new blank sheet."""
     try:
-        return _create_sheets(Path(root_sch), specs)
+        root = Path(root_sch)
+        # every file to create, for the whole call (issue 110: ``root_sch`` is not one of the tool wrapper's mutation
+        # arguments, so two calls naming one new file both passed the "exists" check). The root is only read, so it is not
+        # locked: a call never waits for a file above the one it writes (sheet_pins._run holds the root and then its children).
+        with write_layer.path_lock(_spec_files(root.parent, specs)):
+            return _create_sheets(root, specs)
     except SheetAuthoringError as exc:
         return refusal(exc)
     except write_layer.WriteLayerError as exc:
@@ -419,7 +437,13 @@ def _next_page(tree: sheet_tree.SheetTree) -> int:
 def add_sheet_symbols(parent_sch: str, specs: list[dict], root_sch: str | None = None) -> dict[str, Any]:
     """Insert one sheet symbol per spec into ``parent_sch``; see the module docstring."""
     try:
-        return _add_sheet_symbols(Path(parent_sch), specs, root_sch)
+        parent = Path(parent_sch)
+        # the parent and the child files the call rewrites, for the whole call (issue 110: the wrapper holds only
+        # ``parent_sch``, so an ``add_labels`` on a child was overwritten by the rewrite of its labels and instances). Not the
+        # root: it is only read, and a call never waits for a file above its own parent (a call on the root holds the root and
+        # then the parent, so holding the parent and asking for the root deadlocks until the lock timeout).
+        with write_layer.path_lock([parent, *_spec_files(parent.parent, specs)]):
+            return _add_sheet_symbols(parent, specs, root_sch)
     except SheetAuthoringError as exc:
         return refusal(exc)
     except write_layer.WriteLayerError as exc:

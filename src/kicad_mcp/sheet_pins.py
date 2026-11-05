@@ -34,6 +34,16 @@ parse check, reload-and-compare, ``os.replace``). Decision 4, the order of work 
 6. only then the real write: the children first, then the parent; a parent save that fails restores
    the children.
 
+Two more tools compare and reconcile the pins with the child's hierarchical labels (issue 110):
+
+- ``compare_sheet_pins`` (read-only, no lock, no scratch copy): per sheet symbol the pins without a
+  label, the labels without a pin and the pins whose direction differs from their label's. kicad-cli's
+  ERC reports the missing names (``hier_label_mismatch``) but not a different direction;
+- ``sync_sheet_pins``: creates the missing pins from the child's labels (name and direction of the
+  label), through the same plan and the same checks as ``add_sheet_pins``. It never creates or
+  removes a hierarchical label, never changes a direction and never removes a pin: which side is right
+  is the caller's call, so those differences come back as ``unresolved``.
+
 A wire is not dragged along with a moved pin: the pin leaves the wire's end, which is a
 connectivity change. Move the wire (``delete_wires`` and ``add_wires``) after moving the pin.
 
@@ -621,6 +631,109 @@ def _mismatches(base: Path, parent_rel: Path) -> list[str]:
     return out
 
 
+# --------------------------------------------------------------------------- compare and sync (issue 110)
+
+
+def _selection(value: Any) -> list[str] | None:
+    if value is None:
+        return None
+    if not isinstance(value, list) or not value or not all(isinstance(v, str) and v for v in value):
+        raise SheetAuthoringError("invalid_spec", "sheets must be omitted or a non-empty list of sheet names (or uuids)")
+    return value
+
+
+def _chosen(parent: SExp, selection: list[str] | None) -> list[SExp]:
+    """The sheet symbols the selection names, in the order of the file (all of them without a selection)."""
+    if selection is None:
+        return _kids(parent, "sheet")
+    picked = [_find_sheet(parent, {"sheet": wanted}, f"sheets[{i}]") for i, wanted in enumerate(selection)]
+    ids = {se._uuid(s) for s in picked}
+    return [s for s in _kids(parent, "sheet") if se._uuid(s) in ids]
+
+
+def _compare_one(tree: sheet_tree.SheetTree, parent_dir: Path, sheet: SExp) -> dict[str, Any]:
+    """Pins of ``sheet`` against the hierarchical labels of its child file, from the raw ``(at ...)`` and ``(shape ...)``."""
+    where = f"sheet {sheet_tree.sheet_name_property(sheet)!r}"
+    file, rel = _child_file(tree, parent_dir, sheet, where)
+    child = write_layer.load(file)
+    pins = [(p, _text(p), _text(p, 1)) for p in _kids(sheet, "pin")]
+    labels: dict[str, list[SExp]] = {}
+    for label in _kids(child, "hierarchical_label"):
+        labels.setdefault(_text(label), []).append(label)
+    pin_names = {name for _p, name, _d in pins}
+    entry: dict[str, Any] = {
+        "sheet": sheet_tree.sheet_name_property(sheet), "uuid": se._uuid(sheet), "file": rel,
+        "missing_pins": [], "missing_labels": [], "direction_mismatches": [], "duplicate_labels": [], "pins_in_sync": [],
+    }
+    for name, nodes in labels.items():
+        directions = [_shape(n) for n in nodes]
+        if len(nodes) > 1:
+            entry["duplicate_labels"].append({"name": name, "directions": directions, "count": len(nodes)})
+        if name not in pin_names:
+            x, y, _a = se._at(nodes[0])
+            entry["missing_pins"].append({"name": name, "direction": directions[0], "label_at": [round(x, 4), round(y, 4)]})
+    for node, name, direction in pins:
+        x, y, _a = se._at(node)
+        have = labels.get(name)
+        if not have:
+            entry["missing_labels"].append({"name": name, "pin_direction": direction, "pin_at": [round(x, 4), round(y, 4)]})
+        elif _shape(have[0]) != direction:
+            entry["direction_mismatches"].append({"name": name, "pin_direction": direction, "label_direction": _shape(have[0])})
+        else:
+            entry["pins_in_sync"].append(name)
+    entry["differences"] = sum(len(entry[k]) for k in ("missing_pins", "missing_labels", "direction_mismatches", "duplicate_labels"))
+    entry["in_sync"] = entry["differences"] == 0
+    return entry
+
+
+def _compare(tree: sheet_tree.SheetTree, parent_key: Path, selection: list[str] | None) -> list[dict[str, Any]]:
+    parent = write_layer.load(parent_key)
+    if parent.name != "kicad_sch":
+        raise SheetAuthoringError("invalid_spec", f"{parent_key.name} is not a schematic sheet")
+    return [_compare_one(tree, parent_key.parent, s) for s in _chosen(parent, selection)]
+
+
+def _tree_of(parent_sch: str, root_sch: str | None) -> tuple[Path, sheet_tree.SheetTree]:
+    parent = Path(parent_sch)
+    if not parent.is_file():
+        raise SheetAuthoringError("file_not_found", f"parent sheet not found: {parent}")
+    root = sheet_authoring.find_root(parent, root_sch)
+    tree = sheet_authoring._require_tree(root)
+    parent_key = parent.resolve()
+    if parent_key not in {f.resolve() for f in tree.files}:
+        raise SheetAuthoringError("parent_not_in_tree", f"{parent.name} is not reached from the root sheet {root.name}", **tree.report())
+    return parent_key, tree
+
+
+def _unresolved(sheets: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
+    out: dict[str, list[dict[str, Any]]] = {"missing_labels": [], "direction_mismatches": [], "duplicate_labels": [], "unsupported_directions": []}
+    for entry in sheets:
+        for key in ("missing_labels", "direction_mismatches", "duplicate_labels"):
+            out[key] += [{"sheet": entry["sheet"], **item} for item in entry[key]]
+        out["unsupported_directions"] += [{"sheet": entry["sheet"], "name": m["name"], "label_direction": m["direction"]}
+                                          for m in entry["missing_pins"] if m["direction"] not in PIN_DIRECTIONS]
+    return out
+
+
+def compare_sheet_pins(parent_sch: str, sheets: list[str] | None = None, root_sch: str | None = None) -> dict[str, Any]:
+    """Read-only: the pins of the sheet symbols of ``parent_sch`` against the hierarchical labels of their child sheets."""
+    try:
+        selection = _selection(sheets)
+        parent_key, tree = _tree_of(parent_sch, root_sch)
+        entries = _compare(tree, parent_key, selection)
+    except SheetAuthoringError as exc:
+        return sheet_authoring.refusal(exc)
+    return {
+        "status": "ok", "ok": True, "written": False, "sheets": entries, "count": len(entries),
+        "differences": sum(e["differences"] for e in entries), "sheets_in_sync": sum(1 for e in entries if e["in_sync"]),
+    }
+
+
+def sync_sheet_pins(parent_sch: str, sheets: list[str] | None = None, root_sch: str | None = None, *, allow_connectivity_change: bool = False,
+                    dry_run: bool = False) -> dict[str, Any]:
+    return _pipeline("sync", parent_sch, sheets, root_sch, allow=allow_connectivity_change, dry_run=dry_run)
+
+
 # --------------------------------------------------------------------------- the entry points
 
 
@@ -638,7 +751,7 @@ def _pipeline(op: str, parent_sch: str, specs: Any, root_sch: str | None, *, all
 def _run(op: str, parent: Path, specs: Any, root_sch: str | None, allow: Any, dry_run: Any, remove_child_labels: bool) -> dict[str, Any]:
     if not isinstance(allow, bool) or not isinstance(dry_run, bool):
         raise SheetAuthoringError("invalid_spec", "allow_connectivity_change and dry_run must be true or false")
-    specs = _specs(specs, "specs")
+    specs = _selection(specs) if op == "sync" else _specs(specs, "specs")
     if not parent.is_file():
         raise SheetAuthoringError("file_not_found", f"parent sheet not found: {parent}")
     if not dry_run:
@@ -669,11 +782,30 @@ def _child_files(tree: sheet_tree.SheetTree, parent_key: Path) -> list[Path]:
     return files
 
 
-def _locked(op: str, parent: Path, parent_key: Path, tree: sheet_tree.SheetTree, specs: list[dict], allow: bool, dry_run: bool,
+def _locked(op: str, parent: Path, parent_key: Path, tree: sheet_tree.SheetTree, specs: Any, allow: bool, dry_run: bool,
             remove_child_labels: bool) -> dict[str, Any]:
     original_parent = write_layer.load(parent_key)
     if original_parent.name != "kicad_sch":
         raise SheetAuthoringError("invalid_spec", f"{parent.name} is not a schematic sheet")
+    unresolved = None
+    if op == "sync":
+        # read under the lock: the labels the pins are made from cannot change before the write
+        found = _compare(tree, parent_key, specs)
+        unresolved = _unresolved(found)
+        def makeable(entry: dict[str, Any]) -> list[dict[str, Any]]:
+            # a label name that stands twice with two directions has no one direction to give the pin: unresolved
+            clash = {d["name"] for d in entry["duplicate_labels"] if len(set(d["directions"])) > 1}
+            return [m for m in entry["missing_pins"] if m["direction"] in PIN_DIRECTIONS and m["name"] not in clash]
+
+        specs = [{"uuid": e["uuid"], "pins": [{"name": m["name"], "direction": m["direction"]} for m in makeable(e)]}
+                 for e in found if makeable(e)]
+        if not specs:
+            skipped = any(len(makeable(e)) < len(e["missing_pins"]) for e in found)
+            return {"status": "ok", "ok": True, "written": False, "dry_run": dry_run, "added": [], "count": 0, "unresolved": unresolved,
+                    "differences_left": sum(len(v) for v in unresolved.values()), "child_files_written": [],
+                    "note": ("no pin can be created from the labels of the selected sheets; the labels that were skipped are listed under unresolved"
+                             if skipped else "every hierarchical label of the selected sheets already has a pin; nothing to create")}
+        op = "add"
     session = _Session(tree, parent_key, write_layer.load(parent_key))
     if op == "add":
         _plan_add(session, specs)
@@ -710,6 +842,9 @@ def _locked(op: str, parent: Path, parent_key: Path, tree: sheet_tree.SheetTree,
         "erc_new_violations": proof["erc_new_violations"],
         "child_files_written": sorted(tree.rel(f) for f in plan.children if plan.added_labels.get(f) or plan.removed_labels.get(f)),
     }
+    if unresolved is not None:
+        result["unresolved"] = unresolved
+        result["differences_left"] = sum(len(v) for v in unresolved.values())
     if op == "remove":
         result["child_labels"] = ("removed with the pins" if remove_child_labels else
                                   "left in the child sheets; an unmatched hierarchical label is an ERC error (hier_label_mismatch) until it is removed or its pin is added again")

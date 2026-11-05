@@ -53,6 +53,8 @@ def test_build_registers_expected_tools(sch_tools):
         "add_sheet_pins",
         "remove_sheet_pins",
         "move_sheet_pins",
+        "sync_sheet_pins",
+        "compare_sheet_pins",
         "delete_symbols",
         "delete_wires",
         "delete_labels",

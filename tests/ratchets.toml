@@ -844,6 +844,14 @@ proof = [
     "tests/test_sheet_pins.py::test_a_remove_and_a_move_corrupted_write_is_refused",
 ]
 
+[writing_tool.sync_sheet_pins]
+self_check = "reload-verify"
+note = "Issue 110: sync_sheet_pins reads the child's hierarchical labels under the path_lock of the parent and the child files, turns every label without a pin into an add_sheet_pins spec (name and direction of the label) and then takes the add_sheet_pins path unchanged: copies of the parent tree in memory, staged check that every node it did not select is unchanged, scratch copy with sheet-tree, interface, ERC-census and netlist comparison, and only then write_layer.save, whose verify reloads the temporary sibling and compares it with the serialised tree before os.replace. It creates no label, so the child files are not written. The proof corrupts only the temporary sibling of the real parent (not the scratch copies of the staged checks), so it fires on the verify of the real save; dropping that verify turns it red (mutation checked)."
+proof = [
+    "tests/test_sync_sheet_pins.py::test_the_reload_check_fires_on_a_corrupted_sync_write",
+    "tests/test_sync_sheet_pins.py::test_the_staged_check_fires_when_sync_touches_more_than_it_selected",
+]
+
 [writing_tool.delete_symbols]
 self_check = "reload-verify"
 note = "Issue 84: sheet_editing changes a copy of the sheet's tree in memory, checks that every node it did not select is unchanged, compares kicad-cli's netlist of the project before and after on scratch copies (connectivity_changed unless allowed), and only then saves through write_layer.save, whose verify reloads the temporary sibling and compares it with the serialised tree before os.replace."

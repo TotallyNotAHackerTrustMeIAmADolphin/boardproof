@@ -1764,6 +1764,58 @@ def build(mcp: MCPServer) -> list[str]:
 
         return sheet_pins.move_sheet_pins(parent_sch, specs, root_sch, allow_connectivity_change=allow_connectivity_change, dry_run=dry_run)
 
+    def compare_sheet_pins(parent_sch: str, sheets: list[str] | None = None, root_sch: str | None = None) -> dict:
+        """Read-only, in one call: compare the sheet pins of the sheet symbols on a parent sheet with the
+        hierarchical labels of their child sheets, direction included. It writes nothing and takes no
+        write lock. sheets: sheet names (a uuid also matches) to compare; omitted, every sheet symbol of
+        parent_sch. root_sch: the project's root sheet (optional when parent_sch is the root or the only
+        .kicad_pro of the folder names it).
+
+        Per sheet symbol the result lists every difference: missing_pins (a hierarchical label in the child
+        with no pin of that name: name, direction of the label, label_at), missing_labels (a pin with no
+        label in the child: name, pin_direction, pin_at), direction_mismatches (name, pin_direction,
+        label_direction; kicad-cli's ERC does not report a different direction) and duplicate_labels
+        (the same label name twice in the child). pins_in_sync names the pins that agree; differences and
+        in_sync summarise, and the top level counts differences and sheets_in_sync. A sheet name that
+        matches nothing refuses the whole call: sheet_not_found.
+
+        To make the pins that are missing, call sync_sheet_pins.
+        """
+        from kicad_mcp import sheet_pins
+
+        return sheet_pins.compare_sheet_pins(parent_sch, sheets, root_sch)
+
+    def sync_sheet_pins(
+        parent_sch: str, sheets: list[str] | None = None, root_sch: str | None = None,
+        allow_connectivity_change: bool = False, dry_run: bool = False,
+    ) -> dict:
+        """Create, in one call, the sheet pins that the hierarchical labels of the child sheets ask for: every
+        label with no pin of that name gets a pin of the same name and direction on its sheet symbol (side
+        and position as add_sheet_pins chooses them: left, right for output, the next free 2.54 mm step on
+        the 1.27 mm grid). sheets: sheet names (a uuid also matches); omitted, every sheet symbol of
+        parent_sch. Run compare_sheet_pins first to see the differences without a lock.
+
+        This tool never creates or removes a hierarchical label, never changes a direction and never removes
+        a pin: which side is right is for the caller to decide. What it leaves comes back under unresolved:
+        missing_labels (a pin with no label), direction_mismatches (pin and label disagree; use
+        remove_sheet_pins and add_sheet_pins, or change the label with the label tools), duplicate_labels
+        and unsupported_directions, with differences_left counting them. A second call with nothing to
+        create writes nothing (count 0).
+
+        The same safety as add_sheet_pins: the change is built on scratch copies, every node not selected
+        stays unchanged, kicad-cli's ERC may show no new violation type besides the unconnected new pins,
+        and kicad-cli's netlist before and after is compared net by net: a new pin that lands on a wire end,
+        label or symbol pin is connectivity_changed, nothing written, unless allow_connectivity_change is
+        true. dry_run true computes and returns everything and writes nothing. The result lists each pin's
+        absolute position (at) like add_sheet_pins.
+
+        Refuses with file_open_in_kicad, naming the lock file, while KiCad holds a lock file for a file
+        it would write; close the file in KiCad, then retry.
+        """
+        from kicad_mcp import sheet_pins
+
+        return sheet_pins.sync_sheet_pins(parent_sch, sheets, root_sch, allow_connectivity_change=allow_connectivity_change, dry_run=dry_run)
+
     def delete_symbols(
         sch_path: str, selectors: list[dict], allow_connectivity_change: bool = False,
         remove_dangling: bool = False, dry_run: bool = False, root_sch: str | None = None,
@@ -2393,11 +2445,11 @@ def build(mcp: MCPServer) -> list[str]:
     }
     mutating_tools = [
         add_symbols, add_wires, add_junctions, add_labels, assign_footprints, fix_annotation, create_sheets, add_sheet_symbols,
-        add_sheet_pins, remove_sheet_pins, move_sheet_pins,
+        add_sheet_pins, remove_sheet_pins, move_sheet_pins, sync_sheet_pins,
         delete_symbols, delete_wires, delete_labels, delete_junctions, move_symbols, move_labels, set_text, set_property_positions, connect_pins, replace_symbols,
         add_no_connects, delete_no_connects,
     ]
-    read_only_tools = [get_symbol_pins, check_connectivity]
+    read_only_tools = [get_symbol_pins, check_connectivity, compare_sheet_pins]
     for tool_fn in mutating_tools:
         mcp.add_tool(tool_fn, annotations=dict(_MUTATING_LOCAL))
     for tool_fn in read_only_tools:
