@@ -512,6 +512,10 @@ def test_every_schematic_writer_keeps_existing_non_ascii_text(tmp_path, sch_tool
     assert set(_NON_ASCII_TEXTS) <= set(_label_texts(dest))
 
 
+# kicad_tools warns with the label text in the message ("Label ... "); the text holds the lone surrogate,
+# and pytest-xdist cannot send such a warning from a worker (execnet DumpError, session-aborting
+# INTERNALERROR under -n). The warning carries no information this test checks, so it is dropped here.
+@pytest.mark.filterwarnings("ignore:Label")
 @pytest.mark.parametrize(
     ("tool", "args"),
     [

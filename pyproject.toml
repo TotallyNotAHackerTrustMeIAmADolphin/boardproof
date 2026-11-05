@@ -47,6 +47,8 @@ dependencies = [
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.24",
+    # Targeted runs in parallel (docs/TESTING.md); -n goes on the command line, never into addopts.
+    "pytest-xdist>=3.8,<4",
     # Exact pin: the lint baseline (scripts/ruff-baseline.json) counts findings of this version's
     # rules, and scripts/lint_gate.py refuses any other version (build ticket 45).
     "ruff==0.17.1",

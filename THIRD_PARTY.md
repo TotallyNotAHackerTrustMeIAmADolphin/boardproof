@@ -18,7 +18,7 @@ The rule behind the table: a copyleft tool is only ever run as a separate proces
 | `jlcpcb_basic_index.json` in `src/kicad_mcp/sourcing/data/` | MIT | Index of JLCPCB Basic and Preferred parts, derived from the library above at the same commit `e37fb96f4a4b54013293b80963efb1208d573d43` (`scripts/refresh_jlcpcb_index.py` regenerates it). Copyright (c) 2023 Chris. The file carries its source, licence and copyright line in its header. |
 | `pic_programmer` demo project from KiCad's demos | CC BY-SA 4.0 (KiCad demos are licensed CC BY-SA 4.0; see the KiCad project's documentation for demos) | The input of ladder rung 2. It is read from the user's KiCad install and staged into a scratch copy with its tracks, vias and zones removed. This repository does not contain a copy. **Any modified copy you publish stays CC BY-SA 4.0 and needs the attribution below.** |
 | Python packages `mcp`, `pydantic`, `httpx`, `pdfplumber` | MIT, MIT, BSD-3-Clause, MIT | Core dependencies, imported normally. |
-| `pytest`, `pytest-asyncio`, `ruff` | MIT | Development dependencies (`dev` extra). |
+| `pytest`, `pytest-asyncio`, `pytest-xdist` (with `execnet`), `ruff` | MIT | Development dependencies (`dev` extra). |
 
 ## Not used
 

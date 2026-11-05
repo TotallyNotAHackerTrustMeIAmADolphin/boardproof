@@ -131,6 +131,16 @@ KICAD_DEMOS_REQUIRED=1 KICAD_ROUTING_TOOLS_REQUIRED=1 python -m pytest -m "not n
 python -m pytest -m network                                                              # live network, run deliberately
 ```
 
+### Targeted runs in parallel
+
+Targeted runs may use pytest-xdist (a `dev` extra, build ticket 152, stage 1 of issue 70): `python -m pytest -n 4 --dist load <paths>`.
+
+- **Measured** (trial of 2026-11-05, other runs sharing the machine): 460 tests of the schematic toolset and guard group, 606 s serial and 295 s with `-n 4 --dist load`; six slow files, 1264 s serial and 470 s with `-n 4 --dist loadfile`. The same group with the ticket's fix: 461 passed in 129 s.
+- **Never `-n 8`:** no gain on this machine (the cores are shared). Run **one** parallel pytest at a time: a `-n 4` run needs about 4 to 7 GB of RAM, and each `kicad-cli` may take up to 1 GB. A `-n 4` run counts as one run for the agents' load limit while a batch gate runs; its workers are not counted separately.
+- **`--dist loadfile` for files with a module or session fixture that is expensive to build.** `--dist load` sends tests of one file to different workers and each worker rebuilds the fixture. Checked with `-n 4 --dist load`: `tests/test_rung1_layout.py` (its `flow_result`) and `tests/test_raw_geometry.py` (its `demo_board`) both pass (90 tests), but the fixture may be built again on a second worker (the trial saw about 95 s each time), so `--dist loadfile` avoids that at the cost of using fewer workers (measured for these two files together: 154 s with `--dist load`, 177 s with `--dist loadfile`, so the choice is a trade-off, not a rule). Any other file with a `scope="module"` or `scope="session"` fixture that runs `kicad-cli` or a router is a loadfile candidate too.
+- **The flags go on the command line, never into `addopts`:** `EXPECTED_PYTEST_CONFIG` in `scripts/batch_gate.py` forbids `addopts`. The batch gate keeps its single serial command until its own ticket (stage 2 of issue 70) re-bases its timeouts.
+- **A test must not put text that UTF-8 cannot encode (a lone surrogate) into a warning or output:** a worker cannot send it, and the whole session aborts with an `INTERNALERROR`. The one such test, `test_a_write_that_cannot_be_encoded_leaves_the_schematic_byte_identical`, drops the `kicad_tools` warning with a `filterwarnings` mark.
+
 ### The batch gate
 
 - **The local run is the gate.** Hosted CI does not run: the owner will not pay for GitHub (2026-10-19), so the GitHub Actions workflow was disabled and removed on 2026-10-20 (its failed-run emails carried no signal). `python scripts/batch_gate.py` (build ticket 45) runs the full suite and the lint gate and gives one GREEN/RED verdict.
