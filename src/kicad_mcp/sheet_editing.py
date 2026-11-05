@@ -5,6 +5,7 @@ sending every coordinate again. This module holds the batch tools that change a 
 
 - ``delete_symbols`` / ``delete_wires`` / ``delete_labels`` / ``delete_junctions``
 - ``move_symbols`` / ``move_labels``
+- ``set_text`` (the text of existing labels and free text objects, GitHub issue 114)
 - ``set_property_positions`` (position, angle and justification of a symbol's property texts)
 - ``replace_symbols`` (issue 112: a placed symbol becomes another lib_id in place; the checks are at the function)
 
@@ -1060,6 +1061,160 @@ def set_property_positions(path: str, items: list[dict], root_sch: str | None, *
     result = run(path, root_sch, mutate, allow_connectivity_change=False, dry_run=dry_run)
     if result.get("ok") and dry_run:
         result["would_update"] = result.pop("updated")
+    return result
+
+
+# --------------------------------------------------------------------------- set_text
+
+TEXT_KINDS = {**LABEL_KINDS, "text": "text"}
+_TEXT_ITEM_KEYS = {"uuid", "kind", "old_text", "point", "text"}
+
+
+def _text_nodes(sheet: Sheet) -> list[SExp]:
+    """The labels and the free text objects of a sheet, in file order."""
+    return [c for c in sheet.root.children if not c.is_atom and c.name in (*LABEL_TAGS, "text")]
+
+
+def _kind_of(node: SExp) -> str:
+    return next(k for k, tag in TEXT_KINDS.items() if tag == node.name)
+
+
+def _check_text_items(items: Any) -> list[dict]:
+    if not isinstance(items, list) or not items:
+        raise SheetAuthoringError("invalid_spec", "items must be a non-empty list of {uuid | kind + old_text [+ point], text}")
+    for i, item in enumerate(items):
+        where = f"items[{i}]"
+        if not isinstance(item, dict) or set(item) - _TEXT_ITEM_KEYS:
+            raise SheetAuthoringError("invalid_spec", f"{where} must be an object with keys from {sorted(_TEXT_ITEM_KEYS)}, got {item!r}")
+        if "text" not in item:
+            raise SheetAuthoringError("invalid_spec", f"{where} needs 'text', the new text")
+        if not isinstance(item["text"], str):
+            raise SheetAuthoringError("invalid_spec", f"{where}.text must be a string, got {item['text']!r}")
+        if not item["text"].strip():
+            raise SheetAuthoringError("empty_text", f"{where}.text is empty; a label or text object cannot be given no text; nothing was written")
+        if "uuid" in item:
+            if not (isinstance(item["uuid"], str) and item["uuid"]):
+                raise SheetAuthoringError("invalid_spec", f"{where}.uuid must be a non-empty string")
+        elif "kind" not in item or "old_text" not in item:
+            raise SheetAuthoringError("invalid_spec", f"{where} needs 'uuid' or both 'kind' and 'old_text' (and 'point' when several match)")
+        if "kind" in item and item["kind"] not in TEXT_KINDS:
+            raise SheetAuthoringError("invalid_spec", f"{where}.kind must be one of {sorted(TEXT_KINDS)}")
+        if "old_text" in item and not (isinstance(item["old_text"], str) and item["old_text"]):
+            raise SheetAuthoringError("invalid_spec", f"{where}.old_text must be a non-empty string")
+        if "point" in item and not (isinstance(item["point"], (list, tuple)) and len(item["point"]) == 2 and all(
+                isinstance(v, (int, float)) and not isinstance(v, bool) for v in item["point"])):
+            raise SheetAuthoringError("invalid_spec", f"{where}.point must be [x, y] in mm")
+    return items
+
+
+def _resolve_text_items(sheet: Sheet, items: list[dict]) -> list[SExp]:
+    """One node per item: by uuid, or by kind, current text and (when several match) point."""
+    nodes = _text_nodes(sheet)
+    picked: list[SExp] = []
+    missing: list[str] = []
+    for i, item in enumerate(items):
+        if "uuid" in item:
+            found = [n for n in nodes if _uuid(n) == item["uuid"] and ("kind" not in item or _kind_of(n) == item["kind"])
+                     and ("old_text" not in item or n.get_string(0) == item["old_text"])]
+        else:
+            found = [n for n in nodes if _kind_of(n) == item["kind"] and n.get_string(0) == item["old_text"]]
+        if "point" in item:
+            px, py = float(item["point"][0]), float(item["point"][1])
+            found = [n for n in found if _same(_at(n)[:2], (px, py))]
+        if not found:
+            asked = {k: v for k, v in item.items() if k != "text"}
+            missing.append(f"items[{i}] {asked!r}")
+            continue
+        if len(found) > 1:
+            raise SheetAuthoringError(
+                "ambiguous", f"items[{i}] matches {len(found)} objects; add 'point' or use 'uuid'; nothing was written",
+                candidates=[{"uuid": _uuid(n), "kind": _kind_of(n), "text": n.get_string(0), "at": _round_pt(*_at(n)[:2])} for n in found[:MAX_LISTED]])
+        if any(found[0] is p for p in picked):
+            raise SheetAuthoringError("invalid_spec", f"items[{i}] picks an object an earlier item already picked ({_uuid(found[0])})")
+        picked.append(found[0])
+    if missing:
+        raise SheetAuthoringError("not_found", f"not found on this sheet: {', '.join(missing)}; nothing was written", not_found=missing)
+    return picked
+
+
+def _pin_mismatch_warnings(path: Path, root_sch: str | None, renames: list[tuple[str, str]], new_root: SExp) -> list[dict]:
+    """For each renamed hierarchical label, the sheet pins of the parent sheet symbols that point at
+    this file and still carry the old name: the call leaves them alone, so pin and label now disagree."""
+    tree, standalone = _tree_for(path, root_sch)
+    if standalone:
+        return []
+    labels_now = {c.get_string(0) for c in _kids(new_root, "hierarchical_label")}
+    out: list[dict] = []
+    for parent in tree.files:
+        if parent.resolve() == path.resolve():
+            continue
+        for sheet in sheet_tree.parsed_sheet(tree, parent).find_children("sheet"):
+            rel = sheet_tree.sheet_file_property(sheet)[0]
+            if not rel or (parent.parent / rel).resolve() != path.resolve():
+                continue
+            pins = {p.get_string(0) for p in sheet.find_children("pin")}
+            for old, new in renames:
+                if old in pins and old not in labels_now and new not in pins:
+                    out.append({"code": "pin_name_mismatch", "parent_sheet": tree.rel(parent),
+                                "sheet_name": sheet_tree.sheet_name_property(sheet), "pin": old, "label": new,
+                                "note": "the sheet pin keeps its old name and was not changed; rename it (remove_sheet_pins, then add_sheet_pins) "
+                                        "or ERC reports the pin and the label as unmatched"})
+    return out
+
+
+def set_text(path: str, items: list[dict], root_sch: str | None, *, allow_connectivity_change: bool, dry_run: bool) -> dict[str, Any]:
+    """Change the text of existing labels (local, global, hierarchical) and free text objects."""
+
+    def mutate(sheet: Sheet, root: SExp) -> Outcome:
+        specs = _check_text_items(items)
+        nodes = _resolve_text_items(sheet, specs)
+        outcome = Outcome(check_nets=False)
+        listed, renames, hier_renames, whitespace = [], [], [], []
+        for i, (item, node) in enumerate(zip(specs, nodes, strict=True)):
+            if node.name in LABEL_TAGS:
+                if any(ch in item["text"] for ch in "\r\n\t"):
+                    raise SheetAuthoringError(
+                        "invalid_spec", f"items[{i}].text holds a line break or tab; a label is one line without tabs "
+                        "(only a free text object may hold them); nothing was written")
+                if item["text"] != item["text"].strip():
+                    whitespace.append({"code": "label_whitespace", "uuid": _uuid(node), "text": item["text"]})
+        for item, node in zip(specs, nodes, strict=True):
+            old, new = node.get_string(0), item["text"]
+            x, y, _a = _at(node)
+            entry = {"uuid": _uuid(node), "kind": _kind_of(node), "from": old, "to": new, "at": _round_pt(x, y)}
+            if old == new:
+                entry["unchanged"] = True
+            else:
+                try:
+                    write_layer.set_string(node, 0, new)
+                except write_layer.InvalidStringError as exc:
+                    raise SheetAuthoringError("invalid_spec", f"text {new!r} cannot be written: {exc}") from exc
+                outcome.changed.add(_uuid(node))
+                if node.name in LABEL_TAGS:
+                    renames.append({"type": "label_renamed", "kind": entry["kind"], "uuid": _uuid(node), "from": old, "to": new})
+                    if node.name == "hierarchical_label":
+                        hier_renames.append((old, new))
+            listed.append(entry)
+        outcome.no_change = not outcome.changed
+        outcome.report = {"changed": listed, "count": len(listed), "unchanged": sum(1 for e in listed if e.get("unchanged"))}
+        if renames:
+            outcome.check_nets = True
+
+            def compare(before, after, removed):
+                # A renamed label always counts: the netlist shows a rename only on a net that has pins.
+                return compare_nets(before, after, removed) + renames
+
+            outcome.compare = compare
+        warnings = list(whitespace)
+        if hier_renames:
+            warnings += _pin_mismatch_warnings(Path(path), root_sch, hier_renames, root)
+        if warnings:
+            outcome.report["warnings"] = warnings
+        return outcome
+
+    result = run(path, root_sch, mutate, allow_connectivity_change=allow_connectivity_change, dry_run=dry_run)
+    if result.get("ok") and dry_run:
+        result["would_change"] = result.pop("changed")
     return result
 
 

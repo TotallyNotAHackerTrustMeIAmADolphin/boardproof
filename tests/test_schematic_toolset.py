@@ -59,6 +59,7 @@ def test_build_registers_expected_tools(sch_tools):
         "delete_junctions",
         "move_symbols",
         "move_labels",
+        "set_text",
         "set_property_positions",
         "get_symbol_pins",
         "connect_pins",

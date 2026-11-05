@@ -1903,6 +1903,49 @@ def build(mcp: MCPServer) -> list[str]:
         return sheet_editing.move("label", sch_path, moves, root_sch, move_wires=move_wires, snap=snap, grid=grid,
                                   allow_connectivity_change=allow_connectivity_change, dry_run=dry_run)
 
+    def set_text(
+        sch_path: str, items: list[dict], allow_connectivity_change: bool = False, dry_run: bool = False,
+        root_sch: str | None = None,
+    ) -> dict:
+        """Change the text of existing net labels, global labels, hierarchical labels and free text objects
+        on a sheet in one call. The object keeps its uuid, position, rotation, shape and effects; only the
+        text changes.
+
+        items: a list of objects {uuid | kind + old_text [+ point], text}. `text` is the new text (never
+        empty). The object is picked by `uuid`, or by `kind` (label, global, hier, text) and `old_text`
+        (its current text, exact); `point` [x, y] (mm) tells apart several objects of the same kind and
+        text. More than one match is refused (ambiguous, candidates listed with uuid and position), none is
+        refused (not_found), and so is an object picked twice, an unknown key or kind, a text that is not a
+        string or holds a control character, and a line break or tab in a label, however the label is picked
+        (invalid_spec; empty_text for an empty or blank text). Free text may hold several lines; a label is one
+        line. Leading or trailing whitespace in a label is written and listed as a label_whitespace warning.
+
+        Renaming a net label (local, global or hierarchical) changes connectivity: kicad-cli's netlist of
+        the project is read before and after on scratch copies and compared, and every renamed label is
+        also listed as label_renamed. The call is refused with connectivity_changed (nothing written, the
+        changes listed) unless allow_connectivity_change is true. A change of free text only never changes
+        connectivity, so no netlist is read for it. A text set to what it already is is listed as unchanged.
+
+        A renamed hierarchical label leaves the sheet pin of the parent sheet's sheet symbol alone. When
+        the project has a parent that uses this file and its pin still carries the old name, the result
+        lists a warnings entry pin_name_mismatch (parent_sheet, sheet_name, pin, label): rename the pin
+        with remove_sheet_pins and add_sheet_pins, or ERC reports the two as unmatched. A parent without a pin of
+        the old name, or with a pin of the new name, gives no warning.
+
+        Returns changed (uuid, kind, from, to, at), count, unchanged, connectivity (when a label was
+        renamed), warnings and written. dry_run true computes and returns everything (would_change) and
+        writes nothing. Every other node of the sheet is checked against the original, and the written file
+        is reloaded and compared before it replaces the original. Refuses a failed self-check
+        (write_not_verified, the sheet unchanged). root_sch names the project's root sheet when sch_path is a
+        sub-sheet and its folder holds several projects.
+
+        Refuses with file_open_in_kicad, naming the lock file, while KiCad holds a lock file for a file
+        it would write; close the file in KiCad, then retry.
+        """
+        from kicad_mcp import sheet_editing
+
+        return sheet_editing.set_text(sch_path, items, root_sch, allow_connectivity_change=allow_connectivity_change, dry_run=dry_run)
+
     def set_property_positions(
         sch_path: str, items: list[dict], dry_run: bool = False, root_sch: str | None = None,
     ) -> dict:
@@ -2164,7 +2207,7 @@ def build(mcp: MCPServer) -> list[str]:
     mutating_tools = [
         add_symbols, add_wires, add_junctions, add_labels, assign_footprints, fix_annotation, create_sheets, add_sheet_symbols,
         add_sheet_pins, remove_sheet_pins, move_sheet_pins,
-        delete_symbols, delete_wires, delete_labels, delete_junctions, move_symbols, move_labels, set_property_positions, connect_pins, replace_symbols,
+        delete_symbols, delete_wires, delete_labels, delete_junctions, move_symbols, move_labels, set_text, set_property_positions, connect_pins, replace_symbols,
     ]
     read_only_tools = [get_symbol_pins, check_connectivity]
     for tool_fn in mutating_tools:

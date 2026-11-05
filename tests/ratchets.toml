@@ -893,6 +893,14 @@ proof = [
     "tests/test_pin_wiring.py::test_the_netlist_self_check_fires_on_a_wire_that_misses_its_pin",
 ]
 
+[writing_tool.set_text]
+self_check = "reload-verify"
+note = "Issue 114: sheet_editing.set_text changes the text atom of labels and free text objects on a copy of the sheet's tree in memory, checks that every node it did not select is unchanged, compares kicad-cli's netlist of the project before and after on scratch copies when a label is renamed (connectivity_changed unless allowed), and only then saves through write_layer.save, whose verify reloads the temporary sibling and compares it with the serialised tree before os.replace."
+proof = [
+    "tests/test_set_text.py::test_a_corrupted_write_is_refused_and_leaves_the_sheet_alone",
+    "tests/test_set_text.py::test_the_staged_check_fires_when_the_change_touches_more_than_it_selected",
+]
+
 [writing_tool.replace_symbols]
 self_check = "reload-verify"
 note = "Issue 112: sheet_editing.replace_symbols swaps lib_id and the pin list of a placed symbol and the embedded lib_symbols entries in a copy of the sheet's tree in memory, checks that every child of the symbol except lib_id, lib_name and pins is byte-equal (symbol_children_unchanged) and that every other node and every other library symbol is unchanged (staged check), compares kicad-cli's netlist of the project before and after on scratch copies (connectivity_changed unless allowed; pin_unmapped for a wired pin with no counterpart), and only then saves through write_layer.save, whose verify reloads the temporary sibling and compares it with the serialised tree before os.replace."
