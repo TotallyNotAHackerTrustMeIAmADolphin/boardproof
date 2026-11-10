@@ -243,14 +243,14 @@ def test_legitimate_files_are_not_swallowed_by_a_broad_pattern(tmp_path, rel, ol
 
 def _hostile_env(tmp_path: Path) -> dict[str, str]:
     """An environment whose home carries a global ignore file with the pattern of the planted file."""
-    home = tmp_path / "home"
+    home = tmp_path / "hostile_config_root"
     (home / ".config" / "git").mkdir(parents=True)
     ignore = home / ".config" / "git" / "ignore"
     ignore.write_text("**/.claude/settings.local.json\n", encoding="utf-8")
     cfg = tmp_path / "gitconfig"
     cfg.write_text("[core]\n\texcludesFile = " + ignore.as_posix() + "\n", encoding="utf-8")
     env = dict(os.environ)
-    env.update(HOME=str(home), USERPROFILE=str(home), XDG_CONFIG_HOME=str(home / ".config"), GIT_CONFIG_GLOBAL=str(cfg))
+    env.update(XDG_CONFIG_HOME=str(home / ".config"), GIT_CONFIG_GLOBAL=str(cfg))
     env.pop("GIT_CONFIG_NOSYSTEM", None)
     return env
 
