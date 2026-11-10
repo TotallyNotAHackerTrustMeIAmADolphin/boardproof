@@ -164,6 +164,107 @@ def _pad_numbers(footprint: SExp) -> list[str]:
     return sorted(str(p.get_string(0)) for p in _children(footprint, "pad"))
 
 
+_SHIELD_PAD = re.compile(r"(SH|SHD|SHLD|SHIELD|SHELL|MH|MP|MT|MOUNT|MOUNTING|MECH|CASE)[_-]?\d*", re.IGNORECASE)
+
+
+def _pin_records(symbol: SExp) -> list[dict]:
+    """Raw ``(pin ...)`` nodes of the symbol and its units: number, name and the ``(alternate ...)``
+    names, read from the S-expression."""
+    out: list[dict] = []
+
+    def walk(node: SExp) -> None:
+        for child in node.children:
+            if child.is_atom:
+                continue
+            if child.name == "pin":
+                number, name = child.find("number"), child.find("name")
+                out.append(
+                    {
+                        "number": str(number.get_string(0)) if number is not None else "",
+                        "name": str(name.get_string(0)) if name is not None else "",
+                        "alternates": [str(a.get_string(0)) for a in _children(child, "alternate")],
+                    }
+                )
+            elif child.name == "symbol":
+                walk(child)
+
+    walk(symbol)
+    return out
+
+
+def _pad_records(footprint: SExp) -> list[tuple[str, str]]:
+    """``(number, pad type)`` of every raw ``(pad ...)`` of the footprint."""
+    return [(str(p.get_string(0)), str(p.get_string(1))) for p in _children(footprint, "pad")]
+
+
+def _pin_pad_comparison(symbol: SExp, footprint: SExp) -> dict:
+    """Compare the symbol's pin numbers with the footprint's pad numbers, read from the raw
+    ``(pin ...)`` and ``(pad ...)`` nodes. A pad number that several pads share (stacked pads) and a
+    pin number that several pins share are one number. Unmatched pads that cannot carry a signal
+    (non-plated holes, unnumbered pads, shield and mounting names) are listed as mechanical, not as
+    errors. ``verdict``: ``match``, ``match_with_mechanical_pads`` or ``mismatch`` (a pin without a
+    pad or a numbered pad without a pin)."""
+    pins: dict[str, dict] = {}
+    for rec in _pin_records(symbol):
+        slot = pins.setdefault(rec["number"], {"names": [], "alternates": []})
+        if rec["name"] not in slot["names"]:
+            slot["names"].append(rec["name"])
+        for alt in rec["alternates"]:
+            if alt not in slot["alternates"]:
+                slot["alternates"].append(alt)
+    pads: dict[str, list[str]] = {}
+    for number, kind in _pad_records(footprint):
+        pads.setdefault(number, []).append(kind)
+
+    def carries_copper(number: str) -> bool:
+        return number != "" and any(k != "np_thru_hole" for k in pads.get(number, []))
+
+    matched = [
+        {"number": n, "name": "/".join(v["names"]), "alternates": v["alternates"], "pads": len(pads[n])}
+        for n, v in sorted(pins.items()) if carries_copper(n)
+    ]  # fmt: skip
+    pins_without_pad = [
+        {
+            "number": n,
+            "name": "/".join(v["names"]),
+            "alternates": v["alternates"],
+            "reason": "the only pad of this number is a non-plated hole" if n in pads and n != "" else "no pad of this number",
+        }
+        for n, v in sorted(pins.items()) if not carries_copper(n)
+    ]  # fmt: skip
+    mechanical: list[dict] = []
+    pads_without_pin: list[dict] = []
+    for number, kinds in sorted(pads.items()):
+        if number in pins:  # matched, or reported at the pin (its only pads are non-plated holes)
+            continue
+        if all(k == "np_thru_hole" for k in kinds):
+            kind = "mounting_hole"
+        elif number == "":
+            kind = "unnumbered_pad"
+        elif _SHIELD_PAD.fullmatch(number):
+            kind = "shield_or_mounting_pad"
+        else:
+            pads_without_pin.append({"number": number, "types": sorted(set(kinds)), "count": len(kinds)})
+            continue
+        mechanical.append({"number": number, "types": sorted(set(kinds)), "count": len(kinds), "kind": kind})
+    if pins_without_pad or pads_without_pin:
+        verdict = "mismatch"
+    elif mechanical:
+        verdict = "match_with_mechanical_pads"
+    else:
+        verdict = "match"
+    return {
+        "verdict": verdict,
+        "compared": "the symbol's pin numbers with the footprint's pad numbers (raw pin and pad nodes)",
+        "pin_numbers": len(pins),
+        "pad_numbers": len(pads),
+        "matched": matched,
+        "pins_without_pad": pins_without_pad,
+        "pads_without_pin": pads_without_pin,
+        "mechanical_pads": mechanical,
+    }
+
+
 def _model_nodes(footprint: SExp) -> list[SExp]:
     return _children(footprint, "model")
 
@@ -479,15 +580,16 @@ def _plan_part(
             problems.append(f"{fp_file.name} already exists in {paths['footprints'].name}: nothing is overwritten")
         if not _pins(sym_found[1]):
             problems.append("the symbol has no pins")
-        symbol_pads = {p[0] for p in _pins(sym_found[1])}
-        pads = set(_pad_numbers(fp_found[0]))
-        if not pads:
+        comparison = _pin_pad_comparison(sym_found[1], fp_found[0])
+        entry["pin_pad_check"] = comparison
+        if not _pad_numbers(fp_found[0]):
             problems.append(
                 f"the footprint {footprint_name!r} has no pads: the symbol's pins cannot be matched to anything"
             )
-        elif symbol_pads and not symbol_pads <= pads:
+        elif comparison["pins_without_pad"]:
+            listing = ", ".join(f"{p['number']} ({p['name']})" for p in comparison["pins_without_pad"])
             problems.append(
-                f"symbol pins {sorted(symbol_pads - pads)[:5]} have no pad in the footprint {footprint_name!r}"
+                f"symbol pins without a copper pad in the footprint {footprint_name!r}: {listing}"
             )
         if len(_model_nodes(fp_found[0])) > 1:
             problems.append("the footprint carries more than one (model ...): pass a footprint with one")
@@ -597,15 +699,30 @@ def propose_adopt_parts(
         token = _PENDING.issue(src, payload, extra_files=sources)
     except checkpoint.Refused as exc:
         return {"status": "incomplete", "reason": str(exc)}
+    verdicts = {p["index"]: p["pin_pad_check"]["verdict"] for p in ready if "pin_pad_check" in p}
+    unpinned = sorted(
+        str(p["lcsc_id"]) for p in ready if p.get("pin_pad_check", {}).get("pads_without_pin")
+    )
+    pin_pad_note = ""
+    if unpinned:
+        pin_pad_note = (
+            f" PIN/PAD MISMATCH: {', '.join(unpinned)} have footprint pads with no symbol pin (see each part's "
+            "pin_pad_check.pads_without_pin): that pad can never be connected in the netlist. Show the list to "
+            "the user and confirm only if those pads are meant to stay open or are shield pads."
+        )
     return {
         "status": "proposed",
         **base,
+        "pin_pad_verdict": "mismatch" if unpinned else (
+            "match_with_mechanical_pads" if "match_with_mechanical_pads" in verdicts.values() else "match"
+        ),
         "output_pcb": str(out_dir / src.name),
         "revision_token": token,
         "note": (
             "creates a new project revision with the library added; the original is untouched. "
             "confirm_adopt_parts checks the model path, the model file, the mandatory properties and a "
             "side-view render before it moves the revision into place. Call it with this revision_token."
+            + pin_pad_note
         ),
     }
 
@@ -1140,6 +1257,19 @@ def _verify(state: dict, render: Callable[[Path, Path, str], dict]) -> dict:
                 "detail": f"not set or not valid: {missing}" if missing else f"{', '.join(MANDATORY)} are set",
             }
         )
+        comparison = _pin_pad_comparison(symbol, fp_root)
+        if comparison["pins_without_pad"]:
+            pin_pad_status, pin_pad_detail = "fail", "symbol pins without a copper pad: " + ", ".join(
+                p["number"] for p in comparison["pins_without_pad"]
+            )
+        elif comparison["pads_without_pin"]:
+            pin_pad_status, pin_pad_detail = "warn", (
+                "footprint pads with no symbol pin (they cannot be connected): "
+                + ", ".join(p["number"] for p in comparison["pads_without_pin"])
+            )
+        else:
+            pin_pad_status, pin_pad_detail = "pass", f"verdict {comparison['verdict']}"
+        checks.append({"check": "pin_pad_numbers", "status": pin_pad_status, "detail": pin_pad_detail})
         render_check, evidence = _render_check(tmp, want["lcsc_id"], fp_file, render)
         checks.append(render_check)
         parts_out.append(
@@ -1150,6 +1280,7 @@ def _verify(state: dict, render: Callable[[Path, Path, str], dict]) -> dict:
                 "model": uri,
                 "normalised": want["normalised"],
                 "checks": checks,
+                "pin_pad_check": comparison,
                 "evidence": evidence,
             }
         )
@@ -1210,13 +1341,25 @@ def confirm_adopt_parts(
         for key in ("front", "front_without_model", "top"):
             if part["evidence"].get(key):
                 part["evidence"][key] = str(out_dir / part["evidence"][key])
+    warned = [str(p["lcsc_id"]) for p in built["parts"] if p["pin_pad_check"]["pads_without_pin"]]
+    warning = ""
+    if warned:
+        warning = (
+            f" PIN/PAD WARNING: {', '.join(warned)} have footprint pads with no symbol pin (check pin_pad_numbers, "
+            "pin_pad_check.pads_without_pin): those pads cannot be connected. Tell the user."
+        )
     return {
         **built,
         "output_pcb": str(out_dir / src.name),
         "output_dir": str(out_dir),
+        "pin_pad_verdict": "mismatch" if warned else (
+            "match_with_mechanical_pads"
+            if any(p["pin_pad_check"]["verdict"] == "match_with_mechanical_pads" for p in built["parts"])
+            else "match"
+        ),
         "note": (
             "every machine check passed on the saved files. Open the renders in evidence_dir: they show the "
             "model's height profile and a top view, and a sideways shift or rotation of the model is for you "
-            "to judge there, not checked here."
+            "to judge there, not checked here." + warning
         ),
     }
