@@ -10,6 +10,7 @@ header -- then confirms it's ERC-clean via the existing
 
 from __future__ import annotations
 
+import ast
 import shutil
 from pathlib import Path
 
@@ -40,39 +41,20 @@ def verification_tools():
     return _build_and_get_fns(mcp, verification_toolset)
 
 
-def test_build_registers_expected_tools(sch_tools):
-    assert set(sch_tools) == {
-        "add_symbols",
-        "add_wires",
-        "add_junctions",
-        "add_labels",
-        "assign_footprints",
-        "fix_annotation",
-        "create_sheets",
-        "add_sheet_symbols",
-        "add_sheet_pins",
-        "remove_sheet_pins",
-        "move_sheet_pins",
-        "sync_sheet_pins",
-        "compare_sheet_pins",
-        "delete_symbols",
-        "delete_wires",
-        "delete_labels",
-        "delete_junctions",
-        "move_symbols",
-        "move_labels",
-        "set_text",
-        "set_property_positions",
-        "align_items",
-        "distribute_items",
-        "set_properties",
-        "get_symbol_pins",
-        "connect_pins",
-        "add_no_connects",
-        "delete_no_connects",
-        "replace_symbols",
-        "check_connectivity",
-    }
+def _functions_defined_in_build() -> list[str]:
+    """The names of the functions defined directly in ``schematic.build`` (read from the source)."""
+    tree = ast.parse(Path(schematic_toolset.__file__).read_text(encoding="utf-8"))
+    build = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "build")
+    return [n.name for n in build.body if isinstance(n, ast.FunctionDef)]
+
+
+def test_build_registers_every_function_it_defines(sch_tools):
+    # Issue 147: there is no list to extend. A new tool is a new `def` in `build`, and this holds
+    # for it; its classification (write-guard case, ratchet entry) is pinned by the guards that
+    # name every registered tool, which also catch a tool that is dropped.
+    defined = _functions_defined_in_build()
+    assert len(defined) == len(set(defined)), "a tool name is defined twice in build"
+    assert set(sch_tools) == set(defined)
 
 
 def test_add_symbols_missing_file_is_incomplete(sch_tools):

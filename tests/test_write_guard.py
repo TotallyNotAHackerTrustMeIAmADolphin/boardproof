@@ -26,6 +26,7 @@ from mcp.client.client import Client
 from mcp.server.mcpserver import MCPServer
 
 from kicad_mcp import checkpoint, kicad_lock, write_layer
+from tests import _tool_registry
 from kicad_mcp.server import build_server
 from kicad_mcp.toolsets import project as project_toolset
 from kicad_mcp.toolsets import routing as routing_toolset
@@ -355,6 +356,9 @@ WRITING_TOOLS = frozenset({
     "place_footprints", "move_reference_designators_to_layer", "align_footprints", "distribute_footprints",
     "snap_footprints_to_grid", "pack_footprints_densely", "add_traces",
 })
+# A new tool does not edit this list: it adds tests/tool_cases/<tool>.py (issue 147, tests/_tool_registry.py).
+TOOL_CASES = _tool_registry.load_cases()
+WRITING_TOOLS = _tool_registry.merged(WRITING_TOOLS, _tool_registry.writing_tools(TOOL_CASES), "WRITING_TOOLS")
 
 # Reviewed: tools that write no KiCad design file or library. Each reason is a claim for the reviewer.
 NOT_WRITING_TOOLS = {
@@ -385,6 +389,7 @@ NOT_WRITING_TOOLS = {
     "copilot_apply_proposal": "applied by the running KiCad itself, which owns the lock",
     "export_spice_netlist": "writes a netlist", "run_spice_simulation": "writes simulation output",
 }
+NOT_WRITING_TOOLS = _tool_registry.merged(NOT_WRITING_TOOLS, _tool_registry.not_writing_tools(TOOL_CASES), "NOT_WRITING_TOOLS")
 
 
 async def _listing() -> dict[str, str]:
@@ -404,7 +409,8 @@ async def test_every_listed_tool_is_classified_as_a_writer_or_not():
     assert not unclassified, (
         f"New tool(s) {unclassified}: add each to WRITING_TOOLS (it must call write_layer.check_writable or write "
         "through the write layer, and carry write_layer.LOCK_SENTENCE in its description) or to NOT_WRITING_TOOLS "
-        "with a reason, in tests/test_write_guard.py."
+        "with a reason: add tests/tool_cases/<tool>.py (WRITES = True with scenario(h), or WRITES = False with "
+        "NOT_WRITING_REASON; see tests/_tool_registry.py)."
     )
     assert not WRITING_TOOLS & set(NOT_WRITING_TOOLS)
     gone = sorted((WRITING_TOOLS | set(NOT_WRITING_TOOLS)) - names)

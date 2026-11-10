@@ -34,6 +34,7 @@ import pytest
 from mcp.client.client import Client
 
 from kicad_mcp.server import build_server
+from tests import _tool_registry
 
 _GATE = "verify_board"
 
@@ -134,6 +135,9 @@ _CLAIM_WORD_ALLOWED = {
     ("replace_symbols", "(write_not_verified, the sheet unchanged)"):
         "the name of an error code on a refusal, not a claim",
 }
+# A new tool adds its phrases in tests/tool_cases/<tool>.py (WORDING_ALLOWED), not here (issue 147).
+_CLAIM_WORD_ALLOWED = _tool_registry.merged(
+    _CLAIM_WORD_ALLOWED, _tool_registry.wording_allowed(_tool_registry.load_cases()), "_CLAIM_WORD_ALLOWED")
 
 
 def _points_to_the_gate(sentence: str) -> bool:

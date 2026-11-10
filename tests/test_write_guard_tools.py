@@ -17,6 +17,7 @@ Fake locks on ``tmp_path`` only. A case that cannot run its control here says wh
 from __future__ import annotations
 
 import shutil
+import sys
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -42,7 +43,8 @@ from tests import test_input_prep as t_prep
 from tests import test_part_adoption as t_adopt
 from tests import test_pour_step as t_pour
 from tests import test_silk_minimums as t_silk
-from tests.test_write_guard import CODE, OTHER_HOST, WRITING_TOOLS
+from tests import _tool_registry
+from tests.test_write_guard import CODE, OTHER_HOST, TOOL_CASES, WRITING_TOOLS
 
 FIXTURES = Path(__file__).parent / "fixtures"
 RUNG1 = Path(__file__).resolve().parents[1] / "evals" / "rung1"
@@ -413,10 +415,17 @@ SCENARIOS: dict[str, Callable[[Path], Scenario]] = {
 }
 
 
+SCENARIOS = _tool_registry.merged(
+    SCENARIOS,
+    {name: module.scenario(sys.modules[__name__]) for name, module in TOOL_CASES.items() if module.WRITES},
+    "SCENARIOS",
+)
+
+
 def test_every_writing_tool_has_a_lock_scenario():
     assert set(SCENARIOS) == set(WRITING_TOOLS), (
         f"WRITING_TOOLS and SCENARIOS differ: {sorted(set(WRITING_TOOLS) ^ set(SCENARIOS))}; a new writing tool "
-        "needs a scenario here that calls it beside a fake lock file"
+        "needs tests/tool_cases/<tool>.py with scenario(h) that calls it beside a fake lock file"
     )
 
 

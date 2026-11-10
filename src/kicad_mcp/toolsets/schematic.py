@@ -20,6 +20,7 @@ from __future__ import annotations
 import dataclasses
 import math
 import enum
+import inspect
 import os
 from pathlib import Path
 from typing import Any
@@ -1062,6 +1063,14 @@ def _refine_connectivity(tree: Any, root_path: Path, unconnected: list, issues: 
     return found, marked, kept_issues, missing
 
 
+def _read_only(tool_fn):
+    """Mark a tool function of ``build`` as read-only (``readOnlyHint`` true). Every function defined
+    in ``build`` is a tool and is registered by the end of ``build`` (issue 147): there is no list to
+    add a new tool to. A tool without this mark is a writing tool (destructive, not read-only)."""
+    tool_fn._kicad_read_only = True
+    return tool_fn
+
+
 def build(mcp: MCPServer) -> list[str]:
     """Register the schematic toolset. See toolsets/registry.py for the contract."""
 
@@ -1764,6 +1773,7 @@ def build(mcp: MCPServer) -> list[str]:
 
         return sheet_pins.move_sheet_pins(parent_sch, specs, root_sch, allow_connectivity_change=allow_connectivity_change, dry_run=dry_run)
 
+    @_read_only
     def compare_sheet_pins(parent_sch: str, sheets: list[str] | None = None, root_sch: str | None = None) -> dict:
         """Read-only, in one call: compare the sheet pins of the sheet symbols on a parent sheet with the
         hierarchical labels of their child sheets, direction included. It writes nothing and takes no
@@ -2408,6 +2418,7 @@ def build(mcp: MCPServer) -> list[str]:
         return sheet_editing.set_properties(sch_path, items, root_sch, allow_connectivity_change=allow_connectivity_change, dry_run=dry_run,
                                             standalone=standalone)
 
+    @_read_only
     def get_symbol_pins(sch_path: str, references: list[str] | None = None, uuids: list[str] | None = None) -> dict:
         """Read the pins of placed symbols: absolute sheet coordinates, name and electrical type, for
         wiring by pin instead of by hand-computed offsets. Read-only; writes nothing.
@@ -2491,6 +2502,7 @@ def build(mcp: MCPServer) -> list[str]:
         return pin_wiring.connect_pins(sch_path, connections, root_sch, snap=snap, grid=grid,
                                        allow_connectivity_change=allow_connectivity_change, dry_run=dry_run)
 
+    @_read_only
     def check_connectivity(sch_path: str) -> dict:
         """Check for unconnected pins and connection issues -- a narrower,
         faster check than full ERC (`sch_run_erc` in the `verification`
@@ -2591,13 +2603,15 @@ def build(mcp: MCPServer) -> list[str]:
         "idempotentHint": True,
         "openWorldHint": False,
     }
-    mutating_tools = [
-        add_symbols, add_wires, add_junctions, add_labels, assign_footprints, fix_annotation, create_sheets, add_sheet_symbols,
-        add_sheet_pins, remove_sheet_pins, move_sheet_pins, sync_sheet_pins,
-        delete_symbols, delete_wires, delete_labels, delete_junctions, move_symbols, move_labels, set_text, set_property_positions, set_properties, align_items, distribute_items, connect_pins, replace_symbols,
-        add_no_connects, delete_no_connects,
+    # Every function defined in `build` is a tool (issue 147): collected here, so a new tool is one new
+    # `def` and is not added to any list. `@_read_only` marks the read-only ones; the others are writing
+    # tools and need a write-guard case (tests/tool_cases/) and a ratchet entry (tests/ratchets.d/).
+    tools = [
+        tool_fn for tool_fn in locals().values()
+        if inspect.isfunction(tool_fn) and tool_fn.__qualname__.startswith("build.<locals>.")
     ]
-    read_only_tools = [get_symbol_pins, check_connectivity, compare_sheet_pins]
+    mutating_tools = [tool_fn for tool_fn in tools if not getattr(tool_fn, "_kicad_read_only", False)]
+    read_only_tools = [tool_fn for tool_fn in tools if getattr(tool_fn, "_kicad_read_only", False)]
     for tool_fn in mutating_tools:
         mcp.add_tool(tool_fn, annotations=dict(_MUTATING_LOCAL))
     for tool_fn in read_only_tools:

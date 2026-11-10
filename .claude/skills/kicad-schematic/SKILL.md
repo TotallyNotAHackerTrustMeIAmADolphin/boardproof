@@ -1,6 +1,6 @@
 ---
 name: kicad-schematic
-description: Use when building, wiring, or editing a KiCad schematic -- e.g. "draw the schematic", "add a symbol/component to the schematic", "wire these pins", "connect VCC to the MCU", "add a power flag or net label", "assign footprints", "fix the annotation", "why does ERC say this pin is unconnected". Wraps this project's own `schematic` MCP toolset (add_symbols, add_wires, add_junctions, add_labels, delete_symbols, delete_wires, delete_labels, delete_junctions, move_symbols, move_labels, set_text, set_property_positions, set_properties, align_items, distribute_items, get_symbol_pins, connect_pins, add_no_connects, delete_no_connects, add_sheet_pins, remove_sheet_pins, move_sheet_pins, compare_sheet_pins, sync_sheet_pins, replace_symbols, assign_footprints, fix_annotation, check_connectivity).
+description: Use when building, wiring, or editing a KiCad schematic -- e.g. "draw the schematic", "add a symbol/component to the schematic", "wire these pins", "connect VCC to the MCU", "add a power flag or net label", "assign footprints", "fix the annotation", "why does ERC say this pin is unconnected". Wraps this project's own `schematic` MCP toolset (`list_toolsets` shows it, `load_toolset` loads it, and the server then lists every one of its tools by name; this description does not repeat that list)).
 ---
 
 # Schematic construction workflow

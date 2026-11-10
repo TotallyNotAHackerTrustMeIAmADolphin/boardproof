@@ -47,6 +47,8 @@ from pathlib import Path
 
 import pytest
 
+from tests import _tool_registry
+
 REPO = Path(__file__).resolve().parents[1]
 SRC = REPO / "src" / "kicad_mcp"
 DATA = Path(__file__).with_name("ratchets.toml")
@@ -1342,7 +1344,9 @@ def scan(scanner: type[_Scanner], modules: dict[str, ast.Module] | None = None) 
 @cache
 def _data() -> dict:
     with DATA.open("rb") as fh:
-        return tomllib.load(fh)
+        data = tomllib.load(fh)
+    # A new tool's entry lives in tests/ratchets.d/<tool>.toml, not in the central file (issue 147).
+    return _tool_registry.merge_ratchet_data(data, _tool_registry.load_ratchet_entries())
 
 
 def _frozen(section: str, *, by_code: bool = False) -> dict[tuple, dict]:
