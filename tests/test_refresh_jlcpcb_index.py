@@ -13,6 +13,7 @@ from pathlib import Path
 
 import pytest
 from test_jlcpcb_basic import _symbol, _write_symbol_lib
+from tests._hermetic_git import run_git
 
 ROOT = Path(__file__).resolve().parents[1]
 _spec = importlib.util.spec_from_file_location("refresh_jlcpcb_index", ROOT / "scripts" / "refresh_jlcpcb_index.py")
@@ -174,9 +175,9 @@ def test_the_write_is_verified_before_it_replaces_the_index(tmp_path, capsys, mo
 def test_the_default_library_is_the_submodule_path_and_is_pinned_by_the_gitlink():
     assert refresh.DEFAULT_LIBRARY == ROOT / "third_party" / "JLCPCB-Kicad-Library"
     # The recorded commit of the vendored index is the commit the repository pins.
-    pinned = subprocess.run(
-        ["git", "rev-parse", "HEAD:third_party/JLCPCB-Kicad-Library"],
-        cwd=ROOT, capture_output=True, text=True, check=False,
+    pinned = run_git(
+        "rev-parse", "HEAD:third_party/JLCPCB-Kicad-Library",
+        cwd=ROOT, text=True, check=False,
     )
     assert pinned.returncode == 0, pinned.stderr
     recorded = json.loads(refresh.jlc.VENDORED_INDEX_PATH.read_text(encoding="utf-8"))["source"]["commit"]

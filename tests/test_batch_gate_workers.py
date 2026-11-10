@@ -26,6 +26,7 @@ from pathlib import Path
 import pytest
 
 import tests.test_batch_gate as base
+from tests._hermetic_git import apply_hermetic_env
 from tests.test_batch_gate import ALL_COLLECTED, IPC_SKIP, KNOWN, NETWORK, FakeRunner, TimeoutRecorder, run, run_main
 
 gate = base.gate
@@ -51,8 +52,9 @@ def root(tmp_path, monkeypatch):
 
 
 @pytest.fixture
-def repo(root):
+def repo(root, monkeypatch):
     """A committed, clean git repo shaped like this project, for main()."""
+    apply_hermetic_env(monkeypatch)
     (root / "src" / "kicad_mcp" / "__init__.py").write_text("", encoding="utf-8")
     (root / "scripts").mkdir()
     (root / "scripts" / "known-red.txt").write_text(base.KNOWN_TEXT, encoding="utf-8")

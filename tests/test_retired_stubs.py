@@ -7,8 +7,8 @@ archive resolves them. A reference to the removed files would be a dead pointer 
 from __future__ import annotations
 
 import re
-import subprocess
 from pathlib import Path
+from tests._hermetic_git import run_git
 
 ROOT = Path(__file__).resolve().parents[1]
 _STUB_NAME = re.compile(r"\b(BACKLOG|RESEARCH)\.md\b")
@@ -16,9 +16,7 @@ _THIS = "tests/test_retired_stubs.py"
 
 
 def _tracked_text_files() -> list[str]:
-    out = subprocess.run(
-        ["git", "ls-files", "-z"], cwd=ROOT, capture_output=True, check=True
-    ).stdout.decode()
+    out = run_git("ls-files", "-z", cwd=ROOT).stdout.decode()
     return [
         p
         for p in out.split("\0")

@@ -14,6 +14,7 @@ from pathlib import Path
 import pytest
 
 from kicad_mcp.sourcing.asset_fetch import fetch_part_assets
+from tests._hermetic_git import run_git
 
 
 def test_fetch_part_assets_rejects_malformed_lcsc_id(tmp_path):
@@ -128,10 +129,9 @@ def test_fetch_part_assets_description_pins_missing_module_sentence():
 
 
 def test_no_tracked_doc_calls_easyeda2kicad_optional_or_an_assets_extra():
-    import subprocess
 
     root = Path(__file__).resolve().parents[1]
-    files = subprocess.run(["git", "ls-files", "*.md"], cwd=root, capture_output=True, text=True, check=True).stdout.split()
+    files = run_git("ls-files", "*.md", cwd=root, text=True).stdout.split()
     for name in files:
         if name.startswith("third_party/"):
             continue

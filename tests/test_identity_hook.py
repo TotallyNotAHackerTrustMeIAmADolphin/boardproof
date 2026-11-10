@@ -13,6 +13,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from tests._hermetic_git import run_git
 
 ROOT = Path(__file__).resolve().parents[1]
 HOOK = ROOT / "scripts" / "git-hooks" / "commit-msg"
@@ -22,10 +23,7 @@ WRONG = "someone@example.invalid"
 
 
 def _git(cwd: Path, *args: str, check: bool = True, env: dict | None = None) -> subprocess.CompletedProcess:
-    import os
-
-    return subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True, timeout=60, check=check,
-                          env={**os.environ, **(env or {})})
+    return run_git(*args, cwd=cwd, text=True, check=check, extra_env=env)
 
 
 def _repo(tmp_path: Path, hook: Path = HOOK, email: str = NOREPLY) -> Path:

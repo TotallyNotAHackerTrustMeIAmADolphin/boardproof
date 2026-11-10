@@ -4,13 +4,13 @@ refusals, router-versus-adapter time, repository state and superset invariants."
 from __future__ import annotations
 
 import json
-import subprocess
 
 import pytest
 
 from kicad_mcp import rung_runner
 
 from test_rung_runner import Clock, load, make_run, project  # noqa: F401
+from tests._hermetic_git import run_git
 
 
 def _plan():
@@ -130,7 +130,7 @@ def test_a_router_that_really_ran_past_the_cap_is_still_a_timeout(project, tmp_p
 
 
 def _git(cwd, *args):
-    subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True)
+    run_git(*args, cwd=cwd)
 
 
 @pytest.fixture

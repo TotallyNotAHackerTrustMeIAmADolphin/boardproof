@@ -10,10 +10,10 @@ from __future__ import annotations
 
 import re
 import shutil
-import subprocess
 from pathlib import Path
 
 import pytest
+from tests._hermetic_git import run_git
 
 ROOT = Path(__file__).resolve().parents[1]
 NAMES = ("ARCHITECTURE", "CONTEXT", "ROADMAP", "TESTING")
@@ -26,7 +26,7 @@ EXEMPT_FILES = {"evals/ladder_results.json", "tests/test_docs_layout.py"}
 def _tracked() -> list[str]:
     if shutil.which("git") is None:
         pytest.skip("git is not available")
-    out = subprocess.run(["git", "ls-files", "-z"], cwd=ROOT, capture_output=True, check=True).stdout
+    out = run_git("ls-files", "-z", cwd=ROOT).stdout
     return [f for f in out.decode("utf-8").split("\0") if f]
 
 

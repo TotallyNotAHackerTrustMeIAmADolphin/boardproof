@@ -19,6 +19,7 @@ import time
 from pathlib import Path
 
 import pytest
+from tests._hermetic_git import hermetic_env, run_git
 
 ROOT = Path(__file__).resolve().parents[1]
 HOOK = ROOT / "scripts" / "git_guardrails.py"
@@ -837,12 +838,10 @@ def test_settings_register_the_hook_for_every_shell_tool():
 
 
 def _git(cwd: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess:
-    return subprocess.run(
-        ["git", "-c", "user.name=t", "-c", "user.email=60357333+TotallyNotAHackerTrustMeIAmADolphin@users.noreply.github.com", *args],
+    return run_git(
+        "-c", "user.name=t", "-c", "user.email=60357333+TotallyNotAHackerTrustMeIAmADolphin@users.noreply.github.com", *args,
         cwd=cwd,
-        capture_output=True,
         text=True,
-        timeout=60,
         check=check,
     )
 
@@ -956,7 +955,7 @@ def test_pre_push_blocks_what_the_command_guard_cannot_see(remote_and_clone):
     sh = shutil.which("sh") or shutil.which("bash")
     if sh:
         r = subprocess.run([sh, "-c", "F=--force; git push origin main $F"], cwd=clone,
-                           capture_output=True, text=True, timeout=60)
+                           capture_output=True, text=True, timeout=60, env=hermetic_env())
         assert r.returncode != 0 and "pre-push guard: BLOCKED" in r.stderr
     assert _remote_head(remote) == before
 

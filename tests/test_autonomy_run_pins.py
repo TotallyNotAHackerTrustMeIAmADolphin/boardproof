@@ -22,7 +22,6 @@ import importlib.util
 import json
 import os
 import shutil
-import subprocess
 from pathlib import Path
 
 import pytest
@@ -32,6 +31,7 @@ from tests import _kicad_faults as faults
 
 from test_autonomy_run_review import _measure
 from test_input_prep import GOLDEN_DIR, GOLDEN_NAME
+from tests._hermetic_git import run_git
 
 ROOT = Path(__file__).resolve().parents[1]
 RUNG1_DIR = ROOT / "evals" / "rung1" / "layout_run" / "07_poured"
@@ -319,9 +319,9 @@ def test_the_committed_rung1_source_reproduces_the_rung1_pins():
 def test_the_rung1_board_pin_is_the_committed_blob_content():
     """The LF content git stores: the pin does not depend on the checkout's autocrlf."""
     try:
-        shown = subprocess.run(
-            ["git", "show", f"HEAD:evals/rung1/layout_run/07_poured/{RUNG1_NAME}"],
-            cwd=ROOT, capture_output=True,
+        shown = run_git(
+            "show", f"HEAD:evals/rung1/layout_run/07_poured/{RUNG1_NAME}",
+            cwd=ROOT, check=False,
         )
     except OSError as exc:
         pytest.skip(f"git is not available ({exc}); the pin is still checked against the files")

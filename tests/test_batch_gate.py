@@ -12,11 +12,11 @@ import importlib.util
 import json
 import os
 import re
-import subprocess
 import sys
 from pathlib import Path
 
 import pytest
+from tests._hermetic_git import apply_hermetic_env, run_git
 
 ROOT = Path(__file__).resolve().parents[1]
 _spec = importlib.util.spec_from_file_location("batch_gate", ROOT / "scripts" / "batch_gate.py")
@@ -452,8 +452,7 @@ def test_the_variable_wins_over_the_default_folder(root, monkeypatch, tmp_path):
 
 def _linked_worktree(tmp_path):
     def git(*a, cwd):
-        subprocess.run(["git", "-C", str(cwd), "-c", "user.name=t", "-c", "user.email=t@example.org", *a],
-                       check=True, capture_output=True)
+        run_git("-C", str(cwd), "-c", "user.name=t", "-c", "user.email=t@example.org", *a)
     main = tmp_path / "main"
     main.mkdir()
     git("init", "-q", cwd=main)
@@ -629,13 +628,13 @@ def test_committed_pyproject_has_exactly_the_reviewed_pytest_config():
 
 
 def _git(root, *args):
-    return subprocess.run(["git", "-C", str(root), "-c", "user.name=t", "-c", "user.email=t@t", *args],
-                          check=True, capture_output=True, text=True).stdout.strip()
+    return run_git("-C", str(root), "-c", "user.name=t", "-c", "user.email=t@t", *args, text=True).stdout.strip()
 
 
 @pytest.fixture
-def repo(root):
+def repo(root, monkeypatch):
     """A committed, clean git repo shaped like this project, for main()."""
+    apply_hermetic_env(monkeypatch)  # the gate runs git with the inherited environment
     (root / "src" / "kicad_mcp" / "__init__.py").write_text("", encoding="utf-8")
     (root / "scripts").mkdir()
     (root / "scripts" / "known-red.txt").write_text(KNOWN_TEXT, encoding="utf-8")

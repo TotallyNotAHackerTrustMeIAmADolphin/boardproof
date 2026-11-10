@@ -3,14 +3,14 @@ was gitignored by ``.claude/skills/*`` and missing from the commit)."""
 from __future__ import annotations
 
 import re
-import subprocess
 from pathlib import Path
+from tests._hermetic_git import run_git
 
 REPO = Path(__file__).resolve().parents[1]
 
 
 def _tracked() -> set[str]:
-    out = subprocess.run(["git", "ls-files", ".claude/skills"], cwd=REPO, capture_output=True, text=True, check=True)
+    out = run_git("ls-files", ".claude/skills", cwd=REPO, text=True)
     return set(out.stdout.split())
 
 

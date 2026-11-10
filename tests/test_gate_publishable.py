@@ -16,6 +16,7 @@ import zipfile
 from pathlib import Path
 
 import pytest
+from tests._hermetic_git import run_git
 
 ROOT = Path(__file__).resolve().parents[1]
 _spec = importlib.util.spec_from_file_location("batch_gate_pub", ROOT / "scripts" / "batch_gate.py")
@@ -29,8 +30,7 @@ HIT = "the name zzforbidden appears here"
 
 
 def _git(repo: Path, *args: str) -> None:
-    subprocess.run(["git", "-C", str(repo), "-c", "user.name=t", "-c", "user.email=t@t", *args],
-                   check=True, capture_output=True, text=True)
+    run_git("-C", str(repo), "-c", "user.name=t", "-c", "user.email=t@t", *args, text=True)
 
 
 @pytest.fixture
@@ -46,8 +46,7 @@ def repo(tmp_path, monkeypatch):
 
 
 def blob(repo: Path, path: str) -> str:
-    return subprocess.run(["git", "-C", str(repo), "rev-parse", f":{path}"], capture_output=True, text=True,
-                          check=True).stdout.strip()
+    return run_git("-C", str(repo), "rev-parse", f":{path}", text=True).stdout.strip()
 
 
 def commit(repo: Path) -> None:
@@ -257,7 +256,7 @@ def test_missing_checker_script_is_red(repo):
 
 
 def _tracked() -> set[str]:
-    out = subprocess.run(["git", "-C", str(ROOT), "ls-files"], capture_output=True, text=True, check=True).stdout
+    out = run_git("-C", str(ROOT), "ls-files", text=True).stdout
     return set(out.splitlines())
 
 
@@ -281,8 +280,7 @@ def test_reviewed_hit_files_are_pinned_to_the_blob_that_was_reviewed():
     # change of its blob id in scripts/batch_gate.py.
     if not gate.PUBLISH_ALLOWED_HITS:  # the public export has none (an empty pathspec would list every file)
         return
-    out = subprocess.run(["git", "-C", str(ROOT), "ls-files", "-s", "--", *gate.PUBLISH_ALLOWED_HITS],
-                         capture_output=True, text=True, check=True).stdout.splitlines()
+    out = run_git("-C", str(ROOT), "ls-files", "-s", "--", *gate.PUBLISH_ALLOWED_HITS, text=True).stdout.splitlines()
     current = {line.split("\t", 1)[1]: line.split()[1] for line in out}
     assert current == {k: v[1] for k, v in gate.PUBLISH_ALLOWED_HITS.items()}
 

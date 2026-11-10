@@ -18,10 +18,11 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
-import tempfile
 from pathlib import Path
 
 import pytest
+
+from tests._hermetic_git import hermetic_env
 
 ROOT = Path(__file__).resolve().parents[1]
 GITIGNORE = ROOT / ".gitignore"
@@ -129,28 +130,19 @@ LEGIT_CASES = [
 
 
 def _hermetic_env(base: dict[str, str]) -> dict[str, str]:
-    """``base`` with every user-level git setting cut off: no global or system config, no global
-    ignore file (a user's ``~/.config/git/ignore`` or ``core.excludesFile`` would change verdicts)."""
-    quiet_dir = tempfile.mkdtemp(prefix="gitignore-test-xdg-")
-    env = dict(base)
-    env.update(
-        GIT_CONFIG_GLOBAL=os.devnull,
-        GIT_CONFIG_SYSTEM=os.devnull,
-        GIT_CONFIG_NOSYSTEM="1",
-        XDG_CONFIG_HOME=quiet_dir,
-        GIT_CONFIG_COUNT="1",
-        GIT_CONFIG_KEY_0="core.excludesFile",
-        GIT_CONFIG_VALUE_0=os.devnull,
-    )
-    return env
+    """``base`` with every user-level git setting cut off (the shared helper, issue 174)."""
+    return hermetic_env(base)
 
 
 def _git(cwd: Path, *args: str, check: bool = True, env: dict[str, str] | None = None) -> subprocess.CompletedProcess:
     if shutil.which("git") is None:
         pytest.fail("git is not on PATH; the .gitignore cannot be tested")
-    if env is None:
-        env = _hermetic_env(dict(os.environ))
-    return subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True, timeout=60, check=check, env=env)
+    # Default wiring: every call is isolated. Only a caller that passes its own env (the hostile control
+    # run, which must NOT be isolated) bypasses it.
+    return subprocess.run(
+        ["git", *args], cwd=cwd, capture_output=True, text=True, timeout=60, check=check,
+        env=_hermetic_env(dict(os.environ)) if env is None else env,
+    )
 
 
 def _is_ignored(tmp_path: Path, lines: list[str], rel: str) -> bool:
