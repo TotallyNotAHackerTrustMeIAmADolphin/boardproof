@@ -2327,6 +2327,48 @@ def build(mcp: MCPServer) -> list[str]:
 
         return sheet_editing.set_text(sch_path, items, root_sch, allow_connectivity_change=allow_connectivity_change, dry_run=dry_run)
 
+    def set_title_block(sch_path: str, items: list[dict], dry_run: bool = False, root_sch: str | None = None) -> dict:
+        """Set the title block of one or several sheets of a schematic project in one call: title, date,
+        revision, company and the comments 1 to 9, with line breaks in any of them.
+
+        items: a list of objects {sheet, title, date, rev, company, comments}. sheet is a sheet of the
+        project (its path from the root sheet's folder, or an absolute path; left out it is sch_path
+        itself); two items may not name one sheet. Every other key is optional and only the keys given
+        are changed. A text of null or "" removes the field (KiCad treats an empty field and none as the
+        same, and drops an empty one when it saves). comments is {"1": text, ..., "9": text}; KiCad
+        cannot load a comment 0 or a comment above 9, so those are refused (invalid_spec).
+
+        Line breaks: write \\n in a text for a line break; the drawing sheet prints a second line. KiCad
+        stores it as the two characters backslash and n, which is what is written, so KiCad's own next
+        save of the sheet keeps it. CRLF is written as one line break and listed (line_break_normalised);
+        a lone CR, any other control character, a text that is not a string and a text longer than 4000
+        characters are refused, and so is a whole call with one bad item (nothing written). Leading or
+        trailing white space or a line break at the ends is written and listed (title_block_edge_whitespace).
+        A title block with a duplicated field, a second title_block or a child this tool does not know is
+        refused (title_block_unusual) instead of guessed at; a sheet with no title block gets one.
+
+        Nothing but the title block changes: every other node of each sheet is compared with the original,
+        kicad-cli's netlist of the project is read after the change and must show exactly the asked text on
+        each edited sheet (a line break comes back as a line break) with the same nets as before, and the
+        ERC violation counts of the project must be the same as before, or the call is refused with
+        write_not_verified (nothing written). Each written file is reloaded and compared before it replaces
+        the original; if one sheet fails, the sheets already written are restored. A title block has no
+        position, so the 1.27 mm grid does not apply and nothing on the sheet moves. The sheet's text
+        variables such as ${TITLE} are not expanded here: the text is stored as given.
+
+        Returns sheets (per sheet: changed with field, from, to and action added, changed or removed;
+        unchanged fields), count, connectivity (nets before and after), erc (violation counts before and
+        after), warnings, note and written. dry_run true computes and returns everything and writes nothing.
+        A call that asks for what is already there writes nothing. root_sch names the project's root sheet
+        when sch_path is a sub-sheet and its folder holds several projects.
+
+        Refuses with file_open_in_kicad, naming the lock file, while KiCad holds a lock file for a file
+        it would write; close the file in KiCad, then retry.
+        """
+        from kicad_mcp import title_block
+
+        return title_block.set_title_block(sch_path, items, root_sch, dry_run=dry_run)
+
     def set_property_positions(
         sch_path: str, items: list[dict], dry_run: bool = False, root_sch: str | None = None,
     ) -> dict:
