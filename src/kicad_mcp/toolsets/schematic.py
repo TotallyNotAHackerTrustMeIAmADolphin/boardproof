@@ -2214,6 +2214,90 @@ def build(mcp: MCPServer) -> list[str]:
 
         return sheet_editing.set_property_positions(sch_path, items, root_sch, dry_run=dry_run)
 
+    def align_items(
+        sch_path: str, groups: list[dict], box: str = "pins", move_wires: bool = True, snap: bool = True, grid: float = 1.27,
+        allow_connectivity_change: bool = False, dry_run: bool = False, root_sch: str | None = None,
+    ) -> dict:
+        """Align the symbols (or the labels) of a sheet to a common edge or centre line, in one call.
+
+        groups: a list of objects, each {kind, references | uuids | texts, edge, reference}. kind is
+        "symbol" or "label" (one kind per call). The list names the items one by one: references (symbols),
+        texts (labels) or uuids; every entry must pick exactly one node (use uuids for several units of
+        one reference or for equal label texts), an entry the sheet does not have refuses the call
+        (not_found), and an item may be in one group only. edge: left, right, hcenter, top, bottom or
+        vcenter (top is the smaller y). reference (default "first"): "first" or "last" (in the order of the
+        list you gave), "min" or "max" (the smallest or largest edge coordinate), or a number, the
+        coordinate in mm to align to. At least two items per group.
+
+        Boxes: a symbol's box is computed from the raw geometry of its library symbol in the sheet file
+        and the raw (at ...) and mirror of the placed symbol: it is the symbol's graphics of the placed unit
+        and body style plus its pin connection points (and the pin lines), for the pins that are not hidden.
+        Texts and text boxes inside the library symbol, pin name and number texts, the stroke width and the
+        property texts are not counted; a bezier curve counts by its control points, so the box can be
+        slightly too large. box accepts "pins" only (any other value is invalid_spec). A label is
+        its anchor point (its connection point), because its text extent is not in the file. Numbers
+        (reference, spacing, grid) must be finite and at most 1e6 mm, else invalid_spec.
+
+        The property texts of a moved symbol move with it. move_wires (default true): wire ends, junctions,
+        labels and no-connect markers that sit exactly on a moved pin (or label) follow by the same offset;
+        wires left slanted are listed under slanted, every dragged item under followed. snap (default true)
+        and grid (default 1.27 mm): the new origin of each moved item is rounded to the grid on the moved
+        axis, so items of different size may not match the target exactly; every item lists its residual
+        (edge after minus target) and every group its max_residual and aligned, and moved lists what was
+        asked and what it became (snapped).
+
+        Connectivity: before anything is written, kicad-cli's netlist of the project is read from a scratch
+        copy before and after the change and compared net by net; a split or merged net, a pin left alone
+        on its net, a renamed or vanished named net refuses the call with connectivity_changed (nothing
+        written; the changes are listed) unless allow_connectivity_change is true. dry_run true computes and
+        returns everything (would_move) and writes nothing. Instance data is not touched.
+
+        Refuses a failed self-check (write_not_verified, the sheet unchanged), two moved items at one wire
+        end that move differently (ambiguous_drag) and a project whose sheet tree cannot be read
+        (sheet_tree_incomplete). root_sch names the project's root sheet when sch_path is a sub-sheet.
+        Refuses with file_open_in_kicad, naming the lock file, while KiCad holds a lock file for a file
+        it would write; close the file in KiCad, then retry.
+
+        Returns groups (per group: edge, reference, target, items with edge_before, edge_after, residual,
+        moved, snapped; max_residual; aligned), moved, followed, slanted, connectivity and written. Wires and
+        junctions as items to align are not supported.
+        """
+        from kicad_mcp import sheet_align
+
+        return sheet_align.align(sch_path, groups, root_sch, box=box, move_wires=move_wires, snap=snap, grid=grid,
+                                 allow_connectivity_change=allow_connectivity_change, dry_run=dry_run)
+
+    def distribute_items(
+        sch_path: str, groups: list[dict], box: str = "pins", move_wires: bool = True, snap: bool = True, grid: float = 1.27,
+        allow_connectivity_change: bool = False, dry_run: bool = False, root_sch: str | None = None,
+    ) -> dict:
+        """Space the symbols (or the labels) of a sheet evenly along x or y, in one call.
+
+        groups: a list of objects, each {kind, references | uuids | texts, axis, spacing}. kind "symbol" or
+        "label" (one kind per call); the list names the items one by one exactly as for align_items (each
+        entry picks exactly one node; not_found refuses). At least three items per group. axis: "x" or "y".
+        The items are ordered by their centre along the axis. spacing (default "gaps"): "gaps" keeps the
+        first and the last item and makes the gaps between the boxes equal; "centres" keeps them and makes
+        the centre-to-centre distances equal; a positive number is a pitch in mm: the first item stays and
+        the k-th is put at first centre + k * pitch (for example ten branches on a pitch of 17.78).
+
+        Boxes, property texts, move_wires, snap and grid, the connectivity comparison, dry_run, root_sch and
+        the refusals are as for align_items (box "pins" only; a label is its anchor point). Because
+        the new origins are rounded to the grid, the spacing may be off by less than half a grid step: the
+        group lists gaps_after, centre_pitches_after, nominal, max_residual and even, and overlapping_after
+        names neighbours whose boxes overlap after the move (reported, not refused).
+
+        Refuses with file_open_in_kicad, naming the lock file, while KiCad holds a lock file for a file
+        it would write; close the file in KiCad, then retry.
+
+        Returns groups (order, items with centre_before, centre_after, moved, snapped), moved, followed,
+        slanted, connectivity and written. Wires and junctions as items are not supported.
+        """
+        from kicad_mcp import sheet_align
+
+        return sheet_align.distribute(sch_path, groups, root_sch, box=box, move_wires=move_wires, snap=snap, grid=grid,
+                                      allow_connectivity_change=allow_connectivity_change, dry_run=dry_run)
+
     def replace_symbols(
         sch_path: str, replacements: list[dict], allow_connectivity_change: bool = False,
         dry_run: bool = False, root_sch: str | None = None,
@@ -2510,7 +2594,7 @@ def build(mcp: MCPServer) -> list[str]:
     mutating_tools = [
         add_symbols, add_wires, add_junctions, add_labels, assign_footprints, fix_annotation, create_sheets, add_sheet_symbols,
         add_sheet_pins, remove_sheet_pins, move_sheet_pins, sync_sheet_pins,
-        delete_symbols, delete_wires, delete_labels, delete_junctions, move_symbols, move_labels, set_text, set_property_positions, set_properties, connect_pins, replace_symbols,
+        delete_symbols, delete_wires, delete_labels, delete_junctions, move_symbols, move_labels, set_text, set_property_positions, set_properties, align_items, distribute_items, connect_pins, replace_symbols,
         add_no_connects, delete_no_connects,
     ]
     read_only_tools = [get_symbol_pins, check_connectivity, compare_sheet_pins]

@@ -654,3 +654,33 @@ def test_get_symbol_pins_without_the_embedded_library_symbol_gives_no_pins_and_a
     got = tools["get_symbol_pins"](str(sheet), ["R1", "C1"])
     by = {e["reference"]: e for e in got["symbols"]}
     assert by["R1"]["pins"] == [] and "warning" in by["R1"] and by["C1"]["pins"]
+
+
+# --------------------------------------------------------------------------- the toolset forwards dry_run and grid (review of issue 90)
+
+
+def test_move_symbols_forwards_dry_run_through_the_tool(sheet, tools):
+    before = _bytes(sheet)
+    result = tools["move_symbols"](str(sheet), [{"references": ["C1"], "offset": [2.54, 0]}], dry_run=True)
+    assert result["ok"] is True and result["written"] is False and len(result["would_move"]) == 1, result
+    assert _bytes(sheet) == before
+    assert tools["move_symbols"](str(sheet), [{"references": ["C1"], "offset": [2.54, 0]}])["written"] is True
+
+
+def test_move_labels_forwards_dry_run_through_the_tool(sheet, tools):
+    before = _bytes(sheet)
+    result = tools["move_labels"](str(sheet), [{"texts": ["NETA"], "offset": [-2.54, 0]}], dry_run=True)
+    assert result["ok"] is True and result["written"] is False and len(result["would_move"]) == 1, result
+    assert _bytes(sheet) == before
+
+
+def test_move_symbols_forwards_grid_through_the_tool(sheet, tools):
+    result = tools["move_symbols"](str(sheet), [{"references": ["C1"], "to": [110.0, 52.0]}], grid=2.54)
+    assert result["ok"] is True and result["grid"] == 2.54, result
+    assert result["moved"][0]["snapped"] == [109.22, 50.8]
+    assert sheet_editing._at(_symbol(sheet, "C1"))[:2] == (109.22, 50.8)
+
+
+def test_move_labels_forwards_grid_through_the_tool(sheet, tools):
+    result = tools["move_labels"](str(sheet), [{"texts": ["NETA"], "to": [64.0, 40.64]}], grid=2.54, allow_connectivity_change=True)
+    assert result["ok"] is True and result["grid"] == 2.54 and result["moved"][0]["snapped"] == [63.5, 40.64], result

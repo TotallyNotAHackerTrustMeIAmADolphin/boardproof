@@ -902,6 +902,20 @@ proof = [
     "tests/test_sheet_editing.py::test_move_labels_corrupted_write_is_refused",
 ]
 
+[writing_tool.align_items]
+self_check = "reload-verify"
+note = "Issue 90: sheet_align computes the new positions and runs them through sheet_editing.move_pipeline: a copy of the sheet's tree is changed in memory, every node not selected is checked unchanged, kicad-cli's netlist of the project before and after on scratch copies is compared (connectivity_changed unless allowed), and only then the sheet is saved through write_layer.save, whose verify reloads the temporary sibling and compares it with the serialised tree before os.replace."
+proof = [
+    "tests/test_sheet_align.py::test_align_items_corrupted_write_is_refused",
+]
+
+[writing_tool.distribute_items]
+self_check = "reload-verify"
+note = "Issue 90: sheet_align computes the new positions and runs them through sheet_editing.move_pipeline: a copy of the sheet's tree is changed in memory, every node not selected is checked unchanged, kicad-cli's netlist of the project before and after on scratch copies is compared (connectivity_changed unless allowed), and only then the sheet is saved through write_layer.save, whose verify reloads the temporary sibling and compares it with the serialised tree before os.replace."
+proof = [
+    "tests/test_sheet_align.py::test_distribute_items_corrupted_write_is_refused",
+]
+
 [writing_tool.connect_pins]
 self_check = "reload-verify"
 note = "Issue 86: pin_wiring plans the wires of pin-to-pin connections on a copy of the sheet's tree through sheet_editing.run (staged check that only the reported wires, junctions and labels were added; kicad-cli netlist before and after on scratch copies: every requested pair on one net or write_not_verified, no unrequested merge or named-net join unless allowed), and only then saves through write_layer.save, whose verify reloads the temporary sibling and compares it with the serialised tree before os.replace."

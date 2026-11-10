@@ -60,6 +60,7 @@ TOL = 1e-3  # mm: KiCad connects by exact internal units (1 nm); a micrometre is
 LABEL_TAGS = ("label", "global_label", "hierarchical_label")
 LABEL_KINDS = {"label": "label", "global": "global_label", "hier": "hierarchical_label"}
 MAX_LISTED = 50
+MAX_MM = 1e6  # a coordinate, offset, pitch or grid beyond this many mm is refused (and NaN or infinity always)
 
 
 # --------------------------------------------------------------------------- small helpers
@@ -936,11 +937,16 @@ def _snap(value: float, grid: float) -> float:
     return _r(round(value / grid) * grid)
 
 
+def is_mm(value: Any) -> bool:
+    """A real number of mm: not a bool, finite, and within MAX_MM of the origin."""
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value) and abs(value) <= MAX_MM
+
+
 def _check_move_args(snap: Any, grid: Any, move_wires: Any) -> None:
     if not isinstance(snap, bool) or not isinstance(move_wires, bool):
         raise SheetAuthoringError("invalid_spec", "snap and move_wires must be true or false")
-    if isinstance(grid, bool) or not isinstance(grid, (int, float)) or grid <= 0:
-        raise SheetAuthoringError("invalid_spec", f"grid must be a positive number of mm, got {grid!r}")
+    if not is_mm(grid) or grid <= 0:
+        raise SheetAuthoringError("invalid_spec", f"grid must be a positive, finite number of mm (at most {MAX_MM:g}), got {grid!r}")
 
 
 def _plan_moves(kind: str, moves: Any, sheet: Sheet, snap: bool, grid: float) -> list[tuple[SExp, float, float, dict]]:
@@ -959,9 +965,8 @@ def _plan_moves(kind: str, moves: Any, sheet: Sheet, snap: bool, grid: float) ->
         if angle is not None and (kind != "label" or angle not in (0, 90, 180, 270)):
             raise SheetAuthoringError("invalid_spec", f"moves[{i}].angle is for labels only and must be 0, 90, 180 or 270")
         for name, val in (("to", to), ("offset", offset)):
-            if val is not None and not (isinstance(val, (list, tuple)) and len(val) == 2 and all(
-                    isinstance(v, (int, float)) and not isinstance(v, bool) for v in val)):
-                raise SheetAuthoringError("invalid_spec", f"moves[{i}].{name} must be [x, y] in mm, got {val!r}")
+            if val is not None and not (isinstance(val, (list, tuple)) and len(val) == 2 and all(is_mm(v) for v in val)):
+                raise SheetAuthoringError("invalid_spec", f"moves[{i}].{name} must be [x, y] in mm (finite, within {MAX_MM:g}), got {val!r}")
         nodes = select(sheet, kind, [spec])
         if to is not None and len(nodes) != 1:
             raise SheetAuthoringError("invalid_spec", f"moves[{i}]: 'to' needs a selector that picks exactly one {kind}, it picked {len(nodes)}; use 'offset'")
@@ -982,11 +987,23 @@ def _plan_moves(kind: str, moves: Any, sheet: Sheet, snap: bool, grid: float) ->
 def move(kind: str, path: str, moves: list[dict], root_sch: str | None, *, move_wires: bool, snap: bool, grid: float,
          allow_connectivity_change: bool, dry_run: bool) -> dict[str, Any]:
     """Move symbols or labels (``kind`` "symbol" or "label")."""
+    return move_pipeline(kind, lambda sheet: (_plan_moves(kind, moves, sheet, snap, float(grid)), {}), path, root_sch,
+                         move_wires=move_wires, snap=snap, grid=grid,
+                         allow_connectivity_change=allow_connectivity_change, dry_run=dry_run)
+
+
+def move_pipeline(kind: str, planner, path: str, root_sch: str | None, *, move_wires: bool, snap: bool, grid: float,
+                  allow_connectivity_change: bool, dry_run: bool) -> dict[str, Any]:
+    """The move machinery shared by ``move`` and the align and distribute tools (issue 90):
+    ``planner(sheet)`` returns ``(planned, extra_report)`` where ``planned`` is the list of
+    ``(node, dx, dy, record)`` of ``_plan_moves``; everything after that (drag of wire ends,
+    junctions, labels and no-connect markers, property texts, staged check, netlist comparison,
+    write layer) is the move's."""
 
     def mutate(sheet: Sheet, root: SExp) -> Outcome:
         _check_move_args(snap, grid, move_wires)
-        planned = _plan_moves(kind, moves, sheet, snap, float(grid))
-        outcome = Outcome(dangling_before=dangling(sheet))
+        planned, extra = planner(sheet)
+        outcome = Outcome(dangling_before=dangling(sheet), no_change=not planned)
         anchors: dict[tuple[float, float], tuple[float, float]] = {}
         listed = []
         for node, dx, dy, record in planned:
@@ -1056,6 +1073,7 @@ def move(kind: str, path: str, moves: list[dict], root_sch: str | None, *, move_
             "move_wires": move_wires, "followed": followed, "slanted": slanted,
             "move_wires_note": ("wire ends, junctions, labels and no-connect markers that sat exactly on a moved pin (or on a moved label) moved with it"
                                 if move_wires else "move_wires is false: nothing attached was moved; wires that ended on a moved pin now end where the pin was"),
+            **extra,
         }
         return outcome
 

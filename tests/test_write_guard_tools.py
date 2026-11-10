@@ -313,6 +313,20 @@ def _editing(tool: str, args: Callable[[Path], tuple]) -> Callable[[Path], Scena
     return make
 
 
+def _align_scenario(tool: str, groups: list[dict]) -> Callable[[Path], Scenario]:
+    """align_items / distribute_items (issue 90): R2 and R3 beside R1, then the tool over them."""
+    def make(tmp_path):
+        project = _schematic_project(tmp_path)
+        tools = _tools(schematic_toolset)
+        r1 = tools["get_symbol_pins"](str(project["sch"]), ["R1"])["symbols"][0]
+        x, y = r1["at"][0], r1["at"][1]
+        assert tools["add_symbols"](str(project["sch"]), [
+            {"lib_id": "Device:R", "x": x + 25.4, "y": y + 5.08, "ref": "R2", "value": "1k"},
+            {"lib_id": "Device:R", "x": x + 63.5, "y": y + 10.16, "ref": "R3", "value": "1k"}])["status"] == "ok"
+        return Scenario(project["sch"], lambda: tools[tool](str(project["sch"]), groups))
+    return make
+
+
 def _connect_pins(tmp_path):
     """connect_pins (issue 86): a second resistor beside R1, and a U-shaped wire between their first pins."""
     project = _schematic_project(tmp_path)
@@ -383,6 +397,8 @@ SCENARIOS: dict[str, Callable[[Path], Scenario]] = {
     "set_properties": _editing("set_properties", lambda p: ([{"reference": "R1", "set": {"LCSC": "C25744"}}],)),
     "set_text": _editing("set_text", lambda p: ([{"kind": "label", "old_text": "LBL", "text": "LBL2"}], True)),
     "set_property_positions": _editing("set_property_positions", lambda p: ([{"references": ["R1"], "properties": {"Value": {"offset": [3.81, 0]}}}],)),
+    "align_items": _align_scenario("align_items", [{"kind": "symbol", "references": ["R2", "R3"], "edge": "top", "reference": "first"}]),
+    "distribute_items": _align_scenario("distribute_items", [{"kind": "symbol", "references": ["R1", "R2", "R3"], "axis": "x"}]),
     "connect_pins": _connect_pins,
     "add_no_connects": _editing("add_no_connects", lambda p: ([{"references": ["R1"]}],)),
     "delete_no_connects": _delete_no_connects,
