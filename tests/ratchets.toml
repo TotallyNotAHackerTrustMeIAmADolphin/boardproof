@@ -2073,3 +2073,19 @@ function = "_hide_variant"
 kind = "write_unchecked"
 code = '''faults.write_unchecked(tree, out)'''
 note = "Scratch copies whose property hide is written as a bare hide or (hide) so kicad-cli can show it fails to load (issue 167, fact 4); the layer's own save refuses that form, so the copy skips its parse check."
+
+[[test_kicad_write]]
+file = "test_cli_replay.py"
+function = "_project"
+kind = "write_bytes"
+count = 2
+use = "stub"
+note = "Issue 172: the files of a fake project for the replay cache's FAKE kicad-cli (it appends a marker and never parses them); no real KiCad reads them."
+
+[[test_kicad_write]]
+file = "test_load_check_memo.py"
+function = "test_the_key_names_the_executable"
+kind = "write_bytes"
+count = 1
+use = "stub"
+note = "Issue 172: a one-line stand-in file whose bytes are hashed by the memo key; kicad-cli never reads it."

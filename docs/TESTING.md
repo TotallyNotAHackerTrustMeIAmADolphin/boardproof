@@ -141,6 +141,16 @@ Targeted runs may use pytest-xdist (a `dev` extra, build ticket 152, stage 1 of 
 - **The flags go on the command line, never into `addopts`:** `EXPECTED_PYTEST_CONFIG` in `scripts/batch_gate.py` forbids `addopts`. The batch gate keeps its single serial command until its own ticket (stage 2 of issue 70) re-bases its timeouts.
 - **A test must not put text that UTF-8 cannot encode (a lone surrogate) into a warning or output:** a worker cannot send it, and the whole session aborts with an `INTERNALERROR`. The one such test, `test_a_write_that_cannot_be_encoded_leaves_the_schematic_byte_identical`, drops the `kicad_tools` warning with a `filterwarnings` mark.
 
+### Replay cache for `kicad-cli upgrade` runs (opt-in, issue 172)
+
+`KICAD_MCP_CLI_REPLAY=1 python -m pytest ...` answers a repeated `kicad-cli sch|pcb|sym|fp upgrade` (and `version`) from a recording of an earlier real run in the same session (`tests/_cli_replay.py`, installed by `tests/conftest.py`, never imported by `src/`). It is off by default and the batch gate does not set it: the gate stays a run of the real tool.
+
+- **Measured (counting hook, full suite, 16486 `kicad-cli` runs):** 35 percent of the runs had byte-identical inputs and argv to an earlier run; the repeated ones are almost all upgrades (`sch upgrade` 3206 of 5109, `pcb upgrade` 849 of 2042); `pcb drc` 0 of 385, `sch erc` 7 of 1273, `sch export netlist` 32 of 6886.
+- **The key:** the `kicad-cli version` output, the argv with every directory it reads or writes replaced by a token (so a copy of the project in another temporary directory has the same key), the name and sha256 of every file under those directories, and the `KICAD*` environment. A changed byte, file, flag, version or variable is a miss. The recording restores the files the run created, changed or removed, the exit code, stdout and stderr; paths in them come back as the new directory's.
+- **Never replayed:** `pcb drc` and `sch erc` (the gate runs DRC three times because runs differ), netlist and `pcb export` runs, a call with a timeout under 60 s, a crash exit, binary output that holds a path, a directory over 3000 files or 400 MB. The tests of `test_verify_board*`, `test_gate_*`, `test_batch_gate*`, `test_rung*`, `test_autonomy_run*` and `test_ladder*` run with the cache off (`EXCLUDED_FILES`).
+- **Fidelity check:** `KICAD_MCP_CLI_REPLAY_VERIFY=1` also runs the real call on every hit and fails the test on any difference (`ReplayMismatch`).
+- **The write layer's own memo (product code):** the parse check of a schematic runs `sch upgrade` once per distinct sheet content, kicad-cli executable and `KICAD*` environment per process (successes only; `tests/test_load_check_memo.py`). `tests/conftest.py` clears it before each test.
+
 ### The batch gate
 
 - **The local run is the gate.** Hosted CI does not run: the owner will not pay for GitHub (2026-10-19), so the GitHub Actions workflow was disabled and removed on 2026-10-20 (its failed-run emails carried no signal). `python scripts/batch_gate.py` (build ticket 45) runs the full suite and the lint gate and gives one GREEN/RED verdict.

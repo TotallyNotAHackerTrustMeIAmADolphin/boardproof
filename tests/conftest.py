@@ -27,13 +27,22 @@ from tests._test_times import pytest_runtest_logfinish as pytest_runtest_logfini
 from tests._test_times import pytest_runtest_logstart as pytest_runtest_logstart
 from tests._test_times import pytest_sessionstart as pytest_sessionstart  # issue 154: xdist controller writes none
 
+# Issue 172: the opt-in replay cache of kicad-cli upgrade runs (KICAD_MCP_CLI_REPLAY=1); docs/TESTING.md
+from tests import _cli_replay
+from tests._cli_replay import pytest_sessionfinish as pytest_sessionfinish
+from tests._cli_replay import pytest_terminal_summary as pytest_terminal_summary
+from tests._cli_replay import pytest_unconfigure as pytest_unconfigure
+
+
 def pytest_configure(config):
     config.addinivalue_line("markers", _krt.MARKER_HELP)
+    _cli_replay.pytest_configure(config)
 
 
 def pytest_runtest_setup(item):
     """``needs_krt``: decided before the test's own fixtures run (a module-scoped fixture
     that drives KRT is never set up when it is absent)."""
+    _cli_replay.pytest_runtest_setup(item)
     if item.get_closest_marker(_krt.MARKER) is not None:
         _krt.require()
 
@@ -84,6 +93,16 @@ def _no_default_router_folder_of_this_machine(request, monkeypatch, tmp_path_fac
     from kicad_mcp.routers import kicad_routing_tools as krt
 
     monkeypatch.setattr(krt, "REPO_ROOT", tmp_path_factory.mktemp("no-default-krt"))
+
+
+@pytest.fixture(autouse=True)
+def _write_layer_load_memo_is_per_test():
+    """Issue 172: the write layer remembers sheets that KiCad loaded (one ``sch upgrade`` per distinct
+    content). A test that fakes kicad-cli's answer, or counts its runs, must not see another test's memory."""
+    from kicad_mcp import write_layer
+
+    write_layer.clear_load_check_memo()
+    yield
 
 
 @pytest.fixture(autouse=True)

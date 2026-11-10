@@ -57,6 +57,7 @@ temporary-file write, copies and ``os.replace`` are reviewed entries in
 
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 import os
@@ -535,9 +536,56 @@ def _exit_text(code: int) -> str:
     return f"{code} (0x{code & 0xFFFFFFFF:08X})" if code < 0 or code > 255 else str(code)
 
 
+# Issue 172: a schematic that KiCad loaded once loads again. The parse check of every save re-ran
+# ``sch upgrade`` on every unchanged sub-sheet of the tree (35 runs, about 20 s on vme-wren). The memo keeps
+# ONLY successes, keyed by what decides the answer: the sha256 of the bytes that are checked, the kind, the
+# kicad-cli executable (path, size, mtime) and the KICAD* environment. It is a set in this process, bounded,
+# and boards, symbols and footprints are never in it (the board writers keep the real check every time).
+_LOAD_CHECK_MEMO_MAX = 4096
+_load_check_memo: set[tuple] = set()
+_load_check_lock = threading.Lock()
+
+
+def clear_load_check_memo() -> None:
+    """Forget every remembered load (tests call it between tests)."""
+    with _load_check_lock:
+        _load_check_memo.clear()
+
+
+def _load_check_memo_size() -> int:
+    with _load_check_lock:
+        return len(_load_check_memo)
+
+
+def _remember_load_ok(key: tuple) -> None:
+    with _load_check_lock:
+        if len(_load_check_memo) >= _LOAD_CHECK_MEMO_MAX:
+            _load_check_memo.clear()
+        _load_check_memo.add(key)
+
+
+def _load_check_key(kind: str, target: Path, cli: Path) -> tuple | None:
+    """The memo key of the file ``target`` (a scratch copy nobody else writes), or None when it is not
+    memoised (anything but a schematic file, an unreadable file or executable)."""
+    if kind != "sch" or not target.is_file():
+        return None
+    try:
+        digest = hashlib.sha256(target.read_bytes()).hexdigest()
+        stat = cli.stat()
+    except OSError:
+        return None
+    env = tuple(sorted((k, v) for k, v in os.environ.items() if k.upper().startswith(("KICAD", "KIPRJMOD"))))
+    return (kind, digest, str(cli), stat.st_size, stat.st_mtime_ns, env)
+
+
 def _upgrade(kind: str, target: Path, shown: Path) -> None:
     """Run ``kicad-cli <kind> upgrade --force`` on ``target`` (a scratch copy of ``shown``)."""
     cli = _kicad_cli()
+    memo_key = _load_check_key(kind, target, cli)
+    if memo_key is not None:
+        with _load_check_lock:
+            if memo_key in _load_check_memo:
+                return
     try:
         proc = subprocess.run(
             [str(cli), kind, "upgrade", "--force", str(target)],
@@ -563,6 +611,8 @@ def _upgrade(kind: str, target: Path, shown: Path) -> None:
             exit_code=proc.returncode,
             output=output[-2000:],
         )
+    if memo_key is not None:
+        _remember_load_ok(memo_key)
 
 
 def _sub_sheets(root: SExp) -> list[str]:
