@@ -949,6 +949,15 @@ proof = [
     "tests/test_sheet_editing.py::test_set_property_positions_corrupted_write_is_refused",
 ]
 
+[writing_tool.set_properties]
+self_check = "reload-verify"
+note = "Issue 120: sheet_editing.set_properties changes the property nodes of selected symbols on a copy of the sheet's tree in memory, checks that every node it did not select is unchanged, compares kicad-cli's netlist of the project before and after on scratch copies (connectivity_changed unless allowed; the Value of a power symbol names its net), and only then saves through write_layer.save, whose verify reloads the temporary sibling and compares it with the serialised tree before os.replace."
+proof = [
+    "tests/test_set_properties.py::test_set_properties_corrupted_write_is_refused",
+    "tests/test_set_properties.py::test_the_staged_check_fires_when_a_property_edit_touches_an_unselected_symbol",
+    "tests/test_set_properties.py::test_the_netlist_comparison_fires_when_a_property_edit_changes_connectivity",
+]
+
 [writing_tool.confirm_board_rules]
 self_check = "reload-verify"
 proof = [

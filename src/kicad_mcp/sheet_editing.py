@@ -8,6 +8,7 @@ sending every coordinate again. This module holds the batch tools that change a 
 - ``set_text`` (the text of existing labels and free text objects, GitHub issue 114)
 - ``set_property_positions`` (position, angle and justification of a symbol's property texts)
 - ``replace_symbols`` (issue 112: a placed symbol becomes another lib_id in place; the checks are at the function)
+- ``set_properties`` (issue 120: set, add and remove the properties of placed symbols)
 
 Decision 1 (docs/ARCHITECTURE.md): nothing here edits KiCad text. A sheet is loaded with
 ``write_layer.load`` into ``kicad_tools``' low-level ``SExp`` tree, changed by removing nodes and
@@ -269,6 +270,7 @@ class Sheet:
         self.root = root
         self.nets_before = nets_before  # callable -> kicad-cli's netlist of the project before the change (memoised)
         self.erc_for = erc_for  # callable(tree or None) -> kicad-cli's ERC census of the project with that sheet tree (None: as it is on disk)
+        self.tree: sheet_tree.SheetTree | None = None  # the sheet tree the call checks connectivity in (set by ``_run``)
         self.symbols = _kids(root, "symbol")
         self.wires = _kids(root, "wire")
         self.junctions = _kids(root, "junction")
@@ -550,19 +552,39 @@ def _is_auto(name: str) -> bool:
     return name.startswith(("Net-(", "unconnected-(")) or "/Net-(" in name or "/unconnected-(" in name
 
 
-def read_nets(tree: sheet_tree.SheetTree, sheet: Path, replacement: SExp | None) -> dict[str, frozenset]:
+def read_nets(tree: sheet_tree.SheetTree, sheet: Path, replacement: SExp | None, capture: dict | None = None) -> dict[str, frozenset]:
     """kicad-cli's netlist of the project, from a scratch copy of the tree in which ``sheet``
     holds ``replacement`` (when given): net name -> the ``(reference, pin)`` nodes on it,
-    unannotated (``?``) references left out."""
+    unannotated (``?``) references left out. ``capture``, when given, receives the components of
+    the same export under ``"components"`` (``_components_of``)."""
     with tempfile.TemporaryDirectory(prefix="kicad-mcp-sheet-edit-") as tmp:
         scratch = Path(tmp) / "p"
         root = sheet_authoring._copy_project(tree, [], scratch)
         if replacement is not None:
             sheet_authoring._save(replacement, scratch / sheet.resolve().relative_to(tree.project_dir))
-        return nets_from(root)
+        return nets_from(root, capture)
 
 
-def nets_from(root: Path) -> dict[str, frozenset]:
+def _components_of(parsed: SExp) -> list[dict[str, Any]]:
+    """The components of a parsed kicad-cli netlist: ``ref``, ``value`` and ``fields`` (name -> value; KiCad lists
+    every property but Reference and Value there, Footprint, Datasheet and Description included)."""
+    def text(node: SExp, tag: str) -> str:
+        found = node.find_children(tag)
+        return str(found[0].children[0].value) if found and found[0].children else ""
+
+    out = []
+    for block in parsed.find_children("components"):
+        for comp in block.find_children("comp"):
+            fields: dict[str, str] = {}
+            for group in comp.find_children("fields"):
+                for fld in group.find_children("field"):
+                    atoms = [v for v in fld.values if isinstance(v, (str, int, float))]
+                    fields[text(fld, "name")] = str(atoms[0]) if atoms else ""
+            out.append({"ref": text(comp, "ref"), "value": text(comp, "value"), "fields": fields})
+    return out
+
+
+def nets_from(root: Path, capture: dict | None = None) -> dict[str, frozenset]:
     """kicad-cli's netlist of the project whose root sheet is ``root`` (a scratch copy: the CLI
     writes beside it): net name -> the ``(reference, pin)`` nodes on it, unannotated references left out."""
     from kicad_tools.sexp.parser import parse_file
@@ -571,6 +593,8 @@ def nets_from(root: Path) -> dict[str, frozenset]:
 
     with tempfile.TemporaryDirectory(prefix="kicad-mcp-sheet-net-") as tmp:
         parsed = parse_file(str(kicad_cli.export_netlist(root, Path(tmp) / "check.net")))
+    if capture is not None:
+        capture["components"] = _components_of(parsed)
     nets: dict[str, frozenset] = {}
     for block in parsed.find_children("nets"):
         for net in block.find_children("net"):
@@ -641,6 +665,7 @@ class Outcome:
     compare: Any = None                                    # (before, after, removed_refs) -> changes; default compare_nets
     post_check: Any = None                                 # (before, after) -> None, raises to refuse (self-check)
     no_change: bool = False                                # nothing to write: return after the checks
+    post_netlist: Any = None                               # (components of the staged netlist) -> None, raises to refuse (issue 120)
     lib_added: set[str] = field(default_factory=set)       # names of lib_symbols entries the call added on purpose (issue 112)
     lib_removed: set[str] = field(default_factory=set)     # names of lib_symbols entries the call dropped on purpose
 
@@ -793,7 +818,9 @@ def _run(path: Path, root_sch: str | None, mutate, allow: bool, dry_run: bool) -
             erc_memo["old"] = census
         return census
 
-    outcome: Outcome = mutate(Sheet(new, nets_before, erc_for), new)
+    sheet_index = Sheet(new, nets_before, erc_for)
+    sheet_index.tree = tree
+    outcome: Outcome = mutate(sheet_index, new)
     _staged_check(original, new, outcome)
 
     result: dict[str, Any] = {"status": "ok", "ok": True, "written": False, **outcome.report}
@@ -801,7 +828,10 @@ def _run(path: Path, root_sch: str | None, mutate, allow: bool, dry_run: bool) -
         result["standalone_sheet"] = True
     if outcome.check_nets:
         before = nets_before()
-        after = read_nets(tree, path, new)
+        capture: dict | None = {} if outcome.post_netlist is not None else None
+        after = read_nets(tree, path, new, capture)
+        if outcome.post_netlist is not None:
+            outcome.post_netlist(capture["components"])
         if outcome.post_check is not None:
             outcome.post_check(before, after)
         changes = (outcome.compare or compare_nets)(before, after, outcome.removed_refs)
@@ -1584,4 +1614,394 @@ def replace_symbols(path: str, replacements: Any, root_sch: str | None, *, allow
     result = run(path, root_sch, mutate, allow_connectivity_change=allow_connectivity_change, dry_run=dry_run)
     if result.get("ok") and dry_run:
         result["would_replace"] = result.pop("replaced")
+    return result
+
+
+# --------------------------------------------------------------------------- set_properties (issue 120)
+
+_PROPERTY_ITEM_KEYS = {"reference", "uuid", "set", "remove"}
+_UNREMOVABLE = ("Reference", "Value", "uuid")
+
+
+def _property_name(name: Any, where: str) -> str:
+    if not isinstance(name, str) or not name or any(ord(ch) < 0x20 or ord(ch) == 0x7F for ch in name):
+        raise SheetAuthoringError("invalid_spec", f"{where}: a property name must be a non-empty string without control characters, got {name!r}")
+    if name != name.strip():
+        raise SheetAuthoringError(
+            "invalid_spec", f"{where}: a property name must not start or end with white space (ERC reports field_name_whitespace), got {name!r}")
+    return name
+
+
+def _property_value(spec: Any, where: str) -> tuple[str, bool | None]:
+    """``(value, hidden or None)`` of one ``set`` entry: a string, or ``{value, hidden?}``."""
+    hidden = None
+    if isinstance(spec, dict):
+        if "value" not in spec or set(spec) - {"value", "hidden"}:
+            raise SheetAuthoringError("invalid_spec", f"{where} must be a string or an object with 'value' and optionally 'hidden', got {spec!r}")
+        value = spec["value"]
+        if "hidden" in spec:
+            hidden = spec["hidden"]
+            if not isinstance(hidden, bool):
+                raise SheetAuthoringError("invalid_spec", f"{where}.hidden must be true or false, got {hidden!r}")
+    else:
+        value = spec
+    if not isinstance(value, str):
+        raise SheetAuthoringError("invalid_spec", f"{where}: a property value must be a string (numbers are not converted), got {value!r}")
+    try:
+        write_layer.check_text(value)
+    except write_layer.InvalidStringError as exc:
+        raise SheetAuthoringError("invalid_spec", f"{where}: {exc}") from exc
+    return value, hidden
+
+
+def _check_property_items(items: Any) -> list[dict]:
+    """Validate every item before anything is selected; returns ``[{selector, set, remove}]``."""
+    if not isinstance(items, list) or not items:
+        raise SheetAuthoringError("invalid_spec", "items must be a non-empty list of {reference | uuid, set: {...}, remove: [...]}")
+    checked = []
+    for i, item in enumerate(items):
+        where = f"items[{i}]"
+        if not isinstance(item, dict) or set(item) - _PROPERTY_ITEM_KEYS:
+            raise SheetAuthoringError("invalid_spec", f"{where} must be an object with keys from {sorted(_PROPERTY_ITEM_KEYS)}, got {item!r}")
+        if ("reference" in item) == ("uuid" in item):
+            raise SheetAuthoringError("invalid_spec", f"{where} needs exactly one of 'reference' and 'uuid'")
+        key = "reference" if "reference" in item else "uuid"
+        if not isinstance(item[key], str) or not item[key]:
+            raise SheetAuthoringError("invalid_spec", f"{where}.{key} must be a non-empty string")
+        sets: dict[str, tuple[str, bool | None]] = {}
+        if "set" in item:
+            if not isinstance(item["set"], dict) or not item["set"]:
+                raise SheetAuthoringError("invalid_spec", f"{where}.set must be a non-empty object {{property name: value | {{value, hidden}}}}")
+            for name, spec in item["set"].items():
+                name = _property_name(name, f"{where}.set")
+                if name == "Reference":
+                    raise SheetAuthoringError(
+                        "reference_not_settable",
+                        f"{where}: the Reference cannot be set here (fix_annotation owns references); nothing was written")
+                if name == "uuid":
+                    raise SheetAuthoringError("invalid_spec", f"{where}.set: 'uuid' is the identity of the symbol, not a property")
+                sets[name] = _property_value(spec, f"{where}.set[{name!r}]")
+        removes: list[str] = []
+        if "remove" in item:
+            if not isinstance(item["remove"], list) or not item["remove"]:
+                raise SheetAuthoringError("invalid_spec", f"{where}.remove must be a non-empty list of property names")
+            for name in item["remove"]:
+                name = _property_name(name, f"{where}.remove")
+                if name in _UNREMOVABLE:
+                    raise SheetAuthoringError(
+                        "property_not_removable",
+                        f"{where}: {name!r} cannot be removed" + ("; set a new value instead" if name == "Value" else "") + "; nothing was written")
+                if name in sets:
+                    raise SheetAuthoringError("invalid_spec", f"{where}: {name!r} is both set and removed")
+                if name not in removes:
+                    removes.append(name)
+        if not sets and not removes:
+            raise SheetAuthoringError("invalid_spec", f"{where} needs 'set' or 'remove'")
+        selector = {"references" if key == "reference" else "uuids": [item[key]]}
+        checked.append({"selector": selector, "set": sets, "remove": removes})
+    return checked
+
+
+def _hidden(prop: SExp) -> bool:
+    effects = prop.find_children("effects")
+    if not effects:
+        return False
+    return any((k.children[0].value if k.children else "yes") != "no" for k in _kids(effects[0], "hide"))
+
+
+def _set_hidden(prop: SExp, hidden: bool) -> None:
+    effects = prop.find_children("effects")
+    if not effects:
+        font = SExp.list("font", SExp.list("size", write_layer.number(1.27), write_layer.number(1.27)))
+        prop.children.append(SExp.list("effects", font))
+        effects = prop.find_children("effects")
+    node = effects[0]
+    _remove(node, _kids(node, "hide"))
+    if hidden:
+        node.children.append(SExp.list("hide", write_layer.symbol("yes")))
+
+
+def _new_property(symbol: SExp, name: str, value: str, hidden: bool) -> SExp:
+    """A property node at the own ``(at)`` of the symbol with the usual font, after its last property."""
+    x, y, _angle = _at(symbol)
+    prop = SExp.list("property", write_layer.string(name), write_layer.string(value),
+                     SExp.list("at", write_layer.number(_r(x)), write_layer.number(_r(y)), write_layer.number(0)),
+                     SExp.list("effects", SExp.list("font", SExp.list("size", write_layer.number(1.27), write_layer.number(1.27)))))
+    if hidden:
+        _set_hidden(prop, True)
+    last = max((k for k, c in enumerate(symbol.children) if not c.is_atom and c.name == "property"), default=len(symbol.children) - 1)
+    symbol.children.insert(last + 1, prop)
+    return prop
+
+
+def _unit(node: SExp) -> int:
+    found = node.find_children("unit")
+    return int(found[0].get_float(0)) if found else 1
+
+
+def _lib_id(node: SExp) -> str:
+    """The library identity of a placed symbol: its lib_id and, for a local variant, its lib_name."""
+    found = node.find_children("lib_id")
+    name = node.find_children("lib_name")
+    return ((found[0].get_string(0) or "") if found else "") + (f"|{name[0].get_string(0) or ''}" if name else "")
+
+
+def _part_of(sheet: Sheet, nodes: list[SExp], by_uuid: bool, where: str) -> list[SExp]:
+    """The symbols one item edits together: the units of one multi-unit part.
+
+    KiCad reads the fields of a part from one unit's copy, so the copies must stay in step. Units are
+    symbols with the same Reference text and lib_id and different unit numbers. Several symbols that are
+    not units of one part (equal unit numbers, other lib_ids) are ``ambiguous_reference``."""
+    if by_uuid:
+        node = nodes[0]
+        group = [node] + [n for n in sheet.symbols if n is not node and _ref(n) == _ref(node)
+                          and _lib_id(n) == _lib_id(node) and _unit(n) != _unit(node)]
+    else:
+        group = list(nodes)
+    if len({_lib_id(n) for n in group}) != 1 or len({_unit(n) for n in group}) != len(group):
+        ids = [f"{_uuid(n)} (unit {_unit(n)}, at {_round_pt(*_at(n)[:2])})" for n in group]
+        raise SheetAuthoringError(
+            "ambiguous_reference",
+            f"{where}: {_ref(group[0])!r} is the reference of {len(group)} symbols that are not the units of one part ({'; '.join(ids)}); "
+            "select one by uuid; nothing was written", matches=ids)
+    return sorted(group, key=_unit)
+
+
+def _part_index(path: str, root_sch: str | None, standalone: bool) -> tuple[dict | None, str | None]:
+    """The symbols on the other sheets of the project of ``path``, keyed by ``(reference, lib identity)``, read once per call.
+
+    KiCad reads the fields of a part from one unit's copy wherever the units sit in the tree, so a part with a
+    unit on another sheet cannot be kept in step by an edit of this sheet alone. The sheet must therefore be
+    tied to ONE readable project tree that holds it: the one ``root_sch`` names, or the one project in the folder
+    of the sheet or up to ``MAX_PARENTS_SEARCHED`` folders above it whose tree holds it. Anything else proves
+    nothing (no project found, several holding it, a tree that does not read whole; a project without a
+    ``.kicad_pro`` is not found at all) and is refused with ``root_not_found`` unless the caller passed
+    ``standalone``: then the sheet is checked alone, ``(None, note)`` is returned, and the note says that units on
+    other sheets were not checked."""
+    if root_sch:
+        if standalone:
+            raise SheetAuthoringError("invalid_spec", "standalone and root_sch exclude each other: with a root sheet the units on the other sheets are looked for")
+        tree, _alone = _tree_for(Path(path), root_sch)
+    else:
+        found = sheet_authoring.discover_projects(Path(path))
+        if len(found["contains"]) == 1 and (standalone or not found["unreadable"]):
+            tree = found["contains"][0][1]  # one holder is known: standalone does not bypass it
+        else:
+            named = [str(r) for r, _t in found["contains"]]
+            levels = sheet_authoring.MAX_PARENTS_SEARCHED
+            why = (f"several projects hold it: {', '.join(named)}" if named else
+                   f"no readable project whose sheet tree holds it was found in its folder or up to {levels} levels above"
+                   + (f" (readable projects that do not hold it: {', '.join(found['excluded'])})" if found["excluded"] else ""))
+            why += (f"; projects that do not read whole: {'; '.join(found['unreadable'])}" if found["unreadable"] else "")
+            why += "; a project without a .kicad_pro file is not found"
+            if not standalone:
+                raise SheetAuthoringError(
+                    "root_not_found",
+                    f"cannot tell which project holds {Path(path).name}, so units of a part on other sheets cannot be ruled out ({why}); "
+                    "pass root_sch (the root sheet of the project), or standalone true to edit this sheet without looking for units on "
+                    "other sheets (KiCad may then keep reading the copy of the other unit, so the netlist may not follow the edit, "
+                    "and the call is refused as write_not_verified); nothing was written", candidates=named, unreadable=found["unreadable"], searched_levels=levels)
+            return None, (f"part_checked_standalone: units on other sheets were not checked ({why}); "
+                          "the edit applies to this sheet only")
+    index: dict = {}
+    this_sheet = tree.rel(Path(path))
+    for record in sheet_tree.placed_instances(tree):
+        if record["sheet"] != this_sheet:  # the reference of KiCad's netlist (instance data of the use), not the Reference text
+            index.setdefault((record["ref"], record["lib_id"]), []).append(
+                {"sheet": record["sheet"], "unit": record["unit"], "uuid": record["uuid"]})
+    return index, None
+
+
+def _plain_lib_id(node: SExp) -> str:
+    found = node.find_children("lib_id")
+    return (found[0].get_string(0) or "") if found else ""
+
+
+def _instance_records(sheet: Sheet, path: str) -> dict[str, list[dict]]:
+    """The placed-instance records (one per sheet use) of the symbols of this sheet, by symbol uuid: ``ref`` is
+    the reference of the instance data of the use, the one KiCad's netlist carries."""
+    this_sheet = sheet.tree.rel(Path(path))
+    out: dict[str, list[dict]] = {}
+    for record in sheet_tree.placed_instances(sheet.tree):
+        if record["sheet"] == this_sheet:
+            out.setdefault(record["uuid"], []).append(record)
+    return out
+
+
+def _check_part_on_one_sheet(index: dict | None, part: list[SExp], records: dict[str, list[dict]], where: str) -> None:
+    """Refuse (``part_spans_sheets``) a part whose instance reference is also on another sheet of the project."""
+    for node in part:
+        refs = sorted({r["ref"] for r in records.get(_uuid(node), [])} or {_ref(node)})
+        for ref in refs:
+            found_units = (index or {}).get((ref, _plain_lib_id(node)))
+            if found_units:
+                raise SheetAuthoringError(
+                    "part_spans_sheets",
+                    f"{where}: the reference {ref!r} (the instance reference of the project, which may differ from the Reference text "
+                    f"{_ref(node)!r}) is also on another sheet of the project "
+                    f"({', '.join('unit %s on %s' % (u['unit'], u['sheet']) for u in found_units)}): units of one part, or a duplicate reference "
+                    "(run fix_annotation first). KiCad reads the fields of a part from one unit's copy, so an edit of one sheet cannot keep them in step; "
+                    "nothing was written", other_units=found_units)
+
+
+_STANDARD_FIELDS = ("Footprint", "Datasheet", "Description")
+
+_CAUSES = {
+    "count": "the reference is not exactly one component in the netlist (a duplicate or unannotated reference that the netlist keeps once, "
+             "or a symbol that the netlist leaves out, for example a lib_name without a library symbol)",
+    "space": "KiCad trims white space at the ends of Value, Datasheet, Description and Footprint",
+    "variable": "KiCad expands a text variable such as ${REFERENCE} in the netlist",
+    "tilde": "KiCad writes the placeholder ~ as an empty field",
+    "case": "a field name that differs from Footprint, Datasheet or Description only by case is one of those fields to KiCad",
+    "elsewhere": "KiCad may read the part from a copy elsewhere (another sheet or another unit)",
+}
+
+
+def _cause(name: str, asked: str, got: str | None) -> str:
+    """The class of the likeliest cause of a mismatch of one field (a key of ``_CAUSES``)."""
+    if name.lower() in {f.lower() for f in _STANDARD_FIELDS} and name not in _STANDARD_FIELDS:
+        return "case"
+    if "${" in asked:
+        return "variable"
+    if asked == "~" and got in (None, ""):
+        return "tilde"
+    if asked != asked.strip() and got == asked.strip():
+        return "space"
+    return "elsewhere"
+
+
+def _netlist_follows(expected: list[dict], records: dict[str, list[dict]]):
+    """The staged-netlist check (issue 120): kicad-cli's netlist of the edited project must carry the fields the call asked for.
+
+    Whatever the reason (a unit KiCad reads from another sheet, a Reference text that differs from the instance
+    reference, a duplicate reference that the netlist keeps once, a library variant), an edit the netlist does not
+    follow is refused with ``write_not_verified``. Compared, per edited symbol and per sheet use, with the one
+    netlist component of the instance reference: ``Value`` with the value of the component, every other set field with
+    its entry in the fields of the component (KiCad lists Footprint, Datasheet and Description there too), a removed
+    standard field as empty and a removed custom field as absent. Not compared: power symbols (``#`` references)
+    and symbols marked off-board, which are not in the netlist."""
+    def check(components: list[dict]) -> None:
+        by_ref: dict[str, list[dict]] = {}
+        for comp in components:
+            by_ref.setdefault(comp["ref"], []).append(comp)
+        problems: list[str] = []
+        causes: list[str] = []
+        for item in expected:
+            for record in records.get(item["uuid"], []):
+                ref = record["ref"]
+                if ref.startswith("#") or record.get("on_board") == "no":
+                    continue
+                comps = by_ref.get(ref, [])
+                if len(comps) != 1:
+                    problems.append(f"{ref}: {len(comps)} components in the netlist, expected one")
+                    causes.append("count")
+                    continue
+                comp = comps[0]
+                for name, value in item["set"].items():
+                    got = comp["value"] if name == "Value" else comp["fields"].get(name)
+                    if got != value:
+                        problems.append(f"{ref}: {name} asked {value!r}, netlist has " + (repr(got) if got is not None else "no such field"))
+                        causes.append(_cause(name, value, got))
+                for name in item["remove"]:
+                    got = comp["fields"].get(name)
+                    if (got not in (None, "")) if name in _STANDARD_FIELDS else (got is not None):
+                        problems.append(f"{ref}: {name} removed, netlist still has {got!r}")
+                        causes.append("case" if name.lower() in {f.lower() for f in _STANDARD_FIELDS} and name not in _STANDARD_FIELDS else "elsewhere")
+        if problems:
+            raise SheetAuthoringError(
+                "write_not_verified",
+                "check netlist_follows_edit: kicad-cli's netlist of the edited project does not carry what was asked ("
+                + "; ".join(problems[:10]) + "); likely cause: " + "; ".join(_CAUSES[c] for c in dict.fromkeys(causes))
+                + "; nothing was written",
+                check="netlist_follows_edit", problems=problems[:MAX_LISTED], causes=list(dict.fromkeys(causes)))
+
+    return check
+
+
+def set_properties(path: str, items: list[dict], root_sch: str | None, *, allow_connectivity_change: bool, dry_run: bool,
+                   standalone: bool = False) -> dict[str, Any]:
+    """Set, add or remove instance properties of placed symbols (GitHub issue 120)."""
+
+    def mutate(sheet: Sheet, root: SExp) -> Outcome:
+        checked = _check_property_items(items)
+        if not isinstance(standalone, bool):
+            raise SheetAuthoringError("invalid_spec", "standalone must be true or false")
+        part_index, standalone_note = _part_index(path, root_sch, standalone)  # once per call, not per item
+        records = _instance_records(sheet, path)
+        outcome = Outcome()
+        taken: set[int] = set()
+        listed = []
+        # select everything first: a missing or ambiguous symbol refuses the whole call before any edit
+        parts = []
+        notes: list[str] = [standalone_note] if standalone_note else []
+        for i, item in enumerate(checked):
+            by_uuid = "uuids" in item["selector"]
+            part = _part_of(sheet, select(sheet, "symbol", [item["selector"]]), by_uuid, f"items[{i}]")
+            _check_part_on_one_sheet(part_index, part, records, f"items[{i}]")
+            if any(id(n) in taken for n in part):
+                raise SheetAuthoringError("invalid_spec", f"items[{i}] selects {_ref(part[0])} again; put all its changes in one item")
+            taken.update(id(n) for n in part)
+            for name in item["remove"]:
+                if not any(_property(n, name) is not None for n in part):
+                    raise SheetAuthoringError(
+                        "property_not_found",
+                        f"items[{i}]: {_ref(part[0])} has no property {name!r} to remove (it has "
+                        f"{[p.get_string(0) for p in _kids(part[0], 'property')]}); nothing was written")
+            parts.append(part)
+        any_change = False
+        expected: list[dict] = []
+        for item, part in zip(checked, parts, strict=True):
+            for node in part:
+                rows = []
+                for name, (value, hidden) in item["set"].items():
+                    prop = _property(node, name)
+                    if prop is None:
+                        new_hidden = True if hidden is None else hidden
+                        _new_property(node, name, value, new_hidden)
+                        rows.append({"name": name, "action": "added", "value": value, "hidden": new_hidden})
+                        any_change = True
+                        continue
+                    previous = prop.get_string(1) or ""
+                    was_hidden = _hidden(prop)
+                    if previous != value:
+                        write_layer.set_string(prop, 1, value)
+                    if hidden is not None and hidden != was_hidden:
+                        _set_hidden(prop, hidden)
+                    now_hidden = _hidden(prop)
+                    changed = previous != value or now_hidden != was_hidden
+                    any_change |= changed
+                    rows.append({"name": name, "action": "changed" if changed else "unchanged", "value": value, "previous": previous,
+                                 "hidden": now_hidden})
+                for name in item["remove"]:
+                    doomed = [p for p in _kids(node, "property") if p.get_string(0) == name]
+                    if not doomed:
+                        rows.append({"name": name, "action": "absent"})
+                        continue
+                    rows.append({"name": name, "action": "removed", "previous": doomed[0].get_string(1) or ""})
+                    _remove(node, doomed)
+                    any_change = True
+                    if name == "Footprint":
+                        notes.append("Footprint was removed: the netlist then carries an empty footprint for that symbol, "
+                                     "and a board made from it has no footprint to place; assign_footprints sets one again.")
+                outcome.changed.add(_uuid(node))
+                expected.append({"uuid": _uuid(node), "set": {n: v for n, (v, _h) in item["set"].items()}, "remove": list(item["remove"])})
+                listed.append({"reference": _ref(node), "uuid": _uuid(node), "unit": _unit(node), "properties": rows})
+        outcome.report = {"updated": listed, "count": len(listed)}
+        outcome.post_netlist = _netlist_follows(expected, records)
+        if len(listed) > len(parts):
+            notes.append("A reference shared by the units of one part is edited in every unit, because KiCad reads the fields "
+                         "from one unit's copy; the units are listed with their unit numbers.")
+        if not any_change:
+            outcome.no_change = True
+            outcome.check_nets = False
+            notes.append("every property already had the asked value; nothing was written")
+        if any(n.startswith("part_checked_standalone") for n in notes):
+            outcome.report["part_checked_standalone"] = True
+        if notes:
+            outcome.report["note"] = " ".join(dict.fromkeys(notes))
+        return outcome
+
+    result = run(path, root_sch, mutate, allow_connectivity_change=allow_connectivity_change, dry_run=dry_run)
+    if result.get("ok") and dry_run:
+        result["would_update"] = result.pop("updated")
     return result

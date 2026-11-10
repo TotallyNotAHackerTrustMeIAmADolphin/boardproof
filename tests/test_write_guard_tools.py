@@ -380,6 +380,7 @@ SCENARIOS: dict[str, Callable[[Path], Scenario]] = {
     "delete_junctions": _editing("delete_junctions", lambda p: ([{"region": [0, 0, 300, 300]}],)),
     "move_symbols": _editing("move_symbols", lambda p: ([{"references": ["R1"], "offset": [5.08, 0]}],)),
     "move_labels": _editing("move_labels", lambda p: ([{"pattern": "*", "offset": [5.08, 0]}],)),
+    "set_properties": _editing("set_properties", lambda p: ([{"reference": "R1", "set": {"LCSC": "C25744"}}],)),
     "set_text": _editing("set_text", lambda p: ([{"kind": "label", "old_text": "LBL", "text": "LBL2"}], True)),
     "set_property_positions": _editing("set_property_positions", lambda p: ([{"references": ["R1"], "properties": {"Value": {"offset": [3.81, 0]}}}],)),
     "connect_pins": _connect_pins,

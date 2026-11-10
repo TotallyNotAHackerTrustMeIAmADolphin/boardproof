@@ -2260,6 +2260,70 @@ def build(mcp: MCPServer) -> list[str]:
 
         return sheet_editing.replace_symbols(sch_path, replacements, root_sch, allow_connectivity_change=allow_connectivity_change, dry_run=dry_run)
 
+    def set_properties(
+        sch_path: str, items: list[dict], allow_connectivity_change: bool = False, dry_run: bool = False,
+        root_sch: str | None = None, standalone: bool = False,
+    ) -> dict:
+        """Set, add or remove the properties (fields: LCSC, MPN, Datasheet, Description, Value, Footprint, any
+        custom name) of placed symbols in one call, for example to put the LCSC number on every new instance.
+
+        items: a list of objects, each `{reference | uuid, set: {name: value | {value, hidden}}, remove:
+        [names]}`; at least one of set and remove. Exactly one of reference (exact text) and uuid picks the
+        symbol. The units of a multi-unit part (same reference and lib_id, different unit numbers) are
+        edited together, whichever unit's uuid or the reference is given, because KiCad reads the fields of a
+        part from one unit's copy only; every touched symbol is listed with its uuid and unit. Several symbols
+        that share a reference but are not units of one part are refused with ambiguous_reference, naming
+        their uuids, so pick one by uuid. A part with units on more than one sheet of the project is refused
+        (part_spans_sheets, naming the other sheets and units): an edit of one sheet cannot keep the units in
+        step. Units on other sheets are seen only through the project tree, so the sheet must be tied to one
+        readable project that holds it: root_sch (the root sheet of the project) or, without it, the one project
+        in the folder of the sheet or up to 12 folders above it whose sheet tree holds it. Otherwise (no project
+        found, several holding it, a project that does not read whole, a project root sheet without a .kicad_pro
+        file, a project more than 12 levels up, a sheet no sheet symbol uses yet) the call is refused with
+        root_not_found and writes nothing. standalone true (not with root_sch) is the explicit way out: the sheet
+        is then edited without looking for units on other sheets, and the result says so (part_checked_standalone
+        true and a note); it changes nothing when one project holds the sheet. What it costs: KiCad may keep
+        reading the copy of the other unit, so the netlist may not follow the edit, and the call is then refused
+        (write_not_verified, the sheet unchanged); it risks a refusal, not a silent edit that has no effect. A value is a
+        string (numbers are not converted). A property is only a field: one named "dnp" or "in_bom" becomes a netlist field and does not set the real
+        flag of the symbol. Setting a property the symbol has changes only its value text
+        (and its hidden flag when `hidden` is given); its position, font and place in the symbol stay as they
+        are. Setting a property the symbol lacks adds it after the last one, at the symbol's own (at) with
+        angle 0, hidden unless `hidden` is false; a shown new field sits on the symbol's origin, so move it
+        with set_property_positions. A property set to the value it already has is reported `unchanged`; when
+        nothing changes the file is not written.
+
+        Not allowed: setting the Reference (refused, reference_not_settable: fix_annotation owns it) and
+        removing the Reference, the Value or the uuid (property_not_removable; set a Value instead). Removing
+        a property no unit of the symbol has is property_not_found. Removing the Footprint is allowed, and the
+        result carries a note: the netlist then holds an empty footprint. Other refusals: not_found (a
+        reference or uuid not on this sheet), invalid_spec (including a property name with leading or
+        trailing white space). A refusal writes nothing.
+
+        Properties only change text, but the Value of a power symbol names its net: the netlist of the project
+        is compared before and after on scratch copies, and a changed net is refused with
+        connectivity_changed unless allow_connectivity_change is true. A staged check confirms that
+        every top-level node the call did not select is unchanged; the instance data (reference, unit, project
+        path) of a selected symbol is never touched. The netlist of the edited project (kicad-cli, scratch copy) must carry every field
+        asked for, found by the reference of the instance data of each sheet use (the one KiCad uses, which may
+        differ from the Reference text): Value as the component value, the other fields by name, a removed
+        standard field as empty and a removed custom field as absent; power symbols and off-board symbols are not
+        in the netlist and are not compared. Any mismatch, or a reference that is not exactly one component, is a
+        refusal (write_not_verified, the sheet unchanged) that names the reference, the field, the asked value and
+        the netlist value. The written file is read back and compared (write_not_verified, the sheet unchanged).
+
+        dry_run true computes and returns everything (would_update) and writes nothing. Returns updated: per
+        symbol (a multi-unit part: per unit) its reference, uuid, unit and per property name, action (added, changed, unchanged, removed, absent), value,
+        previous and hidden; count, connectivity and written.
+
+        Refuses with file_open_in_kicad, naming the lock file, while KiCad holds a lock file for a file
+        it would write; close the file in KiCad, then retry.
+        """
+        from kicad_mcp import sheet_editing
+
+        return sheet_editing.set_properties(sch_path, items, root_sch, allow_connectivity_change=allow_connectivity_change, dry_run=dry_run,
+                                            standalone=standalone)
+
     def get_symbol_pins(sch_path: str, references: list[str] | None = None, uuids: list[str] | None = None) -> dict:
         """Read the pins of placed symbols: absolute sheet coordinates, name and electrical type, for
         wiring by pin instead of by hand-computed offsets. Read-only; writes nothing.
@@ -2446,7 +2510,7 @@ def build(mcp: MCPServer) -> list[str]:
     mutating_tools = [
         add_symbols, add_wires, add_junctions, add_labels, assign_footprints, fix_annotation, create_sheets, add_sheet_symbols,
         add_sheet_pins, remove_sheet_pins, move_sheet_pins, sync_sheet_pins,
-        delete_symbols, delete_wires, delete_labels, delete_junctions, move_symbols, move_labels, set_text, set_property_positions, connect_pins, replace_symbols,
+        delete_symbols, delete_wires, delete_labels, delete_junctions, move_symbols, move_labels, set_text, set_property_positions, set_properties, connect_pins, replace_symbols,
         add_no_connects, delete_no_connects,
     ]
     read_only_tools = [get_symbol_pins, check_connectivity, compare_sheet_pins]

@@ -186,9 +186,43 @@ def _require_tree(root: Path) -> sheet_tree.SheetTree:
     return tree
 
 
+MAX_PARENTS_SEARCHED = 12
+
+
+def discover_projects(path: Path) -> dict[str, list]:
+    """Every project around ``path``: the ``.kicad_pro`` files in its folder and in the folders above it
+    (at most ``MAX_PARENTS_SEARCHED`` levels), each with the root sheet of the same name, whose sheet tree is walked.
+
+    ``contains``: ``(root sheet, tree)`` of the projects whose tree holds ``path``; ``excluded``: root sheets
+    whose tree reads whole and does not hold it; ``unreadable``: ``"root sheet: why"`` for a tree that does
+    not read whole (it may hold the sheet or not: nothing is proven about it)."""
+    here = path.resolve()
+    contains: list = []
+    excluded: list = []
+    unreadable: list = []
+    for folder in [here.parent, *list(here.parent.parents)[:MAX_PARENTS_SEARCHED]]:
+        for project in sorted(folder.glob("*.kicad_pro")):
+            root = project.with_suffix(".kicad_sch")
+            if not root.is_file():
+                continue
+            try:
+                tree = sheet_tree.walk(root)
+            except Exception as exc:  # noqa: BLE001 - whatever the walk could not read
+                unreadable.append(f"{root}: {exc}")
+                continue
+            if tree.problems:
+                unreadable.append(f"{root}: " + "; ".join(tree.problems))
+            elif here in {f.resolve() for f in tree.files}:
+                contains.append((root, tree))
+            else:
+                excluded.append(str(root))
+    return {"contains": contains, "excluded": excluded, "unreadable": unreadable}
+
+
 def find_root(path: Path, root_sch: str | None) -> Path:
     """The project's root sheet: ``root_sch`` if given, else ``path`` itself when a ``.kicad_pro``
-    of the same name sits beside it, else the one ``.kicad_pro`` in its folder."""
+    of the same name sits beside it, else the one ``.kicad_pro`` in its folder, else the one project
+    in the folders above whose sheet tree holds ``path`` (a child sheet in a subfolder)."""
     if root_sch:
         return Path(root_sch)
     if path.with_suffix(".kicad_pro").is_file():
@@ -196,7 +230,15 @@ def find_root(path: Path, root_sch: str | None) -> Path:
     projects = sorted(path.parent.glob("*.kicad_pro"))
     if len(projects) == 1 and projects[0].with_suffix(".kicad_sch").is_file():
         return projects[0].with_suffix(".kicad_sch")
-    raise SheetAuthoringError("root_not_found", f"cannot tell which sheet is the project root for {path.name}; pass root_sch")
+    found = discover_projects(path)
+    if len(found["contains"]) == 1:
+        return found["contains"][0][0]
+    named = [str(r) for r, _t in found["contains"]]
+    raise SheetAuthoringError(
+        "root_not_found", f"cannot tell which sheet is the project root for {path.name}; pass root_sch"
+        + (f" (several projects hold it: {', '.join(named)})" if named else "")
+        + (f" (projects that do not read whole, so nothing is proven about them: {'; '.join(found['unreadable'])})" if found["unreadable"] else ""),
+        candidates=named, unreadable=found["unreadable"], excluded=found["excluded"])
 
 
 def _expected_verify(root: SExp):
