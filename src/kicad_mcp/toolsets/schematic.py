@@ -2369,6 +2369,44 @@ def build(mcp: MCPServer) -> list[str]:
 
         return title_block.set_title_block(sch_path, items, root_sch, dry_run=dry_run)
 
+    def add_text(
+        sch_path: str, items: list[dict], snap: bool = True, grid: float = 1.27, dry_run: bool = False,
+        root_sch: str | None = None,
+    ) -> dict:
+        """Create free text objects (notes, pin annotations such as "U501.24 VDD") on a sheet in one call.
+        A free text is not a label: it names no net and joins nothing, so use it for annotations and never
+        add_labels. The new text can be changed later with set_text through the uuid this call returns.
+
+        items: a list of objects {x, y, text [, rotation, size, justify]}. x and y are in mm. `text` is one
+        line: a line break, a tab or a Unicode line separator is refused (invalid_spec), an empty or blank
+        text too (empty_text); leading or trailing whitespace is written and listed as a text_whitespace
+        warning. `rotation` is 0 (default) or 90 (KiCad reads 180 and 270 as 0 and 90, so they are refused). `size` is the text height and width in mm
+        (default 1.27, from 0.1 to 50). `justify` is words such as "left bottom" (left or right, top or
+        bottom, mirror; none by default). Two identical items in one call are refused. One bad item refuses
+        the whole call and nothing is written.
+
+        snap (default true) and grid (default 1.27 mm) round the position; each added entry lists asked and
+        snapped. With "snap": false the position is written as asked (rounded to 0.0001 mm).
+
+        Checks before anything is written: kicad-cli's netlist of the project, read from a scratch copy
+        before and after, must show no change (connectivity_changed otherwise; there is no override), and
+        its ERC census of the project must be the same before and after, otherwise the call is refused
+        (write_not_verified, the sheet unchanged). Every other node of the sheet is checked against the
+        original, and the written file is reloaded and compared before it replaces the original. dry_run
+        true computes and returns everything (would_add) and writes nothing. Works on a sheet that a parent
+        sheet symbol uses (no instance data is touched). root_sch names the project's root sheet when
+        sch_path is a sub-sheet and its folder holds several projects.
+
+        Refuses with file_open_in_kicad, naming the lock file, while KiCad holds a lock file for a file it
+        would write; close the file in KiCad, then retry.
+
+        Returns added (uuid, text, at, rotation, size, justify, asked, snapped), count, grid, warnings,
+        connectivity (nets_before, nets_after, changed, changes) and written.
+        """
+        from kicad_mcp import add_text as add_text_module
+
+        return add_text_module.add_text(sch_path, items, root_sch, snap=snap, grid=grid, dry_run=dry_run)
+
     def set_property_positions(
         sch_path: str, items: list[dict], dry_run: bool = False, root_sch: str | None = None,
     ) -> dict:

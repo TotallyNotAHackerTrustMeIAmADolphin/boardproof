@@ -1,0 +1,8 @@
+[writing_tool.add_text]
+self_check = "reload-verify"
+note = "Issue 145: add_text.add_text appends free text nodes to a copy of the sheet's tree in memory, checks that every node it did not add is unchanged (staged check), compares kicad-cli's netlist of the project before and after on scratch copies (connectivity_changed, no override) and its ERC census (write_not_verified, check erc_unchanged), and only then saves through write_layer.save, whose verify reloads the temporary sibling and compares it with the serialised tree before os.replace."
+proof = [
+    "tests/test_add_text.py::test_a_corrupted_write_is_refused_and_leaves_the_sheet_alone",
+    "tests/test_add_text.py::test_the_staged_check_fires_when_the_call_touches_more_than_it_added",
+    "tests/test_add_text.py::test_the_erc_check_fires_when_the_census_moves",
+]
