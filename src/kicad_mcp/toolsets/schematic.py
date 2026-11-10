@@ -2503,6 +2503,35 @@ def build(mcp: MCPServer) -> list[str]:
                                        allow_connectivity_change=allow_connectivity_change, dry_run=dry_run)
 
     @_read_only
+    def check_symbol_fields(sch_path: str, required_fields: list[str] | None = None, root_sch: str | None = None) -> dict:
+        """Read-only, in one call over the whole sheet tree: list every placed symbol that has a gap in a
+        required field, per sheet and by reference and uuid. Neither check_connectivity nor ERC reports an empty
+        Footprint, a missing LCSC or a Datasheet of "~", so a wired schematic can still give an
+        incomplete BOM. It writes nothing, makes no scratch copy and takes no write lock.
+
+        required_fields: the field names that must hold a real value (exact, case-sensitive names); omitted,
+        Footprint, LCSC and Datasheet. sch_path: any sheet of the project; the check always starts at the
+        project's root sheet (root_sch, optional when sch_path is the root or the only .kicad_pro of its
+        folder names it) and follows the sheet symbols, so every sheet of the tree is read, each file once.
+
+        A field is a gap when the symbol has no such property (problem missing), or its value is empty (empty),
+        only white space (blank) or "~" (placeholder). A missing property that exists under a name that differs
+        only in case (for example "Lcsc") lists that name under case_variant. The result: sheets, one entry per
+        sheet file (checked, symbols_with_gaps and symbols: reference, uuid, unit, lib_id, uses, gaps, each
+        {field, problem, value}); a sheet file used twice is listed once and reports the reference of its first
+        use; a multi-unit part is checked per placed unit, as each unit carries its own fields. Totals:
+        placed_symbols, checked, symbols_with_gaps, gap_count and no_gaps (true when no symbol has a gap). Nothing is truncated: every
+        symbol with a gap is listed.
+
+        Not checked, and listed apart under skipped with a count each (the first matching reason): power
+        (a power symbol, or a reference starting with #), off_board (marked not on board) and dnp (marked do
+        not populate), plus no_lib_id (a symbol node without a library id). placed_symbols = checked + all skipped. To repair a gap use set_properties; no_gaps is not a verdict on the board.
+        """
+        from kicad_mcp import field_check
+
+        return field_check.check_symbol_fields(sch_path, required_fields, root_sch)
+
+    @_read_only
     def check_connectivity(sch_path: str) -> dict:
         """Check for unconnected pins and connection issues -- a narrower,
         faster check than full ERC (`sch_run_erc` in the `verification`
