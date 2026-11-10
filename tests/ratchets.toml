@@ -2066,3 +2066,10 @@ function = "test_carriage_returns_in_strings_by_version"
 kind = "rewrite_bytes"
 code = '''faults.rewrite_bytes(raw_cr, lambda data: data.replace(b'"A\\rB"', b'"A\rB"'))'''
 note = "The same raw-CR fixture, to pin per version how kicad_tools' reader treats a raw CR (LF up to 0.24, kept from 0.25.0); the layer cannot write it (build ticket 6)."
+
+[[test_kicad_fault_call]]
+file = "test_kicad_field_rules.py"
+function = "_hide_variant"
+kind = "write_unchecked"
+code = '''faults.write_unchecked(tree, out)'''
+note = "Scratch copies whose property hide is written as a bare hide or (hide) so kicad-cli can show it fails to load (issue 167, fact 4); the layer's own save refuses that form, so the copy skips its parse check."
