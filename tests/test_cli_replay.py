@@ -280,3 +280,23 @@ def test_the_real_kicad_cli_replays_a_sheet_upgrade_exactly(kicad_demo, tmp_path
     assert rp._stats["hit"] == 1, "the second copy must be a replay"
     assert (b.returncode, b.stdout, b.stderr) == (a.returncode, a.stdout.replace(str(one), str(two)), a.stderr.replace(str(one), str(two)))
     assert two.read_bytes() == one.read_bytes() == expected[1].read_bytes()
+
+
+def test_with_the_replay_unset_subprocess_run_is_left_unpatched(monkeypatch) -> None:
+    """Issue 176. Mutant M10: ``pytest_configure`` installs the wrapper without looking at
+    ``KICAD_MCP_CLI_REPLAY`` (the default of every run, and of the batch gate, would then be the replay)."""
+    sentinel = object()
+    monkeypatch.setattr(subprocess, "run", sentinel)
+    monkeypatch.delenv(rp.ENV_ON, raising=False)
+    monkeypatch.delenv(rp.ENV_DIR, raising=False)
+
+    class Config:
+        pass
+
+    rp.pytest_configure(Config())
+    assert subprocess.run is sentinel
+    # and the opt-in does install it (the guard is the variable, not a dead code path)
+    monkeypatch.setenv(rp.ENV_ON, "1")
+    monkeypatch.setenv(rp.ENV_DIR, str(Path(__file__).parent))
+    rp.pytest_configure(Config())
+    assert subprocess.run is rp._run

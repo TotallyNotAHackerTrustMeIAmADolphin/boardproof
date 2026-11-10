@@ -127,3 +127,42 @@ def test_the_key_names_the_executable(tmp_path: Path) -> None:
     cli_b.write_bytes(b"bb")
     assert wl._load_check_key("sch", sheet, cli_a) != wl._load_check_key("sch", sheet, cli_b)
     assert wl._load_check_key("sch", sheet, cli_a) == wl._load_check_key("sch", sheet, cli_a)
+
+
+def test_the_key_names_the_executable_size_and_mtime(tmp_path: Path) -> None:
+    """Issue 176. Mutant M7: a key without the executable's mtime_ns. Mutant M8: a key without its size
+    (and mtime). Each part of the identity alone must change the key."""
+    import os
+
+    plain = tmp_path / "plain.txt"
+    plain.write_bytes(b"bytes that only get hashed")
+    cli = tmp_path / "cli.exe"
+    cli.write_bytes(b"aa")
+    os.utime(cli, ns=(1_000_000_000, 1_000_000_000))
+    base = wl._load_check_key("sch", plain, cli)
+    assert base is not None
+    # same path, same size, another mtime_ns
+    os.utime(cli, ns=(2_000_000_000, 2_000_000_000))
+    assert wl._load_check_key("sch", plain, cli) != base
+    # same path, another size, the first mtime_ns again
+    cli.write_bytes(b"aaaa")
+    os.utime(cli, ns=(1_000_000_000, 1_000_000_000))
+    assert wl._load_check_key("sch", plain, cli) != base
+
+
+def test_the_autouse_fixture_clears_the_memo(request) -> None:
+    """Issue 176. Mutant M9: the autouse fixture in tests/conftest.py without ``clear_load_check_memo()``.
+    The fixture's own generator is run here after the memo was filled: it must leave the memo empty (every
+    other memo test clears the memo itself, so removing the call showed nothing before)."""
+    name = "_write_layer_load_memo_is_per_test"
+    defs = request._fixturemanager.getfixturedefs(name, request.node)
+    assert defs, "the autouse fixture is gone from tests/conftest.py"
+    assert name in request.fixturenames or any(d.argname == name for d in defs)
+    wl._remember_load_ok(("leftover", 1))
+    assert wl._load_check_memo_size() >= 1
+    gen = defs[-1].func()
+    next(gen)
+    try:
+        assert wl._load_check_memo_size() == 0
+    finally:
+        gen.close()
