@@ -532,7 +532,9 @@ def _netlist_census(sheet: Path, replacement: Path | None = None) -> dict[str, A
                 if not ref.endswith("?"):
                     nodes.add((ref, pin))
             nets.append(frozenset(nodes))
-    return {"components": len(refs), "refs": refs, "nets": nets}
+    from kicad_mcp import sheet_editing
+
+    return {"components": len(refs), "refs": refs, "nets": nets, "component_records": sheet_editing._components_of(parsed)}
 
 
 def _clip(text: str, limit: int = 160) -> str:
@@ -569,7 +571,7 @@ def _describe_lost_node(label: str, source_root: Any, written_root: Any) -> tupl
     )
 
 
-def _verify_schematic_write(path: Path, written: Path, added_refs: set[str]) -> None:
+def _verify_schematic_write(path: Path, written: Path, added_refs: set[str], expected_fields: dict[str, dict[str, str]] | None = None) -> None:
     """The builder tools' self-check (decision 4, build ticket 38), on the temporary file
     ``written`` before it replaces ``path``; raises ``SchematicWriteNotVerified``.
 
@@ -578,7 +580,9 @@ def _verify_schematic_write(path: Path, written: Path, added_refs: set[str]) -> 
     2. kicad-cli's netlist of each, read as the root: every component before is still there
        and the count rises by exactly the new references in ``added_refs`` (``#`` power
        references are not components); every net before lies within one net after (a new
-       wire may join two nets; nothing may split one or lose a pin)."""
+       wire may join two nets; nothing may split one or lose a pin).
+    3. Fields (issue 162, ``expected_fields``: reference -> field name -> value): the netlist component of each
+       new reference carries those fields (``~`` and an empty text count as equal)."""
     from collections import Counter
 
     from kicad_mcp import write_layer
@@ -620,6 +624,16 @@ def _verify_schematic_write(path: Path, written: Path, added_refs: set[str]) -> 
             "expected": f"{expected} components (added: {', '.join(new_refs) or 'none'})",
             "actual": f"{after['components']} components" + (f"; not found: {', '.join(absent)}" if absent else ""),
         })
+    for ref, wanted in (expected_fields or {}).items():
+        comps = [c for c in after.get("component_records", []) if c["ref"] == ref]
+        if ref in before["refs"] or len(comps) != 1:  # a duplicate reference: the netlist keeps one of the two, not ours to guess
+            continue  # also: absent (off-board symbol, count already checked above) or not unique
+        for name, value in wanted.items():
+            got = comps[0]["fields"].get(name)
+            if "${" in value or (got or "") == (value if value != "~" else ""):
+                continue
+            mismatches.append({"file": path.name, "check": "netlist_follows_fields", "expected": f"{ref} field {name} = {value!r}",
+                               "actual": "no such field" if got is None else repr(got)})
     net_of = {node: i for i, net in enumerate(after["nets"]) for node in net}
     for net in before["nets"]:
         landed = {net_of.get(node) for node in net}
@@ -730,7 +744,7 @@ def _reattach_to_tree(content: str, path: Path) -> str:
     return write_layer.serialise(node) + chr(10)
 
 
-_ADD_SYMBOL_KEYS = frozenset({"lib_id", "x", "y", "ref", "value", "rotation", "footprint", "unit", "in_bom", "dnp", "snap", "mirror"})
+_ADD_SYMBOL_KEYS = frozenset({"lib_id", "x", "y", "ref", "value", "rotation", "footprint", "unit", "in_bom", "dnp", "snap", "mirror", "properties"})
 _MIRROR_AXES = ("x", "y")
 
 
@@ -747,6 +761,7 @@ def _symbol_spec_refusal(specs: Any) -> dict | None:
     if not isinstance(specs, list):
         return refuse("specs must be a list of objects")
     mirrors: dict[tuple[str, int], str] = {}
+    field_sets: dict[tuple[str, str], str] = {}
     for i, spec in enumerate(specs):
         if not isinstance(spec, dict):
             return refuse(f"specs[{i}] must be an object, got {spec!r}")
@@ -771,10 +786,98 @@ def _symbol_spec_refusal(specs: Any) -> dict | None:
         mirror = spec.get("mirror", "")
         if not (isinstance(mirror, str) and mirror in ("", *_MIRROR_AXES)):
             return refuse(f"specs[{i}].mirror must be \"x\", \"y\" or \"\" (none), got {mirror!r}")
+        if "properties" in spec:
+            try:
+                checked = _check_symbol_properties(spec["properties"], f"specs[{i}].properties")
+            except sheet_authoring.SheetAuthoringError as exc:
+                return refuse(str(exc))
+            if "Footprint" in checked and spec.get("footprint"):
+                return refuse(f"specs[{i}] gives the footprint twice (footprint and properties.Footprint); give one")
+        # KiCad's netlist reads one unit's copy of a part's fields, so the units of one symbol must ask for the same fields
+        fieldset = repr((spec.get("footprint") or "", sorted((spec.get("properties") or {}).items(), key=repr)))
+        if not spec["ref"].endswith("?") and field_sets.setdefault((spec["ref"], spec["lib_id"]), fieldset) != fieldset:
+            return refuse(f"specs[{i}] places another unit of {spec['ref']} of the same symbol with a different footprint or properties; "
+                          "the units of one symbol share their fields, so give the same ones")
         asked = mirrors.setdefault((spec["ref"], unit), mirror)
-        if asked != mirror:
+        if asked != mirror and not spec["ref"].endswith("?"):  # unannotated specs are separate placements
             return refuse(f"specs[{i}] places {spec['ref']} unit {unit} again with a different mirror ({asked!r} before, {mirror!r} now)")
     return None
+
+
+def _check_symbol_properties(properties: Any, where: str) -> dict[str, tuple[str, bool | None]]:
+    """The per-entry field overrides of an add_symbols spec (issue 162): ``{name: value | {value, hidden}}``."""
+    from kicad_mcp import sheet_authoring, sheet_editing
+
+    if not isinstance(properties, dict):
+        raise sheet_authoring.SheetAuthoringError("invalid_spec", f"{where} must be an object {{property name: value | {{value, hidden}}}}")
+    out: dict[str, tuple[str, bool | None]] = {}
+    for name, value in properties.items():
+        name = sheet_editing._property_name(name, where)
+        if name in ("Reference", "Value", "uuid"):
+            raise sheet_authoring.SheetAuthoringError(
+                "invalid_spec", f"{where}: {name!r} is not an override here (use the spec's ref and value keys)")
+        out[name] = sheet_editing._property_value(value, f"{where}[{name!r}]")
+    return out
+
+
+class _FieldPairingError(ValueError):
+    """The new symbols in the text do not pair one to one with the specs (raised only after the other write checks)."""
+
+
+def _library_field_overrides(specs: list[dict]) -> list[dict]:
+    """Per spec, in spec order (the placement, not the reference: two ``R?`` specs are two placements): the field names the
+    spec fixes itself (``skip``), the override values and whether it gave a value."""
+    out: list[dict] = []
+    for spec in specs:
+        props = _check_symbol_properties(spec.get("properties", {}), "properties")
+        skip = set(props)
+        if spec.get("footprint"):
+            skip.add("Footprint")
+        out.append({"skip": frozenset(skip), "properties": props, "value_given": bool(spec.get("value"))})
+    return out
+
+
+def _apply_library_fields(root: Any, overrides: list[dict], old_uuids: set[str]) -> dict[str, dict[str, str]]:
+    """Give each symbol this call added every field of its embedded library symbol, as KiCad does (issue 162), then the
+    spec's own overrides. Returns ref -> {field name: value} of every field the netlist should carry (Reference and Value
+    aside)."""
+    from kicad_mcp import sheet_editing
+
+    expected: dict[str, dict[str, str]] = {}
+    seen: dict[str, dict[str, str]] = {}
+    conflicting: set[str] = set()
+    new_nodes = [n for n in root.children
+                 if not n.is_atom and n.name == "symbol" and n.find_children("lib_id") and n.find_children("uuid")
+                 and n.find_children("uuid")[0].get_string(0) not in old_uuids]
+    if len(new_nodes) != len(overrides):  # the new symbols come in spec order, one per spec; anything else is not guessed
+        raise _FieldPairingError(f"{len(new_nodes)} new symbol(s) in the text for {len(overrides)} spec(s); the sheet was left unchanged")
+    for node, asked in zip(new_nodes, overrides, strict=True):
+        ref = sheet_editing._ref(node)
+        entry = sheet_editing._lib_symbol(root, node)
+        if entry is not None:
+            sheet_editing.take_library_fields(node, entry, asked["skip"])
+            lib_value = sheet_editing._property(entry, "Value")
+            value = sheet_editing._property(node, "Value")
+            if not asked["value_given"] and lib_value is not None and value is not None and (lib_value.get_string(1) or ""):
+                if value.get_string(1) != lib_value.get_string(1):
+                    write_layer.set_string(value, 1, lib_value.get_string(1))
+        for name, (text, hidden) in asked["properties"].items():
+            prop = sheet_editing._property(node, name)
+            if prop is None:
+                sheet_editing._new_property(node, name, text, True if hidden is None else hidden)
+                continue
+            write_layer.set_string(prop, 1, text)
+            if hidden is not None:
+                sheet_editing._set_hidden(prop, hidden)
+        if not ref.startswith("#"):
+            fields = {p.get_string(0): p.get_string(1) or "" for p in sheet_editing._kids(node, "property")
+                      if p.get_string(0) not in ("Reference", "Value")}
+            if seen.setdefault(ref, fields) != fields:
+                conflicting.add(ref)  # KiCad reads one copy of a part's fields; which one is not ours to guess
+            expected[ref] = fields
+    for ref in conflicting:
+        expected.pop(ref, None)
+    return expected
 
 
 def _unit_of(node: Any) -> int:
@@ -782,34 +885,38 @@ def _unit_of(node: Any) -> int:
     return (int(unit[0].get_float(0)) if unit else 1) or 1
 
 
-def _apply_mirrors(root: Any, mirrors: dict[tuple[str, int], str], old_uuids: set[str]) -> None:
-    """Give the symbol nodes this call added (reference in ``mirrors``, uuid not in ``old_uuids``) a
-    ``(mirror x|y)`` node right after ``(at ..)``, where KiCad writes it, through the write layer."""
-    from kicad_mcp import sheet_editing
+def _new_symbol_nodes(root: Any, old_uuids: set[str]) -> list[Any]:
+    """The placed-symbol nodes of ``root`` this call added (uuid not in ``old_uuids``), in file order, which is the order of the specs."""
+    return [n for n in root.children
+            if not n.is_atom and n.name == "symbol" and n.find_children("lib_id") and n.find_children("uuid")
+            and n.find_children("uuid")[0].get_string(0) not in old_uuids]
 
-    for node in root.children:
-        if node.is_atom or node.name != "symbol" or not node.find_children("lib_id") or not node.find_children("uuid"):
-            continue
-        axis = mirrors.get((sheet_editing._ref(node), _unit_of(node)), "")
-        if not axis or node.find_children("uuid")[0].get_string(0) in old_uuids or node.find_children("mirror"):
+
+def _apply_mirrors(root: Any, mirrors: list[str], old_uuids: set[str]) -> None:
+    """Give the i-th symbol node this call added (uuid not in ``old_uuids``) the i-th entry of ``mirrors`` (spec order, "" for none) as a
+    ``(mirror x|y)`` node right after ``(at ..)``, where KiCad writes it, through the write layer. Paired by position, not by
+    reference: two ``R?`` specs are two placements."""
+    for node, axis in zip(_new_symbol_nodes(root, old_uuids), mirrors, strict=False):
+        if not axis or node.find_children("mirror"):
             continue
         at = node.find_children("at")[0]
         node.children.insert(node.children.index(at) + 1, write_layer.SExp.list("mirror", write_layer.symbol(axis)))
 
 
-def _check_mirrors(content: str, mirrors: dict[tuple[str, int], str], old_uuids: set[str]) -> None:
+def _check_mirrors(content: str, mirrors: list[str], old_uuids: set[str]) -> None:
     """Self-check (decision 4): the text about to be written holds the mirror each new symbol was asked for."""
     from kicad_mcp import sheet_editing
 
-    root = write_layer.parse_string(content)
-    found = {
-        (sheet_editing._ref(n), _unit_of(n)): (n.find_children("mirror")[0].children[0].value if n.find_children("mirror") else "")
-        for n in root.children
-        if not n.is_atom and n.name == "symbol" and n.find_children("lib_id") and n.find_children("uuid")
-        and n.find_children("uuid")[0].get_string(0) not in old_uuids
-    }
-    wrong = [{"reference": f"{ref} unit {unit}", "expected": axis, "actual": found.get((ref, unit))}
-             for (ref, unit), axis in mirrors.items() if axis and found.get((ref, unit)) != axis]
+    nodes = _new_symbol_nodes(write_layer.parse_string(content), old_uuids)
+    wrong = []
+    for i, axis in enumerate(mirrors):
+        if not axis:
+            continue
+        node = nodes[i] if i < len(nodes) else None
+        actual = None if node is None else (node.find_children("mirror")[0].children[0].value if node.find_children("mirror") else "")
+        if actual != axis:
+            wrong.append({"reference": f"{sheet_editing._ref(node)} unit {_unit_of(node)}" if node is not None else f"spec {i}",
+                          "expected": axis, "actual": actual})
     if wrong:
         raise SchematicWriteNotVerified(
             f"the mirror of {len(wrong)} new symbol(s) did not survive into the text; the sheet was left unchanged",
@@ -819,7 +926,8 @@ def _check_mirrors(content: str, mirrors: dict[tuple[str, int], str], old_uuids:
 
 def _write_schematic_utf8(
     sch: Any, path: Path, *, added_refs: set[str] = frozenset(), reattach: bool = False,
-    mirrors: dict[tuple[str, int], str] | None = None, old_uuids: set[str] = frozenset(),
+    mirrors: list[str] | None = None, old_uuids: set[str] = frozenset(),
+    field_overrides: list[dict] | None = None,
 ) -> None:
     """Write a kicad_tools high-level ``Schematic`` to ``path`` as UTF-8.
 
@@ -852,11 +960,20 @@ def _write_schematic_utf8(
     content = _schematic_text(sch)
     if reattach:
         content = _reattach_to_tree(content, path)
-    if mirrors and any(mirrors.values()):  # GitHub issue 111: kicad_tools' add_symbol has no mirror parameter
+    if mirrors and any(mirrors):  # GitHub issue 111: kicad_tools' add_symbol has no mirror parameter
         node = write_layer.parse_string(content)
         _apply_mirrors(node, mirrors, set(old_uuids))
         content = write_layer.serialise(node) + chr(10)
         _check_mirrors(content, mirrors, set(old_uuids))
+    expected_fields: dict[str, dict[str, str]] | None = None
+    deferred: Exception | None = None
+    if field_overrides is not None:  # GitHub issue 162: take over every field of the library symbol, as KiCad does
+        node = write_layer.parse_string(content)
+        try:
+            expected_fields = _apply_library_fields(node, field_overrides, set(old_uuids))
+            content = write_layer.serialise(node) + chr(10)
+        except _FieldPairingError as exc:
+            deferred = exc  # raised after the token and netlist checks, so a damaged text is reported by those first
     if "\r" in content:  # backstop: the tools refuse \r in their input before this
         raise ValueError("carriage return in the schematic text; kicad_tools would write it unescaped")
     tmp = path.with_name(path.name + ".utf8.tmp")
@@ -864,7 +981,9 @@ def _write_schematic_utf8(
         tmp.write_text(content, encoding="utf-8")
         if tmp.read_text(encoding="utf-8") != content:
             raise OSError(f"read-back of the written schematic differs from its content; {path.name} left unchanged")
-        _verify_schematic_write(path, tmp, set(added_refs))
+        _verify_schematic_write(path, tmp, set(added_refs), expected_fields)
+        if deferred is not None:
+            raise deferred
         write_layer.check_writable(path)  # KiCad may have opened the sheet while the checks ran
         write_layer.replace_file(tmp, path)  # retries a transient sharing denial, then file_busy
     finally:
@@ -1078,8 +1197,20 @@ def build(mcp: MCPServer) -> list[str]:
         """Place one or more symbols onto an existing schematic in one call.
 
         Each spec: lib_id, x, y, ref (required); value, rotation, footprint,
-        unit, in_bom, dnp, snap, mirror (optional). Batch-oriented -- never loop this one
+        unit, in_bom, dnp, snap, mirror, properties (optional). Batch-oriented -- never loop this one
         symbol at a time.
+
+        Library fields (issue 162): like a symbol placed by hand in KiCad, each new instance takes over every
+        field of its library symbol -- Footprint, Datasheet, Description, LCSC and any custom field -- with the
+        library's hidden state, and the library's Value unless the spec gives `value`. A field the library
+        lacks stays absent. Overrides win: `footprint` (as before) and `properties`, an object
+        {field name: text | {value, hidden}} that sets or adds fields (a field the library lacks is added
+        hidden unless "hidden": false; Reference, Value and a name with edge white space are refused as
+        invalid_spec; giving the footprint in both `footprint` and `properties` is refused; units of one
+        symbol must ask for the same fields). Before the sheet is replaced, kicad-cli's netlist of the
+        project must carry those fields on every new component, else the call is refused
+        as a failed write check (check netlist_follows_fields) and the sheet stays unchanged. Fields of existing symbols change with set_properties, and replace_symbols
+        takes a new library symbol's fields with library_fields true.
 
         mirror (issue 111): "x", "y" or "" (none; the default). KiCad applies the rotation first and
         then the mirror: "y" flips the symbol left to right (a connector's pins that were on its left
@@ -1161,7 +1292,8 @@ def build(mcp: MCPServer) -> list[str]:
                 )
                 placed.append(instance.reference)
             _write_schematic_utf8(sch, path, added_refs=set(placed), reattach=True,
-                                  mirrors={(spec["ref"], spec.get("unit", 1)): spec.get("mirror", "") for spec in specs}, old_uuids=before_uuids)
+                                  mirrors=[spec.get("mirror", "") for spec in specs], old_uuids=before_uuids,
+                                  field_overrides=_library_field_overrides(specs))
         except SchematicWriteNotVerified as exc:
             return _not_verified_result(exc)
         except Exception as exc:  # noqa: BLE001 - evidence-gated verdict
@@ -2316,12 +2448,17 @@ def build(mcp: MCPServer) -> list[str]:
         final part, keeping what the sheet already has: the uuid, the reference, the position, the
         rotation, the mirror, the unit, the property texts and the instance data stay as they are.
 
-        replacements: a list of objects {reference | uuid, lib_id, pin_map}. reference (exact, one placed
+        replacements: a list of objects {reference | uuid, lib_id, pin_map, library_fields}. reference (exact, one placed
         symbol; use uuid when several share a reference such as "R?") or uuid picks the symbol; lib_id is
         the new Library:Symbol, read from the project's symbol library table or KiCad's own folder (or
         reused when the sheet already embeds it); pin_map is optional: {old pin number: new pin number}
         for pins whose numbers differ. Without a pin_map pins are paired by pin number (by pin name for a
-        pin that has no number). A part with several units placed on the sheet is refused
+        pin that has no number). library_fields (default false, issue 162): true also takes over every field
+        of the new library symbol like KiCad's Change Symbol with fields updated (Footprint, Datasheet,
+        Description, LCSC and any custom field, with the library's hidden state; Reference and Value are
+        never touched, a field only the old symbol has stays); the default keeps the symbol's own field
+        texts, so a Footprint you assigned survives. The netlist after the change must carry the adopted
+        fields, else the call is refused as a failed write check and the sheet stays unchanged; library_fields_taken in the result lists them per symbol. A part with several units placed on the sheet is refused
         (multi_unit_symbol); so is a unit the new symbol does not have (unit_missing).
 
         The embedded library symbol is rewritten: the new one is added, and the old one is dropped only

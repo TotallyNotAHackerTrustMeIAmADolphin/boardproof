@@ -128,11 +128,14 @@ def test_fact1_the_boundary_is_20250318(proj, tools, tmp_path):
 
 
 def test_fact1_what_the_tools_write_today_is_a_file_version_where_tilde_means_empty(proj, tools, tmp_path):
-    """add_symbols writes Datasheet "~" into a file whose version is the tools' own (read here, not assumed)."""
+    """add_symbols writes into a file whose version is the tools' own (read here, not assumed); since issue 162 the
+    instance takes the library's Datasheet (empty for Device:R), so "~" is set through the write layer, as a
+    tool written by an older version of the product (or kicad_tools) would have left it."""
     _add(tools, proj, [_r("R1")])
     tree = write_layer.load(proj)
     version = tree.find_children("version")[0].get_int(0)
-    assert _props(_placed(tree, "R1")[0])["Datasheet"].get_string(1) == "~"
+    assert _props(_placed(tree, "R1")[0])["Datasheet"].get_string(1) == ""
+    _set(proj, "R1", "Datasheet", "~")
     nl, _ = netlist(proj, tmp_path)
     assert (version < 20250318) == (nl["R1"]["datasheet"] is None), (version, nl["R1"])
 

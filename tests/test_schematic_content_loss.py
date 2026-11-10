@@ -110,7 +110,8 @@ CONTENT = ("sheet", "bus", "bus_entry", "image", "polyline", "text_box", "rectan
 # What each harmless call adds: a resistor with two unconnected pins is one component and two
 # nets; a wire, junction or label away from every pin joins no net.
 ADDED = {
-    "add_symbols": {"symbol": 1, "Description": 1, "components": 1, "nets": 2},
+    # Description: 2 = the embedded library symbol's and, since issue 162, the instance's own copy of the library field
+    "add_symbols": {"symbol": 1, "Description": 2, "components": 1, "nets": 2},
     "add_wires": {"wire": 1},
     "add_junctions": {"junction": 1},
     "add_labels": {"label": 1},

@@ -70,7 +70,7 @@ def test_default_fields_over_the_whole_hierarchy_in_one_call(project, tools) -> 
     assert result["ok"] is True and result["written"] is False, result
     assert result["required_fields"] == ["Footprint", "LCSC", "Datasheet"]
     assert _gaps(result) == {
-        "R1": {"Footprint": "empty", "LCSC": "missing", "Datasheet": "placeholder"},
+        "R1": {"Footprint": "empty", "LCSC": "missing", "Datasheet": "empty"},  # issue 162: add_symbols copies the library's empty Datasheet
         "R20": {"LCSC": "missing"},
         "R32": {"LCSC": "missing"},
         "R33": {"LCSC": "blank"},
@@ -91,7 +91,7 @@ def test_gaps_are_listed_per_sheet_by_reference_and_uuid(project, tools) -> None
     assert mcu["symbols"][0]["lib_id"] == "Device:R" and mcu["symbols"][0]["unit"] == "1"
     top = {s["reference"]: s for s in sheets[project.name]["symbols"]}
     assert top["R1"]["uuid"] == _uuid(project, "R1")
-    assert top["R1"]["gaps"][2] == {"field": "Datasheet", "problem": "placeholder", "value": "~"}
+    assert top["R1"]["gaps"][2] == {"field": "Datasheet", "problem": "empty", "value": ""}
     assert top["R1"]["gaps"][0] == {"field": "Footprint", "problem": "empty", "value": ""}
     assert top["R1"]["gaps"][1]["value"] is None
 
@@ -216,6 +216,14 @@ def test_a_two_unit_part_is_checked_per_placed_unit(project, tools) -> None:
     assert sorted(r["unit"] for r in rows) == ["1", "2"] and len({r["uuid"] for r in rows}) == 2
     assert all(r["gaps"] == [{"field": "LCSC", "problem": "missing", "value": None}] for r in rows)
     assert result["checked"] == 8 and result["placed_symbols"] == 11
+
+
+def test_a_tilde_datasheet_on_a_placed_symbol_is_reported_as_a_placeholder(project, tools) -> None:
+    tree, node = _sym(project, "R34")
+    write_layer.set_string(next(p for p in node.find_children("property") if p.get_string(0) == "Datasheet"), 1, "~")
+    write_layer.save(tree, project)
+    gaps = next(s for e in tools["check_symbol_fields"](str(project))["sheets"] for s in e["symbols"] if s["reference"] == "R34")["gaps"]
+    assert gaps == [{"field": "Datasheet", "problem": "placeholder", "value": "~"}]
 
 
 def test_a_wrong_case_field_is_named_as_a_case_variant(project, tools) -> None:

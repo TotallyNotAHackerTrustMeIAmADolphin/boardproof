@@ -268,7 +268,7 @@ def test_apply_mirrors_never_touches_a_symbol_that_was_already_on_the_sheet(tool
     root = write_layer.load(sch)
     old = {_node_uuid for _node_uuid in [c.find_children("uuid")[0].get_string(0) for c in root.children
                                          if not c.is_atom and c.name == "symbol" and c.find_children("lib_id")]}
-    module._apply_mirrors(root, {("J1", 1): "y"}, set(old))
+    module._apply_mirrors(root, ["y"], set(old))
     assert not [c for c in root.children if not c.is_atom and c.name == "symbol" and c.find_children("mirror")]
-    module._apply_mirrors(root, {("J1", 1): "y"}, set())
+    module._apply_mirrors(root, ["y"], set())
     assert [c for c in root.children if not c.is_atom and c.name == "symbol" and c.find_children("mirror")]

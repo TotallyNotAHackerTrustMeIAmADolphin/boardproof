@@ -1324,7 +1324,7 @@ def set_text(path: str, items: list[dict], root_sch: str | None, *, allow_connec
 # --------------------------------------------------------------------------- replace_symbols (issue 112)
 
 _NO_NUMBER = ("", "~")
-_REPLACE_KEYS = {"reference", "uuid", "lib_id", "pin_map"}
+_REPLACE_KEYS = {"reference", "uuid", "lib_id", "pin_map", "library_fields"}
 
 
 def _placed(sheet: Sheet) -> list[SExp]:
@@ -1462,6 +1462,8 @@ def _check_replace_specs(replacements: Any) -> list[dict]:
         pm = spec.get("pin_map", {})
         if not isinstance(pm, dict) or not all(isinstance(k, str) and isinstance(v, str) and k and v for k, v in pm.items()):
             raise SheetAuthoringError("invalid_spec", f"replacements[{i}].pin_map must map old pin numbers to new pin numbers (strings)")
+        if not isinstance(spec.get("library_fields", False), bool):
+            raise SheetAuthoringError("invalid_spec", f"replacements[{i}].library_fields must be true or false")
     return replacements
 
 
@@ -1537,6 +1539,7 @@ def replace_symbols(path: str, replacements: Any, root_sch: str | None, *, allow
         extras: list[dict] = []
         unmapped_wired: list[dict] = []
         old_names: list[str] = []
+        taken_expected: list[dict] = []
         added: dict[str, str] = {}  # lib_id -> "added" | "reused"
         for node, spec in chosen:
             ref, uid, lib_id = _ref(node), _uuid(node), spec["lib_id"]
@@ -1570,6 +1573,10 @@ def replace_symbols(path: str, replacements: Any, root_sch: str | None, *, allow
             _swap_symbol_library(node, lib_id, [p["number"] for p in new_pins], keep_uuid)
             _swap_check(node, snapshot, lib_id, who)
             outcome.changed.add(uid)
+            fields_taken: dict[str, str] = {}
+            if spec.get("library_fields"):  # issue 162: adopt every field of the new library symbol (never Reference or Value)
+                fields_taken = take_library_fields(node, entry)
+                taken_expected.append({"uuid": uid, "set": {n: ("" if v == "~" else v) for n, v in fields_taken.items()}, "remove": []})
 
             for o in unmapped:
                 found = _attached(sheet, (o["x"], o["y"]), node)
@@ -1598,7 +1605,7 @@ def replace_symbols(path: str, replacements: Any, root_sch: str | None, *, allow
             report.append({
                 "reference": ref, "uuid": uid, "old_lib_id": old_lib_id, "lib_id": lib_id, "library_symbol": added[lib_id],
                 "at": _round_pt(x, y), "rotation": rot, "mirror": _mirror(node), "unit": unit,
-                "pin_map": pair_report,
+                "pin_map": pair_report, "library_fields_taken": fields_taken,
                 "unmapped_old_pins": [{"pin": o["number"], "name": o["name"], "at": [o["x"], o["y"]]} for o in unmapped],
                 "pins": new_pins,
             })
@@ -1627,6 +1634,8 @@ def replace_symbols(path: str, replacements: Any, root_sch: str | None, *, allow
             "note": "uuid, reference, position, rotation, mirror, unit, properties and instance data are unchanged; wires are not moved, "
                     "so a wired pin whose counterpart lies elsewhere is reported as connectivity_changed"}
         outcome.compare = lambda before, after, removed: [*extras, *compare_nets(before, after, removed)]
+        if taken_expected:  # the netlist must carry the adopted fields (issue 162, the check of set_properties)
+            outcome.post_netlist = _netlist_follows(taken_expected, _instance_records(sheet, path))
         return outcome
 
     result = run(path, root_sch, mutate, allow_connectivity_change=allow_connectivity_change, dry_run=dry_run)
@@ -1737,6 +1746,48 @@ def _set_hidden(prop: SExp, hidden: bool) -> None:
     _remove(node, _kids(node, "hide"))
     if hidden:
         node.children.append(SExp.list("hide", write_layer.symbol("yes")))
+
+
+def library_hidden(prop: SExp) -> bool:
+    """Whether a library property is hidden: ``(hide yes)`` and the older bare ``hide`` both count."""
+    effects = prop.find_children("effects")
+    if not effects:
+        return False
+    for kid in effects[0].children:
+        if kid.is_atom:
+            if kid.value == "hide":
+                return True
+        elif kid.name == "hide":
+            return not kid.children or kid.children[0].value != "no"
+    return False
+
+
+def library_fields(entry: SExp) -> list[tuple[str, str, bool]]:
+    """``(name, value, hidden)`` of every property of an embedded library symbol except Reference and Value, in file order."""
+    return [(p.get_string(0), p.get_string(1) or "", library_hidden(p)) for p in _kids(entry, "property")
+            if p.get_string(0) not in ("Reference", "Value")]
+
+
+def take_library_fields(node: SExp, entry: SExp, skip: frozenset[str] = frozenset()) -> dict[str, str]:
+    """Copy every library field (Footprint, Datasheet, Description, LCSC and any custom one) from the embedded library
+    symbol ``entry`` into the placed symbol ``node`` as KiCad does when it places a symbol (issue 162): the value and
+    the hidden state of the library field; a field the instance lacks is added, one it has is overwritten; names in
+    ``skip`` are left alone; Reference and Value are never touched; a field the library lacks is neither added nor
+    removed. Returns name -> value of the fields written."""
+    done: dict[str, str] = {}
+    for name, value, hidden in library_fields(entry):
+        if name in skip:
+            continue
+        prop = _property(node, name)
+        if prop is None:
+            _new_property(node, name, value, hidden)
+        else:
+            if (prop.get_string(1) or "") != value:
+                write_layer.set_string(prop, 1, value)
+            if _hidden(prop) != hidden:
+                _set_hidden(prop, hidden)
+        done[name] = value
+    return done
 
 
 def _new_property(symbol: SExp, name: str, value: str, hidden: bool) -> SExp:
