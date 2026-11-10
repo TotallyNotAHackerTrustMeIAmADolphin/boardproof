@@ -15,8 +15,10 @@ only; nothing here scans the checkout's directory tree, so untracked files aroun
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -126,10 +128,29 @@ LEGIT_CASES = [
 ]
 
 
-def _git(cwd: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess:
+def _hermetic_env(base: dict[str, str]) -> dict[str, str]:
+    """``base`` with every user-level git setting cut off: no global or system config, no global
+    ignore file (a user's ``~/.config/git/ignore`` or ``core.excludesFile`` would change verdicts)."""
+    quiet_dir = tempfile.mkdtemp(prefix="gitignore-test-xdg-")
+    env = dict(base)
+    env.update(
+        GIT_CONFIG_GLOBAL=os.devnull,
+        GIT_CONFIG_SYSTEM=os.devnull,
+        GIT_CONFIG_NOSYSTEM="1",
+        XDG_CONFIG_HOME=quiet_dir,
+        GIT_CONFIG_COUNT="1",
+        GIT_CONFIG_KEY_0="core.excludesFile",
+        GIT_CONFIG_VALUE_0=os.devnull,
+    )
+    return env
+
+
+def _git(cwd: Path, *args: str, check: bool = True, env: dict[str, str] | None = None) -> subprocess.CompletedProcess:
     if shutil.which("git") is None:
         pytest.fail("git is not on PATH; the .gitignore cannot be tested")
-    return subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True, timeout=60, check=check)
+    if env is None:
+        env = _hermetic_env(dict(os.environ))
+    return subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True, timeout=60, check=check, env=env)
 
 
 def _is_ignored(tmp_path: Path, lines: list[str], rel: str) -> bool:
@@ -218,3 +239,41 @@ def test_legitimate_files_are_not_swallowed_by_a_broad_pattern(tmp_path, rel, ol
     # Mutant: the old broad pattern back in place of the narrow ones turns the case red.
     mutant = [ln for ln in lines if ln not in new] + [old]
     assert _is_ignored(tmp_path, mutant, rel)
+
+
+def _hostile_env(tmp_path: Path) -> dict[str, str]:
+    """An environment whose home carries a global ignore file with the pattern of the planted file."""
+    home = tmp_path / "home"
+    (home / ".config" / "git").mkdir(parents=True)
+    ignore = home / ".config" / "git" / "ignore"
+    ignore.write_text("**/.claude/settings.local.json\n", encoding="utf-8")
+    cfg = tmp_path / "gitconfig"
+    cfg.write_text("[core]\n\texcludesFile = " + ignore.as_posix() + "\n", encoding="utf-8")
+    env = dict(os.environ)
+    env.update(HOME=str(home), USERPROFILE=str(home), XDG_CONFIG_HOME=str(home / ".config"), GIT_CONFIG_GLOBAL=str(cfg))
+    env.pop("GIT_CONFIG_NOSYSTEM", None)
+    return env
+
+
+def _ignored_with(env: dict[str, str], tmp_path: Path, lines: list[str], rel: str) -> bool:
+    repo = tmp_path / "hr"
+    _git(tmp_path, "init", "-q", str(repo), env=env)
+    (repo / ".gitignore").write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
+    target = repo / rel
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text("x\n", encoding="utf-8")
+    r = _git(repo, "check-ignore", "-q", "--no-index", rel, check=False, env=env)
+    assert r.returncode in (0, 1), r.stderr
+    return r.returncode == 0
+
+
+def test_a_global_ignore_file_does_not_change_the_verdict(tmp_path):
+    rel = ".claude/settings.local.json"
+    mutant = [ln for ln in _lines() if ln not in (".claude/settings.local.json", ".claude/*")]
+    hostile = _hostile_env(tmp_path)
+    # Control: without the isolation the hostile global file does ignore the planted file.
+    (tmp_path / "a").mkdir()
+    assert _ignored_with(hostile, tmp_path / "a", mutant, rel)
+    # With the isolation (what _git applies by default) it does not.
+    (tmp_path / "b").mkdir()
+    assert not _ignored_with(_hermetic_env(hostile), tmp_path / "b", mutant, rel)
