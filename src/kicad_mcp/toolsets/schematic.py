@@ -2711,6 +2711,43 @@ def build(mcp: MCPServer) -> list[str]:
         return field_check.check_symbol_fields(sch_path, required_fields, root_sch)
 
     @_read_only
+    def get_properties(
+        sch_path: str, references: list[str] | None = None, uuids: list[str] | None = None,
+        properties: list[str] | None = None, root_sch: str | None = None,
+    ) -> dict:
+        """Read-only, in one call over the whole sheet tree: the values of chosen properties (fields) of the selected
+        placed symbols, or of all of them, per sheet file by reference and uuid. It is the read companion of
+        set_properties and the way to check a whole design (for example the LCSC number, Footprint, Datasheet,
+        Description and Value of every part) in one call. It writes nothing, makes no scratch copy and takes no
+        write lock; the values are read from the raw property nodes of each sheet file.
+
+        properties: the names to read (exact, case-sensitive); omitted, Value, Footprint, Datasheet, Description
+        and LCSC. references: exact references to select; uuids: exact symbol uuids to select; both given, a symbol
+        matching either is returned; neither given, every placed symbol is returned. sch_path: any sheet of the
+        project; the read always starts at the project's root sheet (root_sch, optional when sch_path is the root
+        or the only .kicad_pro of its folder names it) and follows the sheet symbols, so every sheet of the tree is
+        read, each file once. A reference is matched against the instance reference of the project (what the
+        netlist carries) and the Reference text.
+
+        The result: sheets, one entry per sheet file, each with symbols: reference, uuid, unit, lib_id, uses,
+        properties ({name: value} of the requested names the symbol has; an empty value is present, as "") and
+        absent (the requested names the symbol has no property of, each {name} with case_variant when it exists
+        under a name that differs only in case, for example "Lcsc"), plus flags (power, off_board, dnp,
+        no_lib_id: those symbols are returned too, not skipped) and, for a sheet file used more than once,
+        use_references. A multi-unit part is returned per placed unit, as each unit carries its own copy of the
+        fields; KiCad's netlist reads one unit's copy. Totals: placed_symbols, returned, absent_count, and
+        not_found (the references and uuids that matched no symbol) with all_found. Nothing is truncated.
+
+        A selection list must be non-empty and hold distinct strings, and a property name must have no white
+        space at the ends (invalid_spec). Other refusals: file_not_found, parent_not_in_tree, root_not_found, and a
+        missing, unparseable or cyclic sheet (sheet_tree_incomplete). To change a property use set_properties; to
+        list the symbols whose required fields are empty use check_symbol_fields.
+        """
+        from kicad_mcp import field_check
+
+        return field_check.get_properties(sch_path, references, uuids, properties, root_sch)
+
+    @_read_only
     def check_connectivity(sch_path: str) -> dict:
         """Check for unconnected pins and connection issues -- a narrower,
         faster check than full ERC (`sch_run_erc` in the `verification`
