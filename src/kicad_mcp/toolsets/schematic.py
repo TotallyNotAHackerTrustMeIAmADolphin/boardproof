@@ -2635,6 +2635,93 @@ def build(mcp: MCPServer) -> list[str]:
         return sheet_editing.set_properties(sch_path, items, root_sch, allow_connectivity_change=allow_connectivity_change, dry_run=dry_run,
                                             standalone=standalone)
 
+    def rename_net(
+        sch_path: str, renames: list[dict], merge: bool = False, allow_orphaned_net_rules: bool = False,
+        dry_run: bool = False, root_sch: str | None = None,
+    ) -> dict:
+        """Rename nets in one call, with every place that carries the name changed in the same transaction over the
+        whole sheet tree: local labels, hierarchical labels (with the sheet pins of the parent sheet symbols, so the two
+        sides stay in step), global labels and the Value of power symbols.
+
+        renames: a list of {old, new}. old is the net as kicad-cli's netlist names it: `VCC` (a global label or a power symbol), `/SDA` (a local label on the root sheet),
+        `/Sub/SDA` (a local or hierarchical label on the sheet named Sub, the chain of sheet names being the path).
+        new is the new name WITHOUT a sheet path: the net keeps its scope, so `/Sub/SDA` renamed to `DATA` becomes
+        `/Sub/DATA`. A slash, a bus name, an empty or blank name, a control character and the same old twice are
+        refused (invalid_spec, bus_name_unsupported). A name the netlist lacks is refused (not_found, nets named
+        alike listed), an automatic name such as Net-(R1-Pad1) is refused (net_not_named: nothing carries it), and
+        so is a net no label or power symbol carries (no_label_carries_net: it may be named by a pin, for example a
+        hidden power pin, which a rename of labels cannot change).
+
+        What changes, by scope. A name without a leading slash: every global label with that text and every power
+        symbol whose Value is that text, on every sheet. `/<path>/<text>`: the local labels and hierarchical labels
+        with that text on that sheet, and, for a hierarchical label, the sheet pins of that name on every sheet
+        symbol that uses the sheet's file. A sheet pin that is only wired to a renamed label keeps its own name (the
+        net is named by the label). KiCad joins a local label and a global label of the same text, so a rename that would
+        leave them apart is refused as write_not_verified by the netlist comparison. Not handled (follow-ups): net-class patterns that match the new name only through a character class, and net names that
+        themselves contain a slash. A sheet file used by more than one sheet symbol cannot have a local name renamed
+        for one use only and is refused (sheet_used_more_than_once). Every touched object keeps its uuid, position and
+        effects; the project file, the libraries and the board are never touched.
+
+        The name must be free: when the new name already exists (a net of the netlist, or a label or power symbol
+        of that text in the scope) the call is refused with name_exists, naming the existing net and its pins. merge
+        true is the explicit way to join: the two nets become one, which CHANGES CONNECTIVITY, and the result says so
+        under connectivity.merged (from, into, pins_joined); without merge connectivity never changes. A net-class
+        assignment or pattern of the project file that names the old net and would stop matching the new name is
+        refused (net_rule_orphaned, rules listed), because the project file is not edited here;
+        allow_orphaned_net_rules true renames anyway and lists the orphaned rules as a warning. A custom rules file
+        that mentions the old name is listed as a warning (rules_file_mentions_net). The board keeps its old net
+        names until it is updated from the schematic.
+
+        Proof: kicad-cli's netlist of the project is read before and after on scratch copies, and the netlist after
+        must equal the netlist before with the nets renamed (with merge: and the asked join), components included;
+        any other difference refuses the call (write_not_verified, the sheet unchanged, differences listed). Every
+        node of every sheet the call did not select is checked unchanged, no sheet pin and hierarchical label may
+        disagree that did not before, and every written file is reloaded and compared before it replaces the
+        original; if a write fails the files already written are restored to the same content (not necessarily the same bytes) and a file that could not be restored is named in restore_failed. dry_run true runs all of this and writes
+        nothing (would_rename). sch_path is any sheet of the project; root_sch names the root sheet when it cannot be
+        found. Returns renamed (per net: old, new, merge, targets with sheet, kind, uuid, from, to), count,
+        connectivity, files_changed, warnings and written.
+
+        Refuses with file_open_in_kicad, naming the lock file, while KiCad holds a lock file for a file
+        it would write; close the file in KiCad, then retry.
+        """
+        from kicad_mcp import sheet_rename
+
+        return sheet_rename.rename_net(sch_path, renames, root_sch, merge=merge, allow_orphaned_net_rules=allow_orphaned_net_rules, dry_run=dry_run)
+
+    def rename_ref(sch_path: str, renames: list[dict], dry_run: bool = False, root_sch: str | None = None) -> dict:
+        """Rename references in one call over the whole sheet tree: every unit of a multi-unit part, on every sheet,
+        in the instance data KiCad reads the reference from and in the Reference property text.
+
+        renames: a list of {old, new}; old is the reference as it stands (exact text), new the new one: no white
+        space, quote or question mark, no leading # (power symbols and flags are not parts), the same old twice
+        refused (invalid_spec). An old that no placed symbol has is refused (not_found). A new reference that
+        another part already has is refused (reference_exists, the holder named); a rename never merges two parts.
+        Within one call a reference may be given up and taken (R1 to R2 with R2 to R1 swaps them).
+
+        Each unit of the part is renamed where it sits: a symbol's reference is the (reference ..) of its instance
+        entry at the path of its sheet use, so a sheet file that is used twice has one reference per use and only
+        the use that carries the old reference changes. The Reference property text follows when it equals the old
+        reference. Instance data that cannot be shown to be the entry KiCad reads (several entries at the path, a path
+        that matches no sheet use, a KiCad 6 symbol_instances table, a symbol without an entry at its use) is refused
+        (instance_data_unproven) and nothing is written. Uuids, positions, values and every other field stay.
+
+        Proof: kicad-cli's netlist of the project is read before and after on scratch copies; the nets must hold
+        the same pins with the references mapped, the named nets keep their names, and every component must keep
+        its value and fields; any other difference refuses the call (write_not_verified, the sheet unchanged).
+        Every other node of every sheet is checked unchanged, and each written file is reloaded and compared
+        before it replaces the original; if a write fails the files already written are restored to the same content (not necessarily the same bytes) and a file that could not be restored is named in restore_failed. dry_run true runs
+        all of this and writes nothing (would_rename). Connectivity never changes. The board keeps its old
+        references until it is updated from the schematic. Returns renamed (per reference: old, new, units with
+        sheet, uuid, unit, lib_id, sheet_use, reference_property), count, connectivity, files_changed and written.
+
+        Refuses with file_open_in_kicad, naming the lock file, while KiCad holds a lock file for a file
+        it would write; close the file in KiCad, then retry.
+        """
+        from kicad_mcp import sheet_rename
+
+        return sheet_rename.rename_ref(sch_path, renames, root_sch, dry_run=dry_run)
+
     @_read_only
     def get_symbol_pins(sch_path: str, references: list[str] | None = None, uuids: list[str] | None = None) -> dict:
         """Read the pins of placed symbols: absolute sheet coordinates, name and electrical type, for

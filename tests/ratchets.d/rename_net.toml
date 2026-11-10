@@ -1,0 +1,10 @@
+[writing_tool.rename_net]
+self_check = "reload-verify"
+note = "Issue 96: sheet_rename.rename_net changes the text atom of labels, hierarchical labels, sheet pins and the Value of power symbols on copies of every sheet's tree in memory (write_layer.set_string), checks per file that every node it did not select is unchanged and that no sheet pin and hierarchical label disagree that did not before, reads kicad-cli's netlist of the project before and after on scratch copies and requires the netlist after to equal the netlist before with the nets renamed (merge: and the asked join; components equal), and only then saves each changed file through write_layer.save with a reload-and-compare, restoring the files already written when a later write fails."
+proof = [
+    "tests/test_rename.py::test_a_corrupted_write_is_refused_and_every_file_is_restored",
+    "tests/test_rename.py::test_a_failure_on_the_second_file_restores_the_first",
+    "tests/test_rename.py::test_the_staged_check_fires_when_the_rename_touches_an_unselected_node",
+    "tests/test_rename.py::test_the_interface_check_fires_when_a_pin_is_left_behind",
+    "tests/test_rename.py::test_the_netlist_check_fires_when_the_written_name_is_not_the_asked_one",
+]

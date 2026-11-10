@@ -1,0 +1,8 @@
+[writing_tool.rename_ref]
+self_check = "reload-verify"
+note = "Issue 96: sheet_rename.rename_ref changes the (reference ..) of the instance entry at each sheet use's path and the Reference property text of every unit with the old reference, on copies of every sheet's tree in memory (write_layer.set_string), checks per file that every node it did not select is unchanged, reads kicad-cli's netlist of the project before and after on scratch copies and requires the same pins on the same nets with the references mapped and equal components, and only then saves each changed file through write_layer.save with a reload-and-compare, restoring the files already written when a later write fails."
+proof = [
+    "tests/test_rename.py::test_a_reference_corrupted_write_is_refused",
+    "tests/test_rename.py::test_the_reference_staged_check_fires_when_the_rename_touches_another_symbol",
+    "tests/test_rename.py::test_the_reference_netlist_check_fires_when_only_the_property_is_renamed",
+]
