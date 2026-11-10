@@ -267,7 +267,9 @@ def netlist_components(root: str | Path) -> list[dict[str, Any]]:
     return comps
 
 
-def netlist_disagreement(tree: SheetTree, netlist_refs: Iterable[str]) -> list[str]:
+def netlist_disagreement(
+    tree: SheetTree, netlist_refs: Iterable[str], *, records: list[dict[str, str]] | None = None
+) -> list[str]:
     """Why kicad-cli's netlist cannot stand for the tree's placed parts, or ``[]``.
 
     kicad-cli 10's netlist keeps one component per reference and drops any other part under
@@ -291,9 +293,13 @@ def netlist_disagreement(tree: SheetTree, netlist_refs: Iterable[str]) -> list[s
     Then it compares references: the placed (non-``#``, on-board) ones the netlist lacks, the
     netlist's ones no sheet places, and any the netlist lists twice. kicad-cli leaves a sheet it cannot read out with exit 0
     (docs/ARCHITECTURE.md, the silent sub-sheet drop), so a reader built on its netlist checks it
-    against the files."""
+    against the files.
+
+    ``records`` is ``placed_instances(tree)`` when the caller already has it (build ticket 153: one
+    pass over the sheets instead of two); it is only read."""
     netlist = list(netlist_refs)
-    records = placed_instances(tree)
+    if records is None:
+        records = placed_instances(tree)
     problems = []
     unproven = [f"{r['ref']} uuid {r['uuid']} in {r['sheet']}: {r['unproven_paths']}" for r in records if r["unproven_paths"]]
     unproven += legacy_table_problems(tree)

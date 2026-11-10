@@ -887,6 +887,30 @@ def test_timeout_paths_leave_no_temp_dirs(pcb: Path, tmp_path: Path, monkeypatch
     assert list(scratch.iterdir()) == []
 
 
+def test_a_slow_parse_of_the_netlist_file_is_blocked_inside_the_timeout(pcb: Path, tmp_path: Path, monkeypatch) -> None:
+    """Build ticket 153: the default exporter's parse and Netlist build run inside the timeout,
+    as Netlist.load did. kicad-cli is stood in for by a copy of a finished netlist file."""
+    import shutil
+    import tempfile
+    import time
+
+    scratch = tmp_path / "scratch"
+    scratch.mkdir()
+    monkeypatch.setattr(tempfile, "tempdir", str(scratch))
+    monkeypatch.setattr(si, "_EXPORT_TIMEOUT", 0.2)
+    monkeypatch.setattr(si, "_JOIN_GRACE", 0.2)
+    fixture = Path(__file__).parent / "fixtures" / "simple_led-netlist.kicad_net"
+    monkeypatch.setattr(si, "_kicad_cli_export", lambda sch, out: shutil.copy(fixture, out))
+    monkeypatch.setattr(si, "_parse", lambda path: time.sleep(3))
+
+    started = time.time()
+    result = si.propose_schematic_import(pcb, output_dir=tmp_path / "out")
+    assert time.time() - started < 2.5
+    assert result["status"] == "blocked" and result["revision_token"] is None
+    assert "did not finish within" in result["reason"]
+    assert list(scratch.iterdir()) == []
+
+
 def test_watcher_waits_longer_than_the_subprocess_timeout() -> None:
     assert si._JOIN_GRACE > 0  # the child is killed by its own timeout before the watcher gives up
 

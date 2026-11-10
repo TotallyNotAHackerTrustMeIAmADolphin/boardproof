@@ -50,6 +50,7 @@ from pathlib import Path
 from typing import Any
 
 from kicad_mcp import checkpoint, write_layer
+from kicad_mcp.board_view import OUTLINE_SHAPES, read_board_view
 from kicad_mcp import verify_board as gate
 from kicad_mcp.sheet_tree import netlist_disagreement, parsed_sheet, path_key, placed_instances
 from kicad_mcp.sheet_tree import walk as walk_sheet_tree
@@ -103,11 +104,9 @@ class _Blocked(Exception):
     """The import cannot be proposed; the message is the reason (no token is issued)."""
 
 
-def _kicad_cli_netlist(sch_path: Path, out_path: Path) -> Any:
-    """Netlist via kicad-cli only, under a timeout. No Python fallback extractor:
-    it mislabels PWR_FLAG and no-connect pins."""
-    from kicad_tools.operations.netlist import Netlist
-
+def _kicad_cli_export(sch_path: Path, out_path: Path) -> None:
+    """Write the kicadsexpr netlist with kicad-cli only, under a timeout. No Python fallback
+    extractor: it mislabels PWR_FLAG and no-connect pins."""
     from kicad_mcp.kicad_cli import ensure_kicad_cli_on_path
 
     cli = ensure_kicad_cli_on_path()
@@ -118,6 +117,13 @@ def _kicad_cli_netlist(sch_path: Path, out_path: Path) -> Any:
         raise _Blocked(f"kicad-cli netlist export timed out after {_EXPORT_TIMEOUT:g}s") from exc
     if proc.returncode != 0 or not out_path.is_file():
         raise RuntimeError(f"kicad-cli netlist export failed (exit {proc.returncode}): {proc.stderr.strip()}")
+
+
+def _kicad_cli_netlist(sch_path: Path, out_path: Path) -> Any:
+    """The kicad-cli netlist, parsed (``_load_netlist`` parses the file once itself)."""
+    from kicad_tools.operations.netlist import Netlist
+
+    _kicad_cli_export(sch_path, out_path)
     return Netlist.load(out_path)
 
 
@@ -142,9 +148,9 @@ def _call_with_timeout(fn: Callable[[], Any]) -> Any:
     return box["value"]
 
 
-def _netlist_components(path: Path) -> list[dict]:
+def _netlist_components(tree: Any) -> list[dict]:
     """Raw component records of an exported kicadsexpr netlist (symbol uuid, sheet path, sheet properties)."""
-    comps = _parse(path).find("components")
+    comps = tree.find("components")
     out: list[dict] = []
     for comp in comps.find_all("comp") if comps is not None else []:
         def first(node: Any, key: str) -> str:
@@ -177,12 +183,12 @@ def _netlist_components(path: Path) -> list[dict]:
     return out
 
 
-def _netlist_nodes(path: Path) -> set[tuple[str, str]]:
+def _netlist_nodes(tree: Any) -> set[tuple[str, str]]:
     """``(reference, pin)`` of every ``(nets (net ... (node (ref R) (pin P) ...)))`` of an exported
     kicadsexpr netlist, read from the raw S-expression. kicad-cli gives every pin of a placed
     unit a node, an unconnected pin on a net of its own (``unconnected-(U30A-GPIO12-Pad40)``)."""
     out: set[tuple[str, str]] = set()
-    for nets in _parse(path).find_children("nets"):
+    for nets in tree.find_children("nets"):
         for net in nets.find_children("net"):
             for node in net.find_children("node"):
                 ref, pin = node.find_children("ref"), node.find_children("pin")
@@ -199,10 +205,25 @@ def _load_netlist(
     td = Path(tempfile.mkdtemp(prefix="kmcp-net-"))
     try:
         out = td / "import.kicad_net"
-        netlist = _call_with_timeout(lambda: (exporter or _kicad_cli_netlist)(sch_path, out))
+        if exporter is None:
+            # the default exporter: one parse of the file serves the Netlist and both raw readers
+            # (it was three: Netlist.load, then one parse each for the components and the nodes)
+            def export_and_parse() -> tuple[Any, list[dict], set[tuple[str, str]]]:
+                # export, parse and build the Netlist all inside the timeout, as Netlist.load was
+                from kicad_tools.operations.netlist import Netlist
+
+                _kicad_cli_export(sch_path, out)
+                if not out.is_file():
+                    return Netlist.load(out), [], set()  # raises as the exporter always did
+                tree = _parse(out)
+                return Netlist.from_sexp(tree), _netlist_components(tree), _netlist_nodes(tree)
+
+            return _call_with_timeout(export_and_parse)
+        netlist = _call_with_timeout(lambda: exporter(sch_path, out))
         if not out.is_file():
             return netlist, [], set()
-        return netlist, _netlist_components(out), _netlist_nodes(out)
+        tree = _parse(out)  # one parse for both raw readers
+        return netlist, _netlist_components(tree), _netlist_nodes(tree)
     finally:
         for _ in range(10):  # a just-killed child can hold the directory for a moment on Windows
             shutil.rmtree(td, ignore_errors=True)
@@ -328,7 +349,7 @@ def _outline_bbox(root: Any) -> tuple[float, float, float, float] | None:
     xs: list[float] = []
     ys: list[float] = []
     for node in root.children:
-        if node.name not in ("gr_line", "gr_arc", "gr_rect", "gr_circle", "gr_poly", "gr_curve"):
+        if node.name not in OUTLINE_SHAPES:
             continue
         layer = node.find("layer")
         if layer is None or not layer.values or str(layer.values[0]) != "Edge.Cuts":
@@ -445,7 +466,7 @@ def _placed_symbols(root_sheet: Path, project: str | None = None) -> list[dict]:
     return [r for r in _schematic_records(walk_sheet_tree(root_sheet), project) if not r["reference"].startswith("#")]
 
 
-def _schematic_records(tree: Any, project: str | None = None) -> list[dict]:
+def _schematic_records(tree: Any, project: str | None = None, *, placed: list[dict[str, str]] | None = None) -> list[dict]:
     """Every placed symbol unit of the sheet tree, power symbols included, read from the raw
     schematics. ``_check_schematic`` walks the tree and reads these once for all its checks.
 
@@ -467,7 +488,7 @@ def _schematic_records(tree: Any, project: str | None = None) -> list[dict]:
     """
     facts = _symbol_facts(tree)
     out = []
-    for rec in placed_instances(tree, project):
+    for rec in placed if placed is not None else placed_instances(tree, project):
         unit_count, instance_paths, on_board, pins_of = facts.get((rec["sheet"], rec["uuid"]), (None, [], True, {}))
         own = pins_of.get(rec["unit"], set())
         out.append(
@@ -681,7 +702,8 @@ def _check_schematic(sch_path: Path, netlist: Any, raw: list[dict], nodes: set[t
     if not refs:
         raise _Blocked("the schematic exports no components: refusing an empty import")
     tree = walk_sheet_tree(sch_path, memo)
-    records = _schematic_records(tree)  # read once: every check below works on these
+    placed = placed_instances(tree)  # one pass over the sheets, shared with the disagreement check below
+    records = _schematic_records(tree, placed=placed)  # read once: every check below works on these
     stale_only = _stale_only_entries(records)
     if stale_only:
         raise _Blocked(f"{_STALE_ONLY}: " + "; ".join(stale_only))
@@ -706,7 +728,7 @@ def _check_schematic(sch_path: Path, netlist: Any, raw: list[dict], nodes: set[t
     # another one (a symbol whose only instance entry is stale or another project's: its netlist
     # takes that entry's reference and silently drops a part). Not modelled; any disagreement
     # between the sheets' placed references and the netlist's refuses, by name (build ticket 68).
-    disagreement = netlist_disagreement(tree, refs)
+    disagreement = netlist_disagreement(tree, refs, records=placed)
     if disagreement:
         raise _Blocked("the sheets and kicad-cli's netlist disagree on the placed parts: " + "; ".join(disagreement))
     if not raw:  # an exporter that wrote no netlist file: nothing to compare symbol by symbol
@@ -732,7 +754,7 @@ def _copper_on_nets(root: Any, names: set[str]) -> list[str]:
     """``kind uuid (net)`` of every top-level segment/arc/via/zone on one of ``names``, from raw nodes."""
     table = _net_table(root)
     hits: list[str] = []
-    for n in root.children:
+    for n in root.copper_children():
         if n.name not in ("segment", "arc", "via", "zone"):
             continue
         net = n.find("net")
@@ -807,7 +829,7 @@ def _plan(
 ) -> dict:
     netlist, raw, nodes = _load_netlist(sch_path, netlist_exporter)
     tree = _check_schematic(sch_path, netlist, raw, nodes)
-    root = _parse(pcb_path)
+    root = read_board_view(pcb_path)  # footprints, outline and net table; copper only if asked (ticket 153)
     facts = _footprint_facts(root)
     present = set(facts) - {""}
     resolver = _Resolver(pcb_path.parent, footprint_dirs)
