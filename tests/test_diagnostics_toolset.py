@@ -24,7 +24,7 @@ def _build_and_get_fns(mcp: MCPServer, module) -> dict:
 def test_build_registers_expected_tools():
     mcp = MCPServer("test")
     names = diagnostics_toolset.build(mcp)
-    assert set(names) == {"render_board_diagnostic", "render_schematic_diagnostic"}
+    assert set(names) == {"render_board_diagnostic", "render_schematic_diagnostic", "render_region"}
 
 
 def test_render_board_diagnostic_produces_svgs_and_is_non_authoritative(tmp_path):

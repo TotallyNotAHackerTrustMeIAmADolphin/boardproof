@@ -34,6 +34,23 @@ note = "Byte-for-byte restore of the original .kicad_pro after a KRT run; compar
 read_only_reach = "KRT runs only on trial copies in this codebase (propose_route_with_retry, propose_placement_optimization, the rung backends), so this restores the trial copy's own .kicad_pro, never the caller's. A read-only tool may reach this KiCad-file write and no other."
 
 [[raw_write]]
+file = "schematic_diff.py"
+function = "materialise"
+kind = "write_bytes"
+code = '''target.write_bytes(body)'''
+kicad_file = true
+note = "Issues 98 and 125: writes the sheet files of a git revision, read from the object database (git cat-file), into a TemporaryDirectory of diff_schematic; the caller's project folder and index are never written (a test compares them before and after)."
+read_only_reach = "diff_schematic rebuilds the old state of a project in its own TemporaryDirectory from git objects; the destination is created by the tool and is never a path the caller gave."
+
+[[raw_write]]
+file = "render_region.py"
+function = "render_region"
+kind = "write_bytes"
+code = '''target.write_bytes(data)'''
+kicad_file = false
+note = "Issue 98: writes the rendered region PNG (a raster the child process made, checked for the PNG signature and IEND chunk) into the caller's output directory; not a KiCad file."
+
+[[raw_write]]
 file = "_png_crop_worker.py"
 function = "main"
 kind = "open"
@@ -1073,6 +1090,13 @@ reaches = [
     "sheet_authoring.py | _copy_project | shutil.copyfile",
 ]
 
+[read_only_tool_writes.diff_schematic]
+reason = "Issues 98 and 125: rebuilds a git revision's sheet files into a TemporaryDirectory (schematic_diff.materialise, from git objects) and copies the sheets of a working state into one (sheet_authoring._copy_project) for the kicad-cli netlist, which writes beside its input; the project folder is only read."
+reaches = [
+    "schematic_diff.py | materialise | write_bytes",
+    "sheet_authoring.py | _copy_project | shutil.copyfile",
+]
+
 [read_only_tool_writes.verify_board]
 reason = "Copies the project into scratch directories for its three refilled kicad-cli DRC runs."
 reaches = ["verify_board.py | _copy_project | shutil.copytree"]
@@ -1116,6 +1140,13 @@ reaches = [
 [read_only_tool_writes.render_schematic_diagnostic]
 reason = "Optional PNG raster of the schematic in the caller's output directory (build ticket 83); no KiCad file is written."
 reaches = ["png_render.py | render_pdf_pages | shutil.move"]
+
+[read_only_tool_writes.render_region]
+reason = "Issue 98: copies the sheet tree into a TemporaryDirectory for the kicad-cli PDF export (which writes beside its input) and writes the region PNG into the caller's output directory; no KiCad file is written."
+reaches = [
+    "render_region.py | render_region | write_bytes",
+    "sheet_authoring.py | _copy_project | shutil.copyfile",
+]
 
 [read_only_tool_writes.run_spice_simulation]
 reason = "ngspice run script inside a TemporaryDirectory."
@@ -2103,3 +2134,19 @@ kind = "write_bytes"
 count = 1
 use = "stub"
 note = "Issue 172: a one-line stand-in file whose bytes are hashed by the memo key; kicad-cli never reads it."
+
+[[test_kicad_write]]
+file = "test_diff_schematic.py"
+function = "repo"
+kind = "write_text"
+count = 1
+use = "stub"
+note = "Issues 98 and 125: a stand-in text file (not KiCad syntax) committed to a throwaway git repository to test the revision reader (which never parses it); the loop above writes the first version of the same files."
+
+[[test_kicad_write]]
+file = "test_diff_schematic.py"
+function = "test_git_runs_with_a_hermetic_environment"
+kind = "write_text"
+count = 1
+use = "stub"
+note = "Issues 98 and 125: a stand-in text file (not KiCad syntax, never parsed) committed to a second throwaway git repository, to show that a GIT_DIR of the caller does not redirect diff_schematic's git calls."

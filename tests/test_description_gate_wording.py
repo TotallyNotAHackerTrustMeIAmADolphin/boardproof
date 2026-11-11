@@ -150,6 +150,7 @@ _MUST_NAME_THE_GATE = {
     # diagnostics
     "render_board_diagnostic",
     "render_schematic_diagnostic",
+    "render_region",
     # manufacturing
     "export_manufacturing_package",
     "panelize_board",

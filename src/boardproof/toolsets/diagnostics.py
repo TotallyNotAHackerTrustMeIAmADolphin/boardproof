@@ -108,6 +108,22 @@ def build(mcp: MCPServer) -> list[str]:
             return refusal
         return result
 
+    def render_region(sch_path: str, x1: float, y1: float, x2: float, y2: float, output_dir: str, dpi: int = 300) -> dict:
+        """Render one rectangular area of a schematic sheet to a PNG at a stated resolution.
+
+        sch_path: a sheet file; it is exported as the root of its own tree (a sheet that
+        another sheet uses may show references as the sheet itself stores them). x1, y1, x2, y2:
+        the area in the sheet's own millimetres, x to the right and y downwards from the top-left
+        corner of the page, the numbers of the .kicad_sch file; x2 > x1, y2 > y1, inside the page.
+        dpi: 50-600, default 300; a region over about 30 million pixels is refused.
+        The PNG is written to output_dir; its size is the region size at that dpi.
+
+        NOT a correctness check -- see sch_run_erc for that.
+        """
+        from boardproof import render_region as _render_region
+
+        return _render_region.render_region(sch_path, x1, y1, x2, y2, output_dir, dpi)
+
     mcp.add_tool(
         render_board_diagnostic,
         name="render_board_diagnostic",
@@ -148,4 +164,27 @@ def build(mcp: MCPServer) -> list[str]:
             "openWorldHint": True,
         },
     )
-    return ["render_board_diagnostic", "render_schematic_diagnostic"]
+    mcp.add_tool(
+        render_region,
+        name="render_region",
+        description=(
+            "Render one rectangular area of a schematic sheet to a PNG at a stated resolution, "
+            "as a non-authoritative, human-style visual check (a dense corner of a sheet at "
+            "300 dpi instead of the whole page). Always returns authoritative: false: an image is "
+            "never evidence. The area is given in the sheet's own millimetres (the numbers of the "
+            ".kicad_sch file: x to the right, y downwards from the top-left corner of the page; "
+            "inside the page, else it is refused), dpi is 50-600 (default 300) and the PNG is "
+            "written to output_dir with its size in the result; a region of more than about 30 "
+            "million pixels is refused. The sheet is rendered on a scratch copy, so the project "
+            "folder is not touched, and as the root of its own tree: it renders what the file "
+            "draws, not the hierarchy around it. sch_run_erc lists ERC violations; it is not a "
+            "verdict either. Only verify_board gives a verdict on the board."
+        ),
+        annotations={
+            "readOnlyHint": True,
+            "destructiveHint": False,
+            "idempotentHint": True,
+            "openWorldHint": True,
+        },
+    )
+    return ["render_board_diagnostic", "render_schematic_diagnostic", "render_region"]

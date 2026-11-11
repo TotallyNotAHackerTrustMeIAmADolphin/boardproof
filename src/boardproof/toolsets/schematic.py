@@ -3313,6 +3313,57 @@ def build(mcp: MCPServer) -> list[str]:
 
         return project_check.check_project(sch_path, root_sch, checks, check_connectivity)
 
+    @_read_only
+    def diff_schematic(
+        before: str, after: str | None = None, before_revision: str | None = None, after_revision: str | None = None,
+        root_sch: str | None = None, after_root_sch: str | None = None, limit: int = 200,
+    ) -> dict:
+        """Read-only: what changed between two states of a schematic project: symbols added, removed, changed
+        and moved, per sheet file, and nets added, removed, renamed and with other pins, for the whole project. Use it to review a rework or to see what
+        a branch changed without reading thousands of lines of text diff. It writes nothing the caller owns: a state read
+        from a git revision is rebuilt in a scratch folder from the object database (nothing is checked out, no working
+        file or index is touched), and kicad-cli's netlist of each state runs on a scratch copy.
+
+        Two states, in one of these forms. before + after: two sheet files of two projects (or two copies). before +
+        before_revision (and optionally after_revision): the same project at a git revision against its working files (or
+        against another revision); the project folder must be inside a git repository and the path must exist in the
+        working tree. before is any sheet of the project; the comparison always starts at each state's root sheet
+        (root_sch for before, after_root_sch for after, found the way check_project finds it when omitted).
+        limit (1 to 5000, default 200) caps each listing; the counts are never capped.
+
+        Symbols are read from the raw sheet files. Within one sheet file a symbol is matched by its uuid, the rest by
+        reference and unit; a key that occurs twice is never paired by guess. changed lists, per symbol, each field that
+        differs (reference, lib_id, unit, value, footprint, dnp, on_board, mirror, uuid and every other property as
+        "property:<name>", with before and after). moved lists symbols whose position or rotation differs by more than
+        0.001 mm or degrees (from and to as the raw (at ...) reads, distance_mm, largest first), with the largest move
+        in each sheet and in the totals. A symbol that moved to another sheet file shows as removed on one and added
+        on the other; a renamed sheet file shows as a removed and an added sheet.
+
+        Nets are read from the kicad-cli netlist of each state. renamed: the same pins under another name (a net with no
+        pins is never paired); members_changed: the same name with pins added or removed; added and removed carry their
+        pins and an auto flag for the generated Net-(...) names; a generated name that only follows a renumbered reference is not a rename (nets.auto_renamed counts them). Pins of a symbol whose reference changed are translated
+        first, so a renumbered part is not a net change (reference_changes lists the translation). Each net carries the
+        sheet_path its name starts with ("/Connectors/"; "" for a global or power net) and nets.by_sheet_path counts per
+        path. Nets are those of the whole project: a net is not a sheet file. A named net that now carries a generated
+        Net-(...) name (it lost its label or power symbol) is a removal and an addition, not a rename.
+
+        A state that does not load (parse error, missing or cyclic sheet, a revision that does not name a commit, a root
+        sheet absent at the revision, git missing) is reported under states with its reason; nothing is compared then and
+        the result is status incomplete, ok false, compared false. A netlist that fails is checks_not_run.nets: the symbol
+        part is still given, status is incomplete. no_symbol_or_net_differences is true only when both states loaded, the
+        netlist ran and no symbol and no net differs; it does NOT mean the two sheets are the same: only symbols and nets
+        are compared, never labels and texts (except through the nets they change), wires and junctions (likewise), sheet
+        symbols and their pins, no-connect markers, graphics, the title block, the paper or the project file (not_compared
+        lists them in every result). It compares what the files say, not whether either state is correct: it is no verdict on a board
+        (only verify_board gives one) and no ERC.
+
+        Refusals: file_not_found, root_not_found, invalid_spec (limit, revision), nothing_to_compare (the two states are
+        the same path and the same revision).
+        """
+        from boardproof import schematic_diff
+
+        return schematic_diff.diff_schematic(before, after, before_revision, after_revision, root_sch, after_root_sch, limit)
+
     # add_symbols/add_wires/add_junctions/add_labels/assign_footprints/
     # fix_annotation all mutate the schematic file (.write()/run_*
     # rewrite it) -- destructive in the sense of overwriting prior file

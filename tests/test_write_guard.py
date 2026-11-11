@@ -513,6 +513,8 @@ NON_KICAD_RAW = {
     ("png_render.py", "render_pdf_pages"): "moves finished diagnostic PNGs from scratch into the caller's output dir (issue 104)",
     ("toolsets/manufacturing.py", "_bom_from_root"): "BOM CSV output",
     ("toolsets/simulation.py", "run_spice_simulation"): "SPICE run output file",
+    ("render_region.py", "render_region"): "the region PNG in the caller's output directory (issue 98)",
+    ("schematic_diff.py", "materialise"): "writes the .kicad_sch, .kicad_pro and library table bytes of a git revision (from the object database) into a TemporaryDirectory of the tool (issues 98 and 125); a KiCad-file write, but on scratch only, never the caller's project folder (ratchets.toml: kicad_file = true with read_only_reach)"
 }
 _DOTTED_WRITES = {"os.replace", "os.rename", "shutil.move"}
 _METHOD_WRITES = {"write_text", "write_bytes", "save", "run_fix_annotation"}
