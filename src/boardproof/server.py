@@ -12,7 +12,7 @@ from typing import Literal
 
 from mcp.server.mcpserver import Context, MCPServer
 
-from boardproof import write_layer
+from boardproof import argument_hints, write_layer
 from boardproof.gate_state import GateState, attach_gate_field
 from boardproof.toolsets.registry import ToolsetRegistry
 
@@ -22,6 +22,7 @@ STARTER_TOOLSETS = ["project"]
 
 def build_server() -> MCPServer:
     mcp = MCPServer("boardproof")
+    argument_hints.install(mcp)
     registry = ToolsetRegistry(mcp)
     gate_state = GateState()
 
