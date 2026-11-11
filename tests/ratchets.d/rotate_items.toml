@@ -1,0 +1,8 @@
+[writing_tool.rotate_items]
+self_check = "reload-verify"
+note = "Issue 93: sheet_orient.rotate changes the stored angle (and the form of the mirror) of the picked symbols on a copy of the sheet's tree in memory, drags the wire ends, junctions, labels and markers on each pin to that pin's new place, proves that the pins of the changed tree sit where the turned old offsets put them (write_not_verified, check orientation), refuses a drag that lays a wire over another connection (drag_crosses_connection), checks that every node it did not select is unchanged, compares kicad-cli's netlist of the project before and after on scratch copies (connectivity_changed unless allowed), and only then saves through write_layer.save, whose verify reloads the temporary sibling and compares it with the serialised tree before os.replace."
+proof = [
+    "tests/test_sheet_orient.py::test_a_corrupted_write_is_refused_and_leaves_the_sheet_alone",
+    "tests/test_sheet_orient.py::test_the_orientation_check_fires_when_the_angle_written_is_wrong",
+    "tests/test_sheet_orient.py::test_the_staged_check_fires_when_an_unselected_node_changes",
+]

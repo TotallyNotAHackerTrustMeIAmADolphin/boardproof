@@ -2582,6 +2582,92 @@ def build(mcp: MCPServer) -> list[str]:
         return sheet_align.distribute(sch_path, groups, root_sch, box=box, move_wires=move_wires, snap=snap, grid=grid,
                                       allow_connectivity_change=allow_connectivity_change, dry_run=dry_run)
 
+    def rotate_items(
+        sch_path: str, items: list[dict], move_wires: bool = True, property_texts: str = "follow", grid: float = 1.27,
+        allow_connectivity_change: bool = False, dry_run: bool = False, root_sch: str | None = None,
+    ) -> dict:
+        """Rotate placed symbols of a sheet in place, in one call, with the wires and labels on their pins.
+
+        items: a list of objects, each holding symbol selector keys (references, uuids, pattern, region
+        [x1, y1, x2, y2], lib_id; all must match; every unit of a reference is picked) and exactly one of
+        `by` (90, 180 or 270: degrees counter-clockwise as seen on the screen, so a pin at the top of the
+        part goes to its left for 90) or `to` (the stored angle 0, 90, 180 or 270, which add_symbols calls
+        rotation; the mirror stays). A symbol may be picked once per call; `to` equal to the present angle
+        changes nothing (listed under unchanged).
+
+        The symbol keeps its origin, uuid, reference, unit and instance data; only the stored angle (and,
+        for a mirrored symbol, the form of the mirror) changes, computed with the pin geometry measured
+        against kicad-cli and checked after the change: the pins of the edited sheet must sit where the old
+        pin offsets, turned on the sheet, put them, else the call is refused (write_not_verified, the sheet
+        unchanged). A symbol placed at an angle that is not a multiple of 90, or whose library symbol is not in the
+        sheet file, is refused (unusual_orientation, no_symbol_geometry).
+
+        move_wires (default true): wire ends, junctions, labels and no-connect markers that sit exactly on
+        a pin follow that pin to its new place (every pin has its own offset); wires that end up neither
+        horizontal nor vertical are listed under slanted, every dragged item under followed, and anything
+        left hanging under dangling_created. With move_wires false nothing attached moves. Two pins at one
+        point that move to different places are refused (ambiguous_drag). property_texts (default
+        "follow"): the property texts (Reference, Value, ...) keep their offset from the origin turned with
+        the symbol; their own angle and justification are not changed (set_property_positions adjusts them);
+        "keep" leaves them where they are. KiCad's own rotate command was not run to compare.
+
+        Grid: the origin does not move, so nothing is rounded; the pins whose new position is off the grid
+        (default 1.27 mm) are listed under off_grid_pins.
+
+        Connectivity: before anything is written, kicad-cli's netlist of the project is read from a scratch
+        copy before and after and compared net by net; a pin that lands on the end of another wire, on
+        another pin or on a label, or a wire left behind, refuses the call with connectivity_changed (nothing
+        written; the changes are listed) unless allow_connectivity_change is true. A pin that lands in the
+        middle of a foreign wire is neither connected by KiCad nor refused. A drag that would lay a wire over
+        a pin, label, marker, junction or wire end that is not its own, such as a 180 degree turn of a
+        two-pin part wired on both sides, is refused as drag_crosses_connection (no override; use move_wires
+        false). dry_run true computes and returns everything (would_rotate) and
+        writes nothing. Instance data is not touched. Refuses with file_open_in_kicad, naming the lock file,
+        while KiCad holds a lock file for a file it would write; close the file in KiCad, then retry.
+        root_sch names the project's root sheet when sch_path is a sub-sheet.
+
+        Returns rotated (per symbol: reference, uuid, unit, at, before and after {rotation, mirror}, changed,
+        pins with was and now, property_texts with was and now, off_grid_pins), unchanged, followed, slanted,
+        dangling_created, grid, connectivity and written.
+        """
+        from kicad_mcp import sheet_orient
+
+        return sheet_orient.rotate(sch_path, items, root_sch, move_wires=move_wires, property_texts=property_texts, grid=grid,
+                                   allow_connectivity_change=allow_connectivity_change, dry_run=dry_run)
+
+    def mirror_items(
+        sch_path: str, items: list[dict], move_wires: bool = True, property_texts: str = "follow", grid: float = 1.27,
+        allow_connectivity_change: bool = False, dry_run: bool = False, root_sch: str | None = None,
+    ) -> dict:
+        """Mirror placed symbols of a sheet in place, in one call, with the wires and labels on their pins.
+
+        items: a list of objects, each holding symbol selector keys (references, uuids, pattern, region,
+        lib_id; as for rotate_items) and `axis`: "x" swaps top and bottom (the stored (mirror x)), "y" swaps
+        left and right (the stored (mirror y)). Mirroring toggles: mirroring a mirrored symbol about the
+        same axis undoes it. A mirror and a turn of 180 degrees can be stored two ways; the tool keeps the
+        mirror form the symbol already has (a symbol without one gets the axis asked for).
+
+        Everything else is as for rotate_items: the origin, uuid, reference and instance data stay; the
+        pins are checked after the change (write_not_verified, the sheet unchanged); move_wires, the
+        followed, slanted and dangling_created lists, property_texts (the offsets of the texts are mirrored
+        with the symbol, their justification is not flipped), grid and off_grid_pins; the netlist
+        comparison (connectivity_changed unless allow_connectivity_change; a pin landing mid-wire is neither
+        connected nor refused); a drag that would lay a wire over a pin, label, marker, junction or wire end
+        that is not its own, such as a two-pin part wired on both sides and mirrored along its own length,
+        is refused as drag_crosses_connection (no override; use move_wires false); dry_run
+        (would_mirror); root_sch.
+
+        Refuses with file_open_in_kicad, naming the lock file, while KiCad holds a lock file for a file it
+        would write; close the file in KiCad, then retry.
+
+        Returns mirrored (per symbol: reference, uuid, unit, at, before and after {rotation, mirror}, axis,
+        pins, property_texts, off_grid_pins), followed, slanted, dangling_created, grid, connectivity and written.
+        """
+        from kicad_mcp import sheet_orient
+
+        return sheet_orient.mirror(sch_path, items, root_sch, move_wires=move_wires, property_texts=property_texts, grid=grid,
+                                   allow_connectivity_change=allow_connectivity_change, dry_run=dry_run)
+
     def replace_symbols(
         sch_path: str, replacements: list[dict], allow_connectivity_change: bool = False,
         dry_run: bool = False, root_sch: str | None = None,

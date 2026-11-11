@@ -1,0 +1,6 @@
+[writing_tool.mirror_items]
+self_check = "reload-verify"
+note = "Issue 93: sheet_orient.mirror runs the same pipeline as rotate_items (orientation proof, per-pin drag, crossing refusal, staged check, kicad-cli netlist comparison on scratch copies, write_layer.save with a reload verify before os.replace) with a flip of the symbol's axes instead of a turn."
+proof = [
+    "tests/test_sheet_orient.py::test_mirror_corrupted_write_is_refused_and_the_orientation_check_fires",
+]
