@@ -1748,10 +1748,8 @@ def _check_property_items(items: Any) -> list[dict]:
 
 
 def _hidden(prop: SExp) -> bool:
-    effects = prop.find_children("effects")
-    if not effects:
-        return False
-    return any((k.children[0].value if k.children else "yes") != "no" for k in _kids(effects[0], "hide"))
+    """Whether a property is hidden, in either file form (see ``library_hidden``)."""
+    return library_hidden(prop)
 
 
 def _set_hidden(prop: SExp, hidden: bool) -> None:
@@ -1762,12 +1760,21 @@ def _set_hidden(prop: SExp, hidden: bool) -> None:
         effects = prop.find_children("effects")
     node = effects[0]
     _remove(node, _kids(node, "hide"))
+    _remove(prop, _kids(prop, "hide"))  # the KiCad 10 form, a direct child of the property (issue 190)
+    node.children[:] = [c for c in node.children if not (c.is_atom and c.value == "hide")]
     if hidden:
         node.children.append(SExp.list("hide", write_layer.symbol("yes")))
 
 
 def library_hidden(prop: SExp) -> bool:
-    """Whether a library property is hidden: ``(hide yes)`` and the older bare ``hide`` both count."""
+    """Whether a property is hidden. KiCad 10 writes ``(hide yes)`` as a direct child of the property (its stock
+    libraries: every Description and ki_* field), KiCad 9 and older write it inside ``(effects ..)`` as ``(hide yes)``
+    or a bare ``hide``; all three count (issue 190: the direct form was not read, so a hidden library field was
+    copied as visible). Rule: a direct ``(hide ..)`` decides and effects is not looked at (a direct ``(hide no)`` reads as
+    shown even if effects says hide; KiCad does not write such a file)."""
+    for kid in prop.children:
+        if not kid.is_atom and kid.name == "hide":
+            return not kid.children or kid.children[0].value != "no"
     effects = prop.find_children("effects")
     if not effects:
         return False
