@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from boardproof import autonomy_run, input_prep, rung_runner
+from boardproof import autonomy_run, input_prep, rung_backends, rung_runner
 
 from test_input_prep import _build_fixture
 
@@ -103,6 +103,7 @@ def test_an_unavailable_backend_is_reported_for_the_whole_batch_and_touches_noth
 
 def test_main_exit_codes_and_json_summary(board, tmp_path, monkeypatch, capsys):
     monkeypatch.delenv("FREEROUTING_JAR_PATH", raising=False)
+    monkeypatch.setattr(rung_backends.routing_toolset, "find_java", lambda: Path("java"))  # issue 189
     code = autonomy_run.main([
         "--rung", "fixture", "--backend", "freerouting", "--board", str(board),
         "--runs-root", str(tmp_path / "runs"), "--parity", "required",

@@ -135,10 +135,45 @@ def test_krt_adapter_refuses_a_board_with_a_filled_pour(tmp_path):
 
 
 def test_freerouting_is_unavailable_without_a_jar(monkeypatch):
+    # Java is faked present, so the answer does not depend on the machine (issue 189).
     monkeypatch.delenv("FREEROUTING_JAR_PATH", raising=False)
+    monkeypatch.setattr(rung_backends.routing_toolset, "find_java", lambda: Path("java"))
     result = rung_backends.freerouting_availability()
     assert result["available"] is False
     assert "FREEROUTING_JAR_PATH" in result["reason"]
+
+
+def test_freerouting_is_unavailable_when_the_jar_path_is_not_a_file(tmp_path, monkeypatch):
+    monkeypatch.setenv("FREEROUTING_JAR_PATH", str(tmp_path / "missing.jar"))
+    monkeypatch.setattr(rung_backends.routing_toolset, "find_java", lambda: Path("java"))
+    result = rung_backends.freerouting_availability()
+    assert result["available"] is False
+    assert "FREEROUTING_JAR_PATH" in result["reason"]
+    assert "does not point to a file" in result["reason"]
+
+
+def test_freerouting_is_unavailable_without_java_and_says_java(tmp_path, monkeypatch):
+    # Java is looked up first: with java missing the reason names java even though a jar is set.
+    jar = tmp_path / "freerouting.jar"
+    jar.write_bytes(b"x")
+    monkeypatch.setenv("FREEROUTING_JAR_PATH", str(jar))
+    monkeypatch.delenv("JAVA_PATH", raising=False)
+    monkeypatch.setattr(rung_backends.routing_toolset.shutil, "which", lambda name: None)
+    monkeypatch.setattr(rung_backends.routing_toolset, "_JAVA_CANDIDATE_GLOBS", {})
+    result = rung_backends.freerouting_availability()
+    assert result["available"] is False
+    assert "java not found" in result["reason"]
+    assert "FREEROUTING_JAR_PATH" not in result["reason"]
+
+
+def test_freerouting_reports_java_first_when_java_and_the_jar_are_both_missing(monkeypatch):
+    monkeypatch.delenv("FREEROUTING_JAR_PATH", raising=False)
+    monkeypatch.delenv("JAVA_PATH", raising=False)
+    monkeypatch.setattr(rung_backends.routing_toolset.shutil, "which", lambda name: None)
+    monkeypatch.setattr(rung_backends.routing_toolset, "_JAVA_CANDIDATE_GLOBS", {})
+    reason = rung_backends.freerouting_availability()["reason"]
+    assert "java not found" in reason
+    assert "FREEROUTING_JAR_PATH" not in reason
 
 
 def test_freerouting_is_unavailable_when_the_jvm_cannot_load_the_jar(tmp_path, monkeypatch):
