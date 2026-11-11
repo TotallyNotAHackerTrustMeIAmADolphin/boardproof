@@ -47,12 +47,14 @@ from __future__ import annotations
 
 import dataclasses
 import enum
+import json
+import tempfile
 from pathlib import Path
 from typing import Any
 
 from mcp.server.mcpserver import MCPServer
 
-from boardproof import kicad_cli
+from boardproof import erc_groups, kicad_cli
 from boardproof.kicad_cli import ensure_kicad_cli_on_path
 from boardproof.manufacturing_profiles import (
     UnknownManufacturerError,
@@ -105,6 +107,20 @@ def _to_jsonable(value: Any) -> Any:
     if isinstance(value, (str, int, float, bool)) or value is None:
         return value
     return str(value)
+
+
+def _read_raw_erc(path: Path) -> Any:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception:  # noqa: BLE001 - grouping is an extra; the flat list does not depend on it
+        return None
+
+
+def _erc_grouping(raw: Any, listed: list[dict]) -> dict:
+    try:
+        return erc_groups.grouping_for(raw, listed)
+    except Exception as exc:  # noqa: BLE001 - a grouping failure never hides the flat list
+        return erc_groups.unavailable(f"grouping failed: {exc}", len(listed))
 
 
 def _incomplete(reason: str, **extra: Any) -> dict:
@@ -370,6 +386,20 @@ def build(mcp: MCPServer) -> list[str]:
         nothing about the board (the gate does not run ERC). Only
         `verify_board` gives a verdict, and only its PASS may be reported as
         routed or done.
+
+        Grouping (issue 127): `violations` stays the flat list of every finding, unchanged. `groups` adds related
+        findings together, each {rule, key, count, severity, type, types, sheets, violation_indexes, note}
+        with violation_indexes pointing into `violations`; `grouping` gives status, the rules,
+        grouped_count, ungrouped_count and ungrouped_indexes, and grouped_count + ungrouped_count always
+        equals the number of violations (a finding is in at most one group, one that matches no rule stays
+        ungrouped and is never dropped). Rules, in this order, each finding taken by the first that fits:
+        same_item (findings that name the same item uuid, for example two labels on one net give a
+        multiple_net_names and two isolated_pin_label findings), same_label_text (isolated_pin_label or
+        label_dangling findings with the same quoted label text, also on different sheets, where local
+        labels never join), same_symbol_pins (pin_not_connected findings of one symbol reference on one
+        sheet, read from the item text "<word> <reference> <word> <pin> [type, style]"). A group says what
+        the findings share, not that fixing one fixes the others. If the raw report does not line up with
+        the list, grouping.status is "unavailable" with a reason, `groups` is empty and every finding is listed in ungrouped_indexes.
         """
         path = Path(sch_path)
         if not path.is_file():
@@ -378,10 +408,17 @@ def build(mcp: MCPServer) -> list[str]:
             ensure_kicad_cli_on_path()  # kicad_tools' run_erc shells out to kicad-cli internally
             from kicad_tools.schema import Schematic
 
-            report = Schematic.load(path).run_erc()
+            with tempfile.TemporaryDirectory(prefix="boardproof-erc-") as scratch:
+                raw_path = Path(scratch) / "erc.json"
+                report = Schematic.load(path).run_erc(output_path=raw_path)
+                raw = _read_raw_erc(raw_path)
         except Exception as exc:  # noqa: BLE001 - evidence-gated verdict
             return _incomplete(f"ERC could not complete: {exc}")
-        return {"status": "complete", **_to_jsonable(report)}
+        out = {"status": "complete", **_to_jsonable(report)}
+        grouping = _erc_grouping(raw, out["violations"])
+        out["groups"] = grouping.pop("groups")
+        out["grouping"] = grouping
+        return out
 
     def pcb_check_collisions(
         pcb_path: str,
