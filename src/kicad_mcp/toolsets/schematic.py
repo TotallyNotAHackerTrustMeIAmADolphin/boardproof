@@ -710,24 +710,72 @@ def _stale_instance_refs(path: Path, old_uuids: Any) -> list[str]:
     return sorted(stale)
 
 
-def _reattach_to_tree(content: str, path: Path) -> str:
-    """``content`` (the text about to replace ``path``) with the instance data of the symbols
-    keyed on the sheet's own uuid moved to every use path of the project's sheet tree (GitHub
-    issue 79), by ``sheet_authoring.rewrite_child_instances``, the rewrite ``add_sheet_symbols``
-    makes. A sheet that is the project's root, is not reached from it, or sits in a tree that
-    does not read whole keeps ``content`` unchanged."""
-    from kicad_mcp import sheet_authoring, sheet_tree, write_layer
+class InstanceDataUnproven(RuntimeError):
+    """The project's sheet tree cannot say where the symbols of this call belong (GitHub issue 187): the write is
+    refused, because instance data keyed on the sheet's own uuid is stale once a parent uses the sheet."""
 
+    def __init__(self, reason: str, message: str) -> None:
+        super().__init__(message)
+        self.reason = reason
+
+
+def _instance_refusal(exc: InstanceDataUnproven) -> dict:
+    from kicad_mcp import sheet_authoring
+
+    return sheet_authoring.refusal(sheet_authoring.SheetAuthoringError(
+        "unproven_instance_data", f"{exc}; nothing was written", instance_reason=exc.reason))
+
+
+def _reattach_to_tree(content: str, path: Path) -> tuple[str, dict]:
+    """``(text, instance_data)``: ``content`` (the text about to replace ``path``) with the instance data of the
+    symbols keyed on the sheet's own uuid moved to every use path of the project's sheet tree (GitHub issue 79), by
+    ``sheet_authoring.rewrite_child_instances``, the rewrite ``add_sheet_symbols`` makes. ``instance_data`` is
+    ``{"reattached": bool, "reason": ..., "note": ...}`` and goes into the tool's result.
+
+    The parents are found with ``discover_projects`` (every project in the sheet's folder and above whose tree holds it,
+    other than a project whose root is the sheet itself). Not reattached, and said so, where the own-uuid path is
+    right: ``root_sheet`` (a project's own root and no other project uses it), ``not_attached`` (a readable project
+    exists, none holds the sheet), ``no_project`` (no readable project at all, also a ``.kicad_pro`` whose root sheet
+    is missing), ``no_new_symbols``. Where the tree cannot prove it, the call raises ``InstanceDataUnproven`` and
+    nothing is written: ``tree_problems`` (a project around the sheet does not read whole), ``root_not_found``
+    (several projects hold the sheet), ``walk_failed`` (the lookup raised)."""
+    from kicad_mcp import sheet_authoring, write_layer
+
+    def keep(reason: str, note: str) -> tuple[str, dict]:
+        return content, {"reattached": False, "reason": reason, "note": note}
+
+    here = path.resolve()
     try:
-        root_sch = sheet_authoring.find_root(path, None)
-        tree = sheet_tree.walk(root_sch)
-    except Exception:  # noqa: BLE001 - no project around it: a sheet written alone
-        return content
-    if tree.problems or path.resolve() == Path(root_sch).resolve():
-        return content
-    uses = [use for file, use in tree.uses if file == path.resolve()]
+        found = sheet_authoring.discover_projects(path)
+    except Exception as exc:  # noqa: BLE001 - named, not swallowed: the caller refuses
+        raise InstanceDataUnproven("walk_failed", f"the projects around {path.name} could not be looked up: {exc}") from exc
+    # A project whose root is this very sheet (a .kicad_pro beside it, KiCad makes one when a sub-sheet is opened alone)
+    # is not a parent: the parents are the other projects whose tree holds the sheet (GitHub issue 187, review).
+    parents = [(root, tree) for root, tree in found["contains"] if Path(root).resolve() != here]
+    own_unreadable = [u for u in found["unreadable"] if u.startswith(f"{here}: ")]  # the sheet's own project: its tree is not needed
+    unreadable = [u for u in found["unreadable"] if u not in own_unreadable]
+    if unreadable:
+        raise InstanceDataUnproven(
+            "tree_problems", f"a project around {path.name} does not read whole, so nothing is proven about where the "
+                              f"sheet is used: {'; '.join(unreadable)}")
+    if len(parents) > 1:
+        raise InstanceDataUnproven(
+            "root_not_found", f"several projects hold {path.name} ({', '.join(str(r) for r, _t in parents)}): "
+                              "the instance paths depend on which one is meant")
+    if not parents:
+        if own_unreadable or any(Path(r).resolve() == here for r, _t in found["contains"]):
+            return keep("root_sheet", "the sheet is a project's own root sheet and no other project uses it: "
+                                      "it keeps the sheet's own uuid path")
+        if found["excluded"]:
+            return keep("not_attached", f"a readable project exists and no sheet symbol of its tree uses {path.name}: the "
+                                        "symbols carry the sheet's own uuid path, which add_sheet_symbols re-keys when a "
+                                        "parent sheet uses the sheet")
+        return keep("no_project", "no readable project's sheet tree holds this sheet: the symbols carry the sheet's own "
+                                  "uuid path, which add_sheet_symbols re-keys when a parent sheet uses the sheet")
+    root_sch, tree = parents[0]
+    uses = [use for file, use in tree.uses if file == here]
     if not uses:
-        return content
+        raise InstanceDataUnproven("tree_problems", f"{Path(root_sch).name}'s tree holds {path.name} but names no use path for it")
     node = write_layer.parse_string(content)
     # Only the symbols this call adds are re-keyed: an old symbol is kept unchanged (the "tools only add"
     # check refuses a changed one), stale instance data on it is the sheet's own business (GitHub issue 107).
@@ -740,8 +788,10 @@ def _reattach_to_tree(content: str, path: Path) -> str:
     except OSError:
         old = set()
     if not sheet_authoring.rewrite_child_instances(node, Path(root_sch).stem, uses, frozenset(old)):
-        return content
-    return write_layer.serialise(node) + chr(10)
+        return keep("no_new_symbols", "this call placed no symbol, so there is no instance data to re-key")
+    return write_layer.serialise(node) + chr(10), {
+        "reattached": True, "reason": "reattached",
+        "note": f"the new symbols' instance data is keyed on {len(uses)} use path(s) of {path.name} in {Path(root_sch).name}'s tree"}
 
 
 _ADD_SYMBOL_KEYS = frozenset({"lib_id", "x", "y", "ref", "value", "rotation", "footprint", "unit", "in_bom", "dnp", "snap", "mirror", "properties"})
@@ -958,8 +1008,9 @@ def _write_schematic_utf8(
         raise RuntimeError("synthesized power symbols need kicad_tools' sidecar files; not written")
     sch.auto_size_paper()  # what write() does by default
     content = _schematic_text(sch)
+    instance_data: dict | None = None
     if reattach:
-        content = _reattach_to_tree(content, path)
+        content, instance_data = _reattach_to_tree(content, path)
     if mirrors and any(mirrors):  # GitHub issue 111: kicad_tools' add_symbol has no mirror parameter
         node = write_layer.parse_string(content)
         _apply_mirrors(node, mirrors, set(old_uuids))
@@ -988,6 +1039,7 @@ def _write_schematic_utf8(
         write_layer.replace_file(tmp, path)  # retries a transient sharing denial, then file_busy
     finally:
         tmp.unlink(missing_ok=True)
+    return instance_data
 
 
 # --------------------------------------------------------------------------
@@ -1237,6 +1289,15 @@ def build(mcp: MCPServer) -> list[str]:
         or a sheet no sheet symbol uses yet, it keeps the sheet's own uuid path. Symbols already on
         the sheet are never re-keyed; those that still carry the sheet's own uuid path are listed
         in `stale_instance_symbols` (references; empty when none, and also when the sheet tree cannot be read).
+        The result's `instance_data` says which of these happened: {reattached, reason, note}; reattached
+        false with reason root_sheet (a project's own root sheet), no_project (no readable project's tree holds the
+        sheet), not_attached (a readable project exists and no sheet symbol uses the sheet) or no_new_symbols is
+        correct as it stands. When the project's tree cannot prove where the sheet is used (a project around the
+        sheet that does not read whole, several projects that hold it, a failing walk), the call is refused with
+        unproven_instance_data and instance_reason (tree_problems, root_not_found, walk_failed) and nothing is
+        written, because the new symbols would carry instance paths KiCad later treats as stale. This holds also for
+        an unrelated project with an unreadable tree in a folder above the sheet (up to 12 levels): its sheet files
+        cannot be read, so it cannot be shown not to hold the sheet; repair or move it, then retry.
 
         Refuses a sheet older than KiCad 8's format (error old_sheet_format, nothing
         written): kicad_tools would rewrite it and drop what it does not model. Before
@@ -1291,11 +1352,13 @@ def build(mcp: MCPServer) -> list[str]:
                     dnp=spec.get("dnp", False),
                 )
                 placed.append(instance.reference)
-            _write_schematic_utf8(sch, path, added_refs=set(placed), reattach=True,
+            instance_data = _write_schematic_utf8(sch, path, added_refs=set(placed), reattach=True,
                                   mirrors=[spec.get("mirror", "") for spec in specs], old_uuids=before_uuids,
                                   field_overrides=_library_field_overrides(specs))
         except SchematicWriteNotVerified as exc:
             return _not_verified_result(exc)
+        except InstanceDataUnproven as exc:
+            return _instance_refusal(exc)
         except Exception as exc:  # noqa: BLE001 - evidence-gated verdict
             if (locked := write_layer.as_lock_refusal(exc)) is not None:
                 return locked
@@ -1311,6 +1374,7 @@ def build(mcp: MCPServer) -> list[str]:
         return {"status": "ok", "placed": placed, "count": len(placed), "symbols": symbols, "grid": grid,
                 "snapped": snapped_refs,
                 "stale_instance_symbols": _stale_instance_refs(path, before_uuids),
+                "instance_data": instance_data,
                 "grid_note": "Positions are NOT snapped to the grid unless a spec says \"snap\": true; "
                              "off_grid_pins lists the pin numbers whose point is off the grid. "
                              "Wire by pin with connect_pins."}
@@ -1491,7 +1555,10 @@ def build(mcp: MCPServer) -> list[str]:
         "power" it's the power symbol lib_id, e.g. "power:GND", resolved through the project
         sym-lib-table, then the global one, then KiCad's folder, as add_symbols does; the symbol is placed as
         add_symbols places a power lib_id, so its instance data is the same: the project's name and the
-        use path(s) on an attached sheet, and a reference #PWR01.. that is new in the whole sheet tree), rotation,
+        use path(s) on an attached sheet, and a reference #PWR01.. that is new in the whole sheet tree; a call with a
+        power spec is refused as unproven_instance_data when the project's tree cannot prove where the sheet is used,
+        and its result carries `instance_data` {reattached, reason, note} as add_symbols' does; labels, no-connects
+        and the other kinds hold no instance data and do not depend on the tree), rotation,
         shape (global/hier label direction), snap (optional bool, default
         True -- see SNAP).
 
@@ -1563,14 +1630,19 @@ def build(mcp: MCPServer) -> list[str]:
                 else:
                     return {"status": "error", "reason": f"unknown label kind: {kind!r}"}
                 placed.append(kind)
-            _write_schematic_utf8(sch, path, reattach=True)
+            # only a power symbol carries instance data; labels, markers and wires do not, so a call without one
+            # does not depend on the project's sheet tree
+            instance_data = _write_schematic_utf8(sch, path, reattach=bool(power_ids))
         except SchematicWriteNotVerified as exc:
             return _not_verified_result(exc)
+        except InstanceDataUnproven as exc:
+            return _instance_refusal(exc)
         except Exception as exc:  # noqa: BLE001 - evidence-gated verdict
             if (locked := write_layer.as_lock_refusal(exc)) is not None:
                 return locked
             return _incomplete(f"could not add labels: {exc}")
-        return {"status": "ok", "placed": placed, "count": len(placed), "grid": grid, "snapped": snapped, "landed_on_pin": landed}
+        return {"status": "ok", "placed": placed, "count": len(placed), "grid": grid, "snapped": snapped, "landed_on_pin": landed,
+                "instance_data": instance_data}
 
     def assign_footprints(sch_path: str, mapping: dict[str, str]) -> dict:
         """Assign footprints to symbols by reference designator in one call.
