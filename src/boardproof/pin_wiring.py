@@ -647,6 +647,7 @@ def connect_pins(path: str, connections: list[dict], root_sch: str | None, *, sn
         outcome.compare = _compare(made, net_of)
         outcome.post_check = _post_check(made)
         outcome.check_nets = bool(made)
+        outcome.preview_nets = True
         outcome.report = {
             "connections": listed, "count": len(listed), "already_connected": skipped,
             "grid": grid_mm if snap else None,
@@ -662,6 +663,7 @@ def connect_pins(path: str, connections: list[dict], root_sch: str | None, *, sn
     result = se.run(path, root_sch, mutate, allow_connectivity_change=allow_connectivity_change, dry_run=dry_run)
     if result.get("ok") and dry_run:
         result["would_connect"] = result.pop("connections")
+        result["dry_run"] = True
     return result
 
 

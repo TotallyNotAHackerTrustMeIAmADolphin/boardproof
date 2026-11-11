@@ -22,6 +22,7 @@ import math
 import enum
 import inspect
 import os
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -524,6 +525,7 @@ def _netlist_census(sheet: Path, replacement: Path | None = None) -> dict[str, A
         for comp in block.find_children("comp")
     ]
     nets = []
+    named: dict[str, frozenset] = {}
     for block in parsed.find_children("nets"):
         for net in block.find_children("net"):
             nodes = set()
@@ -532,9 +534,11 @@ def _netlist_census(sheet: Path, replacement: Path | None = None) -> dict[str, A
                 if not ref.endswith("?"):
                     nodes.add((ref, pin))
             nets.append(frozenset(nodes))
+            named[str(net.find("name").children[0].value)] = frozenset(nodes)
     from boardproof import sheet_editing
 
-    return {"components": len(refs), "refs": refs, "nets": nets, "component_records": sheet_editing._components_of(parsed)}
+    return {"components": len(refs), "refs": refs, "nets": nets, "named_nets": named,
+            "component_records": sheet_editing._components_of(parsed)}
 
 
 def _clip(text: str, limit: int = 160) -> str:
@@ -571,7 +575,7 @@ def _describe_lost_node(label: str, source_root: Any, written_root: Any) -> tupl
     )
 
 
-def _verify_schematic_write(path: Path, written: Path, added_refs: set[str], expected_fields: dict[str, dict[str, str]] | None = None) -> None:
+def _verify_schematic_write(path: Path, written: Path, added_refs: set[str], expected_fields: dict[str, dict[str, str]] | None = None) -> dict:
     """The builder tools' self-check (decision 4, build ticket 38), on the temporary file
     ``written`` before it replaces ``path``; raises ``SchematicWriteNotVerified``.
 
@@ -582,7 +586,11 @@ def _verify_schematic_write(path: Path, written: Path, added_refs: set[str], exp
        references are not components); every net before lies within one net after (a new
        wire may join two nets; nothing may split one or lose a pin).
     3. Fields (issue 162, ``expected_fields``: reference -> field name -> value): the netlist component of each
-       new reference carries those fields (``~`` and an empty text count as equal)."""
+       new reference carries those fields (``~`` and an empty text count as equal).
+
+    Returns the net change of ``written`` against ``path`` (``sheet_editing.net_change`` of the two named netlists,
+    GitHub issue 124): the checks above already read both, so the preview of a dry run and the ``nets`` of a real
+    call cost no kicad-cli run of their own."""
     from collections import Counter
 
     from boardproof import write_layer
@@ -648,6 +656,9 @@ def _verify_schematic_write(path: Path, written: Path, added_refs: set[str], exp
             write_check,
             netlist_check,
         )
+    from boardproof import sheet_editing
+
+    return sheet_editing.net_change(before["named_nets"], after["named_nets"])
 
 
 def _power_reference(number: int) -> str:
@@ -977,8 +988,8 @@ def _check_mirrors(content: str, mirrors: list[str], old_uuids: set[str]) -> Non
 def _write_schematic_utf8(
     sch: Any, path: Path, *, added_refs: set[str] = frozenset(), reattach: bool = False,
     mirrors: list[str] | None = None, old_uuids: set[str] = frozenset(),
-    field_overrides: list[dict] | None = None,
-) -> None:
+    field_overrides: list[dict] | None = None, dry_run: bool = False, report: dict | None = None,
+) -> dict | None:
     """Write a kicad_tools high-level ``Schematic`` to ``path`` as UTF-8.
 
     Replaces ``sch.write(path)`` (build ticket 12). kicad_tools 0.20.0's
@@ -999,8 +1010,15 @@ def _write_schematic_utf8(
     ``SchematicWriteNotVerified``. Newlines are translated as before
     (``write_text`` default, CRLF on Windows). Build ticket 44 moves this onto
     the write layer.
+
+    ``dry_run`` (GitHub issue 124) runs this same path up to the move and stops there: the text is staged in a
+    temporary folder instead of beside the sheet, every check runs on it as for a real write, and ``path`` is never
+    replaced, so no lock check is made (nothing is written). ``report``, when given, receives ``nets`` (the net
+    change of the staged text against ``path``, ``sheet_editing.net_change``) and ``content`` (the staged text).
+    Returns the instance data of the re-attachment (``None`` without ``reattach``).
     """
-    write_layer.check_writable(path)  # nothing is touched while KiCad holds the sheet (GitHub issue 68)
+    if not dry_run:
+        write_layer.check_writable(path)  # nothing is touched while KiCad holds the sheet (GitHub issue 68)
     if getattr(sch, "_synthesized_pwr_defs", None):
         # write() would also emit kicad_tools_pwr sidecars, with the platform
         # encoding. This toolset never synthesizes power symbols (add_power
@@ -1027,18 +1045,24 @@ def _write_schematic_utf8(
             deferred = exc  # raised after the token and netlist checks, so a damaged text is reported by those first
     if "\r" in content:  # backstop: the tools refuse \r in their input before this
         raise ValueError("carriage return in the schematic text; kicad_tools would write it unescaped")
-    tmp = path.with_name(path.name + ".utf8.tmp")
+    scratch = tempfile.TemporaryDirectory(prefix="boardproof-sch-dry-") if dry_run else None
+    tmp = (Path(scratch.name) if scratch is not None else path.parent) / (path.name + ".utf8.tmp")
     try:
         tmp.write_text(content, encoding="utf-8")
         if tmp.read_text(encoding="utf-8") != content:
             raise OSError(f"read-back of the written schematic differs from its content; {path.name} left unchanged")
-        _verify_schematic_write(path, tmp, set(added_refs), expected_fields)
+        nets = _verify_schematic_write(path, tmp, set(added_refs), expected_fields)
         if deferred is not None:
             raise deferred
-        write_layer.check_writable(path)  # KiCad may have opened the sheet while the checks ran
-        write_layer.replace_file(tmp, path)  # retries a transient sharing denial, then file_busy
+        if report is not None:
+            report["nets"], report["content"] = {**nets, **_net_scope(path)}, content
+        if not dry_run:
+            write_layer.check_writable(path)  # KiCad may have opened the sheet while the checks ran
+            write_layer.replace_file(tmp, path)  # retries a transient sharing denial, then file_busy
     finally:
         tmp.unlink(missing_ok=True)
+        if scratch is not None:
+            scratch.cleanup()
     return instance_data
 
 
@@ -1234,6 +1258,37 @@ def _refine_connectivity(tree: Any, root_path: Path, unconnected: list, issues: 
     return found, marked, kept_issues, missing
 
 
+def _net_scope(path: Path) -> dict[str, str]:
+    """What the net change of an edit of ``path`` covers (GitHub issue 124, review): the census reads the netlist with
+    the edited sheet as root and walks the tree only downwards, so a sheet that a parent sheet uses is seen alone
+    (``scope`` "sheet": a join through the parent is not seen, a join may show as a rename); a sheet no parent uses
+    is the root of its tree (``scope`` "project"). A project lookup that fails counts as "sheet"."""
+    from boardproof import sheet_authoring
+
+    here = path.resolve()
+    try:
+        found = sheet_authoring.discover_projects(path)
+        parents = [r for r, _t in found["contains"] if Path(r).resolve() != here]
+        # a project around the sheet that does not read whole proves nothing about where the sheet is used; its own
+        # project (a .kicad_pro with this sheet as root) is no parent, as in _reattach_to_tree
+        unproven = [u for u in found["unreadable"] if not u.startswith(f"{here}: ")]
+    except Exception:  # noqa: BLE001 - unknown means the narrower claim
+        parents, unproven = [], ["lookup failed"]
+    if not parents and not unproven:
+        return {"scope": "project"}
+    return {"scope": "sheet", "scope_note": "the netlist was read with this sheet as root: a join through a parent sheet "
+            "(a global label also on the parent, a hierarchical pin) is not seen, and a join may show as a rename"}
+
+
+def _as_dry_run(result: dict, renames: dict[str, str]) -> dict:
+    """A tool's result as a dry run's (GitHub issue 124): the result the real call would give, with the keys in
+    ``renames`` renamed (``placed`` to ``would_place``, the repo's would_* convention), ``written`` false and
+    ``dry_run`` true."""
+    out = {renames.get(key, key): value for key, value in result.items()}
+    out.update(written=False, dry_run=True)
+    return out
+
+
 def _read_only(tool_fn):
     """Mark a tool function of ``build`` as read-only (``readOnlyHint`` true). Every function defined
     in ``build`` is a tool and is registered by the end of ``build`` (issue 147): there is no list to
@@ -1245,7 +1300,7 @@ def _read_only(tool_fn):
 def build(mcp: MCPServer) -> list[str]:
     """Register the schematic toolset. See toolsets/registry.py for the contract."""
 
-    def add_symbols(sch_path: str, specs: list[dict]) -> dict:
+    def add_symbols(sch_path: str, specs: list[dict], dry_run: bool = False) -> dict:
         """Place one or more symbols onto an existing schematic in one call.
 
         Each spec: lib_id, x, y, ref (required); value, rotation, footprint,
@@ -1308,6 +1363,23 @@ def build(mcp: MCPServer) -> list[str]:
 
         Refuses with file_open_in_kicad, naming the lock file, while KiCad holds a lock file for a file
         it would write; close the file in KiCad, then retry.
+
+        dry_run (GitHub issue 124): true runs this call's own code path up to the write and stops there. It makes the
+        same checks and the same refusals as the real call (every refusal above, the staged text's self-check and
+        kicad-cli's netlist of the staged sheet), writes nothing (no file, no backup, no scratch file beside the
+        sheet; the sheet's bytes stay as they are) and returns the result the real call would, with `written` false,
+        `dry_run` true and `would_place` (the references) in place of `placed`. One difference: the lock file of an open KiCad does not stop a preview (nothing
+        is written), while the real call is refused with file_open_in_kicad. Both calls, dry or real, return `nets`,
+        the net change of the sheet as it would be written against the sheet on disk, read from kicad-cli's netlist
+        of scratch copies: nets_before and nets_after (counts), changed, and the lists created ({net, pins}: nets of
+        new pins), merged ({nets, now, pins}: pins of several nets now on one), renamed ({net, now, pins}), extended
+        ({net, added_pins}: an existing net that gained pins), split and removed (a refusal when they occur, as
+        before), truncated and scope. `nets.scope` is "project" when no parent sheet uses the edited sheet (the
+        tree below it is read); when a parent uses it, `scope "sheet"` and `scope_note` say so: the netlist is read
+        with the edited sheet as root, so cross-sheet joins through a parent sheet are not seen (a global label that
+        also sits on the parent, a hierarchical pin) and a join may show as a rename. Net names are kicad-cli's choice
+        (a second label with another name on a net that already has one leaves the old name: no change is shown).
+        Repeat the call without dry_run to write.
         """
         path = Path(sch_path)
         if not path.is_file():
@@ -1352,9 +1424,10 @@ def build(mcp: MCPServer) -> list[str]:
                     dnp=spec.get("dnp", False),
                 )
                 placed.append(instance.reference)
+            stage: dict = {}
             instance_data = _write_schematic_utf8(sch, path, added_refs=set(placed), reattach=True,
                                   mirrors=[spec.get("mirror", "") for spec in specs], old_uuids=before_uuids,
-                                  field_overrides=_library_field_overrides(specs))
+                                  field_overrides=_library_field_overrides(specs), dry_run=dry_run, report=stage)
         except SchematicWriteNotVerified as exc:
             return _not_verified_result(exc)
         except InstanceDataUnproven as exc:
@@ -1363,7 +1436,8 @@ def build(mcp: MCPServer) -> list[str]:
             if (locked := write_layer.as_lock_refusal(exc)) is not None:
                 return locked
             return _incomplete(f"could not add symbols: {exc}")
-        symbols = pin_wiring.read_back(write_layer.load(path), before_uuids, grid)
+        # a dry run reads back the staged text: the sheet on disk is unchanged
+        symbols = pin_wiring.read_back(write_layer.parse_string(stage["content"]) if dry_run else write_layer.load(path), before_uuids, grid)
         # the new symbol nodes come back in the order the specs were written: one per spec
         by_spec = len(symbols) == len(specs)
         moved = {r["spec"] for r in snapped_refs}
@@ -1371,15 +1445,17 @@ def build(mcp: MCPServer) -> list[str]:
             entry["spec"] = index if by_spec else None
             entry["asked"] = [specs[index]["x"], specs[index]["y"]] if by_spec else None
             entry["snapped"] = index in moved if by_spec else None
-        return {"status": "ok", "placed": placed, "count": len(placed), "symbols": symbols, "grid": grid,
-                "snapped": snapped_refs,
-                "stale_instance_symbols": _stale_instance_refs(path, before_uuids),
-                "instance_data": instance_data,
-                "grid_note": "Positions are NOT snapped to the grid unless a spec says \"snap\": true; "
-                             "off_grid_pins lists the pin numbers whose point is off the grid. "
-                             "Wire by pin with connect_pins."}
+        result = {"status": "ok", "placed": placed, "count": len(placed), "symbols": symbols, "grid": grid,
+                  "snapped": snapped_refs,
+                  "stale_instance_symbols": _stale_instance_refs(path, before_uuids),
+                  "instance_data": instance_data,
+                  "grid_note": "Positions are NOT snapped to the grid unless a spec says \"snap\": true; "
+                               "off_grid_pins lists the pin numbers whose point is off the grid. "
+                               "Wire by pin with connect_pins.",
+                  "nets": stage["nets"], "written": not dry_run}
+        return _as_dry_run(result, {"placed": "would_place"}) if dry_run else result
 
-    def add_wires(sch_path: str, specs: list[dict]) -> dict:
+    def add_wires(sch_path: str, specs: list[dict], dry_run: bool = False) -> dict:
         """Add one or more wires to an existing schematic in one call,
         drawn with right-angle corners (no diagonals) by default.
 
@@ -1433,6 +1509,23 @@ def build(mcp: MCPServer) -> list[str]:
 
         Refuses with file_open_in_kicad, naming the lock file, while KiCad holds a lock file for a file
         it would write; close the file in KiCad, then retry.
+
+        dry_run (GitHub issue 124): true runs this call's own code path up to the write and stops there. It makes the
+        same checks and the same refusals as the real call (every refusal above, the staged text's self-check and
+        kicad-cli's netlist of the staged sheet), writes nothing (no file, no backup, no scratch file beside the
+        sheet; the sheet's bytes stay as they are) and returns the result the real call would, with `written` false,
+        `dry_run` true and `would_add` ({wires, segments}) in place of `count` and `segments` (`nets` is not returned when no wire could be added). One difference: the lock file of an open KiCad does not stop a preview (nothing
+        is written), while the real call is refused with file_open_in_kicad. Both calls, dry or real, return `nets`,
+        the net change of the sheet as it would be written against the sheet on disk, read from kicad-cli's netlist
+        of scratch copies: nets_before and nets_after (counts), changed, and the lists created ({net, pins}: nets of
+        new pins), merged ({nets, now, pins}: pins of several nets now on one), renamed ({net, now, pins}), extended
+        ({net, added_pins}: an existing net that gained pins), split and removed (a refusal when they occur, as
+        before), truncated and scope. `nets.scope` is "project" when no parent sheet uses the edited sheet (the
+        tree below it is read); when a parent uses it, `scope "sheet"` and `scope_note` say so: the netlist is read
+        with the edited sheet as root, so cross-sheet joins through a parent sheet are not seen (a global label that
+        also sits on the parent, a hierarchical pin) and a join may show as a rename. Net names are kicad-cli's choice
+        (a second label with another name on a net that already has one leaves the old name: no change is shown).
+        Repeat the call without dry_run to write.
         """
         path = Path(sch_path)
         if not path.is_file():
@@ -1492,9 +1585,10 @@ def build(mcp: MCPServer) -> list[str]:
             except Exception as exc:  # noqa: BLE001 - evidence-gated, per-spec
                 errors.append({"index": i, "reason": str(exc)})
 
+        stage: dict = {}
         if added:
             try:
-                _write_schematic_utf8(sch, path)
+                _write_schematic_utf8(sch, path, dry_run=dry_run, report=stage)
             except SchematicWriteNotVerified as exc:
                 return {**_not_verified_result(exc), "errors": errors}
             except Exception as exc:  # noqa: BLE001 - evidence-gated verdict
@@ -1503,12 +1597,16 @@ def build(mcp: MCPServer) -> list[str]:
                 return _incomplete(f"could not write schematic: {exc}", errors=errors)
         if not added:
             if not specs:
-                return {"status": "ok", "count": 0, "segments": 0}
+                empty = {"status": "ok", "count": 0, "segments": 0}
+                return _as_dry_run({**empty, "would_add": {"wires": 0, "segments": 0}}, {}) if dry_run else empty
             return _incomplete("no wires could be added", errors=errors, count=0, segments=0)
         result = {"status": "partial" if errors else "ok", "count": added, "segments": segments,
-                  "grid": grid, "snapped": snapped, "landed_on_pin": landed}
+                  "grid": grid, "snapped": snapped, "landed_on_pin": landed, "nets": stage["nets"], "written": not dry_run}
         if errors:
             result["errors"] = errors
+        if dry_run:
+            result["would_add"] = {"wires": result.pop("count"), "segments": result.pop("segments")}
+            return _as_dry_run(result, {})
         return result
 
     def add_junctions(sch_path: str, points: list[list[float]]) -> dict:
@@ -1546,7 +1644,7 @@ def build(mcp: MCPServer) -> list[str]:
             return _incomplete(f"could not add junctions: {exc}")
         return {"status": "ok", "count": len(points)}
 
-    def add_labels(sch_path: str, specs: list[dict]) -> dict:
+    def add_labels(sch_path: str, specs: list[dict], dry_run: bool = False) -> dict:
         """Add one or more labels/power symbols/no-connects to an existing
         schematic in one call.
 
@@ -1579,6 +1677,23 @@ def build(mcp: MCPServer) -> list[str]:
 
         Refuses with file_open_in_kicad, naming the lock file, while KiCad holds a lock file for a file
         it would write; close the file in KiCad, then retry.
+
+        dry_run (GitHub issue 124): true runs this call's own code path up to the write and stops there. It makes the
+        same checks and the same refusals as the real call (every refusal above, the staged text's self-check and
+        kicad-cli's netlist of the staged sheet), writes nothing (no file, no backup, no scratch file beside the
+        sheet; the sheet's bytes stay as they are) and returns the result the real call would, with `written` false,
+        `dry_run` true and `would_place` (the kinds) in place of `placed`. One difference: the lock file of an open KiCad does not stop a preview (nothing
+        is written), while the real call is refused with file_open_in_kicad. Both calls, dry or real, return `nets`,
+        the net change of the sheet as it would be written against the sheet on disk, read from kicad-cli's netlist
+        of scratch copies: nets_before and nets_after (counts), changed, and the lists created ({net, pins}: nets of
+        new pins), merged ({nets, now, pins}: pins of several nets now on one), renamed ({net, now, pins}), extended
+        ({net, added_pins}: an existing net that gained pins), split and removed (a refusal when they occur, as
+        before), truncated and scope. `nets.scope` is "project" when no parent sheet uses the edited sheet (the
+        tree below it is read); when a parent uses it, `scope "sheet"` and `scope_note` say so: the netlist is read
+        with the edited sheet as root, so cross-sheet joins through a parent sheet are not seen (a global label that
+        also sits on the parent, a hierarchical pin) and a join may show as a rename. Net names are kicad-cli's choice
+        (a second label with another name on a net that already has one leaves the old name: no change is shown).
+        Repeat the call without dry_run to write.
         """
         path = Path(sch_path)
         if not path.is_file():
@@ -1632,7 +1747,8 @@ def build(mcp: MCPServer) -> list[str]:
                 placed.append(kind)
             # only a power symbol carries instance data; labels, markers and wires do not, so a call without one
             # does not depend on the project's sheet tree
-            instance_data = _write_schematic_utf8(sch, path, reattach=bool(power_ids))
+            stage: dict = {}
+            instance_data = _write_schematic_utf8(sch, path, reattach=bool(power_ids), dry_run=dry_run, report=stage)
         except SchematicWriteNotVerified as exc:
             return _not_verified_result(exc)
         except InstanceDataUnproven as exc:
@@ -1641,8 +1757,9 @@ def build(mcp: MCPServer) -> list[str]:
             if (locked := write_layer.as_lock_refusal(exc)) is not None:
                 return locked
             return _incomplete(f"could not add labels: {exc}")
-        return {"status": "ok", "placed": placed, "count": len(placed), "grid": grid, "snapped": snapped, "landed_on_pin": landed,
-                "instance_data": instance_data}
+        result = {"status": "ok", "placed": placed, "count": len(placed), "grid": grid, "snapped": snapped, "landed_on_pin": landed,
+                  "instance_data": instance_data, "nets": stage["nets"], "written": not dry_run}
+        return _as_dry_run(result, {"placed": "would_place"}) if dry_run else result
 
     def assign_footprints(sch_path: str, mapping: dict[str, str]) -> dict:
         """Assign footprints to symbols by reference designator in one call.
@@ -3064,7 +3181,13 @@ def build(mcp: MCPServer) -> list[str]:
         merges with another that no requested pair asked for, or two differently named nets joined (even when
         asked for), refuses the call with connectivity_changed (nothing written, the changes listed); pass
         allow_connectivity_change true when that is meant. dry_run true plans, checks and returns everything
-        (would_connect) and writes nothing. junction_candidates lists points where three or more wire ends or
+        (would_connect, written false, dry_run true) and writes nothing; its refusals are the real call's (the lock
+        file of an open KiCad aside: a preview is not stopped by it). Both calls return `nets`, the net change read
+        from the project's netlists (scope "project"): nets_before, nets_after, changed and the lists created, merged
+        ({nets, now, pins}), renamed ({net, now, pins}), extended ({net, added_pins}), split and removed are listed,
+        and refused unless allow_connectivity_change is true (`nets` is absent when every pair was already
+        connected). Net names are kicad-cli's choice: a second label with another name on a net that already has one
+        leaves the old name and shows no change. junction_candidates lists points where three or more wire ends or
         pins meet without a junction (add_junctions draws the dot).
 
         Refuses unannotated symbols (unannotated_symbol, run fix_annotation first), a pin or symbol that does not

@@ -374,7 +374,9 @@ def _verify_with_netlists(sheet: Path, monkeypatch, before: dict, after: dict, a
 
 
 def _fake_census(refs: list[str], nets: list[set[tuple[str, str]]]) -> dict:
-    return {"components": len(refs), "refs": refs, "nets": [frozenset(n) for n in nets]}
+    frozen = [frozenset(n) for n in nets]
+    # the real census also names every net (GitHub issue 124: the net change preview reads the names)
+    return {"components": len(refs), "refs": refs, "nets": frozen, "named_nets": {f"N{i}": n for i, n in enumerate(frozen)}}
 
 
 def test_netlist_check_refuses_a_net_that_split(kicad_demo, monkeypatch) -> None:

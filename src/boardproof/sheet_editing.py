@@ -652,6 +652,57 @@ def compare_nets(before: dict[str, frozenset], after: dict[str, frozenset], remo
     return changes
 
 
+def net_change(before: dict[str, frozenset], after: dict[str, frozenset]) -> dict[str, Any]:
+    """The net change a staged edit would make, read from two netlists (net name -> ``(reference, pin)`` nodes;
+    GitHub issue 124). Every net of ``after`` is classed by the nets its old pins came from: ``created`` (no
+    old pin: a new symbol's pins), ``merged`` (old pins of several nets: ``nets`` and ``now``), ``renamed`` (one
+    old net under another name, unless both names are automatic) and ``extended`` (one old net that gained
+    pins: ``added_pins``); a net of ``before`` whose pins end on several nets is ``split`` and one with no pin
+    left is ``removed``. ``changed`` is true when any list is not empty. Lists are bounded like the other
+    previews (``MAX_LISTED``; ``truncated`` says so)."""
+    before_of = {node: name for name, nodes in before.items() for node in nodes}
+    after_of = {node: name for name, nodes in after.items() for node in nodes}
+    created: list[dict] = []
+    merged: list[dict] = []
+    renamed: list[dict] = []
+    extended: list[dict] = []
+    split: list[dict] = []
+    removed: list[dict] = []
+
+    def pins(nodes: Any) -> list[str]:
+        return sorted(f"{r}.{p}" for r, p in nodes)
+
+    for name in sorted(after):
+        nodes = after[name]
+        if not nodes:
+            continue
+        old = sorted({before_of[n] for n in nodes if n in before_of})
+        fresh = [n for n in nodes if n not in before_of]
+        if not old:
+            created.append({"net": name, "pins": pins(nodes)})
+        elif len(old) > 1:
+            merged.append({"nets": old, "now": name, "pins": pins(nodes)})
+        else:
+            if old[0] != name and not (_is_auto(old[0]) and _is_auto(name)):
+                renamed.append({"net": old[0], "now": name, "pins": pins(nodes)})
+            if fresh:
+                extended.append({"net": name, "added_pins": pins(fresh)})
+    for name in sorted(before):
+        nodes = before[name]
+        landed = {after_of.get(n) for n in nodes}
+        if nodes and landed == {None}:
+            removed.append({"net": name, "pins": pins(nodes)})
+        elif len(landed) > 1:
+            split.append({"net": name, "pins": pins(nodes), "now_on": sorted(x for x in landed if x)})
+    lists = {"created": created, "merged": merged, "renamed": renamed, "extended": extended, "split": split, "removed": removed}
+    return {
+        "nets_before": len(before), "nets_after": len(after),
+        "changed": any(lists.values()),
+        **{key: items[:MAX_LISTED] for key, items in lists.items()},
+        "truncated": any(len(items) > MAX_LISTED for items in lists.values()),
+    }
+
+
 def _bounded(changes: list[dict]) -> dict[str, Any]:
     return {"count": len(changes), "items": changes[:MAX_LISTED], "truncated": len(changes) > MAX_LISTED}
 
@@ -673,6 +724,7 @@ class Outcome:
     compare: Any = None                                    # (before, after, removed_refs) -> changes; default compare_nets
     post_check: Any = None                                 # (before, after) -> None, raises to refuse (self-check)
     no_change: bool = False                                # nothing to write: return after the checks
+    preview_nets: bool = False                             # add the net change (``net_change``) to the result as ``nets`` (issue 124)
     post_netlist: Any = None                               # (components of the staged netlist) -> None, raises to refuse (issue 120)
     lib_added: set[str] = field(default_factory=set)       # names of lib_symbols entries the call added on purpose (issue 112)
     lib_removed: set[str] = field(default_factory=set)     # names of lib_symbols entries the call dropped on purpose
@@ -852,6 +904,8 @@ def _run(path: Path, root_sch: str | None, mutate, allow: bool, dry_run: bool) -
         changes = (outcome.compare or compare_nets)(before, after, outcome.removed_refs)
         result["connectivity"] = {"nets_before": len(before), "nets_after": len(after), "changed": bool(changes),
                                   "changes": _bounded(changes)}
+        if outcome.preview_nets:
+            result["nets"] = {**net_change(before, after), "scope": "project"}  # read_nets walks the project from its root
         if changes and not allow:
             raise SheetAuthoringError(
                 "connectivity_changed",
