@@ -1,0 +1,8 @@
+[writing_tool.snap_to_grid]
+self_check = "reload-verify"
+note = "Issue 95: sheet_grid.snap_to_grid moves off-grid pins (a symbol as a whole, with its property texts), wire ends, labels, junctions and no-connect markers on a copy of the sheet's tree in memory (write_layer.set_number through sheet_editing._set_at and _set_wire_end), scans the changed tree again (check on_grid_after: every point meant for the grid is on it, else write_not_verified), checks that every node it did not move is unchanged (staged check), compares kicad-cli's netlist of the project before and after on scratch copies (connectivity_changed, no override), and only then saves through write_layer.save, whose verify reloads the temporary sibling and compares it with the serialised tree before os.replace."
+proof = [
+    "tests/test_snap_to_grid.py::test_a_corrupted_write_is_refused_and_leaves_the_sheet_alone",
+    "tests/test_snap_to_grid.py::test_the_on_grid_scan_fires_when_a_point_is_snapped_to_the_wrong_place",
+    "tests/test_snap_to_grid.py::test_the_staged_check_fires_when_the_call_touches_more_than_it_moved",
+]

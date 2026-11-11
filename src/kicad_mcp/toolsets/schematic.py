@@ -2551,6 +2551,57 @@ def build(mcp: MCPServer) -> list[str]:
         return sheet_align.align(sch_path, groups, root_sch, box=box, move_wires=move_wires, snap=snap, grid=grid,
                                  allow_connectivity_change=allow_connectivity_change, dry_run=dry_run)
 
+    def snap_to_grid(
+        sch_path: str, kinds: list[str] | None = None, grid: float = 1.27, dry_run: bool = False,
+        root_sch: str | None = None,
+    ) -> dict:
+        """Find the connection points of one sheet that are off the grid and move them onto it, in one call.
+        ERC reports an off-grid pin or wire end (endpoint_off_grid) and offers no fix; this is the fix, and
+        with dry_run true it is the detector too. It replaces hand-editing coordinates.
+
+        The grid is `grid` mm (default 1.27, 50 mil) with its origin at the sheet origin, as in move_symbols
+        and the other move tools. A point is off the grid when it is more than 0.001 mm from a multiple of
+        it. kinds (default all): symbol (every pin of every placed symbol, power symbols and hidden pins
+        included), wire (each end), label (local, global and hierarchical: the anchor), junction and
+        no_connect. Only the kinds you list are examined and moved; what you leave out stays where it is
+        even when it sat on a moved pin, which the connectivity check then refuses.
+
+        A symbol moves as a whole, with its property texts, by the shift that puts its pins on the grid. A
+        symbol whose pins cannot all reach the grid with one shift (the library's pin spacing is not a
+        multiple of the grid) is not moved and is listed under unsnappable, as is a hierarchical sheet
+        symbol with an off-grid origin or pin (move it with move_sheet_pins). A wire end, junction, label or
+        marker that sat exactly on a moved pin follows by the same shift, so the join stays; every other
+        off-grid point is rounded to the nearest grid point on its own. Free text and property texts are
+        not connection points and are not snapped. A wire the snap would shrink to a point refuses the call
+        (degenerate_wire). A wire that was horizontal or vertical and is not after the snap is listed under
+        slanted.
+
+        Connectivity: before anything is written, kicad-cli's netlist of the project is read from a
+        scratch copy before and after and compared net by net. A snap that splits or joins a net, leaves a
+        pin alone or renames a net (for example a pin snapped away from its wire) refuses the call with
+        connectivity_changed, lists the changes and writes nothing. There is no override: narrow kinds, or
+        move the parts first. The netlist cannot see a wire laid over a pin (it joins nothing but looks wired),
+        so the snapped sheet is also checked for wires newly over a pin, label, marker, junction or wire end and
+        for wire ends newly touching one; either refuses the call (snap_creates_connection, listed, nothing
+        written). After the change the sheet is scanned again; any point meant for the grid
+        that is not on it refuses the call (write_not_verified, the sheet unchanged). The written file is
+        reloaded and compared before it replaces the original. dry_run true computes and returns
+        everything (would_move) and writes nothing. A sheet with nothing off the grid is not written.
+        Works on one sheet file per call (a sheet a parent uses included; instance data is not touched);
+        call it again for each sheet. root_sch names the project's root sheet when sch_path is a sub-sheet
+        and its folder holds several projects.
+
+        Refuses with file_open_in_kicad, naming the lock file, while KiCad holds a lock file for a file it
+        would write; close the file in KiCad, then retry.
+
+        Returns grid, kinds, count, moved (symbol: reference, from, to, shift, pins; wire: was, now; other
+        points: from, to), found_off_grid and already_on_grid (counts per kind), unsnappable, slanted,
+        connectivity (nets_before, nets_after, changed, changes) and written.
+        """
+        from kicad_mcp import sheet_grid
+
+        return sheet_grid.snap_to_grid(sch_path, root_sch, kinds=kinds, grid=grid, dry_run=dry_run)
+
     def distribute_items(
         sch_path: str, groups: list[dict], box: str = "pins", move_wires: bool = True, snap: bool = True, grid: float = 1.27,
         allow_connectivity_change: bool = False, dry_run: bool = False, root_sch: str | None = None,
@@ -3019,6 +3070,50 @@ def build(mcp: MCPServer) -> list[str]:
         from kicad_mcp import field_check
 
         return field_check.get_properties(sch_path, references, uuids, properties, root_sch)
+
+    @_read_only
+    def find_overlaps(
+        sch_path: str, kinds: list[str] | None = None, root_sch: str | None = None, max_findings: int = 500,
+    ) -> dict:
+        """Read-only layout check over every sheet of the project in one call: what lies on top of what. It
+        writes nothing, makes no scratch copy and takes no write lock. It is the way to find the overlaps
+        ERC does not report (ERC reports off-grid endpoints and unconnected pins, not texts on texts or two
+        parts drawn over each other); to fix them use move_symbols, move_labels, set_property_positions,
+        align_items or distribute_items. A layout aid, not a verdict: a list with no entries says nothing
+        about ERC, the netlist or the board (only verify_board gives a verdict on a board).
+
+        kinds: which findings to look for, a non-empty list drawn from symbol_symbol, text_text,
+        text_symbol, text_wire and wire_through_pin; omitted, all of them. sch_path: any sheet of the
+        project; every sheet file of the tree is read once, starting at the root sheet (root_sch, optional
+        when sch_path is the root or the only .kicad_pro of its folder names it). max_findings (1 to 5000,
+        default 500) limits the listed findings, not the counts.
+
+        symbol_symbol: the boxes of two placed symbols (or hierarchical sheet symbols) overlap by more than
+        0.1 mm in both axes. A symbol's box comes from the raw geometry of its library symbol in the sheet
+        file and the raw (at ...) and mirror of the placed symbol: its graphics of the placed unit and body
+        style plus the connection points and lines of its visible pins (the same box as align_items); a
+        sheet symbol's box is its raw (at) and (size). Power symbols are not compared. Boxes that only
+        touch are not an overlap.
+        text_text, text_symbol, text_wire: a visible text (Reference, Value and other visible properties of
+        symbols, labels, free text) over another text, over the box of a symbol it does not belong to, or
+        crossed by a wire. The Description, Footprint and Datasheet properties and the ki_* library fields are
+        not read as texts, so an overlap they cause is NOT found (a gap in this check, not a clear sheet). The box of a text is an ESTIMATE (the font's extent is not in the file; the width
+        is the character count times the font size times 0.6), so each of these findings says
+        estimated true and a near miss is not reported. A label is not reported against the wire it sits
+        on or a symbol it sits on a pin of.
+        wire_through_pin: a wire whose middle (not an end) runs over a pin with no junction on that point.
+        KiCad joins a pin only to a wire end or a junction, so that pin joins nothing although it looks
+        wired; split the wire at the pin or add a junction.
+
+        Returns found, counts (per kind, the full numbers), findings (each: kind, sheet, at, items with
+        their uuid and box or points or text, estimated, fix, and the numbers behind it: overlap in mm,
+        length_inside, pin), truncated, skipped (symbols whose library geometry is not in the sheet file)
+        and sheets_read. Refuses with invalid_spec, file_not_found, parent_not_in_tree, root_not_found or a
+        missing, unparseable or cyclic sheet (sheet_tree_incomplete).
+        """
+        from kicad_mcp import sheet_overlaps
+
+        return sheet_overlaps.find_overlaps(sch_path, kinds, root_sch, max_findings)
 
     @_read_only
     def check_connectivity(sch_path: str) -> dict:
