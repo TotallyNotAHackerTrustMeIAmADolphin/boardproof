@@ -271,7 +271,7 @@ wins over both.
   after the run's completion notification), real `kicad-cli`
   where the claim is about KiCad behaviour, and the findings the reference module needed. The
   verdict, the reviewed commit and the review text go into the ticket. Each BLOCKS finding becomes
-  a failing test before its fix; a FOLLOW-UP's test is written in its own ticket.
+  a failing test before its fix; a FOLLOW-UP's test is written in the same fix round.
 - **Metrics:** review rounds and the CLEAN verdict per ticket only. No token or wall-clock tracking.
 
 ## Project-only rules
@@ -321,17 +321,29 @@ wins over both.
     unchanged code; what it finds there is a FOLLOW-UP unless it is a regression the delta causes.
   - A finding that fits both lists BLOCKS, and so does one the reviewer and the coordinator class
     differently.
-  - Builders fix BLOCKS findings. A FOLLOW-UP they fix anyway is new code under review. At the
-    merge the coordinator files the FOLLOW-UPs as build tickets (one per module is fine), links
-    them from the review record, and their failing tests are written there.
+  - Builders fix BLOCKS findings, and a fix a reviewer finds lands in the same ticket (owner,
+    2026-11-11: "fixes die ein reviewer findet sollten im selben ticket landen"). A FOLLOW-UP
+    that is a pure fix (a test gap, a wording fix, a small hardening of code the ticket touched) is
+    fixed on the ticket's branch before the merge, in the same fix round as the BLOCKS findings. It
+    is not a ticket and not a comment list. Re-class before you file: a guard in code the ticket
+    touched whose test survives its mutant is BLOCKS, not a FOLLOW-UP.
+  - A FOLLOW-UP-only fix of 30 lines or fewer without new logic (counted as added plus removed lines
+    of `git diff --stat`, tests included) needs no new review round: the coordinator reads the diff
+    or asks the same reviewer, and it does not count as a delta review for the stop rule. A fix
+    mixed into a BLOCKS round is reviewed in that round's delta. A larger or logic-changing fix is
+    new code under review.
+  - A new ticket is opened only for new knowledge, with the reason in one line: a production bug
+    (a wrong value, or ok/success the user sees) in code the ticket did not touch, a measured fact,
+    a design question, a scope decision or a feature request. A question only the owner can settle
+    goes to the owner (label needs-owner), not into a build ticket.
   - "No merge without CLEAN" and the stop rule below stay as they are. Findings from rounds before
     2026-10-21 are classed by the ticket's next review.
 - **A stop rule for deep review loops (section 5):** after the third delta review of one module,
   no reviewer is dispatched again without the owner. The module's claims shrink to what it proves
   (per-item `proven | unproven`, a `proves` field), and the authority stays with the gate. The
   coordinator checks the latest diff against the open BLOCKS findings and escalates to the owner.
-  The owner may grant one more fix round, or cut the open findings into a FOLLOW-UP ticket (never
-  a hard-rule breach); either way one more delta review judges what is left and gives the verdict.
+  The owner may grant one more fix round, or move the open findings into a ticket by scope decision (an
+  exception to the FOLLOW-UP rule above; never a hard-rule breach); either way one more delta review judges what is left and gives the verdict.
   See incidents 2 and 6. The stop rule never permits a merge without a CLEAN verdict: it
   escalates, it does not wave through.
 - **Measurement protocol:** the first OFFICIAL scored batch per (rung, backend, protocol sha) is the

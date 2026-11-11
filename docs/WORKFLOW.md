@@ -35,7 +35,7 @@ The helper `scripts/issues.py` refuses a text that `scripts/check_publishable.py
 - **Review verdict**: after each adversarial review, the coordinator posts the reviewed (full) sha,
   the verdict (CLEAN or NOT CLEAN), the BLOCKS findings and the FOLLOW-UP findings, and the number
   of the delta round. The coordinator merges only the sha named in a CLEAN verdict.
-- **Follow-ups** become new `build` issues at the merge, each linked from the closing comment.
+- **Follow-ups** that are pure fixes are fixed in the same ticket before the merge; a new issue is opened only for new knowledge (a bug in code the ticket did not touch, a measured fact, a design or scope question, a feature request).
 
 ## What does not change
 

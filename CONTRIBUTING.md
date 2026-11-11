@@ -13,7 +13,7 @@ These rules protect against failures that already happened. They apply to code, 
 
 ## How changes are planned and reviewed
 
-Work is split into small tickets, each with a written acceptance list. Every change gets an adversarial review: each finding is classed as BLOCKS (the change cannot merge until it is fixed, and a failing test comes before the fix) or FOLLOW-UP (a new ticket). A change merges only when the review has no BLOCKS finding. If you want to work on something, open an issue first so that the scope and the acceptance list are agreed before code is written.
+Work is split into small tickets, each with a written acceptance list. Every change gets an adversarial review: each finding is classed as BLOCKS (the change cannot merge until it is fixed, and a failing test comes before the fix) or FOLLOW-UP (a smaller finding, fixed in the same ticket before the merge). A change merges only when the review has no BLOCKS finding. If you want to work on something, open an issue first so that the scope and the acceptance list are agreed before code is written.
 
 ## Running the tests
 

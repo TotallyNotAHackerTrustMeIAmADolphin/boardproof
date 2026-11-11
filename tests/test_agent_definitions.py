@@ -308,6 +308,11 @@ def test_fork_playbook_agrees_on_background_gate(anchor):
         "A second fail-open or wrong value of the same family makes the design itself the finding",
         "stays green when the key line it guards is broken",
         "a runtime guard has no such exemption",
+        # follow-up rule (owner, 2026-11-11): reviewer fixes land in the same ticket
+        "in the same fix round as the BLOCKS findings",
+        "30 lines or fewer without new logic",
+        "A new ticket is opened only for new knowledge",
+        "by scope decision (an exception to the FOLLOW-UP rule above",
     ],
 )
 def test_fork_playbook_carries_the_finding_rule(anchor):
@@ -317,7 +322,7 @@ def test_fork_playbook_carries_the_finding_rule(anchor):
 @pytest.mark.parametrize(
     "stale",
     [
-        # superseded by "What a finding blocks"; a FOLLOW-UP's test is written in its own ticket
+        # superseded by "What a finding blocks"; a FOLLOW-UP's test is written in the same fix round
         "Each finding becomes a failing test before its fix",
         "a finding from an earlier round that is not closed",
     ],
@@ -330,7 +335,8 @@ def test_claude_md_points_to_the_finding_rule():
     text = _norm((FORK.parents[2] / "CLAUDE.md").read_text(encoding="utf-8"))
     assert _norm("CLEAN means no BLOCKS finding") in text
     assert _norm("A BLOCKS finding becomes a failing test before its fix") in text
-    assert _norm("FOLLOW-UPs go into build tickets at the merge") in text
+    assert _norm("FOLLOW-UPs go into build tickets at the merge") not in text
+    assert _norm("A FOLLOW-UP that is a pure fix is fixed in the same ticket before the merge") in text
     assert _norm("stop after the third delta review and escalate") in text
     assert _norm("The stop rule never permits a merge without CLEAN") in text
     assert _norm("Each finding becomes a failing test before its fix") not in text
