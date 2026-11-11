@@ -493,6 +493,13 @@ code = '''shutil.move(str(Path(tmp) / name), str(dest))'''
 note = "Issue 104: moves each finished diagnostic PNG from the renderer's own temp directory into the caller's output directory; a PNG raster, never a KiCad file, and the source is scratch."
 
 [[commit]]
+file = "project_check.py"
+function = "_copy_libraries"
+kind = "shutil.copyfile"
+code = '''shutil.copyfile(member, dest)'''
+note = "Issue 129: copies the files the project's sym-lib-table and fp-lib-table name under ${KIPRJMOD} into the scratch directory check_project runs kicad-cli ERC in (bounded in files and bytes; a row outside the project folder is refused); the project is only read, never a target."
+
+[[commit]]
 file = "sheet_authoring.py"
 function = "_copy_project"
 kind = "shutil.copyfile"
@@ -1058,6 +1065,13 @@ reaches = []
 # Tools annotated read-only that reach a write or commit site: the reason, and the sites, as
 # above. Only scratch copies and exports belong here, never the caller's KiCad file; no
 # kicad_file raw write may be reached except one that carries read_only_reach.
+
+[read_only_tool_writes.check_project]
+reason = "Issue 129: copies the sheets of the tree, the project file and the library tables into a TemporaryDirectory (sheet_authoring._copy_project) (and, in project_check._copy_libraries, the files the project's library tables name under ${KIPRJMOD}, bounded) and runs the connectivity engine and kicad-cli ERC there, because both write beside the schematic they are given (a netlist, a .kicad_prl); the project folder is only read."
+reaches = [
+    "project_check.py | _copy_libraries | shutil.copyfile",
+    "sheet_authoring.py | _copy_project | shutil.copyfile",
+]
 
 [read_only_tool_writes.verify_board]
 reason = "Copies the project into scratch directories for its three refilled kicad-cli DRC runs."

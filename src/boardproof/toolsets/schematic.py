@@ -3272,6 +3272,47 @@ def build(mcp: MCPServer) -> list[str]:
             "missing_from_netlist": _to_jsonable(missing_from_netlist),
         }
 
+    @_read_only
+    def check_project(sch_path: str, root_sch: str | None = None, checks: list[str] | None = None) -> dict:
+        """Read-only, in one call over the whole sheet tree: check_connectivity and KiCad's ERC of every sheet,
+        grouped per sheet, with counts per sheet and in total. It writes nothing and takes no write lock (the connectivity engine, which writes a
+        netlist beside its input, and kicad-cli ERC, which writes a .kicad_prl there, both run on a scratch copy of the
+        tree that also holds the libraries the project's sym-lib-table and fp-lib-table name under ${KIPRJMOD}, so ERC
+        sees the same libraries as on the real folder; a row that leaves the project folder, a link or junction below a row (never followed),
+        a row naming the variable in a form not read, or a copy past a bound of 2000 files, 2000 directories or 200 MB, or a library that cannot be read (an OS error), is listed under library_problems and makes covered false);
+        it is not a verdict on the board (only verify_board gives one).
+
+        sch_path: any sheet of the project; the check always starts at the project's root sheet (root_sch,
+        optional when sch_path is the root or the only .kicad_pro of its folder names it) and follows the
+        sheet symbols. checks: a non-empty list drawn from "connectivity" and "erc"; omitted, both. The
+        connectivity part is check_connectivity's own engine run once over the tree; the ERC part is ONE
+        kicad-cli ERC run on the root sheet (all severities), whose report is split per sheet, so the
+        cost does not grow with the number of sheets.
+
+        The result: sheets, one entry per sheet file with uses (how often a parent uses it), connectivity
+        (unconnected_pins, no_connect_pins, connection_issues, missing_from_netlist, each with its count) and
+        erc (violations, each with its sheet_path such as "/Connectors/" and the KiCad severity and type, count and
+        by_severity; a sheet file used twice lists the violations of every use, as KiCad reports them);
+        totals (sheets, unconnected_pins, no_connect_pins, connection_issues, missing_from_netlist,
+        erc_violations, erc_by_severity); root and unreferenced_sheets. Nothing is truncated.
+
+        Nothing is dropped silently. A sheet that cannot be loaded (missing, unparseable, cyclic or outside
+        the project) is listed in sheet_problems and makes covered false and status incomplete: with such a
+        sheet the connectivity part is not run (checks_not_run says why, as check_connectivity refuses an
+        incomplete tree) while the ERC part is still run and reported. A finding that cannot be attributed
+        to one sheet file (a base name shared by two files) is listed under connectivity_unattributed and an
+        ERC sheet that matches no sheet file under erc_unmapped, both counted in totals; a sheet use that the
+        ERC report lacks is marked reported false (erc_unreported_paths). no_findings is true only when
+        covered is true, both checks ran (checks omitted) and nothing was found; covered true means every sheet loaded and every requested check ran, and an ERC run that failed never gives no_findings.
+
+        Refusals: file_not_found, root_not_found, parent_not_in_tree, invalid_spec (checks), and a root sheet
+        that cannot be loaded at all (sheet_tree_incomplete). check_connectivity and sch_run_erc stay for a
+        single sheet or file; sch_run_erc runs ERC on one file of the project.
+        """
+        from boardproof import project_check
+
+        return project_check.check_project(sch_path, root_sch, checks, check_connectivity)
+
     # add_symbols/add_wires/add_junctions/add_labels/assign_footprints/
     # fix_annotation all mutate the schematic file (.write()/run_*
     # rewrite it) -- destructive in the sense of overwriting prior file

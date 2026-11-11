@@ -385,7 +385,8 @@ def build(mcp: MCPServer) -> list[str]:
         A single ERC run, NOT the acceptance gate: zero violations here says
         nothing about the board (the gate does not run ERC). Only
         `verify_board` gives a verdict, and only its PASS may be reported as
-        routed or done.
+        routed or done. For a whole hierarchical project, `check_project` (schematic toolset) runs one
+        ERC on the root sheet and groups the violations per sheet.
 
         Grouping (issue 127): `violations` stays the flat list of every finding, unchanged. `groups` adds related
         findings together, each {rule, key, count, severity, type, types, sheets, violation_indexes, note}
