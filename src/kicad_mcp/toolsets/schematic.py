@@ -2262,7 +2262,10 @@ def build(mcp: MCPServer) -> list[str]:
 
         moves: a list of objects; each holds selector keys (all must match) and one of `to` [x, y]
         (absolute, mm; the selector must pick exactly one label) or `offset` [dx, dy] (relative, mm), and
-        optionally `angle` (0, 90, 180 or 270, the label's text direction). Selector keys: texts (exact
+        optionally `angle` (0, 90, 180 or 270, the label's text direction). An item with `angle` and
+        neither `to` nor `offset` only turns the label where it is (position unchanged, not snapped; the
+        result lists from equal to to). Anything else malformed (a wrong type, NaN, a selector key of the
+        wrong type) is refused with invalid_spec and nothing is written. Selector keys: texts (exact
         label texts), uuids, pattern (shell pattern on the text), region [x1, y1, x2, y2], kind (label,
         global or hier). A label may be picked by one move only.
 

@@ -52,7 +52,7 @@ from typing import Any
 
 from kicad_tools.sexp import SExp
 
-from kicad_mcp import _self_check, sheet_authoring, sheet_tree, write_layer
+from kicad_mcp import _self_check, kicad_cli, sheet_authoring, sheet_tree, write_layer
 from kicad_mcp.sheet_authoring import SheetAuthoringError
 
 GRID = 1.27
@@ -370,9 +370,9 @@ _LIST_KEYS = {"references", "uuids", "texts", "points", "pins"}
 
 def _region(value: Any, where: str) -> tuple[float, float, float, float]:
     ok = isinstance(value, (list, tuple)) and len(value) == 4 and all(
-        isinstance(v, (int, float)) and not isinstance(v, bool) for v in value)
+        isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v) for v in value)
     if not ok:
-        raise SheetAuthoringError("invalid_spec", f"{where}.region must be [x1, y1, x2, y2] in mm, got {value!r}")
+        raise SheetAuthoringError("invalid_spec", f"{where}.region must be [x1, y1, x2, y2] in mm (finite numbers), got {value!r}")
     x1, y1, x2, y2 = (float(v) for v in value)
     return min(x1, x2), min(y1, y2), max(x1, x2), max(y1, y2)
 
@@ -414,9 +414,16 @@ def _check_selectors(kind: str, selectors: Any) -> list[dict]:
         for key in _LIST_KEYS & set(sel):
             if not isinstance(sel[key], list) or not sel[key]:
                 raise SheetAuthoringError("invalid_spec", f"selectors[{i}].{key} must be a non-empty list")
+            if key == "points":
+                if not all(isinstance(p, (list, tuple)) and len(p) == 2 and all(is_mm(v) for v in p) for p in sel[key]):
+                    raise SheetAuthoringError("invalid_spec", f"selectors[{i}].points must be a list of [x, y] in mm (finite, within {MAX_MM:g}), got {sel[key]!r}")
+            elif not all(isinstance(v, str) for v in sel[key]):
+                raise SheetAuthoringError("invalid_spec", f"selectors[{i}].{key} must be a list of strings, got {sel[key]!r}")
         if "pattern" in sel and not (isinstance(sel["pattern"], str) and sel["pattern"]):
             raise SheetAuthoringError("invalid_spec", f"selectors[{i}].pattern must be a non-empty string")
-        if "kind" in sel and sel["kind"] not in LABEL_KINDS:
+        if "net" in sel and not (isinstance(sel["net"], str) and sel["net"]):
+            raise SheetAuthoringError("invalid_spec", f"selectors[{i}].net must be a non-empty string (a label text)")
+        if "kind" in sel and not (isinstance(sel["kind"], str) and sel["kind"] in LABEL_KINDS):
             raise SheetAuthoringError("invalid_spec", f"selectors[{i}].kind must be one of {sorted(LABEL_KINDS)}")
     return selectors
 
@@ -782,6 +789,10 @@ def run(path: str, root_sch: str | None, mutate, *, allow_connectivity_change: b
         if (locked := write_layer.as_lock_refusal(exc)) is not None:
             return locked
         return {"status": "incomplete", "ok": False, "code": exc.code, "reason": str(exc), **exc.details}
+    except kicad_cli.KicadCliError as exc:
+        # the netlist or ERC export of a scratch copy failed: nothing was written (the exports come before the save)
+        return {"status": "incomplete", "ok": False, "code": "kicad_cli_failed", "written": False,
+                "reason": f"kicad-cli failed while the change was being checked, so nothing was written: {exc}"}
 
 
 def _run(path: Path, root_sch: str | None, mutate, allow: bool, dry_run: bool) -> dict[str, Any]:
@@ -821,7 +832,10 @@ def _run(path: Path, root_sch: str | None, mutate, allow: bool, dry_run: bool) -
 
     sheet_index = Sheet(new, nets_before, erc_for)
     sheet_index.tree = tree
-    outcome: Outcome = mutate(sheet_index, new)
+    try:
+        outcome: Outcome = mutate(sheet_index, new)
+    except write_layer.NonFiniteNumberError as exc:  # NaN or inf; the tree is a scratch copy, nothing is written yet
+        raise SheetAuthoringError("invalid_spec", f"a number in the request is not finite: {exc}; nothing was written") from exc
     _staged_check(original, new, outcome)
 
     result: dict[str, Any] = {"status": "ok", "ok": True, "written": False, **outcome.report}
@@ -962,7 +976,7 @@ def _plan_moves(kind: str, moves: Any, sheet: Sheet, snap: bool, grid: float) ->
         to, offset, angle = spec.pop("to", None), spec.pop("offset", None), spec.pop("angle", None)
         if (to is None) == (offset is None) and not (kind == "label" and angle is not None and to is None and offset is None):
             raise SheetAuthoringError("invalid_spec", f"moves[{i}] needs exactly one of 'to' (absolute [x, y]) or 'offset' (relative [dx, dy])")
-        if angle is not None and (kind != "label" or angle not in (0, 90, 180, 270)):
+        if angle is not None and (kind != "label" or isinstance(angle, bool) or not isinstance(angle, (int, float)) or angle not in (0, 90, 180, 270)):
             raise SheetAuthoringError("invalid_spec", f"moves[{i}].angle is for labels only and must be 0, 90, 180 or 270")
         for name, val in (("to", to), ("offset", offset)):
             if val is not None and not (isinstance(val, (list, tuple)) and len(val) == 2 and all(is_mm(v) for v in val)):
@@ -975,11 +989,15 @@ def _plan_moves(kind: str, moves: Any, sheet: Sheet, snap: bool, grid: float) ->
                 raise SheetAuthoringError("invalid_spec", f"moves[{i}] picks a {kind} that an earlier move already moves ({_uuid(node)})")
             seen.add(id(node))
             x, y, _a = _at(node)
-            want = (float(to[0]), float(to[1])) if to is not None else (x + float(offset[0]), y + float(offset[1]))
-            got = (_snap(want[0], grid), _snap(want[1], grid)) if snap else (_r(want[0]), _r(want[1]))
+            if to is None and offset is None:
+                # an angle-only item (checked above: a label with an angle): the label turns where it is, never snapped
+                want = got = (x, y)
+            else:
+                want = (float(to[0]), float(to[1])) if to is not None else (x + float(offset[0]), y + float(offset[1]))
+                got = (_snap(want[0], grid), _snap(want[1], grid)) if snap else (_r(want[0]), _r(want[1]))
             record = {"asked": _round_pt(*want), "snapped": [_r(got[0]), _r(got[1])] if snap and not _same(want, got) else None}
             if angle is not None:
-                record["angle"] = angle
+                record["angle"] = int(angle)
             planned.append((node, got[0] - x, got[1] - y, record))
     return planned
 
@@ -1121,11 +1139,11 @@ def set_property_positions(path: str, items: list[dict], root_sch: str | None, *
                     raise SheetAuthoringError("invalid_spec", f"{where} takes 'at' (absolute) or 'offset' (from the symbol's origin), not both")
                 for key in ("at", "offset"):
                     if key in change and not (isinstance(change[key], (list, tuple)) and len(change[key]) == 2 and all(
-                            isinstance(v, (int, float)) and not isinstance(v, bool) for v in change[key])):
-                        raise SheetAuthoringError("invalid_spec", f"{where}.{key} must be [x, y] in mm")
+                            is_mm(v) for v in change[key])):
+                        raise SheetAuthoringError("invalid_spec", f"{where}.{key} must be [x, y] in mm (finite, within {MAX_MM:g})")
                 if "at" in change and len(nodes) != 1:
                     raise SheetAuthoringError("invalid_spec", f"{where}: 'at' needs a selector that picks one symbol node; use 'offset'")
-                if "angle" in change and change["angle"] not in (0, 90, 180, 270):
+                if "angle" in change and (isinstance(change["angle"], bool) or change["angle"] not in (0, 90, 180, 270)):
                     raise SheetAuthoringError("invalid_spec", f"{where}.angle must be 0, 90, 180 or 270")
                 words = _justify_words(change["justify"], where) if "justify" in change else None
                 for node in nodes:
@@ -1200,13 +1218,13 @@ def _check_text_items(items: Any) -> list[dict]:
                 raise SheetAuthoringError("invalid_spec", f"{where}.uuid must be a non-empty string")
         elif "kind" not in item or "old_text" not in item:
             raise SheetAuthoringError("invalid_spec", f"{where} needs 'uuid' or both 'kind' and 'old_text' (and 'point' when several match)")
-        if "kind" in item and item["kind"] not in TEXT_KINDS:
+        if "kind" in item and not (isinstance(item["kind"], str) and item["kind"] in TEXT_KINDS):
             raise SheetAuthoringError("invalid_spec", f"{where}.kind must be one of {sorted(TEXT_KINDS)}")
         if "old_text" in item and not (isinstance(item["old_text"], str) and item["old_text"]):
             raise SheetAuthoringError("invalid_spec", f"{where}.old_text must be a non-empty string")
         if "point" in item and not (isinstance(item["point"], (list, tuple)) and len(item["point"]) == 2 and all(
-                isinstance(v, (int, float)) and not isinstance(v, bool) for v in item["point"])):
-            raise SheetAuthoringError("invalid_spec", f"{where}.point must be [x, y] in mm")
+                is_mm(v) for v in item["point"])):
+            raise SheetAuthoringError("invalid_spec", f"{where}.point must be [x, y] in mm (finite, within {MAX_MM:g})")
     return items
 
 

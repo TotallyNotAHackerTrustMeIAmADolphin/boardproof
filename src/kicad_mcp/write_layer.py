@@ -134,6 +134,10 @@ def check_text(value: str, *, new: bool = True) -> str:
     return value
 
 
+class NonFiniteNumberError(ValueError):
+    """A NaN or infinity offered as a KiCad number (a ValueError, so existing callers keep working)."""
+
+
 class WriteLayerError(RuntimeError):
     """A save that did not happen. ``code`` is machine-readable (``parse_check_failed``,
     ``kicad_cli_unavailable``, ``sub_sheet_missing``, ``unsupported_file``,
@@ -307,7 +311,7 @@ def format_number(value: int | float) -> str:
     if isinstance(value, int):
         return str(value)
     if not math.isfinite(value):
-        raise ValueError(f"KiCad files hold finite numbers only, not {value!r}")
+        raise NonFiniteNumberError(f"KiCad files hold finite numbers only, not {value!r}")
     if value == 0:
         return "-0" if math.copysign(1.0, value) < 0 else "0"
     if value.is_integer():
