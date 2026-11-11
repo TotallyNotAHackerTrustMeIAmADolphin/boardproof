@@ -728,12 +728,13 @@ class Outcome:
     post_netlist: Any = None                               # (components of the staged netlist) -> None, raises to refuse (issue 120)
     lib_added: set[str] = field(default_factory=set)       # names of lib_symbols entries the call added on purpose (issue 112)
     lib_removed: set[str] = field(default_factory=set)     # names of lib_symbols entries the call dropped on purpose
+    lib_changed: set[str] = field(default_factory=set)     # names of lib_symbols entries the call rewrote in place on purpose (issue 115)
 
 
 def _staged_check(original: SExp, new: SExp, outcome: Outcome) -> None:
     """Every top-level node the call did not mean to touch is unchanged; deleted nodes are gone;
     changed nodes are still there. Raises ``write_not_verified`` (nothing is written yet)."""
-    track_lib = bool(outcome.lib_added or outcome.lib_removed)
+    track_lib = bool(outcome.lib_added or outcome.lib_removed or outcome.lib_changed)
 
     def table(root: SExp) -> tuple[dict[str, str], Counter, dict[str, list[str]]]:
         keyed: dict[str, str] = {}
@@ -769,7 +770,7 @@ def _staged_check(original: SExp, new: SExp, outcome: Outcome) -> None:
                 continue
             if name not in new_libs:
                 problems.append(f"library symbol {name} is gone but was not selected")
-            elif new_libs[name] != text:
+            elif new_libs[name] != text and name not in outcome.lib_changed:
                 problems.append(f"library symbol {name} changed")
         for name in new_libs.keys() - old_libs.keys():
             if name not in outcome.lib_added:
@@ -1633,7 +1634,8 @@ def replace_symbols(path: str, replacements: Any, root_sch: str | None, *, allow
             if entry is None:
                 raise SheetAuthoringError("lib_unresolved", f"the library file of {lib_id!r} has no symbol of that name; nothing was written", lib_id=lib_id)
             unit = _unit_of(node)
-            if unit not in _library_units(entry) and not (unit == 1 and not _library_units(entry)):
+            real_units = _library_units(entry) - {0}  # a unit-less symbol keeps its pins in unit 0 and is placed as unit 1
+            if unit not in real_units and not (unit == 1 and not real_units):
                 raise SheetAuthoringError("unit_missing", f"{who} is unit {unit} but {lib_id} has units {sorted(_library_units(entry) - {0})}; nothing was written")
             snapshot = [write_layer.serialise(c, compact=True) for c in node.children if c.is_atom or c.name not in ("lib_id", "lib_name", "pin")]
             old_pin_uuids = {p.get_string(0): _uuid(p) for p in _kids(node, "pin")}

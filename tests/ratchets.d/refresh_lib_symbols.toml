@@ -1,0 +1,8 @@
+[writing_tool.refresh_lib_symbols]
+self_check = "reload-verify"
+note = "Issue 115: lib_refresh.refresh swaps the lib_symbols entry of each chosen lib_id for the library's current symbol (sheet_editing._load_library_entry, the source add_symbols embeds) on a copy of the sheet's tree in memory (table.children[...] = new entry through the SExp node list; no text edit), checks the refreshed entry's pins against the pins of the library file read raw (check embedded_pins_equal_library, else write_not_verified), checks that every other node is unchanged (staged check with Outcome.lib_changed), refuses a placed pin number the new symbol lacks (pins_removed), compares kicad-cli's netlist (connectivity_changed) and ERC census (erc_changed) of scratch copies before and after, and only then saves through write_layer.save, whose verify reloads the temporary sibling and compares it with the serialised tree before os.replace."
+proof = [
+    "tests/test_refresh_lib_symbols.py::test_a_corrupted_refresh_is_caught_by_the_pin_check",
+    "tests/test_refresh_lib_symbols.py::test_a_corrupted_write_is_refused_and_leaves_the_sheet_alone",
+    "tests/test_refresh_lib_symbols.py::test_the_refresh_touching_another_node_is_caught_by_the_staged_check",
+]

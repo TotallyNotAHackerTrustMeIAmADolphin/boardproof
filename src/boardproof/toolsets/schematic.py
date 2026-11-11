@@ -2962,6 +2962,59 @@ def build(mcp: MCPServer) -> list[str]:
 
         return sheet_editing.replace_symbols(sch_path, replacements, root_sch, allow_connectivity_change=allow_connectivity_change, dry_run=dry_run)
 
+    def refresh_lib_symbols(
+        sch_path: str, lib_ids: list[str] | None = None, allow_connectivity_change: bool = False,
+        dry_run: bool = False, root_sch: str | None = None,
+    ) -> dict:
+        """Bring the library symbols that a sheet embeds up to date with the library, in one call, after a
+        project library symbol changed (a revised pin layout, a moved pin, a renamed pin). A sheet keeps its
+        own copy of every library symbol it uses (lib_symbols); that copy does not follow the library, add_symbols
+        places a symbol of a lib_id the sheet already embeds with the OLD copy, and KiCad's ERC reports a
+        lib_symbol_mismatch warning for each placed symbol whose copy differs from the library. This tool replaces
+        the embedded copy of each stale symbol by the library's current symbol, the one add_symbols would embed now (the
+        form of the library file; a symbol that extends another is embedded flattened). It changes no other node: placed symbols, their pin lists, wires, labels and instance data keep their bytes.
+
+        lib_ids: a list of Library:Symbol names to refresh, each read from the project's symbol library table or
+        KiCad's own folder; omit it for every library symbol the sheet embeds (a symbol whose library cannot be
+        read is then listed under skipped and left as it is; an explicit lib_ids entry that cannot be read refuses
+        the call). A symbol is stale, and refreshed, when kicad-cli's ERC names a placed symbol of it in a lib_symbol_mismatch finding
+        (read on a scratch copy that also holds the project-local libraries) or when its pins (number, name, type,
+        position, per unit) differ from the library's; found_by says which. Every other symbol is listed under
+        unchanged and is not rewritten, so a sheet KiCad wrote itself is left alone. If kicad-cli's ERC cannot run, only the pins decide and the result says erc_mismatch_read false; a refresh that finds something to write then ends in kicad_cli_failed with nothing written, because the ERC comparison is part of the check. A library edit that moves no pin and
+        that ERC does not report (a symbol nobody places) is not seen. Library symbols are read from the project's
+        symbol library table, else KiCad's own symbol folder (a global table row is resolved like a project one). Works on one sheet file per
+        call; the other sheet files keep their own copies, so call it again for each.
+
+        Refused, nothing written: a placed pin number the new symbol no longer has (pins_removed, listed per placed
+        symbol with its reference, uuid, pin, name and whether a wire sits on it; no override: replace that symbol
+        with replace_symbols (pin_map) or delete it, or leave that lib_id out), a placed unit the new symbol lacks
+        (unit_missing), a lib_id the sheet does not embed (not_found). Pins that moved, were renamed or retyped, and
+        pins the new symbol adds, are listed per placed symbol (pins_moved, pins_changed, pins_added); wires are
+        never dragged. Placed symbols that use a lib_name variant of a library symbol are listed
+        (lib_name_symbols_left) and not touched.
+
+        Before anything is written, kicad-cli's netlist of the project is read from a scratch copy before and
+        after and compared net by net: a wired pin that moved, a new pin that lands on a wire end and a new
+        unconnected pin refuse it as connectivity_changed. kicad-cli's ERC census is compared too: more
+        violations of any type than before refuse it as erc_changed (fewer is the point: erc lists what dropped,
+        and the lib_symbol_mismatch count before and after). Pass allow_connectivity_change true only when that
+        is meant. The refreshed copy's pins are compared with the pins of the library file read raw; a difference
+        refuses it (write_not_verified, the sheet unchanged). The written file is reloaded and compared before it
+        replaces the original. dry_run true computes and returns everything (would_refresh) and writes nothing. A
+        sheet with nothing to refresh is not written. A library symbol that extends another is embedded
+        flattened and its pins are not compared with the raw file.
+
+        Refuses with file_open_in_kicad, naming the lock file, while KiCad holds a lock file for a file it would
+        write; close the file in KiCad, then retry. root_sch names the project's root sheet when sch_path is a
+        sub-sheet and its folder holds several projects.
+
+        Returns refreshed (per library symbol: placed_symbols and per placed symbol the pins moved, changed and
+        added), unchanged, skipped, lib_name_symbols_left, count, erc, connectivity and written.
+        """
+        from boardproof import lib_refresh
+
+        return lib_refresh.refresh(sch_path, lib_ids, root_sch, allow_connectivity_change=allow_connectivity_change, dry_run=dry_run)
+
     def set_properties(
         sch_path: str, items: list[dict], allow_connectivity_change: bool = False, dry_run: bool = False,
         root_sch: str | None = None, standalone: bool = False,
