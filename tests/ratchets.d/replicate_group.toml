@@ -1,0 +1,8 @@
+[writing_tool.replicate_group]
+self_check = "reload-verify"
+note = "Issue 94: sheet_replicate.replicate_group clones the nodes of a region of the sheet into a copy of the tree in memory (new uuids, shifted points, counted references and numbered labels, instance data per use path), checks that every node it did not add is unchanged (staged check), compares kicad-cli's netlist before, after and with only the copies on a scratch copy against the expected netlist (write_not_verified, check netlist_follows_plan), and only then saves through write_layer.save, whose verify reloads the temporary sibling and compares it with the serialised tree before os.replace."
+proof = [
+    "tests/test_replicate_group.py::test_the_netlist_oracle_fires_when_a_copy_connects_differently_from_the_original",
+    "tests/test_replicate_group.py::test_the_reference_check_fires_when_two_parts_get_the_same_reference",
+    "tests/test_replicate_group.py::test_the_staged_check_fires_when_the_call_touches_an_old_node",
+]

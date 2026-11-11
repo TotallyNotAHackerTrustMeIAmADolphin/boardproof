@@ -2407,6 +2407,68 @@ def build(mcp: MCPServer) -> list[str]:
 
         return add_text_module.add_text(sch_path, items, root_sch, snap=snap, grid=grid, dry_run=dry_run)
 
+    def replicate_group(
+        sch_path: str, region: dict, copies: int, pitch: dict, numbered_labels: str | list[str] = "auto",
+        grid: float = 1.27, dry_run: bool = False, root_sch: str | None = None,
+    ) -> dict:
+        """Copy a group of symbols with their wires and labels `copies` times at a grid pitch, counting
+        references and numbered labels up (a relay with two resistors, ten branches on a pitch of 17.78 mm:
+        copies 9, pitch {dx: 17.78, dy: 0}). One call replaces drawing every branch by hand.
+
+        region {x1, y1, x2, y2} (mm): the group is everything that lies wholly inside this closed rectangle:
+        symbols, wires, junctions, no-connect markers, local and global labels and free text. An object that
+        crosses the boundary (a wire or a symbol with pins on both sides) is refused as crosses_region, never
+        copied in half; a bus, bus entry, hierarchical label, sheet symbol or graphic inside the region is
+        refused as unsupported_in_region; a part with only some of its units inside is refused (partial_part).
+        The original stays as branch 1: `copies` is the number of NEW copies (1 to 100), copy i is moved by
+        i x pitch {dx, dy}. The pitch must be a multiple of `grid` (default 1.27 mm), else off_grid.
+
+        References: each source reference gets the next free number of its prefix, counted up from the highest
+        used anywhere in the sheet tree (R1 and R2 in the group, R7 elsewhere: copy 1 gets R8 and R9); a multi-unit
+        part keeps one reference; power symbols get the next #PWR number. The Reference property and the
+        instance data are set together; on a sheet that a parent uses, each use path of the tree gets its own
+        new reference (the instance data of a symbol that is not proven at every use refuses the call:
+        unproven_instance_data). An unannotated reference (R?) is refused (unannotated_reference).
+
+        Labels: numbered_labels is "auto" (default: every LOCAL label whose text ends in digits), or a list of exact
+        label texts of the group (any scope, each must end in digits), or [] for none. A numbered text counts up
+        from its own number: OUT1 becomes OUT2, OUT3, ... (leading zeros kept: S01 becomes S02). A label that is not
+        numbered keeps its text, so its copies join that net (a global VBUS, a GND symbol, but also a local label
+        without trailing digits such as SIG: the result lists each such local label under warnings, code label_shared).
+        That is how copies share a rail. Auto numbering refuses a group that holds sequential labels such as IN1 and
+        IN2 (label_exists: the count of IN1 runs into IN2); pass numbered_labels naming only the texts that no other
+        sequential label follows (here ["IN2"]; IN1 then stays shared and is listed under warnings), or [] for none.
+        If a counted text already exists on the sheet (any label kind), or as a global name anywhere in the tree,
+        the call is refused as label_exists, because it would join two nets.
+
+        Refused before anything is written: a copy that would touch an existing object outside the group or
+        another copy (overlaps_existing, listed; the test uses symbol anchors and pin points, wire ends and label
+        points, not symbol graphics, so the region should enclose the symbol bodies) and a copy outside the page
+        (outside_page). Every new object gets a new uuid.
+
+        Checks: every node of the sheet that is not new is compared with the original, then kicad-cli's netlist of
+        the project must equal the netlist before plus exactly the copies: the new components (value and every
+        field of their source), the new nets (a net that already exists, such as a shared global label or ground,
+        gains the copy's pins) and nothing else (no old net split, merged or renamed). A difference refuses the
+        call (error code write_not_verified, check netlist_follows_plan), nothing is written, and no parameter overrides it. A
+        copy whose label joins a net through a hierarchical label of the same text cannot be proven and is
+        refused the same way. The written file is reloaded and compared before it replaces the original.
+        dry_run true runs every check and returns would_create (per copy: offset, references, labels) and writes
+        nothing. root_sch names the project's root sheet when sch_path is a sub-sheet and its folder holds
+        several projects.
+
+        Refuses with file_open_in_kicad, naming the lock file, while KiCad holds a lock file for a file it would
+        write; close the file in KiCad, then retry.
+
+        Returns created (copies [{copy, offset, references {old: new}, labels {old: new}}], objects, count),
+        group, pitch, grid, numbered_labels, sheet_uses, netlist (checked, nets_before, nets_after, new_nets,
+        joined_existing_nets, new_components), connectivity and written.
+        """
+        from kicad_mcp import sheet_replicate
+
+        return sheet_replicate.replicate_group(
+            sch_path, region, copies, pitch, numbered_labels, root_sch, grid=grid, dry_run=dry_run)
+
     def set_property_positions(
         sch_path: str, items: list[dict], dry_run: bool = False, root_sch: str | None = None,
     ) -> dict:
