@@ -14,9 +14,9 @@ from pathlib import Path
 
 import pytest
 
-from kicad_mcp import png_render
-from kicad_mcp.sourcing import datasheet
-from kicad_mcp.sourcing.datasheet import inspect_datasheet
+from boardproof import png_render
+from boardproof.sourcing import datasheet
+from boardproof.sourcing.datasheet import inspect_datasheet
 from tests.test_datasheet_pin_numbering import _image_page, _pdf
 
 PNG_STUB = 'b"\\x89PNG\\r\\n\\x1a\\n" + b"stub" + bytes.fromhex("0000000049454e44ae426082")'

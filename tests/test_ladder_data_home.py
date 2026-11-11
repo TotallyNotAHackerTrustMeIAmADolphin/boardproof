@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from kicad_mcp import rung_runner
+from boardproof import rung_runner
 
 ROOT = Path(__file__).resolve().parents[1]
 BS = chr(92)  # a backslash, built so no escape in this file can be misread
@@ -45,7 +45,7 @@ def test_no_test_reads_the_scratch_folder():
 
 
 def test_the_default_runs_root_is_the_local_runs_folder_and_the_history_file_is_committed_beside_the_evals():
-    from kicad_mcp import autonomy_run
+    from boardproof import autonomy_run
 
     assert autonomy_run.DEFAULT_RUNS_ROOT == ROOT / "runs"
     assert Path(rung_runner.HISTORY_FILE) == ROOT / "evals" / "ladder_results.json"

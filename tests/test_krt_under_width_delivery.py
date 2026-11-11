@@ -24,7 +24,7 @@ from pathlib import Path
 
 import pytest
 
-from kicad_mcp import rung_backends, rung_runner
+from boardproof import rung_backends, rung_runner
 
 UW = Path(__file__).resolve().parent / "fixtures" / "uw"
 RUNG2 = UW / "r2krt"
@@ -129,7 +129,7 @@ def test_rung1_under_width_is_real_copper_on_one_net_with_a_taper(tmp_path):
 
 
 def test_the_wrapper_keeps_the_ledger_site_of_every_row():
-    from kicad_mcp.routers.kicad_routing_tools import parse_route_log
+    from boardproof.routers.kicad_routing_tools import parse_route_log
 
     summary = {"design_rules": {"narrowed": [
         {"net": 13, "net_name": None, "kind": "track_width", "requested": 0.5, "delivered": 0.326,

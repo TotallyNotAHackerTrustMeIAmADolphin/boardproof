@@ -2,7 +2,7 @@ from pathlib import Path
 
 from mcp.server.mcpserver import MCPServer
 
-from kicad_mcp.toolsets import project as project_toolset
+from boardproof.toolsets import project as project_toolset
 
 
 def _build_tools():

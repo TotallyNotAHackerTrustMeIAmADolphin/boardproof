@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "kicad-mcp"
+name = "boardproof"
 version = "0.1.0"
 description = "MCP server for end-to-end KiCad PCB design automation: component sourcing, schematic/PCB tools, and copilot/autopilot orchestration"
 readme = "README.md"
@@ -16,7 +16,7 @@ dependencies = [
     "mcp>=2.1.0",
     # Always the newest release (docs/ARCHITECTURE.md decision 1, re-decided
     # 2026-10-19), adopted together with our own write layer
-    # (kicad_mcp.write_layer, build ticket 42), because 0.22.0+'s own
+    # (boardproof.write_layer, build ticket 42), because 0.22.0+'s own
     # PCB.save fails on Windows (upstream #7478). 0.24.0 since build ticket
     # 71 (all eight upstream issues of build ticket 48 fixed; facts pinned
     # per version in tests/test_kicad_tools_facts.py). Capped below 0.25
@@ -37,7 +37,7 @@ dependencies = [
     "pydantic>=2.0",
     "httpx>=0.27",
     "pdfplumber>=0.11",
-    # easyeda2kicad is AGPL-3.0 (see src/kicad_mcp/sourcing/asset_fetch.py): a core dependency
+    # easyeda2kicad is AGPL-3.0 (see src/boardproof/sourcing/asset_fetch.py): a core dependency
     # since issue 67 (fetching symbol, footprint and 3D model by LCSC id is essential), but
     # invoked only as an arm's-length subprocess (`python -m easyeda2kicad`), never imported.
     "easyeda2kicad>=1.0.1",
@@ -54,9 +54,9 @@ dev = [
     "ruff==0.17.1",
 ]
 # kicad-python/kipy is MIT (verified from its own LICENSE file, see
-# src/kicad_mcp/ipc/connection.py) -- it's not
+# src/boardproof/ipc/connection.py) -- it's not
 # excluded from core for licensing reasons. It's optional because it's
-# only useful when copilot (live IPC) mode is wanted; kicad_mcp/ipc/*.py
+# only useful when copilot (live IPC) mode is wanted; boardproof/ipc/*.py
 # imports it lazily inside functions, so the `copilot` toolset registers
 # and fails closed with an actionable message even when this extra isn't
 # installed -- autopilot-only users pay nothing for it either way.
@@ -77,10 +77,10 @@ krt = [
 ]
 
 [project.scripts]
-kicad-mcp = "kicad_mcp.server:main"
+boardproof = "boardproof.server:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/kicad_mcp"]
+packages = ["src/boardproof"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

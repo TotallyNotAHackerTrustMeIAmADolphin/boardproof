@@ -9,14 +9,14 @@ It runs ``<interpreter> -m pytest -m "not network" -rfEs -p no:cacheprovider`` f
 root with ``PYTHONPATH=<worktree>/src``, ``KICAD_DEMOS_REQUIRED=1``, ``KICAD_ROUTING_TOOLS_REQUIRED=1`` (not ``NGSPICE_REQUIRED``: ngspice is optional, see below),
 under a timeout (``SUITE_TIMEOUT_S``, about 3x the slowest measured suite ``SUITE_MEASURED_S``, with only other gates known to be running;
 ``--timeout`` overrides it; the timeout is measured on the wall clock), and then
-``scripts/lint_gate.py``. The interpreter is ``--python``, else ``$KICAD_MCP_PYTHON``, else the
+``scripts/lint_gate.py``. The interpreter is ``--python``, else ``$BOARDPROOF_PYTHON``, else the
 shared ``.venv`` of the main checkout (found through ``git rev-parse --git-common-dir``).
 
 RED, never silence, when:
 - the working tree is not clean;
 - ``KICAD_ROUTING_TOOLS_PATH`` is unset (and ``.tools/KiCadRoutingTools`` is absent) or not a directory (the KRT
   tests would fail; the reason names ``scripts/setup_krt.py``);
-- ``kicad_mcp.__file__`` does not lie inside this worktree's ``src`` (the suite is then not run);
+- ``boardproof.__file__`` does not lie inside this worktree's ``src`` (the suite is then not run);
 - pytest's ``rootdir:`` line is missing or names another directory, or its ``configfile:`` is not
   ``pyproject.toml``, or ``[tool.pytest.ini_options]`` differs from ``EXPECTED_PYTEST_CONFIG``
   (no ``addopts``, ``python_files`` or ``norecursedirs`` without a reviewed change here);
@@ -416,8 +416,8 @@ def run_gate(
     res = Result()
     s7 = run_id or sha[:7]
     env = dict(os.environ)
-    env.pop("KICAD_MCP_TEST_TIMES", None)  # the gate sets it for the suite step only (issue 65)
-    env.pop("KICAD_MCP_TEST_TIMES_ROLE", None)  # an outer run's role (tests/_test_times.py) is never inherited
+    env.pop("BOARDPROOF_TEST_TIMES", None)  # the gate sets it for the suite step only (issue 65)
+    env.pop("BOARDPROOF_TEST_TIMES_ROLE", None)  # an outer run's role (tests/_test_times.py) is never inherited
     if env.pop("PYTEST_ADDOPTS", None) is not None:
         say("PYTEST_ADDOPTS is set; ignored for this run")
     env["PYTHONPATH"] = str(root / "src")
@@ -490,16 +490,16 @@ def run_gate(
         say(f"[tool.pytest.ini_options] is {actual!r}; the reviewed table is in scripts/batch_gate.py"
             " (EXPECTED_PYTEST_CONFIG): a change goes through a ticket and a review")
 
-    # Which kicad_mcp does this interpreter import?
+    # Which boardproof does this interpreter import?
     probe_out = log_dir / f"{s7}.import.out"
-    rc = runner([python, "-c", "import kicad_mcp; print(kicad_mcp.__file__)"], env, root, IMPORT_TIMEOUT_S,
+    rc = runner([python, "-c", "import boardproof; print(boardproof.__file__)"], env, root, IMPORT_TIMEOUT_S,
                 probe_out)
     probe = _read(probe_out).strip().splitlines()
     imported = probe[-1].strip() if probe else ""
-    say(f"kicad_mcp.__file__: {imported or '(nothing printed)'}")
+    say(f"boardproof.__file__: {imported or '(nothing printed)'}")
     if rc != 0 or not imported or not inside(imported, root / "src"):
-        res.reasons.append("kicad_mcp is not imported from this worktree's src")
-        say(f"RED: kicad_mcp must come from {root / 'src'} (rc {rc}); the suite was not run")
+        res.reasons.append("boardproof is not imported from this worktree's src")
+        say(f"RED: boardproof must come from {root / 'src'} (rc {rc}); the suite was not run")
         return res
 
     # How many tests carry the network marker? Exactly those may be deselected.
@@ -557,7 +557,7 @@ def run_gate(
         + (f" (with workers one file per worker: {times_path.name.removesuffix('.out')}-gwN.out)"
            if workers > 1 else ""))
     t0 = time.monotonic()
-    rc = runner(cmd, {**env, "KICAD_MCP_TEST_TIMES": str(times_path)}, root, suite_timeout, out_path)
+    rc = runner(cmd, {**env, "BOARDPROOF_TEST_TIMES": str(times_path)}, root, suite_timeout, out_path)
     say(f"pytest finished in {time.monotonic() - t0:.0f} s with exit code {'TIMEOUT' if rc is None else rc}")
     out = _read(out_path)
 
@@ -1023,7 +1023,7 @@ def default_krt_dir(root: Path) -> Path | None:
 
 
 def default_python(root: Path | None = None) -> str:
-    env = os.environ.get("KICAD_MCP_PYTHON")
+    env = os.environ.get("BOARDPROOF_PYTHON")
     if env:
         return env
     common = Path(_git("rev-parse", "--path-format=absolute", "--git-common-dir", root=root))
@@ -1109,7 +1109,7 @@ def main(argv: list[str] | None = None, *, root: Path = ROOT, runner: Runner = d
     ap.add_argument("--publishable-only", action="store_true",
                     help="run only the publishability check over the tracked files (for a push); prints"
                          " PUBLISHABLE: OK or PUBLISHABLE: RED (...) and exits 0 or 1")
-    ap.add_argument("--log-dir", type=Path, default=Path(tempfile.gettempdir()) / "kicad-mcp-batch-gate")
+    ap.add_argument("--log-dir", type=Path, default=Path(tempfile.gettempdir()) / "boardproof-batch-gate")
     args = ap.parse_args(argv)
     if args.timeout is None:
         args.timeout = SUITE_TIMEOUT_S if args.workers == 1 else SUITE_TIMEOUT_PARALLEL_S

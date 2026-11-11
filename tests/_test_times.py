@@ -1,6 +1,6 @@
 """Per-test START/END timestamps for the batch gate (issue 65).
 
-Active only when ``KICAD_MCP_TEST_TIMES`` names a file; ``scripts/batch_gate.py`` sets it for the
+Active only when ``BOARDPROOF_TEST_TIMES`` names a file; ``scripts/batch_gate.py`` sets it for the
 suite run. One line per event, appended and closed at once so a killed run keeps what it wrote:
 ``<ISO time, milliseconds> START|END <node id>``. ``tests/conftest.py`` re-exports the hooks.
 
@@ -14,13 +14,13 @@ from __future__ import annotations
 import os
 from datetime import datetime
 
-ENV = "KICAD_MCP_TEST_TIMES"
+ENV = "BOARDPROOF_TEST_TIMES"
 # The role of THIS process ("controller", "gw0", ... or "" for a serial run) is kept in the environment
 # as "<pid>:<role>", not in module globals: a test that loads the conftest again (tests/test_krt_required.py,
 # tests/test_kicad_demos.py) resets the globals, and the first --workers 4 gate run then wrote a worker's
 # events into the base file. The pid keeps a nested pytest subprocess, which inherits the variable, from
 # taking the role of its parent; its own session start overwrites it.
-ROLE_ENV = "KICAD_MCP_TEST_TIMES_ROLE"
+ROLE_ENV = "BOARDPROOF_TEST_TIMES_ROLE"
 
 
 def pytest_sessionstart(session):

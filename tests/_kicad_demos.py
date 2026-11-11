@@ -52,7 +52,7 @@ def demos_dir_next_to(cli: P) -> P:
 def _locate(
     env: Mapping[str, str], find_cli: Callable[[], Path], var: str, name: str
 ) -> tuple[Path | None, str]:
-    from kicad_mcp.kicad_cli import KicadCliError
+    from boardproof.kicad_cli import KicadCliError
 
     override = env.get(var)
     if override:

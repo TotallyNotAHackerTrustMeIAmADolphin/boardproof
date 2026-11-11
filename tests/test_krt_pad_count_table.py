@@ -14,8 +14,8 @@ from pathlib import Path
 
 import pytest
 
-from kicad_mcp import raw_geometry, write_layer
-from kicad_mcp.routers import kicad_routing_tools as krt_tools
+from boardproof import raw_geometry, write_layer
+from boardproof.routers import kicad_routing_tools as krt_tools
 
 ROOT = Path(__file__).resolve().parents[1]
 CURRENT_DIR = "evals/rung1/layout_run/07_poured"

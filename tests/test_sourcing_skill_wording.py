@@ -8,7 +8,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
 SKILL = " ".join((REPO / ".claude" / "skills" / "kicad-sourcing" / "SKILL.md").read_text(encoding="utf-8").split())
-TOOLS = REPO / "src" / "kicad_mcp" / "toolsets"
+TOOLS = REPO / "src" / "boardproof" / "toolsets"
 
 
 def _strings(name):

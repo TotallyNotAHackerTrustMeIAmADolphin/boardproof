@@ -22,7 +22,7 @@ from pathlib import Path
 import pytest
 from mcp.server.mcpserver import MCPServer
 
-from kicad_mcp.toolsets import schematic as schematic_toolset
+from boardproof.toolsets import schematic as schematic_toolset
 from tests import _tool_registry as registry
 from tests import test_ratchets
 from tests.test_write_guard import NOT_WRITING_TOOLS, TOOL_CASES, WRITING_TOOLS

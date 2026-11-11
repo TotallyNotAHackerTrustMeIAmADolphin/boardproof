@@ -1,4 +1,4 @@
-"""Tests for input preparation (src/kicad_mcp/input_prep.py).
+"""Tests for input preparation (src/boardproof/input_prep.py).
 
 Contract: build ticket 2.
 Seams: ``check_router_text_moves``, ``propose_input_preparation`` and
@@ -15,10 +15,10 @@ from pathlib import Path
 
 import pytest
 
-from kicad_mcp import checkpoint, input_prep, verify_board
-from kicad_mcp import write_layer
-from kicad_mcp import verify_board as gate
-from kicad_mcp.kicad_cli import run_drc
+from boardproof import checkpoint, input_prep, verify_board
+from boardproof import write_layer
+from boardproof import verify_board as gate
+from boardproof.kicad_cli import run_drc
 from tests import _kicad_faults as faults
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -532,7 +532,7 @@ def test_keyboard_interrupt_during_save_cleans_temp_and_keeps_token(
 
 
 def test_gate_failure_after_rename_reports_incomplete_with_the_revision(board: Path, tmp_path: Path) -> None:
-    from kicad_mcp.kicad_cli import KicadCliError
+    from boardproof.kicad_cli import KicadCliError
 
     def missing_cli(path, **_kwargs):
         raise KicadCliError("kicad-cli not found")

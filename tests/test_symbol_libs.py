@@ -15,9 +15,9 @@ import pytest
 from kicad_tools.sexp import parse_string
 from mcp.server.mcpserver import MCPServer
 
-from kicad_mcp import symbol_libs, write_layer
-from kicad_mcp.toolsets import library as library_toolset
-from kicad_mcp.toolsets import schematic as schematic_toolset
+from boardproof import symbol_libs, write_layer
+from boardproof.toolsets import library as library_toolset
+from boardproof.toolsets import schematic as schematic_toolset
 
 FIXTURE = Path(__file__).parent / "fixtures" / "simple_led.kicad_sch"
 

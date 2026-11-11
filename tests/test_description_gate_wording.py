@@ -33,7 +33,7 @@ import re
 import pytest
 from mcp.client.client import Client
 
-from kicad_mcp.server import build_server
+from boardproof.server import build_server
 from tests import _tool_registry
 
 _GATE = "verify_board"

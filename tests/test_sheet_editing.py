@@ -15,9 +15,9 @@ from pathlib import Path
 import pytest
 from mcp.server.mcpserver import MCPServer
 
-from kicad_mcp import kicad_cli, sheet_authoring, sheet_editing, sheet_tree, write_layer
-from kicad_mcp.toolsets import project as project_toolset
-from kicad_mcp.toolsets import schematic as schematic_toolset
+from boardproof import kicad_cli, sheet_authoring, sheet_editing, sheet_tree, write_layer
+from boardproof.toolsets import project as project_toolset
+from boardproof.toolsets import schematic as schematic_toolset
 
 
 @pytest.fixture(autouse=True)

@@ -21,8 +21,8 @@ from pathlib import Path
 import pytest
 
 
-from kicad_mcp import verify_board as gate
-from kicad_mcp import write_layer
+from boardproof import verify_board as gate
+from boardproof import write_layer
 
 FIXTURES = Path(__file__).parent / "fixtures"
 OBSTACLE = FIXTURES / "zone_obstacle"
@@ -352,7 +352,7 @@ def test_f5_the_output_states_the_area_cap() -> None:
 
 
 def test_f7_the_refill_has_a_shorter_bound_than_the_default(monkeypatch) -> None:
-    from kicad_mcp import kicad_cli
+    from boardproof import kicad_cli
 
     seen = {}
 
@@ -369,7 +369,7 @@ def test_f7_the_refill_has_a_shorter_bound_than_the_default(monkeypatch) -> None
 def test_f7_a_refill_timeout_is_not_compared_and_the_verdict_is_unchanged(tmp_path: Path, monkeypatch) -> None:
     import subprocess
 
-    from kicad_mcp import kicad_cli
+    from boardproof import kicad_cli
 
     good = _grade(_copy(OBSTACLE, tmp_path / "good"))
 

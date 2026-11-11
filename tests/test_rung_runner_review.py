@@ -7,7 +7,7 @@ import json
 
 import pytest
 
-from kicad_mcp import rung_runner
+from boardproof import rung_runner
 
 from test_rung_runner import Clock, load, make_run, project  # noqa: F401
 from tests._hermetic_git import run_git

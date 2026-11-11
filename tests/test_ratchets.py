@@ -1,4 +1,4 @@
-"""Ratchet tests over ``src/kicad_mcp/`` (build ticket 29; docs/ARCHITECTURE.md decision 4).
+"""Ratchet tests over ``src/boardproof/`` (build ticket 29; docs/ARCHITECTURE.md decision 4).
 
 Static scans with ``ast`` that keep two bug classes from coming back: silent writes and
 unchecked convenience-property geometry. Each ratchet compares what the scan finds today with
@@ -18,7 +18,7 @@ the frozen list in ``ratchets.toml`` (next to this file):
    CLAUDE.md hard rule 2 in code.
 4. **High-level saves.** ``<x>.save(...)``, ``<x>.write(...)`` (not a file or buffer handle),
    ``save_project``, ``run_set_footprint``, ``run_fix_annotation``, each keyed on its call
-   text. Calls into the reserved module ``kicad_mcp.write_layer`` (build ticket 42) are exempt.
+   text. Calls into the reserved module ``boardproof.write_layer`` (build ticket 42) are exempt.
 5. **Writing tools.** Every registered tool that is not annotated read-only is classified, and
    a classified tool may not be annotated read-only. A writing tool without a proven
    reload-and-compare self-check is listed, and only the tools frozen on 2026-10-19 may be.
@@ -50,7 +50,7 @@ import pytest
 from tests import _tool_registry
 
 REPO = Path(__file__).resolve().parents[1]
-SRC = REPO / "src" / "kicad_mcp"
+SRC = REPO / "src" / "boardproof"
 DATA = Path(__file__).with_name("ratchets.toml")
 DATA_NAME = "tests/ratchets.toml"
 
@@ -115,7 +115,7 @@ PATH_BUILDERS = frozenset(
 
 # Build ticket 42's write layer. Calls that resolve to this module (or package) through an
 # import are its sanctioned save path, not a high-level save.
-WRITE_LAYER_MODULE = "kicad_mcp.write_layer"
+WRITE_LAYER_MODULE = "boardproof.write_layer"
 
 # The writing tools that had no proven self-check when the ratchet was frozen (ticket 07's
 # audit, 2026-10-19): 19 without a reload-and-compare check, and 4 whose check no test has
@@ -166,7 +166,7 @@ FIX_CONVENIENCE = (
 FIX_SAVE = (
     "New code does not save through kicad_tools' high-level models (docs/ARCHITECTURE.md decision 1: "
     "PCB.save failed on Windows in 0.22-0.23 and has no parse check or self-check, Schematic.write collapses hierarchies). Use the write "
-    "layer (module kicad_mcp.write_layer, build ticket 42) or the low-level API with a "
+    "layer (module boardproof.write_layer, build ticket 42) or the low-level API with a "
     "reload-and-compare self-check."
 )
 FIX_COMMIT = (
@@ -198,12 +198,12 @@ FIX_FROZEN = (
 
 @dataclass(frozen=True)
 class Site:
-    file: str  # relative to src/kicad_mcp, POSIX separators
+    file: str  # relative to src/boardproof, POSIX separators
     function: str  # dotted qualname without <locals>; "<module>" at top level
     kind: str
     line: int
     code: str  # the full normalised call text (ast.unparse)
-    root: str = "src/kicad_mcp"  # the scanned tree, for the failure message
+    root: str = "src/boardproof"  # the scanned tree, for the failure message
 
     @property
     def key(self) -> tuple[str, str, str]:
@@ -276,11 +276,11 @@ def _dotted_module(rel: str) -> str:
     parts = rel[:-3].split("/")
     if parts[-1] == "__init__":
         parts = parts[:-1]
-    return ".".join(["kicad_mcp", *parts])
+    return ".".join(["boardproof", *parts])
 
 
 def _kicad_imports(rel: str, tree: ast.Module) -> dict[str, tuple[str, str | None]]:
-    """Local name -> (module, symbol or None) for every ``kicad_mcp`` import in a module,
+    """Local name -> (module, symbol or None) for every ``boardproof`` import in a module,
     absolute or relative, at any depth (a function-local import counts module-wide)."""
     package = _dotted_module(rel).split(".")
     if not rel.endswith("__init__.py"):
@@ -289,13 +289,13 @@ def _kicad_imports(rel: str, tree: ast.Module) -> dict[str, tuple[str, str | Non
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             for alias in node.names:
-                if alias.name.startswith("kicad_mcp"):
+                if alias.name.startswith("boardproof"):
                     names[alias.asname or alias.name] = (alias.name, None)
         elif isinstance(node, ast.ImportFrom):
             base = node.module or ""
             if node.level:
                 base = ".".join(package[: len(package) - node.level + 1] + ([base] if base else []))
-            if not base.startswith("kicad_mcp"):
+            if not base.startswith("boardproof"):
                 continue
             for alias in node.names:
                 # Either a submodule or a symbol; callers try both.
@@ -340,7 +340,7 @@ def _stdlib_aliases(tree: ast.Module) -> dict[str, str]:
 class _Scanner(ast.NodeVisitor):
     """Walks one module, tracking the dotted function/class scope of every node."""
 
-    root = "src/kicad_mcp"  # the tree the scanned files are relative to
+    root = "src/boardproof"  # the tree the scanned files are relative to
 
     def __init__(self, file: str, modules: dict[str, ast.Module] | None = None) -> None:
         self.file = file
@@ -1444,7 +1444,7 @@ def test_save_bytes_has_only_the_frozen_callers() -> None:
 class Tool:
     name: str
     read_only: bool
-    file: str  # relative to src/kicad_mcp
+    file: str  # relative to src/boardproof
     function: str  # dotted qualname without <locals>
 
 
@@ -1452,15 +1452,15 @@ def _registered_tools() -> list[Tool]:
     """Every tool the server can register, with all toolsets loaded."""
     import inspect
 
-    import kicad_mcp
+    import boardproof
     from mcp.client.client import Client
 
-    from kicad_mcp.server import build_server
+    from boardproof.server import build_server
 
-    package = Path(kicad_mcp.__file__).resolve().parent
+    package = Path(boardproof.__file__).resolve().parent
     if os.path.normcase(str(package)) != os.path.normcase(str(SRC.resolve())):
         pytest.fail(
-            f"kicad_mcp is imported from {package}, but this test scans {SRC}. In a worktree, run "
+            f"boardproof is imported from {package}, but this test scans {SRC}. In a worktree, run "
             "with PYTHONPATH=<worktree>/src (docs/TESTING.md, 'Test suite').",
             pytrace=False,
         )
@@ -1505,10 +1505,10 @@ def _registered_tools() -> list[Tool]:
 
 
 class _CallGraph:
-    """Best-effort static call graph over ``src/kicad_mcp``, resolved by name.
+    """Best-effort static call graph over ``src/boardproof``, resolved by name.
 
     Resolves plain calls to functions in an enclosing scope or the module, imported
-    ``kicad_mcp`` functions and modules (absolute or relative), and ``self.method``. Calls
+    ``boardproof`` functions and modules (absolute or relative), and ``self.method``. Calls
     through variables, lambdas or ``functools.partial`` are not followed.
     """
 
@@ -2006,19 +2006,19 @@ def test_save_scanner_exempts_only_calls_into_the_write_layer() -> None:
     )
     layer_core = "def save(doc, path):\n    pass\ndef commit(doc, path):\n    pass\n"
     caller = """
-from kicad_mcp import write_layer
-from kicad_mcp import write_layer as wl
-from kicad_mcp.write_layer import save, save_project
-from kicad_mcp.write_layer import save_project as sp
-from kicad_mcp.write_layer import PCB
-import kicad_mcp.write_layer
+from boardproof import write_layer
+from boardproof import write_layer as wl
+from boardproof.write_layer import save, save_project
+from boardproof.write_layer import save_project as sp
+from boardproof.write_layer import PCB
+import boardproof.write_layer
 from ..write_layer import core
 def f(doc, board, path):
     write_layer.save(doc, path)        # exempt: a def of the layer
     wl.save(doc, path)                 # exempt
     save_project(doc, path)            # exempt
     sp(doc, path)                      # exempt: an alias of a real def
-    kicad_mcp.write_layer.save(doc, path)  # exempt
+    boardproof.write_layer.save(doc, path)  # exempt
     core.save(doc, path)               # exempt: a def of a layer submodule
     board.save(path)                   # still a high-level save
     doc = write_layer.load(path)
@@ -2028,7 +2028,7 @@ def f(doc, board, path):
 def g(schematic, path):
     schematic.write(path)              # a parameter, though h() imports a layer name "schematic"
 def h():
-    from kicad_mcp.write_layer import schematic
+    from boardproof.write_layer import schematic
     return schematic
 def k(path):
     schematic = make(path)
@@ -2063,7 +2063,7 @@ def test_save_bytes_scanner_catches_a_new_caller_in_every_form() -> None:
     # Review round 1 of build ticket 76: a place_footprints mutation through save_bytes passed
     # every ratchet. Each form below must show up as a caller outside SAVE_BYTES_CALLERS.
     text = """
-from kicad_mcp.write_layer import save_bytes as raw_save
+from boardproof.write_layer import save_bytes as raw_save
 
 def place(write_layer, board):
     write_layer.save_bytes(b"(kicad_pcb)", board, verify=print)
@@ -2109,7 +2109,7 @@ def test_ratchet_reports_new_grown_gone_and_shrunk_sites() -> None:
     heads = sorted(p.split(":")[0] + ":" + p.split(" in m.py ")[1].split(":")[0] for p in problems)
     assert heads == ["NEW:grown", "NEW:new", "STALE:gone", "STALE:shrunk"]
     assert all("Fix:" in p for p in problems)
-    assert any("src/kicad_mcp/m.py:5 in new" in p for p in problems)
+    assert any("src/boardproof/m.py:5 in new" in p for p in problems)
 
 
 def test_code_keyed_ratchet_catches_a_retargeted_site() -> None:
@@ -2125,7 +2125,7 @@ def test_code_keyed_ratchet_catches_a_retargeted_site() -> None:
 def test_call_graph_reaches_writes_through_helpers_and_module_imports() -> None:
     modules = {
         "toolsets/demo.py": ast.parse(
-            "from kicad_mcp import helper\n"
+            "from boardproof import helper\n"
             "from .other import write_it\n"
             "def build(mcp):\n"
             "    def tool(p):\n"
@@ -2182,7 +2182,7 @@ def test_scanners_see_the_source_tree() -> None:
 
 # --------------------------------------------------------------------------- tests/ (build ticket 74)
 # CLAUDE.md hard rule 1 holds for tests too: a test builds its KiCad variants through the write
-# layer (kicad_mcp.write_layer: load, change the tree with the typed setters, save), never by
+# layer (boardproof.write_layer: load, change the tree with the typed setters, save), never by
 # editing text, because a hand edit can build a file KiCad would never write and the test then
 # proves less than it seems. A test that must write a broken or drifted file on purpose does it
 # through tests/_kicad_faults.py, the one sanctioned fault-injection helper.

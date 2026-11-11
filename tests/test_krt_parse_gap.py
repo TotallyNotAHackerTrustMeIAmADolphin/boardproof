@@ -14,8 +14,8 @@ from pathlib import Path
 
 import pytest
 
-from kicad_mcp import rung_backends, write_layer
-from kicad_mcp.routers import kicad_routing_tools as krt_tools
+from boardproof import rung_backends, write_layer
+from boardproof.routers import kicad_routing_tools as krt_tools
 
 FIXTURES = Path(__file__).parent / "fixtures"
 needs_krt = pytest.mark.needs_krt

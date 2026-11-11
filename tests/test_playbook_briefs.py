@@ -52,7 +52,7 @@ COMMON = [
     "Never kill a process you did not start; if a foreign process blocks you (lock, port), report it to the coordinator.",  # noqa: E501
     "Run tests as SMALL SEPARATE runs (each aimed at under about 20 minutes), in the background (`run_in_background`) with their own log, waiting for the completion notification (no sleep loops), each printing its own summary line.",  # noqa: E501
     "While a batch gate runs, start no more than 2 other runs",
-    "A result counts only if `kicad_mcp.__file__` lies inside the worktree and pytest's `rootdir:` line names it; report both.",  # noqa: E501
+    "A result counts only if `boardproof.__file__` lies inside the worktree and pytest's `rootdir:` line names it; report both.",  # noqa: E501
 ]
 
 BUILDER_ONLY = [

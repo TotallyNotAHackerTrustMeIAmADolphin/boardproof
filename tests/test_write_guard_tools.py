@@ -27,16 +27,16 @@ from typing import Any
 import pytest
 from mcp.server.mcpserver import MCPServer
 
-from kicad_mcp import board_outline, board_rules, input_prep, kicad_cli, part_adoption, pour_step, silk_minimums
-from kicad_mcp import schematic_import, write_layer
-from kicad_mcp import verify_board as gate
-from kicad_mcp.toolsets import library as library_toolset
-from kicad_mcp.toolsets import manufacturing as manufacturing_toolset
-from kicad_mcp.toolsets import placement as placement_toolset
-from kicad_mcp.toolsets import project as project_toolset
-from kicad_mcp.toolsets import routing as routing_toolset
-from kicad_mcp.toolsets import schematic as schematic_toolset
-from kicad_mcp.toolsets import sourcing as sourcing_toolset
+from boardproof import board_outline, board_rules, input_prep, kicad_cli, part_adoption, pour_step, silk_minimums
+from boardproof import schematic_import, write_layer
+from boardproof import verify_board as gate
+from boardproof.toolsets import library as library_toolset
+from boardproof.toolsets import manufacturing as manufacturing_toolset
+from boardproof.toolsets import placement as placement_toolset
+from boardproof.toolsets import project as project_toolset
+from boardproof.toolsets import routing as routing_toolset
+from boardproof.toolsets import schematic as schematic_toolset
+from boardproof.toolsets import sourcing as sourcing_toolset
 from tests import test_board_outline as t_outline
 from tests import test_board_rules as t_rules
 from tests import test_input_prep as t_prep
@@ -225,7 +225,7 @@ def _generate_footprint(tmp_path):
 
 
 def _register_library_asset(tmp_path):
-    from kicad_mcp.sourcing.footprint_gen import generate_footprint
+    from boardproof.sourcing.footprint_gen import generate_footprint
 
     project = _project(tmp_path)
     fp_dir = project["dir"] / "My.pretty"

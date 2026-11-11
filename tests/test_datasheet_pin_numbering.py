@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from kicad_mcp.sourcing.datasheet import _table_is_pin_like, inspect_datasheet
+from boardproof.sourcing.datasheet import _table_is_pin_like, inspect_datasheet
 
 
 def _pdf(path: Path, pages: list[str]) -> Path:
@@ -238,7 +238,7 @@ def test_f5_pin_name_with_newline_or_control_char_is_unverified(tmp_path):
 def test_f1_registered_tool_passes_package_and_image_dir_and_describes_the_result(tmp_path):
     from mcp.server.mcpserver import MCPServer
 
-    from kicad_mcp.toolsets import sourcing as sourcing_toolset
+    from boardproof.toolsets import sourcing as sourcing_toolset
 
     mcp = MCPServer("t")
     sourcing_toolset.build(mcp)

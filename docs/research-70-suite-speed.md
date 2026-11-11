@@ -55,7 +55,7 @@ the file, 49.6 s alone).** MEASURED: exactly one subprocess call, `kicad-cli sch
 parsed about 8 times each. CODE: nothing caches the parse. `sheet_tree._parse` (`sheet_tree.py` line
 96) and `schematic_import._parse` (line 89) call `parse_file` directly; `walk` keeps a per-call dict
 (`parsed_files`, `sheet_tree.py` line 120), so each walk parses once, but a tool call makes several
-walks plus its own parses. The only `lru_cache` in `src/kicad_mcp` is `board_rules.py` line 287.
+walks plus its own parses. The only `lru_cache` in `src/boardproof` is `board_rules.py` line 287.
 
 **test_verify_board_netlist_guard::test_a_healthy_demo_still_passes[vme-wren] (64.3 s).** CODE: the
 DRC is replaced by `_FakeDrc` (`_clean_gate`, lines 44 to 66), so no DRC runs; the guard's real
@@ -139,9 +139,9 @@ session-scoped fixture can run once per worker, and xdist documents a `FileLock`
 work. The terminal header for xdist is built as `f"{total_workers} {workers_noun} [{tests_collected}
 {tests_noun}]"` and a crash prints `worker 'gw0' crashed while running '<id>'` and replaces the worker.
 
-**Shared state found (CODE, grep over `tests/` and `src/kicad_mcp/`; not exhaustive):**
+**Shared state found (CODE, grep over `tests/` and `src/boardproof/`; not exhaustive):**
 - Per-test private paths: fixtures use `tmp_path`, `tmp_path_factory`, `kicad_demo` copies, and an
-  autouse fixture sets `KICAD_MCP_BACKUP_DIR` to a tmp dir (`tests/conftest.py` lines 73 to 77).
+  autouse fixture sets `BOARDPROOF_BACKUP_DIR` to a tmp dir (`tests/conftest.py` lines 73 to 77).
   `tmp_path_factory` gives each xdist worker its own base temp directory (ASSUMED; standard pytest
   behaviour, not re-verified).
 - The KiCad install is shared but read-only; `demo_install_guard` hashes the whole demos tree at the

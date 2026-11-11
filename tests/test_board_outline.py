@@ -1,4 +1,4 @@
-"""Tests for the board outline and mounting-hole step (src/kicad_mcp/board_outline.py).
+"""Tests for the board outline and mounting-hole step (src/boardproof/board_outline.py).
 
 Contract: build ticket 19.
 Seams: ``propose_board_outline`` and ``confirm_board_outline``. Fixtures are the golden
@@ -16,8 +16,8 @@ from pathlib import Path
 
 import pytest
 
-from kicad_mcp import board_outline
-from kicad_mcp import write_layer
+from boardproof import board_outline
+from boardproof import write_layer
 from tests import _kicad_faults as faults
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -149,7 +149,7 @@ def test_rounded_corners_use_arcs_and_close(board: Path, tmp_path: Path) -> None
 
 def test_closed_outline_has_no_outline_error_in_kicad_cli(board: Path, tmp_path: Path) -> None:
     """Real kicad-cli: no outline violation on the revision."""
-    from kicad_mcp.kicad_cli import run_drc
+    from boardproof.kicad_cli import run_drc
 
     proposal = board_outline.propose_board_outline(
         board, {**RECT, "corner_radius": 2.0}, output_dir=tmp_path / "out"
@@ -788,7 +788,7 @@ HOLE_OK = [{"reference": "H1", "x": 105.0, "y": 75.0, "footprint": HOLE, "keepou
 def test_mounting_hole_is_board_only_so_schematic_parity_has_no_extra_footprint(board: Path, tmp_path: Path) -> None:
     from collections import Counter
 
-    from kicad_mcp.kicad_cli import run_drc
+    from boardproof.kicad_cli import run_drc
 
     src = Counter(v["type"] for v in run_drc(board, schematic_parity=True).get("schematic_parity", []))
     _, result = _apply(board, tmp_path, RECT, HOLE_OK)
@@ -821,7 +821,7 @@ def test_real_drc_flags_a_track_through_the_keepout(board: Path, tmp_path: Path)
     from kicad_tools.schema import PCB
     from kicad_tools.sexp import SExp
 
-    from kicad_mcp.kicad_cli import run_drc
+    from boardproof.kicad_cli import run_drc
 
     _, result = _apply(board, tmp_path, RECT, HOLE_OK)
     out = Path(result["output_pcb"])

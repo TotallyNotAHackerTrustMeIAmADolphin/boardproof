@@ -11,7 +11,7 @@ from __future__ import annotations
 import pytest
 from mcp.client.client import Client
 
-from kicad_mcp.server import build_server
+from boardproof.server import build_server
 
 
 @pytest.mark.asyncio

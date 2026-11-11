@@ -1,6 +1,6 @@
 # Evaluation suite
 
-`kicad_mcp_eval.xml` holds 15 independent, read-only Q&A pairs. Each tests whether an agent with only this project's tools can answer a realistic question about the fixtures in `tests/fixtures/`. The format follows the `mcp-builder` evaluation guide. The suite tests tool usability, not board quality; the acceptance gate (docs/TESTING.md) handles that.
+`boardproof_eval.xml` holds 15 independent, read-only Q&A pairs. Each tests whether an agent with only this project's tools can answer a realistic question about the fixtures in `tests/fixtures/`. The format follows the `mcp-builder` evaluation guide. The suite tests tool usability, not board quality; the acceptance gate (docs/TESTING.md) handles that.
 
 - **Q1-Q10:** single-tool lookups (DRC/ERC on `simple_led`, footprint counts, symbol values, the parametric footprint generator, datasheet extraction).
 - **Q11-Q15:** multi-step chains:

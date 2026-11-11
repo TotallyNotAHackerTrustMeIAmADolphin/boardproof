@@ -21,15 +21,15 @@ from kicad_tools.schema import PCB
 from kicad_tools.sexp import SExp
 from mcp.server.mcpserver import MCPServer
 
-from kicad_mcp import part_adoption as pa
-from kicad_mcp import write_layer
-from kicad_mcp.sourcing.footprint_gen import generate_footprint
-from kicad_mcp.toolsets import library as library_toolset
+from boardproof import part_adoption as pa
+from boardproof import write_layer
+from boardproof.sourcing.footprint_gen import generate_footprint
+from boardproof.toolsets import library as library_toolset
 
 
 def _cli_available() -> bool:
     try:
-        from kicad_mcp.kicad_cli import find_kicad_cli
+        from boardproof.kicad_cli import find_kicad_cli
 
         find_kicad_cli()
         return True
@@ -1109,7 +1109,7 @@ def test_a_clipped_render_with_a_wide_row_fails_and_a_narrow_one_is_incomplete(p
 
 def _stock_dir() -> Path | None:
     try:
-        from kicad_mcp.kicad_cli import find_kicad_cli
+        from boardproof.kicad_cli import find_kicad_cli
 
         root = Path(find_kicad_cli()).resolve().parent.parent / "share" / "kicad"
     except Exception:  # noqa: BLE001

@@ -1,7 +1,7 @@
 """Ticket 03 (pivot-ladder-build): router wrapper flags and the CLI-surface snapshot.
 
 A router upgrade must fail a TEST instead of a RUN. The snapshot
-(`src/kicad_mcp/routers/krt_cli_snapshot.json`) is captured from the real
+(`src/boardproof/routers/krt_cli_snapshot.json`) is captured from the real
 installed router's `route.py --capabilities`; the checks below are one-way:
 every flag the wrapper can emit must exist in the pinned router's surface.
 """
@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from kicad_mcp.routers import kicad_routing_tools as krt
+from boardproof.routers import kicad_routing_tools as krt
 
 FIXTURES = Path(__file__).parent / "fixtures"
 GOLDEN_PCB = FIXTURES / "golden_attiny1616_board" / "golden_attiny1616_board.kicad_pcb"
@@ -321,7 +321,7 @@ def test_installed_router_is_at_the_pinned_commit(krt_checkout):
 
 
 def _availability_with(tmp_path, monkeypatch, *, head: str | None):
-    from kicad_mcp import rung_backends
+    from boardproof import rung_backends
 
     checkout = tmp_path / "krt"
     checkout.mkdir()

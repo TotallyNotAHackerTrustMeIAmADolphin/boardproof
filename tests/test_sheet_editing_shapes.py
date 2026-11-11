@@ -15,8 +15,8 @@ from pathlib import Path
 
 import pytest
 
-from kicad_mcp import kicad_cli, sheet_editing, write_layer
-from kicad_mcp.toolsets import project as project_toolset
+from boardproof import kicad_cli, sheet_editing, write_layer
+from boardproof.toolsets import project as project_toolset
 
 from tests.test_sheet_editing import _tools, _wire
 

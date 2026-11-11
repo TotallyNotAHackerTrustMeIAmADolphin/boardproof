@@ -10,8 +10,8 @@ from pathlib import Path
 
 import pytest
 
-from kicad_mcp import write_layer
-from kicad_mcp import autonomy_run, rung_backends, rung_runner
+from boardproof import write_layer
+from boardproof import autonomy_run, rung_backends, rung_runner
 
 from test_input_prep import _build_fixture, GOLDEN_DIR, GOLDEN_NAME
 

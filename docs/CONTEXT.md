@@ -1,4 +1,4 @@
-# Kicad-MCP
+# Boardproof
 
 An MCP server that automates PCB design work in KiCad, in two tiers of autonomy depending on how complex the board is.
 
@@ -45,7 +45,7 @@ A mutation split into a proposal, which changes nothing and returns a revision t
 _Avoid_: approval step, review gate (the acceptance gate is a different thing)
 
 **Write layer**:
-The project's own thin layer through which every change to a KiCad file is made. A library parses and serialises the file; the write layer owns what KiCad silently depends on (string escaping, number precision, pad angles) and the save itself. Decided 2026-10-19 and built as `kicad_mcp.write_layer` (build ticket 42); the move of the remaining tools onto it is nearly complete, and shrink-only ratchet lists name the rest.
+The project's own thin layer through which every change to a KiCad file is made. A library parses and serialises the file; the write layer owns what KiCad silently depends on (string escaping, number precision, pad angles) and the save itself. Decided 2026-10-19 and built as `boardproof.write_layer` (build ticket 42); the move of the remaining tools onto it is nearly complete, and shrink-only ratchet lists name the rest.
 _Avoid_: writer (KRT and `kicad_tools` each have their own), the high-level models (they are for reads and generators only)
 
 **Self-check**:
@@ -83,7 +83,7 @@ A numbered entry in the "Decisions" section of docs/ARCHITECTURE.md, for example
 _Avoid_: ADR, RFC
 
 **Protocol N**:
-The version of the frozen plan by which a ladder rung is measured (`src/kicad_mcp/autonomy_protocol.json`): attempts, levers, policies and what counts as official. Results are comparable only within one version. The current one is protocol 6.
+The version of the frozen plan by which a ladder rung is measured (`src/boardproof/autonomy_protocol.json`): attempts, levers, policies and what counts as official. Results are comparable only within one version. The current one is protocol 6.
 _Avoid_: test plan, benchmark
 
 **Official batch**:

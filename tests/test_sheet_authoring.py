@@ -21,9 +21,9 @@ import pytest
 from kicad_tools.sexp import SExp
 from mcp.server.mcpserver import MCPServer
 
-from kicad_mcp import kicad_cli, sheet_authoring, sheet_tree, write_layer
-from kicad_mcp.toolsets import project as project_toolset
-from kicad_mcp.toolsets import schematic as schematic_toolset
+from boardproof import kicad_cli, sheet_authoring, sheet_tree, write_layer
+from boardproof.toolsets import project as project_toolset
+from boardproof.toolsets import schematic as schematic_toolset
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -268,7 +268,7 @@ def test_a_second_insert_nests_under_the_first_sheet_with_its_instance_path(blan
 
 def test_a_label_the_child_already_has_is_reused_not_duplicated(blank):
     sheet_authoring.create_sheets(str(blank), [{"file": "sensors.kicad_sch"}])
-    from kicad_mcp.toolsets import schematic as sch
+    from boardproof.toolsets import schematic as sch
 
     mcp = MCPServer("t")
     sch.build(mcp)

@@ -16,8 +16,8 @@ from pathlib import Path
 import pytest
 from mcp.client.client import Client
 
-from kicad_mcp import write_layer
-from kicad_mcp.server import build_server
+from boardproof import write_layer
+from boardproof.server import build_server
 
 FIXTURES = Path(__file__).parent / "fixtures"
 GOLDEN_DIR = FIXTURES / "golden_attiny1616_board"
@@ -51,7 +51,7 @@ def board(tmp_path: Path) -> Path:
 def fake_gate(monkeypatch: pytest.MonkeyPatch) -> list[dict]:
     """The kicad-cli boundary: a PASS verdict and an empty baseline. Returns the
     list of calls the gate received (path plus keyword arguments)."""
-    from kicad_mcp import verify_board as gate
+    from boardproof import verify_board as gate
 
     calls: list[dict] = []
 

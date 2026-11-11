@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from kicad_mcp import autonomy_run, rung_runner
+from boardproof import autonomy_run, rung_runner
 
 from test_autonomy_run_review import OK_INFO, _drc, _measure, _ok_backend, board  # noqa: F401
 from test_input_prep import GOLDEN_DIR, GOLDEN_NAME

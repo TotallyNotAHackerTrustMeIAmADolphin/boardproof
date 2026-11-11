@@ -6,7 +6,7 @@ Puts the router into ``<root>/.tools/KiCadRoutingTools`` (gitignored, like the o
 
 1. clones the upstream repository when the folder is absent, or moves an existing clean checkout to
    the pinned full sha (``PINNED_SHA``, the release commit of ``TAG``, the same commit
-   ``src/kicad_mcp/routers/krt_cli_snapshot.json`` pins) and reads HEAD back: a checkout that does not
+   ``src/boardproof/routers/krt_cli_snapshot.json`` pins) and reads HEAD back: a checkout that does not
    land on the sha is refused;
 2. fetches the prebuilt ``grid_router`` binary of the release for this platform and checks its SHA-256
    against the value recorded below before anything is written; a wrong hash is refused and leaves no

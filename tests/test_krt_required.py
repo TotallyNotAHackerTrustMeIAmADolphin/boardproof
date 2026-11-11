@@ -64,7 +64,7 @@ def test_require_returns_quietly_when_krt_is_usable_even_under_the_flag() -> Non
 
 
 def test_checkout_or_missing_skips_or_fails_on_a_missing_checkout() -> None:
-    from kicad_mcp.routers import kicad_routing_tools as krt
+    from boardproof.routers import kicad_routing_tools as krt
 
     def gone() -> Path:
         raise krt.KicadRoutingToolsError("KiCadRoutingTools not found.")
@@ -79,7 +79,7 @@ def test_checkout_or_missing_returns_the_found_checkout(tmp_path: Path) -> None:
 
 
 def test_the_real_probe_reports_a_wrong_path_as_not_usable(tmp_path: Path, monkeypatch) -> None:
-    from kicad_mcp.routers import kicad_routing_tools as krt
+    from boardproof.routers import kicad_routing_tools as krt
 
     monkeypatch.setenv(krt.ENV_PATH, str(tmp_path / "nowhere"))
     usable, reason = _krt.availability()
@@ -88,7 +88,7 @@ def test_the_real_probe_reports_a_wrong_path_as_not_usable(tmp_path: Path, monke
 
 
 def test_the_probe_cache_is_keyed_on_the_krt_path(tmp_path: Path, monkeypatch) -> None:
-    from kicad_mcp.routers import kicad_routing_tools as krt
+    from boardproof.routers import kicad_routing_tools as krt
 
     for name in ("first", "second"):
         monkeypatch.setenv(krt.ENV_PATH, str(tmp_path / name))
@@ -97,7 +97,7 @@ def test_the_probe_cache_is_keyed_on_the_krt_path(tmp_path: Path, monkeypatch) -
 
 
 def test_a_probe_that_raises_counts_as_not_usable(tmp_path: Path, monkeypatch) -> None:
-    from kicad_mcp.routers import kicad_routing_tools as krt
+    from boardproof.routers import kicad_routing_tools as krt
 
     def boom(**kwargs):
         raise RuntimeError("probe exploded")
@@ -121,7 +121,7 @@ def test_the_conftest_wiring_fails_closed_under_the_flag_and_skips_without(
     pytester: pytest.Pytester, monkeypatch: pytest.MonkeyPatch, body: str
 ) -> None:
     """The real ``tests/conftest.py`` (``-p tests.conftest``), KRT pointed at a missing path."""
-    from kicad_mcp.routers import kicad_routing_tools as krt
+    from boardproof.routers import kicad_routing_tools as krt
 
     monkeypatch.setenv(krt.ENV_PATH, str(pytester.path / "nowhere"))
     pytester.makepyfile(test_one=body)
@@ -142,7 +142,7 @@ def test_under_the_flag_the_krt_check_runs_before_a_fixture_that_skips_for_anoth
 ) -> None:
     """The rung-1 shape: a module fixture that skips on its own ("kicad-cli not installed") must
     not hide an absent KRT from the gate; the marker is decided before the test's fixtures."""
-    from kicad_mcp.routers import kicad_routing_tools as krt
+    from boardproof.routers import kicad_routing_tools as krt
 
     monkeypatch.setenv(krt.ENV_PATH, str(pytester.path / "nowhere"))
     monkeypatch.setenv(_krt.REQUIRED_FLAG, "1")
@@ -480,10 +480,10 @@ def test_the_ratchet_fires_on_each_shape_it_bans(source: str) -> None:
         "    monkeypatch.setattr(krt, '_PLUGIN_GLOBS', {})\n"
         "    assert krt.check_availability()['status'] == 'incomplete'\n",
         # review round 2: hermetic tests that the round-1 rule flagged falsely
-        "@mock.patch('kicad_mcp.routers.kicad_routing_tools.find_kicad_routing_tools')\n"
+        "@mock.patch('boardproof.routers.kicad_routing_tools.find_kicad_routing_tools')\n"
         "def test_x(find):\n    assert krt.check_availability()['status'] == 'incomplete'\n",
         "def test_x():\n"
-        "    with mock.patch('kicad_mcp.routers.kicad_routing_tools.check_availability', return_value={}):\n"
+        "    with mock.patch('boardproof.routers.kicad_routing_tools.check_availability', return_value={}):\n"
         "        krt.check_availability()\n",
         "def test_x():\n"
         "    with mock.patch.object(krt, 'find_kicad_routing_tools', side_effect=krt.KicadRoutingToolsError('x')):\n"

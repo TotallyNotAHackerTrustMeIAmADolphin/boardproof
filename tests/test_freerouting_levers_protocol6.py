@@ -16,8 +16,8 @@ from pathlib import Path
 
 import pytest
 
-from kicad_mcp import rung_backends, rung_runner
-from kicad_mcp.toolsets import routing as routing_toolset
+from boardproof import rung_backends, rung_runner
+from boardproof.toolsets import routing as routing_toolset
 
 
 def _run(tmp_path, monkeypatch, **kwargs):

@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 from kicad_tools.sexp import SExp
 
-from kicad_mcp import write_layer as wl
+from boardproof import write_layer as wl
 from tests import _kicad_faults as faults
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -55,12 +55,12 @@ def test_raw_atom_lands_verbatim_and_nothing_else_changes(tmp_path: Path) -> Non
 
 def test_write_unchecked_writes_what_the_layer_refuses(tmp_path: Path) -> None:
     root = wl.load(_board(tmp_path))
-    root.append(SExp.list("kicad_mcp_unknown_token"))
+    root.append(SExp.list("boardproof_unknown_token"))
     with pytest.raises(wl.WriteLayerError):
         wl.save(root, tmp_path / "refused.kicad_pcb")
     assert not (tmp_path / "refused.kicad_pcb").exists()
     written = faults.write_unchecked(root, tmp_path / "fault.kicad_pcb")
-    assert b"(kicad_mcp_unknown_token)" in written.read_bytes()
+    assert b"(boardproof_unknown_token)" in written.read_bytes()
 
 
 def test_drift_changes_the_bytes_and_keeps_the_tokens(tmp_path: Path) -> None:

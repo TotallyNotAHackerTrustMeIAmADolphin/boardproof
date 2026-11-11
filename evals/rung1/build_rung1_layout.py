@@ -75,7 +75,7 @@ SUPPLY_CAPS = {"C1": ("U2", "/VBUS_F"), "C2": ("U2", "+3V3"), "C3": ("U1", "+3V3
 
 
 def _geo():
-    from kicad_mcp import raw_geometry
+    from boardproof import raw_geometry
 
     return raw_geometry
 
@@ -325,8 +325,8 @@ class Chain:
 async def flow() -> dict:
     from mcp.client.client import Client
 
-    from kicad_mcp import raw_geometry, write_layer
-    from kicad_mcp.server import build_server
+    from boardproof import raw_geometry, write_layer
+    from boardproof.server import build_server
 
     shutil.rmtree(RUN, ignore_errors=True)
     shutil.copytree(SOURCE, RUN / "src")
@@ -468,7 +468,7 @@ def measure(board: str) -> dict:
     for backend in ("krt", "freerouting"):
         t0 = time.time()
         cp = subprocess.run(
-            [sys.executable, "-m", "kicad_mcp.autonomy_run", "--rung", "1", "--backend", backend,
+            [sys.executable, "-m", "boardproof.autonomy_run", "--rung", "1", "--backend", backend,
              "--board", board, "--parity", "required"],
             capture_output=True, text=True, timeout=3 * 1800 + 600,
         )

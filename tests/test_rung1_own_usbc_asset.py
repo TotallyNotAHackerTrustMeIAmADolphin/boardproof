@@ -28,7 +28,7 @@ from pathlib import Path
 
 import pytest
 
-from kicad_mcp import kicad_cli, write_layer
+from boardproof import kicad_cli, write_layer
 
 ROOT = Path(__file__).resolve().parents[1]
 RUNG1 = ROOT / "evals" / "rung1"

@@ -10,7 +10,7 @@ repeats, or the units of one reference differ in Value, Footprint or the unit co
 embedded lib symbol (an unreadable count fails closed), and it names the rule that fired.
 
 Tested at the guard's public seam and at the BOM's, ``export_manufacturing_package``, on copies
-of KiCad demos (``kicad_demo``). Every schematic change goes through ``kicad_mcp.write_layer``
+of KiCad demos (``kicad_demo``). Every schematic change goes through ``boardproof.write_layer``
 (the helpers of ``tests/test_import_duplicate_scan.py``).
 """
 from __future__ import annotations
@@ -20,8 +20,8 @@ from pathlib import Path
 
 import pytest
 
-from kicad_mcp import sheet_tree, write_layer
-from kicad_mcp.toolsets import manufacturing
+from boardproof import sheet_tree, write_layer
+from boardproof.toolsets import manufacturing
 from tests.test_import_duplicate_scan import (
     DELETED_SHEET,
     DIP14,
@@ -507,7 +507,7 @@ def test_the_import_stale_check_reads_instance_paths_as_kicad_does(spelling) -> 
     """``schematic_import._stale_only_entries`` (called by the import) compared paths as strings, so
     an entry at the use's path in another spelling counted as stale and a symbol KiCad reads fine
     was refused. It compares by ``path_key`` now; a path ``path_key`` rejects still counts as stale."""
-    from kicad_mcp import schematic_import
+    from boardproof import schematic_import
 
     def record(paths: list[str]) -> dict:
         return {"reference": "U1", "uuid": U1_UNIT2, "sheet": "s.kicad_sch", "path": SONDE_ROOT, "instance_paths": paths}

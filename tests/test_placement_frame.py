@@ -19,8 +19,8 @@ from pathlib import Path
 import pytest
 from mcp.server.mcpserver import MCPServer
 
-from kicad_mcp import write_layer
-from kicad_mcp.toolsets import placement as placement_toolset
+from boardproof import write_layer
+from boardproof.toolsets import placement as placement_toolset
 
 REPO = Path(__file__).resolve().parents[1]
 FIXTURE = Path(__file__).parent / "fixtures" / "simple_led.kicad_pcb"
@@ -281,7 +281,7 @@ def test_no_outline_at_all_places_in_page_coordinates(fns: dict, board: Path) ->
 def test_a_board_outline_made_by_propose_board_outline_is_accepted(
     fns: dict, tmp_path: Path
 ) -> None:
-    from kicad_mcp import board_outline
+    from boardproof import board_outline
 
     (tmp_path / "proj").mkdir()
     board = tmp_path / "proj" / "simple_led.kicad_pcb"

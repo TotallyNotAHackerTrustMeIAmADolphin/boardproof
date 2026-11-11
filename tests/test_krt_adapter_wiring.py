@@ -12,9 +12,9 @@ import pytest
 from test_rung_runner import make_run
 from test_rung_runner import project as shared_project
 
-from kicad_mcp import rung_backends
-from kicad_mcp.routers import kicad_routing_tools as krt_tools
-from kicad_mcp.toolsets import routing as routing_toolset
+from boardproof import rung_backends
+from boardproof.routers import kicad_routing_tools as krt_tools
+from boardproof.toolsets import routing as routing_toolset
 
 _REGISTERED = (shared_project,)  # the import registers the fixture under this module's name
 

@@ -216,7 +216,7 @@ def test_docs_name_with_under_width_check_when_they_say_the_flag_is_cleared(doc)
 
 
 def test_the_mcp_routing_tools_do_not_contain_the_clearing_code():
-    source = (ROOT / "src" / "kicad_mcp" / "toolsets" / "routing.py").read_text(encoding="utf-8")
+    source = (ROOT / "src" / "boardproof" / "toolsets" / "routing.py").read_text(encoding="utf-8")
     assert "with_under_width_check" not in source
     assert "_clear_stale_strict_sizes_flag" not in source
 

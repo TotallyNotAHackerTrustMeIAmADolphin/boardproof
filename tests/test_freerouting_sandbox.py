@@ -26,8 +26,8 @@ from pathlib import Path
 
 import pytest
 
-from kicad_mcp import rung_backends
-from kicad_mcp.toolsets import routing as routing_toolset
+from boardproof import rung_backends
+from boardproof.toolsets import routing as routing_toolset
 
 FIXTURE = Path(__file__).parent / "fixtures" / "simple_led.kicad_pcb"
 SRC = Path(rung_backends.__file__).resolve().parents[1]
@@ -198,7 +198,7 @@ sys.exit({code})
 
 _PROBE = '''\
 import json
-from kicad_mcp import rung_backends
+from boardproof import rung_backends
 print("RESULT " + json.dumps(rung_backends.freerouting_availability()))
 '''
 

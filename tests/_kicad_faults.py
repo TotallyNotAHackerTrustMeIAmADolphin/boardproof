@@ -36,9 +36,9 @@ from pathlib import Path
 
 from kicad_tools.sexp import SExp
 
-from kicad_mcp import write_layer
+from boardproof import write_layer
 
-_MARKER_PREFIX = "kicad-mcp-test-fault-"
+_MARKER_PREFIX = "boardproof-test-fault-"
 _VERBATIM: dict[str, str] = {}
 
 

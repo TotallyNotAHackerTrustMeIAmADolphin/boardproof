@@ -24,8 +24,8 @@ from pathlib import Path
 
 import pytest
 
-from kicad_mcp import kicad_cli, sheet_tree
-from kicad_mcp.verify_board import snapshot_rules, verify_board
+from boardproof import kicad_cli, sheet_tree
+from boardproof.verify_board import snapshot_rules, verify_board
 
 ROOT = Path(__file__).resolve().parents[1]
 RUNG1_INPUT = ROOT / "evals" / "rung1" / "layout_run" / "07_poured"

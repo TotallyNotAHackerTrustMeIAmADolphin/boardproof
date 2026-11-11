@@ -13,7 +13,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 OLD_PLANNING_DIR = "." + "scratch"  # built, so this file names no quoted path
 # Changed once on purpose (tidy, 2026-10-29): rule 3 names the testing doc by its path under docs/; nothing else.
-HARD_RULES_SHA256 = "a7f91ac7b37308cbb91e4ac58ec87368b4699af97a724e0c7b6324106f006084"
+HARD_RULES_SHA256 = "fb8db188fca2949d8b1de733849984e205a6a69190995f63f8ad84de66cd2244"
 
 
 def _text(rel: str) -> str:

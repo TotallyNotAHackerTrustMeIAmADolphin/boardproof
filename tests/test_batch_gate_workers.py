@@ -39,7 +39,7 @@ SELECTED = 400  # tests that pytest_output selects by default (passed=400)
 def root(tmp_path, monkeypatch):
     """As tests/test_batch_gate.py's ``root``: a fake worktree, a router folder, no outer-shell leaks."""
     r = tmp_path / "wt-1"
-    (r / "src" / "kicad_mcp").mkdir(parents=True)
+    (r / "src" / "boardproof").mkdir(parents=True)
     krt = tmp_path / "krt"
     krt.mkdir()
     monkeypatch.setenv("KICAD_ROUTING_TOOLS_PATH", str(krt))
@@ -55,7 +55,7 @@ def root(tmp_path, monkeypatch):
 def repo(root, monkeypatch):
     """A committed, clean git repo shaped like this project, for main()."""
     apply_hermetic_env(monkeypatch)
-    (root / "src" / "kicad_mcp" / "__init__.py").write_text("", encoding="utf-8")
+    (root / "src" / "boardproof" / "__init__.py").write_text("", encoding="utf-8")
     (root / "scripts").mkdir()
     (root / "scripts" / "known-red.txt").write_text(base.KNOWN_TEXT, encoding="utf-8")
     (root / "scripts" / "known-skips.toml").write_text(base.KNOWN_SKIPS, encoding="utf-8")
@@ -325,7 +325,7 @@ def test_red_known_red_without_ticket_and_lint_and_dirty_and_wrong_import(root):
     assert any("known-red" in r for r in res.reasons)
     res, _ = run_w(root, WorkersRunner(root, lint_rc=1))
     assert "lint" in res.reasons
-    res, _ = run_w(root, WorkersRunner(root, import_path="/elsewhere/kicad_mcp/__init__.py"))
+    res, _ = run_w(root, WorkersRunner(root, import_path="/elsewhere/boardproof/__init__.py"))
     assert any("not imported" in r for r in res.reasons)
 
 
@@ -438,10 +438,10 @@ def _mini(tmp_path, *args, times=None):
                                              encoding="utf-8")
     (tmp_path / "conftest.py").write_text("from tests._test_times import *  # noqa: F403\n", encoding="utf-8")
     (tmp_path / "test_mini.py").write_text(MINI_TESTS, encoding="utf-8")
-    env = {k: v for k, v in os.environ.items() if k not in ("KICAD_MCP_TEST_TIMES", "PYTEST_ADDOPTS")}
+    env = {k: v for k, v in os.environ.items() if k not in ("BOARDPROOF_TEST_TIMES", "PYTEST_ADDOPTS")}
     env["PYTHONPATH"] = str(ROOT)
     if times is not None:
-        env["KICAD_MCP_TEST_TIMES"] = str(times)
+        env["BOARDPROOF_TEST_TIMES"] = str(times)
     return subprocess.run([sys.executable, "-m", "pytest", "-m", "not network", "-rfEs", "-p", "no:cacheprovider",
                            *args], cwd=tmp_path, env=env, capture_output=True, text=True, timeout=300)
 
@@ -521,9 +521,9 @@ def test_a_test_that_reloads_the_hook_module_keeps_the_per_worker_file(tmp_path)
     (tmp_path / "pyproject.toml").write_text("[tool.pytest.ini_options]\n", encoding="utf-8")
     (tmp_path / "conftest.py").write_text("from tests._test_times import *  # noqa: F403\n", encoding="utf-8")
     (tmp_path / "test_reload.py").write_text(RELOAD_TESTS, encoding="utf-8")
-    env = {k: v for k, v in os.environ.items() if k not in ("KICAD_MCP_TEST_TIMES", "PYTEST_ADDOPTS")}
+    env = {k: v for k, v in os.environ.items() if k not in ("BOARDPROOF_TEST_TIMES", "PYTEST_ADDOPTS")}
     env["PYTHONPATH"] = str(ROOT)
-    env["KICAD_MCP_TEST_TIMES"] = str(times)
+    env["BOARDPROOF_TEST_TIMES"] = str(times)
     done = subprocess.run([sys.executable, "-m", "pytest", "-p", "no:cacheprovider", "-n", "2", "--dist", "load"],
                           cwd=tmp_path, env=env, capture_output=True, text=True, timeout=300)
     assert done.returncode == 0, done.stdout
@@ -553,15 +553,15 @@ def test_red_more_tests_selected_than_collected_less_network_is_caught_alone(roo
 
 
 def test_a_role_inherited_from_another_process_is_ignored_by_a_serial_child(tmp_path):
-    # F1: a nested pytest subprocess inherits KICAD_MCP_TEST_TIMES_ROLE of its parent worker; the pid
+    # F1: a nested pytest subprocess inherits BOARDPROOF_TEST_TIMES_ROLE of its parent worker; the pid
     # in it differs, so the child writes the base file, not the parent's worker file.
     times = tmp_path / "t.times.out"
     (tmp_path / "pyproject.toml").write_text("[tool.pytest.ini_options]\n", encoding="utf-8")
     (tmp_path / "conftest.py").write_text("from tests._test_times import *  # noqa: F403\n", encoding="utf-8")
     (tmp_path / "test_x.py").write_text("def test_x(): pass\n", encoding="utf-8")
     for role in ("gw0", "controller"):
-        env = {k: v for k, v in os.environ.items() if k not in ("KICAD_MCP_TEST_TIMES", "PYTEST_ADDOPTS")}
-        env.update(PYTHONPATH=str(ROOT), KICAD_MCP_TEST_TIMES=str(times), KICAD_MCP_TEST_TIMES_ROLE=f"1:{role}")
+        env = {k: v for k, v in os.environ.items() if k not in ("BOARDPROOF_TEST_TIMES", "PYTEST_ADDOPTS")}
+        env.update(PYTHONPATH=str(ROOT), BOARDPROOF_TEST_TIMES=str(times), BOARDPROOF_TEST_TIMES_ROLE=f"1:{role}")
         done = subprocess.run([sys.executable, "-m", "pytest", "-p", "no:cacheprovider"], cwd=tmp_path, env=env,
                               capture_output=True, text=True, timeout=300)
         assert done.returncode == 0, done.stdout
@@ -571,12 +571,12 @@ def test_a_role_inherited_from_another_process_is_ignored_by_a_serial_child(tmp_
 
 
 def test_the_gate_does_not_pass_on_the_times_variables_of_an_outer_run(root, monkeypatch):
-    monkeypatch.setenv("KICAD_MCP_TEST_TIMES_ROLE", "1:gw0")
+    monkeypatch.setenv("BOARDPROOF_TEST_TIMES_ROLE", "1:gw0")
     seen = []
 
     class Spy(FakeRunner):
         def __call__(self, cmd, env, cwd, timeout, out_path):
-            seen.append(env.get("KICAD_MCP_TEST_TIMES_ROLE"))
+            seen.append(env.get("BOARDPROOF_TEST_TIMES_ROLE"))
             return super().__call__(cmd, env, cwd, timeout, out_path)
 
     res, _ = run(root, Spy(root))

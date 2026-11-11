@@ -28,8 +28,8 @@ import kicad_tools
 import pytest
 from kicad_tools.sexp import Document, SExp, parse_string
 
-from kicad_mcp import kicad_cli
-from kicad_mcp import write_layer as wl
+from boardproof import kicad_cli
+from boardproof import write_layer as wl
 from tests import _kicad_faults as faults
 
 _KT_VERSION = tuple(int(p) for p in kicad_tools.__version__.split(".")[:2])
@@ -378,7 +378,7 @@ def test_a_file_kicad_cannot_load_is_never_written(tmp_path: Path) -> None:
     board = _copy_demo("pic_programmer/pic_programmer.kicad_pcb", tmp_path)
     before, listing = board.read_bytes(), _listing(tmp_path)
     root = wl.load(board)
-    root.children.append(SExp.list("kicad_mcp_marker", 1))
+    root.children.append(SExp.list("boardproof_marker", 1))
     with pytest.raises(wl.WriteLayerError) as raised:
         wl.save(root, board)
     assert raised.value.code == "parse_check_failed"
@@ -404,7 +404,7 @@ def test_symbol_and_footprint_files_are_parse_checked_too(rel: str, tmp_path: Pa
     before = target.read_bytes()
 
     root = wl.load(target)
-    root.children.append(SExp.list("kicad_mcp_marker", 1))
+    root.children.append(SExp.list("boardproof_marker", 1))
     with pytest.raises(wl.WriteLayerError, match="parse_check_failed"):
         wl.save(root, target)
     assert target.read_bytes() == before
@@ -415,7 +415,7 @@ def _break_sub_sheet(sheet: Path) -> None:
     """A sub-sheet KiCad cannot load: an unknown top-level token, added through kicad_tools'
     low-level Document API (a test fixture, never raw text)."""
     doc = Document.load(sheet)
-    doc.root.children.append(SExp.list("kicad_mcp_marker", 1))
+    doc.root.children.append(SExp.list("boardproof_marker", 1))
     doc.save(sheet)
 
 

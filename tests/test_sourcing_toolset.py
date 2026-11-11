@@ -10,9 +10,9 @@ from __future__ import annotations
 import pytest
 from mcp.server.mcpserver import MCPServer
 
-from kicad_mcp.sourcing import PROVIDER_REGISTRY, PartResult
-from kicad_mcp.sourcing.registry import _dedupe
-from kicad_mcp.toolsets import sourcing as sourcing_toolset
+from boardproof.sourcing import PROVIDER_REGISTRY, PartResult
+from boardproof.sourcing.registry import _dedupe
+from boardproof.toolsets import sourcing as sourcing_toolset
 
 
 class _FakeProvider:
@@ -537,7 +537,7 @@ def _build_and_get_fns(mcp: MCPServer, module) -> dict:
 
 def test_lookup_jlcpcb_part_tiers_carries_index_age_and_part_count():
     """Issue 37: an unknown tier must say which index it is unknown in."""
-    from kicad_mcp.sourcing import jlcpcb_basic as jlc
+    from boardproof.sourcing import jlcpcb_basic as jlc
 
     idx = jlc.load_index()
     mcp = MCPServer("test")
@@ -562,7 +562,7 @@ def test_lookup_jlcpcb_part_tiers_carries_index_age_and_part_count():
 
 
 def test_lookup_index_info_uses_a_recorded_date_when_the_index_has_one():
-    from kicad_mcp.sourcing import jlcpcb_basic as jlc
+    from boardproof.sourcing import jlcpcb_basic as jlc
 
     payload = {
         "source": {"commit": "a" * 40, "commit_date": "2026-01-02T03:04:05+00:00"},
@@ -624,7 +624,7 @@ def test_search_parts_description_status_claims_match_behaviour():
 @pytest.mark.parametrize("bad", ["yesterday", "2026-13-45", "20260102", 12345, "2026-01", "x" * 40])
 def test_index_info_reports_a_malformed_date_instead_of_passing_it_through(bad):
     """Issue 49: a malformed commit_date is neither shown as the date nor silently dropped."""
-    from kicad_mcp.sourcing import jlcpcb_basic as jlc
+    from boardproof.sourcing import jlcpcb_basic as jlc
 
     payload = {"source": {"commit": "a" * 40, "commit_date": bad}, "parts": [{"lcsc": "C1", "mpn": "X", "tier": "basic"}]}
     info = jlc.classify_parts(["C2"], index=jlc.JLCPCBBasicIndex(payload))["index"]
@@ -636,7 +636,7 @@ def test_index_info_reports_a_malformed_date_instead_of_passing_it_through(bad):
 @pytest.mark.parametrize("good,shown", [("2026-01-02T03:04:05+00:00", "2026-01-02"), ("2026-01-02T03:04:05Z", "2026-01-02"),
                                         ("2026-01-02", "2026-01-02")])
 def test_index_info_accepts_iso_dates(good, shown):
-    from kicad_mcp.sourcing import jlcpcb_basic as jlc
+    from boardproof.sourcing import jlcpcb_basic as jlc
 
     payload = {"source": {"commit": "a" * 40, "commit_date": good}, "parts": [{"lcsc": "C1", "mpn": "X", "tier": "basic"}]}
     info = jlc.classify_parts(["C2"], index=jlc.JLCPCBBasicIndex(payload))["index"]
@@ -645,7 +645,7 @@ def test_index_info_accepts_iso_dates(good, shown):
 
 def test_search_parts_shows_the_same_index_block_as_lookup_jlcpcb_part_tiers():
     """Issue 49: search_parts annotation answers from the index, so it names the index (commit, date or none, count)."""
-    from kicad_mcp.sourcing import jlcpcb_basic as jlc
+    from boardproof.sourcing import jlcpcb_basic as jlc
 
     PROVIDER_REGISTRY.register(_FakeProvider([PartResult(mpn="LM393DR2G", manufacturer="onsemi", lcsc_id="C7955",
                                                          provider="fake")]))

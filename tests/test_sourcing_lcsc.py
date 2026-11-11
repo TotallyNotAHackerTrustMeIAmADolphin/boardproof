@@ -6,7 +6,7 @@ scraping. The failure-path fixture below is REAL, captured live on
 exact body to a plain httpx client even with realistic
 headers/session-cookies, which is strong evidence of Akamai bot-walling
 non-browser clients (see the module docstring in
-kicad_mcp/sourcing/providers/lcsc.py for the full finding). The
+boardproof/sourcing/providers/lcsc.py for the full finding). The
 success-path fixture is NOT verified against a real response (none was
 obtainable) and is marked as such -- it exists to pin down the intended
 parsing behavior once a real payload is captured.
@@ -17,7 +17,7 @@ from __future__ import annotations
 import httpx
 import pytest
 
-from kicad_mcp.sourcing.providers.lcsc import LCSCProvider, LCSCSearchError
+from boardproof.sourcing.providers.lcsc import LCSCProvider, LCSCSearchError
 
 # Captured live 2026-09-02 against https://wmsc.lcsc.com/product/search --
 # real, verified response body (see module docstring for the request that
@@ -60,7 +60,7 @@ def _mock_get(response_json: dict):
 
 
 def test_parses_assumed_success_shape(monkeypatch):
-    monkeypatch.setattr("kicad_mcp.sourcing.providers.lcsc.httpx.get", _mock_get(ASSUMED_SUCCESS_RESPONSE))
+    monkeypatch.setattr("boardproof.sourcing.providers.lcsc.httpx.get", _mock_get(ASSUMED_SUCCESS_RESPONSE))
     provider = LCSCProvider(min_request_interval_s=0)
     results = provider.search("ATtiny1616")
     assert len(results) == 1
@@ -81,7 +81,7 @@ def test_real_captured_failure_response_raises_clear_error(monkeypatch):
     ProviderRegistry.search_all) rather than silently returning an empty
     list that would look like "no matching parts" instead of "blocked".
     """
-    monkeypatch.setattr("kicad_mcp.sourcing.providers.lcsc.httpx.get", _mock_get(REAL_CAPTURED_FAILURE_RESPONSE))
+    monkeypatch.setattr("boardproof.sourcing.providers.lcsc.httpx.get", _mock_get(REAL_CAPTURED_FAILURE_RESPONSE))
     provider = LCSCProvider(min_request_interval_s=0)
     with pytest.raises(LCSCSearchError):
         provider.search("ATtiny1616")
@@ -89,7 +89,7 @@ def test_real_captured_failure_response_raises_clear_error(monkeypatch):
 
 def test_empty_product_list_returns_empty_not_error(monkeypatch):
     monkeypatch.setattr(
-        "kicad_mcp.sourcing.providers.lcsc.httpx.get",
+        "boardproof.sourcing.providers.lcsc.httpx.get",
         _mock_get({"code": 200, "result": {"productList": []}, "ok": True}),
     )
     provider = LCSCProvider(min_request_interval_s=0)
@@ -98,8 +98,8 @@ def test_empty_product_list_returns_empty_not_error(monkeypatch):
 
 def test_rate_limit_sleeps_between_calls(monkeypatch):
     sleep_calls: list[float] = []
-    monkeypatch.setattr("kicad_mcp.sourcing.providers.lcsc.httpx.get", _mock_get({"code": 200, "result": {}, "ok": True}))
-    monkeypatch.setattr("kicad_mcp.sourcing.providers.lcsc.time.sleep", lambda s: sleep_calls.append(s))
+    monkeypatch.setattr("boardproof.sourcing.providers.lcsc.httpx.get", _mock_get({"code": 200, "result": {}, "ok": True}))
+    monkeypatch.setattr("boardproof.sourcing.providers.lcsc.time.sleep", lambda s: sleep_calls.append(s))
     provider = LCSCProvider(min_request_interval_s=5.0)
     provider.search("a")
     provider.search("b")
@@ -107,8 +107,8 @@ def test_rate_limit_sleeps_between_calls(monkeypatch):
 
 
 def test_registers_into_provider_registry():
-    import kicad_mcp.sourcing.providers as providers_pkg  # noqa: F401 -- import triggers registration
-    from kicad_mcp.sourcing import PROVIDER_REGISTRY
+    import boardproof.sourcing.providers as providers_pkg  # noqa: F401 -- import triggers registration
+    from boardproof.sourcing import PROVIDER_REGISTRY
 
     assert any(p.name == "lcsc" for p in PROVIDER_REGISTRY.providers())
 

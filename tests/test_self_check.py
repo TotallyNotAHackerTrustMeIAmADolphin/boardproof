@@ -1,4 +1,4 @@
-"""Unit tests for the shared reload compare (src/kicad_mcp/_self_check.py) and the corrupted-write
+"""Unit tests for the shared reload compare (src/boardproof/_self_check.py) and the corrupted-write
 helper (tests/_self_check_helpers.py). Build ticket 31; the tool-level tests that show each check
 fires live in test_board_outline.py and test_pour_step.py."""
 
@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import pytest
 
-from kicad_mcp import _self_check
+from boardproof import _self_check
 
 
 def _root(text: str):

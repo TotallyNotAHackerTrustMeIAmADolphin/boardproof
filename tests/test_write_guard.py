@@ -25,12 +25,12 @@ import pytest
 from mcp.client.client import Client
 from mcp.server.mcpserver import MCPServer
 
-from kicad_mcp import checkpoint, kicad_lock, write_layer
+from boardproof import checkpoint, kicad_lock, write_layer
 from tests import _tool_registry
-from kicad_mcp.server import build_server
-from kicad_mcp.toolsets import project as project_toolset
-from kicad_mcp.toolsets import routing as routing_toolset
-from kicad_mcp.toolsets import schematic as schematic_toolset
+from boardproof.server import build_server
+from boardproof.toolsets import project as project_toolset
+from boardproof.toolsets import routing as routing_toolset
+from boardproof.toolsets import schematic as schematic_toolset
 
 SRC = Path(write_layer.__file__).parent
 CODE = "file_open_in_kicad"
@@ -232,7 +232,7 @@ def test_project_create_in_a_directory_holding_a_foreign_lock_writes_nothing(tmp
 
 
 def test_generate_footprint_refuses_a_locked_output_file(tmp_path):
-    from kicad_mcp.sourcing.footprint_gen import generate_footprint
+    from boardproof.sourcing.footprint_gen import generate_footprint
 
     out = tmp_path / "lib.pretty" / "R.kicad_mod"
     out.parent.mkdir()
@@ -243,13 +243,13 @@ def test_generate_footprint_refuses_a_locked_output_file(tmp_path):
 
 
 def test_register_library_asset_refuses_when_the_project_lib_table_is_guarded(project):
-    from kicad_mcp.sourcing.footprint_gen import generate_footprint
+    from boardproof.sourcing.footprint_gen import generate_footprint
 
     fp_dir = project["dir"] / "My.pretty"
     fp_dir.mkdir()
     assert generate_footprint("chip", fp_dir / "R.kicad_mod", size="0402")["status"] == "ok"
     lock = _lock(project["pro"])  # KiCad rewrites the lib tables with the project
-    tools = _tools(__import__("kicad_mcp.toolsets.library", fromlist=["build"]))
+    tools = _tools(__import__("boardproof.toolsets.library", fromlist=["build"]))
     result = tools["register_library_asset"](str(project["dir"]), footprint_lib_path=str(fp_dir))
     assert CODE in _text(result) and str(lock) in _text(result)
     assert not (project["dir"] / "fp-lib-table").exists()
@@ -334,7 +334,7 @@ def test_a_revision_copy_leaves_lock_files_behind(project):
 
 
 def test_the_grading_copy_leaves_lock_files_behind(project):
-    from kicad_mcp import verify_board
+    from boardproof import verify_board
 
     _lock(project["pro"])
     copy = verify_board._copy_project(project["pcb"], project["dir"].parent / "graded")

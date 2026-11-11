@@ -27,8 +27,8 @@ import pytest
 from kicad_tools.sexp import Document, SExp, parse_string
 from mcp.server.mcpserver import MCPServer
 
-from kicad_mcp import kicad_cli
-from kicad_mcp import write_layer as wl
+from boardproof import kicad_cli
+from boardproof import write_layer as wl
 from tests import _kicad_faults as faults
 
 # kicad_tools 0.25.0 escapes a CR itself (its changelog); up to 0.24 it wrote it raw.
@@ -153,7 +153,7 @@ def test_the_oracle_sees_a_dropped_sub_sheet(project: Path) -> None:
     (An unknown token after the symbols drops nothing: KiCad keeps what it read before.)"""
     sheet = project / SUB
     doc = Document.load(sheet)
-    doc.root.children.insert(1, SExp.list("kicad_mcp_marker", 1))  # unknown token, not raw text
+    doc.root.children.insert(1, SExp.list("boardproof_marker", 1))  # unknown token, not raw text
     doc.save(sheet)
     count, _ = netlist(project)
     assert count == 10
@@ -225,7 +225,7 @@ def _tools(module) -> dict:
 
 @pytest.fixture(scope="module")
 def sch_tools() -> dict:
-    from kicad_mcp.toolsets import schematic
+    from boardproof.toolsets import schematic
 
     return _tools(schematic)
 
@@ -520,7 +520,7 @@ def test_assign_footprints_names_a_component_it_changed_outside_the_mapping(
     mapping whose footprint changed is an error naming it, with the backup to go back to.
     Unreachable with the staging above, so the writer is patched to change R201's symbol too
     (it still saves and self-checks exactly the tree it was handed)."""
-    from kicad_mcp.toolsets import schematic
+    from boardproof.toolsets import schematic
 
     real = schematic._save_footprint_sheet
 
@@ -676,7 +676,7 @@ def test_a_hierarchical_label_with_a_line_break_is_escaped(project: Path, brk: s
 
 @pytest.mark.parametrize("brk", BREAKS, ids=list(BREAKS))
 def test_place_footprints_escapes_a_line_break_in_reference_and_value(project: Path, brk: str, tmp_path: Path) -> None:
-    from kicad_mcp.toolsets import placement
+    from boardproof.toolsets import placement
 
     pcb = project / "complex_hierarchy.kicad_pcb"
     ref, value = f"R9{BREAKS[brk]}x", f"1k{BREAKS[brk]}1%"
@@ -698,7 +698,7 @@ def test_register_library_asset_never_writes_a_raw_line_break(project: Path, brk
     """The lib tables are read by KiCad's own S-expression lexer. ``kicad_tools``' ``to_string``
     escapes a LF but writes a CR raw; a nickname is one token of a lib id, so the tool refuses
     any line break and names the parameter."""
-    from kicad_mcp.toolsets import library
+    from boardproof.toolsets import library
 
     shutil.copytree(project / "complex_hierarchy.pretty", project / "extra.pretty")
     table = project / "fp-lib-table"
@@ -719,7 +719,7 @@ def test_register_library_asset_keeps_an_existing_escaped_line_break_escaped(pro
     keeps every other byte, so this guards that no rewrite comes back. The fixture table is
     written with the write layer's serialiser (no lib-table tool exists to put a line break
     there)."""
-    from kicad_mcp.toolsets import library
+    from boardproof.toolsets import library
 
     descr = f"a{BREAKS[brk]}b"
     table = project / "fp-lib-table"
@@ -742,7 +742,7 @@ def test_register_library_asset_keeps_an_existing_escaped_line_break_escaped(pro
 def test_generate_footprint_refuses_a_line_break_by_name(tmp_path: Path, brk: str) -> None:
     """``kicad_tools``' ``Footprint.to_sexp`` escapes nothing: a LF or CR in ``name`` reached
     the ``.kicad_mod`` raw. A footprint name is one line, so the tool refuses it."""
-    from kicad_mcp.toolsets import sourcing
+    from boardproof.toolsets import sourcing
 
     out = tmp_path / "fp" / "x.kicad_mod"
     result = _tools(sourcing)["generate_footprint"](
@@ -765,7 +765,7 @@ def test_project_create_writes_no_raw_line_break(tmp_path: Path, brk: str) -> No
     project's machines run Windows)."""
     import os
 
-    from kicad_mcp.toolsets import project as project_toolset
+    from boardproof.toolsets import project as project_toolset
 
     target = tmp_path / "new"
     raised = None

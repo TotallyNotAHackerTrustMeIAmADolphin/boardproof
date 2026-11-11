@@ -19,9 +19,9 @@ from pathlib import Path
 import pytest
 from mcp.client.client import Client
 
-from kicad_mcp import autonomy_run, board_rules, input_prep, pour_step, rung_runner
-from kicad_mcp import verify_board as gate
-from kicad_mcp.server import build_server
+from boardproof import autonomy_run, board_rules, input_prep, pour_step, rung_runner
+from boardproof import verify_board as gate
+from boardproof.server import build_server
 
 from test_input_prep import GOLDEN_DIR, GOLDEN_NAME, _build_fixture
 

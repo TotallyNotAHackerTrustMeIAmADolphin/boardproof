@@ -10,9 +10,9 @@ from pathlib import Path
 
 import pytest
 
-from kicad_mcp import write_layer
-from kicad_mcp import rung_backends, rung_runner
-from kicad_mcp.routers import kicad_routing_tools as krt_tools
+from boardproof import write_layer
+from boardproof import rung_backends, rung_runner
+from boardproof.routers import kicad_routing_tools as krt_tools
 
 from test_rung_backends import FIXTURES, KRT_BASELINE, needs_krt, stress_board  # noqa: F401
 

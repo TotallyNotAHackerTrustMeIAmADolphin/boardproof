@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from kicad_mcp import rung_runner
+from boardproof import rung_runner
 
 from test_rung_runner import PASS, Clock, project  # noqa: F401  (fixture reuse)
 

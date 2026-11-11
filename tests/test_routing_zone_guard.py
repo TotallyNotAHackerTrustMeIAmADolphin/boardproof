@@ -36,7 +36,7 @@ from pathlib import Path
 import pytest
 from mcp.server.mcpserver import MCPServer
 
-from kicad_mcp.toolsets import routing as routing_toolset
+from boardproof.toolsets import routing as routing_toolset
 
 NO_ZONE_PCB = Path(__file__).parent / "fixtures" / "simple_led.kicad_pcb"
 ZONE_PCB = Path(__file__).parent / "fixtures" / "zone_obstacle" / "zone_obstacle.kicad_pcb"

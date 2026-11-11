@@ -9,8 +9,8 @@ from pathlib import Path
 
 import pytest
 
-from kicad_mcp import write_layer
-from kicad_mcp import autonomy_run, rung_backends
+from boardproof import write_layer
+from boardproof import autonomy_run, rung_backends
 
 from test_autonomy_run_review import _measure
 from test_rung_backends import KRT_BASELINE, needs_krt  # noqa: F401
@@ -195,7 +195,7 @@ def _segments_crossing_pour(board: Path) -> list[dict]:
 
 @needs_krt
 def test_a_track_of_another_net_really_crosses_the_pour_and_the_gate_is_still_clean(tmp_path):
-    from kicad_mcp import verify_board
+    from boardproof import verify_board
 
     board = _zone_board(tmp_path, "real", strip_fill=True)
     baseline = verify_board.snapshot_rules(board)

@@ -14,7 +14,7 @@ closed. Build ticket 83: a unit on another sheet than kicad-cli's component of i
 listed in that component's ``tstamps``) is checked pin by pin through the netlist's net nodes.
 
 Tested at the import's public seam, ``propose_schematic_import``, on copies of KiCad demos
-(``kicad_demo``). Every schematic change is made through ``kicad_mcp.write_layer``.
+(``kicad_demo``). Every schematic change is made through ``boardproof.write_layer``.
 """
 from __future__ import annotations
 
@@ -22,8 +22,8 @@ from pathlib import Path
 
 import pytest
 
-from kicad_mcp import schematic_import as si
-from kicad_mcp import sheet_tree, write_layer
+from boardproof import schematic_import as si
+from boardproof import sheet_tree, write_layer
 
 pytestmark = pytest.mark.filterwarnings("ignore::DeprecationWarning")
 

@@ -26,7 +26,7 @@ def _no_cli():
 
 
 def _cli_missing():
-    from kicad_mcp.kicad_cli import KicadCliError
+    from boardproof.kicad_cli import KicadCliError
 
     raise KicadCliError("kicad-cli not found")
 

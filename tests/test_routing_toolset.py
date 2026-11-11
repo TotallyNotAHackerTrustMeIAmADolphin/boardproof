@@ -17,7 +17,7 @@ from pathlib import Path
 import pytest
 from mcp.server.mcpserver import MCPServer
 
-from kicad_mcp.toolsets import routing as routing_toolset
+from boardproof.toolsets import routing as routing_toolset
 
 FIXTURE = Path(__file__).parent / "fixtures" / "simple_led.kicad_pcb"
 GOLDEN_PCB = Path(__file__).parent / "fixtures" / "golden_attiny1616_board" / "golden_attiny1616_board.kicad_pcb"

@@ -60,9 +60,9 @@ from pathlib import Path
 import pytest
 from mcp.server.mcpserver import MCPServer
 
-from kicad_mcp.toolsets import manufacturing as manufacturing_toolset
-from kicad_mcp.toolsets import routing as routing_toolset
-from kicad_mcp.toolsets import verification as verification_toolset
+from boardproof.toolsets import manufacturing as manufacturing_toolset
+from boardproof.toolsets import routing as routing_toolset
+from boardproof.toolsets import verification as verification_toolset
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures" / "golden_attiny1616_board"
 SCH_PATH = FIXTURE_DIR / "golden_attiny1616_board.kicad_sch"

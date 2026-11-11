@@ -1,4 +1,4 @@
-"""Geometry readers on raw tokens (``kicad_mcp.raw_geometry``, build ticket 43), proven against
+"""Geometry readers on raw tokens (``boardproof.raw_geometry``, build ticket 43), proven against
 KiCad itself on KiCad-written demo boards (docs/TESTING.md layer 3).
 
 The oracle for every assertion is KiCad, run in the same session on a copy of the demo board:
@@ -14,7 +14,7 @@ from collections import Counter
 
 import pytest
 
-from kicad_mcp import raw_geometry
+from boardproof import raw_geometry
 from tests import _kicad_oracle as oracle
 
 TOL_MM = 0.01
@@ -54,7 +54,7 @@ def _name_a_pads_copper_by_its_user_name(board):
     user name for F.Cu ("top_copper" on video) in its place, through the low-level tree and
     ``write_layer.save`` (never as text). KiCad 10.0.7 reads that token as the Rescue layer,
     not as F.Cu (delta review 2); returns the pad's uuid."""
-    from kicad_mcp import write_layer as wl
+    from boardproof import write_layer as wl
     from kicad_tools.sexp import SExp
 
     def kids(node, name):
@@ -355,14 +355,14 @@ def test_footprint_edge_cuts_set_the_outline_extent_on_the_nfc_antenna(demo_boar
 
 
 def _xy(tag, x, y):
-    from kicad_mcp import write_layer as wl
+    from boardproof import write_layer as wl
     from kicad_tools.sexp import SExp
 
     return SExp.list(tag, wl.number(x), wl.number(y))
 
 
 def _shape(prefix, kind, uid, *geometry):
-    from kicad_mcp import write_layer as wl
+    from boardproof import write_layer as wl
     from kicad_tools.sexp import SExp
 
     return SExp.list(
@@ -399,7 +399,7 @@ def _every_kind(prefix, n, dx=0.0, dy=0.0):
 
 @pytest.fixture(scope="module")
 def synthetic_board(kicad_demos_dir, kicad_python, tmp_path_factory):
-    from kicad_mcp import write_layer as wl
+    from boardproof import write_layer as wl
 
     scratch = tmp_path_factory.mktemp("oracle-synthetic")
     board = oracle.copy_board(kicad_demos_dir, oracle.ALL_BOARDS["stickhub"], scratch)
@@ -448,7 +448,7 @@ def _tree(*items):
 
 
 def test_an_outline_item_the_reader_cannot_measure_is_named_in_problems():
-    from kicad_mcp import write_layer as wl
+    from boardproof import write_layer as wl
     from kicad_tools.sexp import SExp
 
     text = SExp.list("gr_text", wl.string("x"), _xy("at", 5, 5), SExp.list("layer", wl.string("Edge.Cuts")),
@@ -472,7 +472,7 @@ def test_a_board_without_edge_cuts_has_no_outline_box():
 
 
 def test_a_malformed_coordinate_is_refused_not_read_as_zero():
-    from kicad_mcp import write_layer as wl
+    from boardproof import write_layer as wl
     from kicad_tools.sexp import SExp
 
     bad = _shape("gr", "line", "l1", SExp.list("start", wl.number(0), wl.symbol("north")), _xy("end", 1, 1))
@@ -597,7 +597,7 @@ def _layer_table(copper, users=None):
     """A board ``(layers ...)`` table as KiCad 10 writes it: F.Cu 0, B.Cu 2, In<n>.Cu 2 + 2n,
     each row ``(n "<canonical>" signal ["<user name>"])``, plus a technical layer, which is
     not copper. ``users`` maps a canonical name to its user name."""
-    from kicad_mcp import write_layer as wl
+    from boardproof import write_layer as wl
     from kicad_tools.sexp import SExp
 
     def ordinal(name):
@@ -612,14 +612,14 @@ def _layer_table(copper, users=None):
 
 def _flag(name, *value):
     """``(remove_unused_layers yes)``, or the bare ``(remove_unused_layers)``."""
-    from kicad_mcp import write_layer as wl
+    from boardproof import write_layer as wl
     from kicad_tools.sexp import SExp
 
     return SExp.list(name, *(wl.symbol(v) for v in value))
 
 
 def _zone_connections(*layers):
-    from kicad_mcp import write_layer as wl
+    from boardproof import write_layer as wl
     from kicad_tools.sexp import SExp
 
     return SExp.list("zone_layer_connections", *(wl.string(n) for n in layers))
@@ -630,7 +630,7 @@ def _pad_tree(*stack, shape="circle", kind="thru_hole", layers=("*.Cu", "*.Mask"
     """A board with one footprint holding pad "7"; ``copper`` None leaves out the board's
     ``(layers ...)`` table, ``users`` gives its rows user names. ``extra`` nodes go into the
     pad after its ``(layers ...)``."""
-    from kicad_mcp import write_layer as wl
+    from boardproof import write_layer as wl
     from kicad_tools.sexp import SExp
 
     pad = SExp.list("pad", wl.string("7"), wl.symbol(kind), wl.symbol(shape),
@@ -643,7 +643,7 @@ def _pad_tree(*stack, shape="circle", kind="thru_hole", layers=("*.Cu", "*.Mask"
 
 
 def _stack_layer(name, shape="rect", size=(1.0, 0.5)):
-    from kicad_mcp import write_layer as wl
+    from boardproof import write_layer as wl
     from kicad_tools.sexp import SExp
 
     parts = [SExp.list("shape", wl.symbol(shape))] if shape else []
@@ -653,7 +653,7 @@ def _stack_layer(name, shape="rect", size=(1.0, 0.5)):
 
 
 def _mode(name):
-    from kicad_mcp import write_layer as wl
+    from boardproof import write_layer as wl
     from kicad_tools.sexp import SExp
 
     return SExp.list("mode", wl.symbol(name))

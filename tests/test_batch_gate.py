@@ -2,7 +2,7 @@
 
 `scripts/batch_gate.py` gets a fake runner, so these tests feed it the cases A9 lists: a timeout,
 a known-red failure, a captured ERROR log line, a parametrised id with " - ", exit codes 2/4/5/137,
-a lint failure, and missing output; plus this project's worktree checks (`kicad_mcp.__file__` and
+a lint failure, and missing output; plus this project's worktree checks (`boardproof.__file__` and
 pytest's `rootdir:` must name the worktree).
 """
 
@@ -94,7 +94,7 @@ class FakeRunner:
         self.network, self.collect_rc, self.collect_out = network, collect_rc, collect_out
         self.all_out = all_out if all_out is not None else ALL_COLLECTED
         self.all_rc = all_rc
-        self.import_path = import_path if import_path is not None else str(root / "src" / "kicad_mcp" / "__init__.py")
+        self.import_path = import_path if import_path is not None else str(root / "src" / "boardproof" / "__init__.py")
         self.calls: list[list[str]] = []
 
     def __call__(self, cmd, env, cwd, timeout, out_path):
@@ -135,7 +135,7 @@ class FakeRunner:
 @pytest.fixture
 def root(tmp_path, monkeypatch):
     r = tmp_path / "wt-1"
-    (r / "src" / "kicad_mcp").mkdir(parents=True)
+    (r / "src" / "boardproof").mkdir(parents=True)
     krt = tmp_path / "krt"
     krt.mkdir()
     monkeypatch.setenv("KICAD_ROUTING_TOOLS_PATH", str(krt))
@@ -254,24 +254,24 @@ def test_old_style_rootdir_line_is_parsed(root):
     assert res.green, res.reasons
 
 
-def test_kicad_mcp_from_the_main_checkout_stops_the_run(root):
-    other = str(root.parent / "main" / "src" / "kicad_mcp" / "__init__.py")
+def test_boardproof_from_the_main_checkout_stops_the_run(root):
+    other = str(root.parent / "main" / "src" / "boardproof" / "__init__.py")
     runner = FakeRunner(root, import_path=other)
     res, said = run(root, runner)
-    assert "kicad_mcp is not imported from this worktree's src" in res.reasons
+    assert "boardproof is not imported from this worktree's src" in res.reasons
     assert not any("not network" in c for c in runner.calls), "the suite must not run"
 
 
 def test_sibling_directory_with_a_shared_prefix_is_not_inside(root):
-    sibling = root.parent / (root.name + "-other") / "src" / "kicad_mcp" / "__init__.py"
+    sibling = root.parent / (root.name + "-other") / "src" / "boardproof" / "__init__.py"
     res, _ = run(root, FakeRunner(root, import_path=str(sibling)))
     assert not res.green
 
 
 def test_dirty_tree_cannot_be_green(root):
-    res, said = run(root, FakeRunner(root), dirty=[" M src/kicad_mcp/x.py"])
+    res, said = run(root, FakeRunner(root), dirty=[" M src/boardproof/x.py"])
     assert res.reasons == ["working tree not clean (1 paths)"]
-    assert "src/kicad_mcp/x.py" in said
+    assert "src/boardproof/x.py" in said
 
 
 def test_known_red_entry_without_ticket_is_red(root):
@@ -459,7 +459,7 @@ def _linked_worktree(tmp_path):
     git("commit", "-q", "--allow-empty", "-m", "x", cwd=main)
     wt = tmp_path / "linked"
     git("worktree", "add", "-q", "-b", "ticket-x", str(wt), cwd=main)
-    (wt / "src" / "kicad_mcp").mkdir(parents=True)
+    (wt / "src" / "boardproof").mkdir(parents=True)
     return main, wt
 
 
@@ -635,7 +635,7 @@ def _git(root, *args):
 def repo(root, monkeypatch):
     """A committed, clean git repo shaped like this project, for main()."""
     apply_hermetic_env(monkeypatch)  # the gate runs git with the inherited environment
-    (root / "src" / "kicad_mcp" / "__init__.py").write_text("", encoding="utf-8")
+    (root / "src" / "boardproof" / "__init__.py").write_text("", encoding="utf-8")
     (root / "scripts").mkdir()
     (root / "scripts" / "known-red.txt").write_text(KNOWN_TEXT, encoding="utf-8")
     (root / "scripts" / "known-skips.toml").write_text(KNOWN_SKIPS, encoding="utf-8")
@@ -717,7 +717,7 @@ def test_untracked_file_at_the_start_is_red_even_when_git_config_hides_it(repo, 
 def test_change_during_the_lint_step_is_red(repo, capsys):
     # the recheck comes after the last step, not after pytest
     def edit():
-        (repo / "src" / "kicad_mcp" / "__init__.py").write_text("x = 1\n", encoding="utf-8")
+        (repo / "src" / "boardproof" / "__init__.py").write_text("x = 1\n", encoding="utf-8")
 
     rc, lines = run_main(repo, capsys, during=edit, at="lint_gate.py")
     assert rc == 1
@@ -847,7 +847,7 @@ def test_suite_timeout_in_main_is_red(repo, capsys):
 def test_expected_duration_and_worst_case_are_printed_before_any_step(repo, capsys):
     rec = TimeoutRecorder(repo)
     rc, lines = run_main(repo, capsys, runner=rec)
-    first_step = next(i for i, line in enumerate(lines) if line.startswith("kicad_mcp.__file__"))
+    first_step = next(i for i, line in enumerate(lines) if line.startswith("boardproof.__file__"))
     expected = next(i for i, line in enumerate(lines) if line.startswith("expected duration: "))
     assert expected < first_step
     # every step that can time out, each followed by a bounded kill, plus the git calls
@@ -1088,7 +1088,7 @@ def test_git_failure_at_the_start_prints_a_red_verdict_line(root, capsys, monkey
 
 
 def test_git_failure_while_finding_the_interpreter_prints_a_red_verdict_line(repo, capsys, monkeypatch):
-    monkeypatch.delenv("KICAD_MCP_PYTHON", raising=False)
+    monkeypatch.delenv("BOARDPROOF_PYTHON", raising=False)
     sha7 = _git(repo, "rev-parse", "HEAD")[:7]
     real = gate.subprocess.run
 
@@ -1146,7 +1146,7 @@ def test_runs_older_than_the_maximum_age_are_removed_at_the_start(repo, capsys):
     assert all(f.exists() for f in recent) and foreign.exists()
     line = cleanup_line(lines)
     assert "removed 2 runs (9 files" in line, line
-    first_step = next(i for i, x in enumerate(lines) if x.startswith("kicad_mcp.__file__"))
+    first_step = next(i for i, x in enumerate(lines) if x.startswith("boardproof.__file__"))
     assert lines.index(line) < first_step, "at the start"
 
 
@@ -1325,7 +1325,7 @@ def test_script_below_the_top_of_its_tree_prints_a_red_verdict_line(repo, capsys
 
 def test_no_shared_interpreter_prints_a_red_verdict_line(repo, capsys, monkeypatch):
     # the repo's main checkout is the repo itself, and it has no .venv
-    monkeypatch.delenv("KICAD_MCP_PYTHON", raising=False)
+    monkeypatch.delenv("BOARDPROOF_PYTHON", raising=False)
     sha7 = _git(repo, "rev-parse", "HEAD")[:7]
     line = start_red(repo, capsys)
     assert line.startswith(f"BATCH GATE {sha7}: RED (no shared interpreter under "), line
@@ -1424,14 +1424,14 @@ def test_main_runs_the_publishability_check_and_goes_red_without_the_variable(re
 
 def test_gate_names_a_times_file_for_the_suite_run_and_prints_its_path(root, monkeypatch):
     # the outer gate runs this suite with the variable set: an ambient value must not leak to any step
-    monkeypatch.setenv("KICAD_MCP_TEST_TIMES", "/outer/gate/run.times.out")
+    monkeypatch.setenv("BOARDPROOF_TEST_TIMES", "/outer/gate/run.times.out")
     seen = {}
 
     class Spy(FakeRunner):
         def __call__(self, cmd, env, cwd, timeout, out_path):
             if "not network" in cmd:
-                seen["var"] = env.get("KICAD_MCP_TEST_TIMES")
-            elif "KICAD_MCP_TEST_TIMES" in env:
+                seen["var"] = env.get("BOARDPROOF_TEST_TIMES")
+            elif "BOARDPROOF_TEST_TIMES" in env:
                 seen["leak"] = cmd
             return super().__call__(cmd, env, cwd, timeout, out_path)
 

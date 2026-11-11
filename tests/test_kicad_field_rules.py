@@ -17,8 +17,8 @@ from pathlib import Path
 
 import pytest
 
-from kicad_mcp import kicad_cli, write_layer
-from kicad_mcp.toolsets import project as project_toolset
+from boardproof import kicad_cli, write_layer
+from boardproof.toolsets import project as project_toolset
 from tests import _kicad_faults as faults
 from tests import test_sheet_pins as _base
 

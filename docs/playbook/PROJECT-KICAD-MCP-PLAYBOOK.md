@@ -1,4 +1,4 @@
-# Kicad-MCP: project playbook (fork)
+# Boardproof: project playbook (fork)
 
 Fork of `AGENT-WORKFLOW-PLAYBOOK.md` in this folder (the version of 2026-10-11 with Core, A1-A12,
 856 lines). It cites that file by section and copies nothing: the general file wins on general
@@ -77,7 +77,7 @@ wins over both.
 > the `rootdir:` line): run from the worktree
 > root with the shared interpreter by absolute path, `<main checkout>/.venv/Scripts/python.exe`,
 > and `PYTHONPATH=<worktree>/src`. The result counts
-> only if `kicad_mcp.__file__` lies inside the worktree **and** pytest's `rootdir:` line names the
+> only if `boardproof.__file__` lies inside the worktree **and** pytest's `rootdir:` line names the
 > worktree; otherwise the shared `.venv`'s editable install tested the main checkout.
 > `scripts/batch_gate.py` (P11) does both checks itself. **Lint:** `ruff`, pinned exactly in the
 > dev extra (`ruff==0.17.1`), run by `scripts/lint_gate.py` with `--config pyproject.toml` (a
@@ -97,7 +97,7 @@ wins over both.
 >   `routers/kicad_routing_tools.py`, the tool registrations in `server.py`, anything that mutates a
 >   `.kicad_*` file, and text an LLM reads at runtime (tool descriptions, `.claude/skills/**`,
 >   `CLAUDE.md`, `docs/CONTEXT.md`).
-> - **core:** other `src/kicad_mcp/` code and tests. **config/ops:** `pyproject.toml`, `evals/`,
+> - **core:** other `src/boardproof/` code and tests. **config/ops:** `pyproject.toml`, `evals/`,
 >   fixtures. **docs:** `docs/ARCHITECTURE.md`, `docs/ROADMAP.md`, `README.md`, `docs/**`.
 > - Critical-class text (`CLAUDE.md`, `docs/CONTEXT.md`, `.claude/skills/**`, tool descriptions) needs a
 >   CLEAN adversarial review before it is committed, even when a planning ticket changes it.
@@ -167,11 +167,11 @@ wins over both.
 > verdict). There is no hosted CI: this local run is the test gate, permanently (owner,
 > 2026-10-19). When the full suite is required at all is set by the owner rule of 2026-10-29 in CLAUDE.md and docs/TESTING.md ("Test suite"): not after a change that only moves files or edits docs or comments. It runs `<shared .venv>/python.exe -m pytest -m "not network" -rfEs -p
 > no:cacheprovider` (no `-q`) from the tree's root with `PYTHONPATH=<tree>/src` and
-> `KICAD_DEMOS_REQUIRED=1` and `KICAD_ROUTING_TOOLS_REQUIRED=1` under a 7650 s timeout (about 3x the slowest measured suite with only other gates running, P10; build tickets 70 and 88), checks `kicad_mcp.__file__`, the
+> `KICAD_DEMOS_REQUIRED=1` and `KICAD_ROUTING_TOOLS_REQUIRED=1` under a 7650 s timeout (about 3x the slowest measured suite with only other gates running, P10; build tickets 70 and 88), checks `boardproof.__file__`, the
 > `rootdir:` line and `configfile: pyproject.toml` (P6), prints the collected count and every new
 > failure by id, re-runs each new failure once alone (a pass is a flaky candidate and still RED),
 > runs the lint gate (P6), and ends with `BATCH GATE <sha7>: GREEN` or `RED (<reasons>)`; logs go
-> to the system temp directory's `kicad-mcp-batch-gate/`. It takes 8-43 minutes (460-870 s of
+> to the system temp directory's `boardproof-batch-gate/`. It takes 8-43 minutes (460-870 s of
 > pytest on 2026-10-20 with one gate at a time, up to 2545 s on 2026-10-21 with several gates in parallel and only other gates known to be running; the 5331 s run c1c8f1b of that day is excluded from the timeout's basis: a reviewer's targeted tests ran at the same time and the machine was in standby for 3770 s of it; it exited 0 and ended GREEN under the 4200 s timeout then in force, because Popen.wait(timeout) does not count standby time on Windows; the gate now enforces the timeout on the wall clock; the
 > gate prints its expected duration and worst case, about 168 min, at its start), so it runs in the
 > background (`.claude/agents/builder.md`, Tests). For the batch gate, the suite's timeout is about 3x
@@ -266,7 +266,7 @@ wins over both.
   encouragement.
 - **Every reviewer prompt adds:** mutation testing in the reviewer's own review worktree (a
   detached git worktree of the reviewed sha, never the builder's worktree and never a `git archive`
-  export; `PYTHONPATH=<review worktree>/src`, verify `kicad_mcp.__file__` points into the review
+  export; `PYTHONPATH=<review worktree>/src`, verify `boardproof.__file__` points into the review
   worktree before trusting a result; restore with `git checkout -- .` after each mutation, only
   after the run's completion notification), real `kicad-cli`
   where the claim is about KiCad behaviour, and the findings the reference module needed. The

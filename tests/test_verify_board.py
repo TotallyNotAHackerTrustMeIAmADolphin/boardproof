@@ -1,4 +1,4 @@
-"""Tests for the acceptance gate, ``verify_board`` (src/kicad_mcp/verify_board.py).
+"""Tests for the acceptance gate, ``verify_board`` (src/boardproof/verify_board.py).
 
 Contract: pivot-ladder ticket 3 and
 docs/ARCHITECTURE.md decision 14. Tests observe behaviour only through the public
@@ -20,9 +20,9 @@ from pathlib import Path
 import pytest
 from mcp.client.client import Client
 
-from kicad_mcp import kicad_cli
-from kicad_mcp.server import build_server
-from kicad_mcp.verify_board import snapshot_rules, verify_board
+from boardproof import kicad_cli
+from boardproof.server import build_server
+from boardproof.verify_board import snapshot_rules, verify_board
 
 FIXTURES = Path(__file__).parent / "fixtures"
 GOLDEN_PCB = FIXTURES / "golden_attiny1616_board" / "golden_attiny1616_board.kicad_pcb"
@@ -923,7 +923,7 @@ def _non_id_fixture(tmp_path: Path, root_id: str) -> Path:
 def test_kicad_cli_never_matches_a_sheet_id_that_is_not_an_id(tmp_path: Path, root_id: str) -> None:
     """Measured (ticket 95): `(uuid "root")` with the path `/root` is not live. kicad-cli takes
     the last entry only when its path is the sheet's, here it took the earlier stale one."""
-    from kicad_mcp.sheet_tree import netlist_components
+    from boardproof.sheet_tree import netlist_components
 
     board = _non_id_fixture(tmp_path, root_id)
     assert [c["ref"] for c in netlist_components(board.with_suffix(".kicad_sch"))] == ["C1"]
@@ -931,7 +931,7 @@ def test_kicad_cli_never_matches_a_sheet_id_that_is_not_an_id(tmp_path: Path, ro
 
 def test_kicad_cli_matches_a_real_sheet_id_the_same_way(tmp_path: Path) -> None:
     """The control for the test above: with a real uuid the last entry is live (C2)."""
-    from kicad_mcp.sheet_tree import netlist_components
+    from boardproof.sheet_tree import netlist_components
 
     board = _non_id_fixture(tmp_path, ROOT_UUID)
     assert [c["ref"] for c in netlist_components(board.with_suffix(".kicad_sch"))] == ["C2"]

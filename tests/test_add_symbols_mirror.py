@@ -17,9 +17,9 @@ from pathlib import Path
 import pytest
 from mcp.server.mcpserver import MCPServer
 
-from kicad_mcp import kicad_cli, sheet_editing, write_layer
-from kicad_mcp.toolsets import project as project_toolset
-from kicad_mcp.toolsets import schematic as schematic_toolset
+from boardproof import kicad_cli, sheet_editing, write_layer
+from boardproof.toolsets import project as project_toolset
+from boardproof.toolsets import schematic as schematic_toolset
 
 CONN = "Connector_Generic:Conn_01x08"
 
@@ -182,7 +182,7 @@ def test_adding_to_a_sheet_that_already_holds_a_mirrored_symbol_keeps_it(tools, 
 
 def test_add_symbols_mirror_self_check_fires_when_the_mirror_is_not_written_and_leaves_the_sheet_unchanged(tools, sch, monkeypatch):
     """Mutation check of the mirror self-check: when the mirror does not reach the text, the write is refused."""
-    from kicad_mcp.toolsets import schematic as module
+    from boardproof.toolsets import schematic as module
 
     before = sch.read_bytes()
     monkeypatch.setattr(module, "_apply_mirrors", lambda root, mirrors, old: None)
@@ -262,7 +262,7 @@ def test_non_finite_coordinates_and_bad_rotation_or_unit_are_refused_as_invalid_
 
 def test_apply_mirrors_never_touches_a_symbol_that_was_already_on_the_sheet(tools, sch):
     """The old_uuids skip, seen directly: an old symbol with the same (reference, unit) as a new one is left alone."""
-    from kicad_mcp.toolsets import schematic as module
+    from boardproof.toolsets import schematic as module
 
     assert tools["add_symbols"](str(sch), [_spec("J1")])["status"] == "ok"
     root = write_layer.load(sch)

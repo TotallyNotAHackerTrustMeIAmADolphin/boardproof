@@ -17,7 +17,7 @@ from pathlib import Path
 import pytest
 from mcp.client.client import Client
 
-from kicad_mcp.server import build_server
+from boardproof.server import build_server
 from tests import _kicad_faults as faults
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -316,7 +316,7 @@ def _strings_of(text: str):
 def pass_verdict(monkeypatch: pytest.MonkeyPatch) -> None:
     """Replace only the gate's grading with a PASS (the S1 boundary), so staleness
     is tested against a verdict that looks trustworthy."""
-    from kicad_mcp import verify_board as gate
+    from boardproof import verify_board as gate
 
     def fake(pcb_path, **_kwargs):
         return {"verdict": "PASS", "unconnected": [], "violations": []}
@@ -430,7 +430,7 @@ async def test_a_mutating_call_that_cannot_name_its_board_stales_every_verdict(
 
 
 def test_a_mutation_during_grading_is_not_forgotten(tmp_path: Path) -> None:
-    from kicad_mcp.gate_state import GateState
+    from boardproof.gate_state import GateState
 
     pcb = tmp_path / "b.kicad_pcb"
     pcb.write_text("(kicad_pcb)\n", encoding="utf-8")
@@ -443,7 +443,7 @@ def test_a_mutation_during_grading_is_not_forgotten(tmp_path: Path) -> None:
 
 
 def test_board_suffix_match_ignores_case(tmp_path: Path) -> None:
-    from kicad_mcp.gate_state import attach_gate_field, GateState
+    from boardproof.gate_state import attach_gate_field, GateState
 
     state = GateState()
     wrapped = attach_gate_field(lambda pcb_path: {"status": "ok"}, {"readOnlyHint": True}, state)
@@ -473,7 +473,7 @@ def test_status_claim_pattern_catches_keys_with_underscores() -> None:
 
 
 def _state_with_verdict(pcb: Path, verdict: str = "PASS"):
-    from kicad_mcp.gate_state import GateState
+    from boardproof.gate_state import GateState
 
     state = GateState()
     state.record_verdict(pcb, verdict, state.begin_grading(pcb))
@@ -544,7 +544,7 @@ def test_a_mutation_in_a_subsheet_directory_stales_the_board_above_it(project: P
 def test_unchanged_files_are_not_read_again_and_changed_ones_are(
     project: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from kicad_mcp import gate_state
+    from boardproof import gate_state
 
     reads: list[str] = []
     real = gate_state._hash_file
@@ -578,7 +578,7 @@ def test_unchanged_files_are_not_read_again_and_changed_ones_are(
 def test_several_boards_in_one_directory_are_walked_once(
     project: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from kicad_mcp import gate_state
+    from boardproof import gate_state
 
     second = project.parent / "second.kicad_pcb"
     shutil.copy(project, second)
@@ -599,7 +599,7 @@ def test_several_boards_in_one_directory_are_walked_once(
 def test_project_over_the_size_cap_is_never_shown_fresh(
     project: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from kicad_mcp import gate_state
+    from boardproof import gate_state
 
     state = _state_with_verdict(project)
     monkeypatch.setattr(gate_state, "_MAX_COPY_BYTES", 10)
@@ -613,7 +613,7 @@ def test_project_over_the_size_cap_is_never_shown_fresh(
 def test_project_over_the_file_count_cap_is_never_shown_fresh(
     project: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from kicad_mcp import gate_state
+    from boardproof import gate_state
 
     state = _state_with_verdict(project)
     monkeypatch.setattr(gate_state, "_MAX_FILES", 2)
@@ -626,7 +626,7 @@ def test_project_over_the_file_count_cap_is_never_shown_fresh(
 def test_an_unreadable_input_file_is_named_and_never_shown_fresh(
     project: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from kicad_mcp import gate_state
+    from boardproof import gate_state
 
     state = _state_with_verdict(project)
     real = gate_state._hash_file
@@ -662,7 +662,7 @@ def test_a_symlinked_library_directory_is_fingerprinted_and_cycles_terminate(pro
 
 
 def test_token_memory_is_bounded() -> None:
-    from kicad_mcp.gate_state import GateState
+    from boardproof.gate_state import GateState
 
     state = GateState()
     for i in range(5000):
@@ -678,7 +678,7 @@ def test_the_walk_follows_directory_symlinks_like_the_gates_copy(
 ) -> None:
     # Independent of symlink privilege: the gate's copytree(symlinks=False) follows
     # links, so the fingerprint walk must ask os.walk to follow them too.
-    from kicad_mcp import gate_state
+    from boardproof import gate_state
 
     seen: list[bool] = []
     real_walk = os.walk
@@ -694,7 +694,7 @@ def test_the_walk_follows_directory_symlinks_like_the_gates_copy(
 
 
 def test_symlink_loops_are_pruned_on_the_way_down(monkeypatch: pytest.MonkeyPatch) -> None:
-    from kicad_mcp import gate_state
+    from boardproof import gate_state
 
     # /p/linked -> /shared ; /shared/loop -> /p  (a loop through two links)
     targets = {"/p": "/p", "/p/linked": "/shared", "/p/linked/loop": "/p", "/p/real": "/p/real"}

@@ -200,7 +200,7 @@ def test_a_platform_with_no_published_binary_is_refused(env, capsys):
 # --- the values recorded in the repository --------------------------------------------------------
 
 def test_the_script_pins_the_same_commit_as_the_cli_snapshot():
-    snapshot = json.loads((ROOT / "src/kicad_mcp/routers/krt_cli_snapshot.json").read_text(encoding="utf-8"))
+    snapshot = json.loads((ROOT / "src/boardproof/routers/krt_cli_snapshot.json").read_text(encoding="utf-8"))
     assert setup.PINNED_SHA == snapshot["router_commit"] == PIN
     assert setup.TAG == "v0.23.8"
 
@@ -225,14 +225,14 @@ def test_the_script_has_no_force_or_skip_verification_switch():
 # --- where the other pieces name the script -------------------------------------------------------
 
 def test_the_missing_checkout_hint_names_the_script():
-    from kicad_mcp.routers import kicad_routing_tools as krt
+    from boardproof.routers import kicad_routing_tools as krt
 
     assert "scripts/setup_krt.py" in krt.INSTALL_CHECKOUT_HINT
     assert ".tools/KiCadRoutingTools" in krt.INSTALL_CHECKOUT_HINT
 
 
 def test_discovery_falls_back_to_the_tools_folder_of_the_repository(tmp_path, monkeypatch):
-    from kicad_mcp.routers import kicad_routing_tools as krt
+    from boardproof.routers import kicad_routing_tools as krt
 
     monkeypatch.delenv(krt.ENV_PATH, raising=False)
     monkeypatch.setattr(krt, "_PLUGIN_GLOBS", {})
@@ -246,7 +246,7 @@ def test_discovery_falls_back_to_the_tools_folder_of_the_repository(tmp_path, mo
 
 
 def test_the_environment_variable_still_wins(tmp_path, monkeypatch):
-    from kicad_mcp.routers import kicad_routing_tools as krt
+    from boardproof.routers import kicad_routing_tools as krt
 
     other = tmp_path / "other"
     (other / "py_router").mkdir(parents=True)
@@ -321,7 +321,7 @@ def _git_dirs(tmp_path):
 
 
 def test_discovery_in_a_linked_worktree_finds_the_main_checkouts_router(tmp_path, monkeypatch):
-    from kicad_mcp.routers import kicad_routing_tools as krt
+    from boardproof.routers import kicad_routing_tools as krt
 
     main, wt = _git_dirs(tmp_path)
     monkeypatch.delenv(krt.ENV_PATH, raising=False)
@@ -333,7 +333,7 @@ def test_discovery_in_a_linked_worktree_finds_the_main_checkouts_router(tmp_path
 def test_the_tool_text_names_the_discovery_order():
     import ast
 
-    tree = ast.parse((ROOT / "src/kicad_mcp/toolsets/routing.py").read_text(encoding="utf-8"))
+    tree = ast.parse((ROOT / "src/boardproof/toolsets/routing.py").read_text(encoding="utf-8"))
     docs = [n.value for n in ast.walk(tree) if isinstance(n, ast.Constant) and isinstance(n.value, str)
             and "KICAD_ROUTING_TOOLS_PATH" in n.value and "PCM plugin dir" in n.value]
     assert docs, "the routing tool text names the discovery"
@@ -358,7 +358,7 @@ def test_the_krt_checkout_fixture_docstring_names_the_discovery_order():
 def test_an_ordinary_test_does_not_see_the_default_router_folder_of_this_machine():
     """Issue 64: a real .tools/KiCadRoutingTools must not change what tests of 'KRT missing' or of the
     platform glob see; conftest points the default-folder discovery at an empty directory."""
-    from kicad_mcp.routers import kicad_routing_tools as krt
+    from boardproof.routers import kicad_routing_tools as krt
 
     real_root = Path(krt.__file__).resolve().parents[3]
     assert krt.REPO_ROOT.resolve() != real_root

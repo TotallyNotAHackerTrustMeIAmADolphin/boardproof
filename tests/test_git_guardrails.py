@@ -770,7 +770,7 @@ def _run_hook(payload) -> subprocess.CompletedProcess:
 def test_hook_process_blocks_with_exit_2_and_reason():
     r = _run_hook({"tool_name": "Bash", "tool_input": {"command": "git push --force origin main"}})
     assert r.returncode == 2
-    assert b"BLOCKED by the kicad-mcp git guardrail" in r.stderr
+    assert b"BLOCKED by the boardproof git guardrail" in r.stderr
     assert b"force push" in r.stderr
 
 

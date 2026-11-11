@@ -52,7 +52,7 @@ family means refuse everything not proven. The design is then the finding.
 ## Test runs
 
 - Run tests as SMALL SEPARATE runs (each aimed at under about 20 minutes), in the background (`run_in_background`) with their own log, waiting for the completion notification (no sleep loops), each printing its own summary line.
-- Use `PYTHONPATH=<review worktree>/src` and the shared interpreter by absolute path. A result counts only if `kicad_mcp.__file__` lies inside the worktree and pytest's `rootdir:` line names it; report both.
+- Use `PYTHONPATH=<review worktree>/src` and the shared interpreter by absolute path. A result counts only if `boardproof.__file__` lies inside the worktree and pytest's `rootdir:` line names it; report both.
 - Run the ticket's targeted tests, `tests/test_ratchets.py` and `scripts/lint_gate.py`.
 
 ## Hand-back

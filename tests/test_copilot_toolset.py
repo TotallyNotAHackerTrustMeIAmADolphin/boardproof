@@ -1,4 +1,4 @@
-"""Tests for the copilot toolset (src/kicad_mcp/toolsets/copilot.py).
+"""Tests for the copilot toolset (src/boardproof/toolsets/copilot.py).
 
 Runs tools through the real MCPServer.call_tool path (matches
 test_verification_toolset.py's convention) so the registration contract
@@ -21,8 +21,8 @@ from pathlib import Path
 import pytest
 from mcp.server.mcpserver import MCPServer
 
-from kicad_mcp.ipc import adapter, connection, discovery
-from kicad_mcp.toolsets import copilot as copilot_toolset
+from boardproof.ipc import adapter, connection, discovery
+from boardproof.toolsets import copilot as copilot_toolset
 from tests.test_ipc import requires_live_kicad  # reuse the same live-KiCad gate
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -86,7 +86,7 @@ def test_build_registers_expected_tools() -> None:
 @pytest.mark.asyncio
 async def test_toolset_survives_server_build() -> None:
     """The literal 'Done means' criterion from the brief, at the toolset level."""
-    from kicad_mcp.server import build_server
+    from boardproof.server import build_server
 
     server = build_server()
     result = await server.call_tool("load_toolset", {"name": "copilot"})

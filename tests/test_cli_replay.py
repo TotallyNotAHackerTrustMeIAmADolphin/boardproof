@@ -255,7 +255,7 @@ def test_verify_mode_passes_when_the_replay_equals_a_real_run(fake, tmp_path, mo
 def test_the_real_kicad_cli_replays_a_sheet_upgrade_exactly(kicad_demo, tmp_path, monkeypatch) -> None:
     """The real thing: ``sch upgrade`` of two copies of a demo sheet; the replay (verify mode: the real run
     is made too and compared) leaves the same bytes, the same exit code and the same output."""
-    from kicad_mcp import kicad_cli
+    from boardproof import kicad_cli
 
     monkeypatch.setenv(rp.ENV_ON, "1")
     monkeypatch.setenv(rp.ENV_DIR, str(tmp_path / "store"))
@@ -284,7 +284,7 @@ def test_the_real_kicad_cli_replays_a_sheet_upgrade_exactly(kicad_demo, tmp_path
 
 def test_with_the_replay_unset_subprocess_run_is_left_unpatched(monkeypatch) -> None:
     """Issue 176. Mutant M10: ``pytest_configure`` installs the wrapper without looking at
-    ``KICAD_MCP_CLI_REPLAY`` (the default of every run, and of the batch gate, would then be the replay)."""
+    ``BOARDPROOF_CLI_REPLAY`` (the default of every run, and of the batch gate, would then be the replay)."""
     sentinel = object()
     monkeypatch.setattr(subprocess, "run", sentinel)
     monkeypatch.delenv(rp.ENV_ON, raising=False)

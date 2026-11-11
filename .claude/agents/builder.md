@@ -1,6 +1,6 @@
 ---
 name: builder
-description: Builds exactly one kicad-mcp build ticket test-first on its ticket-<n> branch in a hand-made worktree and hands back the head sha. Dispatched by the coordinator only.
+description: Builds exactly one boardproof build ticket test-first on its ticket-<n> branch in a hand-made worktree and hands back the head sha. Dispatched by the coordinator only.
 maxTurns: 150
 disallowedTools: Agent
 ---
@@ -68,7 +68,7 @@ The playbook is `docs/playbook/AGENT-WORKFLOW-PLAYBOOK.md`; this project's answe
   completion notification (no sleep loops), each printing its own summary line (a run killed by a
   timeout prints none). From the worktree root:
   `PYTHONPATH=<worktree>/src "<main checkout>/.venv/Scripts/python.exe" -m pytest <paths>`,
-  without `-q` for counted runs. A result counts only if `kicad_mcp.__file__` lies inside your
+  without `-q` for counted runs. A result counts only if `boardproof.__file__` lies inside your
   worktree and pytest's `rootdir:` line names it; report both. Set
   `KICAD_ROUTING_TOOLS_PATH` as your prompt says. While a batch gate runs, start no more than 2 other
   runs (the gate's timing basis, fork P11, assumes few other runs).
@@ -115,7 +115,7 @@ The playbook is `docs/playbook/AGENT-WORKFLOW-PLAYBOOK.md`; this project's answe
 - You cannot see your context size, so count turns: from about turn 120, stop after the next green
   slice, commit, and list what is left.
 - Write the ticket's Answer (reproduction; changes per acceptance item; test counts with the
-  `kicad_mcp.__file__` and `rootdir:` evidence) to a file outside the repository and post it as a
+  `boardproof.__file__` and `rootdir:` evidence) to a file outside the repository and post it as a
   comment on the issue (`python scripts/issues.py comment <n> --body-file <file>`) before the batch
   gate starts. Leave the issue open: the coordinator closes it at the merge. The script scans every
   text for names and paths first; a refusal (exit 2) is fixed by rewording, never bypassed.

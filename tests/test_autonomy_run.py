@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from kicad_mcp import autonomy_run, input_prep, rung_runner
+from boardproof import autonomy_run, input_prep, rung_runner
 
 from test_input_prep import _build_fixture
 

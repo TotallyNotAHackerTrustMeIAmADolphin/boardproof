@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from kicad_mcp import rung_backends, rung_runner
+from boardproof import rung_backends, rung_runner
 
 from test_rung_runner import BOARD_SHA, make_run, project  # noqa: F401
 from test_rung_runner_review import _CLEAN, _DIRTY, _git, repo  # noqa: F401

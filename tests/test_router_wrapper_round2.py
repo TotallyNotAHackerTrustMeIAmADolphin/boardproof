@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from kicad_mcp.routers import kicad_routing_tools as krt
+from boardproof.routers import kicad_routing_tools as krt
 
 
 # ---- 2: denied flags (each one its own case) --------------------------------

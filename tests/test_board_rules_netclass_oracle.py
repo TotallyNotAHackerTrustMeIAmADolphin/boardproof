@@ -40,8 +40,8 @@ from pathlib import Path
 
 import pytest
 
-from kicad_mcp import board_rules, write_layer
-from kicad_mcp.toolsets import routing as routing_toolset
+from boardproof import board_rules, write_layer
+from boardproof.toolsets import routing as routing_toolset
 from tests import _kicad_demos as demos
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -137,7 +137,7 @@ def _project(dest: Path, source_pcb: Path, classes, patterns) -> Path:
 
 
 def _kicad(board: Path, nets: list[str]) -> dict:
-    with tempfile.TemporaryDirectory(prefix="kicad_mcp_netclass_", ignore_cleanup_errors=True) as home:
+    with tempfile.TemporaryDirectory(prefix="boardproof_netclass_", ignore_cleanup_errors=True) as home:
         proc = subprocess.run(
             [str(KICAD_PYTHON), "-I", "-X", "utf8", str(ORACLE), str(board.resolve()), json.dumps(nets)],
             capture_output=True, timeout=180, cwd=home, check=False,
@@ -562,7 +562,7 @@ def test_rung_2_pic_programmer_resolves_every_net_like_kicad(kicad_demo, kicad_p
     """Delta review 3, L3: rung 2's board (KiCad's pic_programmer demo, a copy): every net,
     including its ``{slash}`` nets under the patterns GND and VCC, resolves without a refusal
     and exactly as KiCad resolves it."""
-    from kicad_mcp import pour_step
+    from boardproof import pour_step
 
     board = kicad_demo("pic_programmer") / "pic_programmer.kicad_pcb"
     data = board_rules._read_project(board.with_suffix(".kicad_pro"))

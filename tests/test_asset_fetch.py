@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from kicad_mcp.sourcing.asset_fetch import fetch_part_assets
+from boardproof.sourcing.asset_fetch import fetch_part_assets
 from tests._hermetic_git import run_git
 
 
@@ -59,7 +59,7 @@ MISSING_MODULE_REASON = (
 def test_missing_module_gives_actionable_incomplete_result(tmp_path, monkeypatch):
     import importlib.util
 
-    import kicad_mcp.sourcing.asset_fetch as af
+    import boardproof.sourcing.asset_fetch as af
 
     real_find_spec = importlib.util.find_spec
     monkeypatch.setattr(importlib.util, "find_spec", lambda name, *a, **k: None if name == "easyeda2kicad" else real_find_spec(name, *a, **k))
@@ -121,7 +121,7 @@ def test_readme_and_third_party_agree_it_is_core():
 def test_fetch_part_assets_description_pins_missing_module_sentence():
     import ast
 
-    path = Path(__file__).resolve().parents[1] / "src" / "kicad_mcp" / "toolsets" / "sourcing.py"
+    path = Path(__file__).resolve().parents[1] / "src" / "boardproof" / "toolsets" / "sourcing.py"
     tree = ast.parse(path.read_text(encoding="utf-8"))
     strings = [" ".join(n.value.split()) for n in ast.walk(tree) if isinstance(n, ast.Constant) and isinstance(n.value, str)]
     sentence = "If the easyeda2kicad package is missing from the server's Python environment the result is status incomplete with the install command, and nothing is fetched."

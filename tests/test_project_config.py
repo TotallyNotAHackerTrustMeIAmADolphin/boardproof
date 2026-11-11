@@ -6,7 +6,7 @@ import re
 import tomllib
 from pathlib import Path
 
-from kicad_mcp.routers import kicad_routing_tools as krt_tools
+from boardproof.routers import kicad_routing_tools as krt_tools
 
 PYPROJECT = Path(__file__).resolve().parents[1] / "pyproject.toml"
 

@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 from kicad_tools.sexp import parse_string
 
-from kicad_mcp import autonomy_run, rung_backends, rung_runner, write_layer
+from boardproof import autonomy_run, rung_backends, rung_runner, write_layer
 
 from test_rung_runner import make_run as _make_run
 

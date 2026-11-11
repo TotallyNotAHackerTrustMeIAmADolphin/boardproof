@@ -20,9 +20,9 @@ from pathlib import Path
 import pytest
 from kicad_tools.sexp import SExp
 
-from kicad_mcp import checkpoint
-from kicad_mcp import schematic_import as si
-from kicad_mcp import write_layer
+from boardproof import checkpoint
+from boardproof import schematic_import as si
+from boardproof import write_layer
 from tests import _kicad_faults as faults
 
 REPO = Path(__file__).resolve().parents[1]
@@ -32,7 +32,7 @@ NAME = "rung1_usbc_attiny1616"
 
 def _kicad_cli_available() -> bool:
     try:
-        from kicad_mcp.kicad_cli import find_kicad_cli
+        from boardproof.kicad_cli import find_kicad_cli
 
         find_kicad_cli()
         return True
@@ -244,7 +244,7 @@ def test_unresolved_at_confirm_fails_whole_import_names_part_and_writes_nothing(
     # Build ticket 22: the token carries the composite project hash, so a library file INSIDE the
     # project tree that changes is drift (next test). The re-plan at confirm still catches a
     # library OUTSIDE the tree, here one a global fp-lib-table points at.
-    from kicad_mcp.schematic_import import _installed_footprint_dirs
+    from boardproof.schematic_import import _installed_footprint_dirs
 
     lib = tmp_path / "globallib" / "Resistor_SMD.pretty"
     shutil.copytree(_installed_footprint_dirs()[0] / "Resistor_SMD.pretty", lib)
@@ -304,7 +304,7 @@ def test_footprint_with_empty_field_or_unknown_library_is_unresolved(pcb: Path, 
 
 
 def test_netlist_comes_from_kicad_cli_and_cli_is_put_on_path_first(pcb: Path, tmp_path: Path, monkeypatch) -> None:
-    import kicad_mcp.kicad_cli as cli
+    import boardproof.kicad_cli as cli
 
     calls: list[str] = []
     real = cli.ensure_kicad_cli_on_path
@@ -425,7 +425,7 @@ def test_a_pin_without_a_pad_fails_the_import(pcb: Path, tmp_path: Path, monkeyp
 
 
 def test_imported_board_loads_in_kicad_cli(pcb: Path, tmp_path: Path) -> None:
-    from kicad_mcp.kicad_cli import run_drc
+    from boardproof.kicad_cli import run_drc
 
     out = tmp_path / "out"
     assert _import(pcb, out)["status"] == "imported"
@@ -676,7 +676,7 @@ def test_changed_library_between_propose_and_confirm_is_refused(pcb: Path, proje
 def test_global_table_nickname_beats_the_installed_directory(pcb: Path, tmp_path: Path, monkeypatch) -> None:
     lib = tmp_path / "globallib" / "Resistor_SMD.pretty"
     lib.mkdir(parents=True)
-    from kicad_mcp.schematic_import import _installed_footprint_dirs
+    from boardproof.schematic_import import _installed_footprint_dirs
 
     stock = _installed_footprint_dirs()[0] / "Resistor_SMD.pretty" / "R_0603_1608Metric.kicad_mod"
     shutil.copy(stock, lib / "R_0603_1608Metric.kicad_mod")
@@ -936,7 +936,7 @@ def test_only_this_projects_instances_count_for_duplicates(pcb: Path, project: P
 def test_annotation_gate_contract_is_pinned(project: Path) -> None:
     import inspect
 
-    from kicad_mcp import verify_board as gate
+    from boardproof import verify_board as gate
 
     assert list(inspect.signature(gate._annotation_problems).parameters) == ["root_sheet"]
     sch = project / f"{NAME}.kicad_sch"

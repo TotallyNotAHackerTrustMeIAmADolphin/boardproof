@@ -15,9 +15,9 @@ from pathlib import Path
 import pytest
 from mcp.client.client import Client
 
-from kicad_mcp import pour_step
-from kicad_mcp import verify_board as gate
-from kicad_mcp.server import build_server
+from boardproof import pour_step
+from boardproof import verify_board as gate
+from boardproof.server import build_server
 from test_pour_step import FULL, _seam_offenders, build_board, fake_drc, fake_fill, make_fake_router
 
 SEAMS = {"drc", "router", "fill", "connectivity_check"}
@@ -183,7 +183,7 @@ async def test_the_server_forwards_no_seam_even_when_a_caller_supplies_one(
 
 
 def test_the_source_scan_guard_has_a_real_call_to_scan_and_passes() -> None:
-    server = Path(__file__).parent.parent / "src" / "kicad_mcp" / "server.py"
+    server = Path(__file__).parent.parent / "src" / "boardproof" / "server.py"
     source = server.read_text(encoding="utf-8")
     assert "confirm_pour_step(" in source and "propose_pour_step(" in source
     assert _seam_offenders(source, "server.py") == []

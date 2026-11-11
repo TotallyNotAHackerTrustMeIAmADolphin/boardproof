@@ -12,7 +12,7 @@ reference and sheet, the rule ``schematic_import._stale_only_entries`` uses (0 o
 measured sheet uses in 83 roots had that shape).
 
 Fixtures are built through kicad_tools' S-expression builder (tiny sheets) or edited through
-``kicad_mcp.write_layer`` (a demo copy), never by hand (CLAUDE.md hard rule 1).
+``boardproof.write_layer`` (a demo copy), never by hand (CLAUDE.md hard rule 1).
 """
 
 from __future__ import annotations
@@ -22,9 +22,9 @@ from pathlib import Path
 
 import pytest
 
-from kicad_mcp import verify_board as gate
-from kicad_mcp import write_layer
-from kicad_mcp.verify_board import snapshot_rules, verify_board
+from boardproof import verify_board as gate
+from boardproof import write_layer
+from boardproof.verify_board import snapshot_rules, verify_board
 
 PROJECT = "proj"
 ROOT_UUID = "11111111-1111-4111-8111-111111111111"
@@ -259,7 +259,7 @@ def test_a_failing_board_with_a_stale_path_stays_fail(tmp_path: Path) -> None:
 
 
 def test_a_stale_check_that_cannot_run_is_a_reason_not_a_pass(tmp_path: Path, monkeypatch) -> None:
-    from kicad_mcp import sheet_tree
+    from boardproof import sheet_tree
 
     root = _write(
         tmp_path / f"{PROJECT}.kicad_sch",

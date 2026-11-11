@@ -20,10 +20,10 @@ from kicad_tools.library import generators as kt_generators
 from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 
-from kicad_mcp import write_layer as wl
-from kicad_mcp.kicad_cli import find_kicad_cli
-from kicad_mcp.sourcing.footprint_gen import list_package_types as inner_package_types
-from kicad_mcp.toolsets import sourcing as sourcing_toolset
+from boardproof import write_layer as wl
+from boardproof.kicad_cli import find_kicad_cli
+from boardproof.sourcing.footprint_gen import list_package_types as inner_package_types
+from boardproof.toolsets import sourcing as sourcing_toolset
 
 # One real footprint per supported package type, with parameters the tool must pass through.
 SPECS: dict[str, dict] = {

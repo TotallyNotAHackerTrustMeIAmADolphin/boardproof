@@ -25,8 +25,8 @@ from pathlib import Path
 
 import pytest
 
-from kicad_mcp import write_layer
-from kicad_mcp.toolsets import routing as routing_toolset
+from boardproof import write_layer
+from boardproof.toolsets import routing as routing_toolset
 from tests._dsn_pins import kids, misplaced_pins, one, parse
 from tests._self_check_helpers import corrupt_writes, sexp_edit, top_nodes
 
@@ -372,7 +372,7 @@ def test_the_runner_is_started_isolated_in_a_throwaway_profile(tmp_path, monkeyp
 
     def fake_run(argv, **kwargs):
         seen["argv"], seen["env"], seen["cwd"] = list(argv), kwargs["env"], kwargs["cwd"]
-        return subprocess.CompletedProcess(argv, 0, b'noise\nKICAD_MCP_RESULT {"ok": true}\n', b"")
+        return subprocess.CompletedProcess(argv, 0, b'noise\nBOARDPROOF_RESULT {"ok": true}\n', b"")
 
     python = tmp_path / "python.exe"
     python.write_bytes(b"")
@@ -393,7 +393,7 @@ def test_relative_paths_reach_the_runner_resolved(tmp_path, monkeypatch):
 
     def fake_run(argv, **kwargs):
         seen["argv"] = list(argv)
-        return subprocess.CompletedProcess(argv, 0, b'KICAD_MCP_RESULT {"ok": true}\n', b"")
+        return subprocess.CompletedProcess(argv, 0, b'BOARDPROOF_RESULT {"ok": true}\n', b"")
 
     python = tmp_path / "python.exe"
     python.write_bytes(b"")
@@ -416,7 +416,7 @@ def _runner_module():
 def test_importing_the_runner_has_no_side_effects(monkeypatch, tmp_path):
     """Review round 1, finding 4: the profile directory, KICAD_CONFIG_HOME and the pcbnew
     import used to run at module level, so every import (and every failed probe) leaked a
-    ``kicad_mcp_kicad_profile_*`` directory and set KICAD_CONFIG_HOME in the importer."""
+    ``boardproof_kicad_profile_*`` directory and set KICAD_CONFIG_HOME in the importer."""
     import os
     import tempfile
 

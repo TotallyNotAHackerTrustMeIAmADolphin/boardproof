@@ -20,7 +20,7 @@ from pathlib import Path
 
 import pytest
 
-from kicad_mcp import kicad_lock
+from boardproof import kicad_lock
 
 ME_USER = "Test User"
 ME_HOST = "TESTHOST-01"

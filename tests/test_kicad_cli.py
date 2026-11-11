@@ -1,4 +1,4 @@
-"""Tests for src/kicad_mcp/kicad_cli.py, run against a real kicad-cli install."""
+"""Tests for src/boardproof/kicad_cli.py, run against a real kicad-cli install."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from kicad_mcp import kicad_cli
+from boardproof import kicad_cli
 
 FIXTURES = Path(__file__).parent / "fixtures"
 PCB_FIXTURE = FIXTURES / "simple_led.kicad_pcb"

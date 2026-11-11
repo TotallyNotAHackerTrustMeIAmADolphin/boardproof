@@ -16,8 +16,8 @@ import json
 import pytest
 from kicad_tools.sexp.parser import SExp, serialize_sexp
 
-from kicad_mcp.sourcing import PartResult
-from kicad_mcp.sourcing import jlcpcb_basic as jlc
+from boardproof.sourcing import PartResult
+from boardproof.sourcing import jlcpcb_basic as jlc
 
 
 # --- fixtures --------------------------------------------------------------
@@ -451,7 +451,7 @@ def where(tmp_path, monkeypatch):
     fake_user = tmp_path / "fake-user"
     fake_user.mkdir()
     repo = tmp_path / "repo"
-    (repo / "src" / "kicad_mcp").mkdir(parents=True)
+    (repo / "src" / "boardproof").mkdir(parents=True)
     (repo / ".gitmodules").write_text("[submodule]\n", encoding="utf-8")
     monkeypatch.delenv(jlc.JLCPCB_LIBRARY_ENV_VAR, raising=False)
     monkeypatch.setattr(jlc, "_home_dir", lambda: fake_user)
@@ -571,7 +571,7 @@ def test_refresh_index_unavailable_names_the_fetch_command(where):
 
 def test_outside_a_checkout_the_submodule_path_is_not_considered(where, monkeypatch, tmp_path):
     monkeypatch.undo()  # drop the isolated world; test the real _checkout_root
-    site = tmp_path / "site-packages" / "kicad_mcp" / "sourcing"
+    site = tmp_path / "site-packages" / "boardproof" / "sourcing"
     site.mkdir(parents=True)
     monkeypatch.setattr(jlc, "__file__", str(site / "jlcpcb_basic.py"))
     assert jlc._checkout_root() is None

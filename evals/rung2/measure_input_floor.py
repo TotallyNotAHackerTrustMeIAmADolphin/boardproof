@@ -188,8 +188,8 @@ def run_beautifier(krt_dir: Path, python: Path, src_pcb: Path, out_pcb: Path, re
 
 
 def measure(fixture_dir: Path, work: Path, krt_dir: Path, python: Path) -> dict:
-    from kicad_mcp import input_prep, rung_runner
-    from kicad_mcp import verify_board as gate
+    from boardproof import input_prep, rung_runner
+    from boardproof import verify_board as gate
 
     pinned_source = source(rung_runner.load_protocol()["protocol_version"])
     fixture_before = _tree_hashes(fixture_dir)
@@ -271,7 +271,7 @@ def measure(fixture_dir: Path, work: Path, krt_dir: Path, python: Path) -> dict:
 
 
 def main(argv: list[str]) -> int:
-    from kicad_mcp.routers import kicad_routing_tools as krt
+    from boardproof.routers import kicad_routing_tools as krt
 
     fixture, work = Path(argv[1]), Path(argv[2])
     krt_dir = krt.find_kicad_routing_tools()

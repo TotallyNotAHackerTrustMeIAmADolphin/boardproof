@@ -1,7 +1,7 @@
 """Build rung 1's own USB-C receptacle symbol and footprint (publish-prep ticket 02a).
 
 The two files are written here, through the write layer's low-level S-expression API
-(`kicad_mcp.write_layer`: typed atoms, serialise, parse check with kicad-cli, read-back verify,
+(`boardproof.write_layer`: typed atoms, serialise, parse check with kicad-cli, read-back verify,
 `os.replace`); no `.kicad_*` text is edited by hand and no third-party library file is read or
 transformed. The part is the SHOU HAN (Shenzhen Shouhan Technology Co., Ltd.) "TYPE-C 6P"
 receptacle (LCSC C456012 is its purchasing id; it stays in the BOM because it names the part).
@@ -27,7 +27,7 @@ from pathlib import Path
 
 from kicad_tools.sexp import SExp
 
-from kicad_mcp import write_layer as wl
+from boardproof import write_layer as wl
 
 HERE = Path(__file__).resolve().parent
 ASSET = HERE / "assets" / "Rung1_USBC"
@@ -138,7 +138,7 @@ def text_prop(name, value, x, y, layer, hide=False, size=1.0) -> SExp:
 # ------------------------------------------------------------------ the footprint
 
 def footprint_tree() -> SExp:
-    fp = node("footprint", S(FOOTPRINT), node("version", F(20260206)), node("generator", S("kicad_mcp")),
+    fp = node("footprint", S(FOOTPRINT), node("version", F(20260206)), node("generator", S("boardproof")),
               node("layer", S("F.Cu")), node("descr", S(SOURCE_NOTE)),
               node("tags", S("USB Type-C receptacle 6P power only SHOU HAN TYPE-C 6P")))
     fp.children.append(text_prop("Reference", "REF**", 0, -4.4, "F.SilkS"))

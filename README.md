@@ -1,6 +1,6 @@
 # boardproof
 
-An MCP server for PCB design in which nothing counts as finished unless a machine-checked gate says so. The Python package is `kicad_mcp` and the start command is `kicad-mcp`.
+An MCP server for PCB design in which nothing counts as finished unless a machine-checked gate says so. The Python package is `boardproof` and the start command is `boardproof`.
 
 
 An MCP server that lets an AI agent do PCB design work in KiCad: component sourcing, schematic construction, placement, routing (KiCadRoutingTools or Freerouting), verification, SPICE simulation and manufacturing export. It drives KiCad through its files and `kicad-cli`, so no running KiCad is needed.
@@ -87,22 +87,24 @@ Whether a part is a JLCPCB Basic, Preferred or Extended part is answered from a 
 git submodule update --init --depth 1 third_party/JLCPCB-Kicad-Library
 ```
 
-Without it, asset lookups fall back to `easyeda2kicad` (a core dependency) and say so. The server looks for the library in this order: the `KICAD_MCP_JLCPCB_LIBRARY` environment variable, the submodule above, KiCad's third-party directory (a Plugin and Content Manager install). `jlcpcb_library_status` reports what it found and, for an empty or missing submodule, the command above. A new git worktree starts with the submodule empty; set `KICAD_MCP_JLCPCB_LIBRARY` to another checkout's `third_party/JLCPCB-Kicad-Library` to share it. To rebuild the index after moving the pin: `python scripts/refresh_jlcpcb_index.py`.
+Without it, asset lookups fall back to `easyeda2kicad` (a core dependency) and say so. The server looks for the library in this order: the `BOARDPROOF_JLCPCB_LIBRARY` environment variable, the submodule above, KiCad's third-party directory (a Plugin and Content Manager install). `jlcpcb_library_status` reports what it found and, for an empty or missing submodule, the command above. A new git worktree starts with the submodule empty; set `BOARDPROOF_JLCPCB_LIBRARY` to another checkout's `third_party/JLCPCB-Kicad-Library` to share it. To rebuild the index after moving the pin: `python scripts/refresh_jlcpcb_index.py`.
 
 ## MCP client configuration
 
 ```json
 {
   "mcpServers": {
-    "kicad": {
+    "boardproof": {
       "command": "path/to/.venv/Scripts/python",
-      "args": ["-m", "kicad_mcp.server"]
+      "args": ["-m", "boardproof.server"]
     }
   }
 }
 ```
 
-The installed script does the same: `"command": "path/to/.venv/Scripts/kicad-mcp"` with no arguments.
+The installed script does the same: `"command": "path/to/.venv/Scripts/boardproof"` with no arguments.
+
+Renamed from kicad-mcp (package `kicad_mcp`, environment prefix `KICAD_MCP_`) in build ticket 74: the package, the start command and the MCP server name are `boardproof`, and the environment variables `KICAD_MCP_*` are now `BOARDPROOF_*` with no fallback. After pulling the rename run `pip install -e .` again in the virtual environment and change the MCP client configuration (`-m kicad_mcp.server` becomes `-m boardproof.server`). Schematic backups made before the rename stay in the old backup directory (`%LOCALAPPDATA%\kicad-mcp\schematic-backups`) and are not read by the new name.
 
 The server starts with 19 tools: the three toolset tools (`list_toolsets`, `load_toolset`, `unload_toolset`), `project_create`, `project_open`, the gate (`verify_board`, `pin_rule_baseline`) and the checkpointed pairs for input preparation, pour step, schematic import, board rules, board outline and silkscreen minimums. Ten more toolsets load on demand with `load_toolset`: `verification` (9 tools), `sourcing` (13), `diagnostics` (2), `library` (3), `schematic` (7), `placement` (12), `manufacturing` (2), `routing` (6), `copilot` (9) and `simulation` (2). That is 65 more tools, 84 in total (counted from a running server on 2026-10-29).
 
@@ -112,7 +114,7 @@ The server starts with 19 tools: the three toolset tools (`list_toolsets`, `load
 - **`kicad-cli` is the judge:** structured DRC and ERC output, read in full. Renders are for humans only.
 - **Batch tools:** operations take collections, not one item per call.
 - **Checkpoints:** autorouting, autoplacement, ambiguous part matches and destructive edits return a proposal and a revision token. Nothing is written until you confirm, and for the newer checkpoint pairs a confirm is refused if the project's files changed in between.
-- **Never hand-edit KiCad files:** every mutation goes through this project's tools, or through the project's write layer (`kicad_mcp.write_layer`), which saves through a temporary file, a parse check and `os.replace`.
+- **Never hand-edit KiCad files:** every mutation goes through this project's tools, or through the project's write layer (`boardproof.write_layer`), which saves through a temporary file, a parse check and `os.replace`.
 
 ## Limitations
 

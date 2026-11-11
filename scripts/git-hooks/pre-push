@@ -1,5 +1,5 @@
 #!/bin/sh
-# kicad-mcp pre-push guard (build ticket 45; playbook section 8 item 0, fork P2, P8 and P12).
+# boardproof pre-push guard (build ticket 45; playbook section 8 item 0, fork P2, P8 and P12).
 #
 # The authoritative guard for everything a push does (coordinator decision, fix round 2): it sees
 # the real ref updates, whatever started the push (--force, -f, a "+" refspec, an alias, a config

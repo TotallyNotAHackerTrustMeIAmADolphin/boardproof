@@ -1,4 +1,4 @@
-"""Tests for the shared checkpoint helper (src/kicad_mcp/checkpoint.py, build ticket 22).
+"""Tests for the shared checkpoint helper (src/boardproof/checkpoint.py, build ticket 22).
 
 Contract: build ticket 22 and docs/ARCHITECTURE.md
 decisions 4 and 12. Seams: the helper's public interface (``Pending``, ``token_project_hash``,
@@ -15,7 +15,7 @@ from typing import Any
 
 import pytest
 
-from kicad_mcp import checkpoint, gate_state, write_layer
+from boardproof import checkpoint, gate_state, write_layer
 
 FIXTURES = Path(__file__).parent / "fixtures"
 GOLDEN_DIR = FIXTURES / "golden_attiny1616_board"
@@ -353,12 +353,12 @@ class _InputPrep:
         return _build_fixture(tmp_path / "proj")
 
     def propose(self, board: Path, out: Path, variant: str) -> dict:
-        from kicad_mcp import input_prep
+        from boardproof import input_prep
 
         return input_prep.propose_input_preparation(board, out / variant)
 
     def confirm(self, board: Path, token: str) -> dict:
-        from kicad_mcp import input_prep
+        from boardproof import input_prep
         from tests.test_input_prep import _fake_drc
 
         return input_prep.confirm_input_preparation(board, token, parity="required", drc=_fake_drc())
@@ -392,12 +392,12 @@ class _SilkMinimums:
         return _build(tmp_path / "proj")
 
     def propose(self, board: Path, out: Path, variant: str) -> dict:
-        from kicad_mcp import silk_minimums
+        from boardproof import silk_minimums
 
         return silk_minimums.propose_silkscreen_minimums(board, out / variant, min_height_mm=self._heights[variant])
 
     def confirm(self, board: Path, token: str) -> dict:
-        from kicad_mcp import silk_minimums
+        from boardproof import silk_minimums
 
         return silk_minimums.confirm_silkscreen_minimums(board, token)
 
@@ -423,14 +423,14 @@ class _BoardOutline:
         return tmp_path / "proj" / GOLDEN_NAME
 
     def propose(self, board: Path, out: Path, variant: str) -> dict:
-        from kicad_mcp import board_outline
+        from boardproof import board_outline
         from tests.test_board_outline import RECT
 
         outline = {**RECT, "corner_radius": self._radius[variant]}
         return board_outline.propose_board_outline(board, outline, output_dir=out / variant)
 
     def confirm(self, board: Path, token: str) -> dict:
-        from kicad_mcp import board_outline
+        from boardproof import board_outline
         from tests.test_board_outline import _no_outline_drc
 
         return board_outline.confirm_board_outline(board, token, drc=_no_outline_drc)
@@ -454,12 +454,12 @@ class _BoardRules:
         return _build(tmp_path / "proj")
 
     def propose(self, board: Path, out: Path, variant: str) -> dict:
-        from kicad_mcp import board_rules
+        from boardproof import board_rules
 
         return board_rules.propose_board_rules(board, output_dir=out / variant, min_clearance=self._clearance[variant])
 
     def confirm(self, board: Path, token: str) -> dict:
-        from kicad_mcp import board_rules
+        from boardproof import board_rules
         from tests.test_board_rules import _fake_drc
 
         return board_rules.confirm_board_rules(board, token, parity="required", drc=_fake_drc())
@@ -487,7 +487,7 @@ class _SchematicImport:
     _columns = {"narrow": 3, "wide": 5}
 
     def build(self, tmp_path: Path) -> Path:
-        from kicad_mcp.kicad_cli import find_kicad_cli
+        from boardproof.kicad_cli import find_kicad_cli
         from tests.test_schematic_import import NAME, RUNG1
 
         try:
@@ -498,12 +498,12 @@ class _SchematicImport:
         return tmp_path / "proj" / f"{NAME}.kicad_pcb"
 
     def propose(self, board: Path, out: Path, variant: str) -> dict:
-        from kicad_mcp import schematic_import
+        from boardproof import schematic_import
 
         return schematic_import.propose_schematic_import(board, output_dir=out / variant, columns=self._columns[variant])
 
     def confirm(self, board: Path, token: str) -> dict:
-        from kicad_mcp import schematic_import
+        from boardproof import schematic_import
 
         return schematic_import.confirm_schematic_import(board, token)
 
@@ -581,7 +581,7 @@ def test_a_confirmed_token_is_spent_even_when_the_output_is_writable_again(pair,
 def test_a_token_expires_by_the_modules_own_clock(pair, tmp_path: Path, monkeypatch) -> None:
     import importlib
 
-    module = importlib.import_module(f"kicad_mcp.{pair.name}")
+    module = importlib.import_module(f"boardproof.{pair.name}")
     now = [1_000_000.0]
     monkeypatch.setattr(module, "_clock", lambda: now[0])
     board = pair.build(tmp_path)

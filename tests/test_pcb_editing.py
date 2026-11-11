@@ -25,8 +25,8 @@ from pathlib import Path
 import pytest
 from mcp.server.mcpserver import MCPServer
 
-from kicad_mcp import write_layer
-from kicad_mcp.toolsets import placement as placement_toolset
+from boardproof import write_layer
+from boardproof.toolsets import placement as placement_toolset
 from tests import _kicad_faults as faults
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -340,7 +340,7 @@ def test_confirm_detects_count_drift_as_corruption(board_copy, monkeypatch):
     proposal = tools["propose_remove_graphic_items"](board_copy, [{"shape": "gr_poly"}])
     token = proposal["revision_token"]
 
-    from kicad_mcp.toolsets import placement as pt
+    from boardproof.toolsets import placement as pt
 
     real_counts = pt._top_level_tag_counts
 
@@ -376,7 +376,7 @@ def test_real_drc_before_and_after_removal_file_stays_parseable(board_copy):
     verification toolset uses) before and after removal, on the actual
     fixture file, to prove removal doesn't corrupt the board -- not just
     that our own re-parse succeeded."""
-    from kicad_mcp import kicad_cli
+    from boardproof import kicad_cli
 
     mcp = MCPServer("test")
     tools = _build_and_get_fns(mcp)
@@ -419,7 +419,7 @@ def test_malformed_pcb_file_fails_to_parse_not_silently_accepted(tmp_path):
     with pytest.raises(Exception):
         PCB.load(broken)
 
-    from kicad_mcp import kicad_cli
+    from boardproof import kicad_cli
 
     with pytest.raises(Exception):
         kicad_cli.run_drc(broken, severity_all=True)

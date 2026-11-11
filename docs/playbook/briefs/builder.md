@@ -50,7 +50,7 @@ a special case.
 - Targeted runs follow the coordinator decision of 2026-11-05, pending owner confirmation in issue 148 (the foreground limit is 10 minutes and a run killed by it prints no summary line).
 - Run tests as SMALL SEPARATE runs (each aimed at under about 20 minutes), in the background (`run_in_background`) with their own log, waiting for the completion notification (no sleep loops), each printing its own summary line. A run killed by a timeout prints none.
 - Use `PYTHONPATH=<WORKTREE>/src`, the shared interpreter by absolute path, `KICAD_ROUTING_TOOLS_PATH`
-  as the dispatch says. A result counts only if `kicad_mcp.__file__` lies inside the worktree and pytest's `rootdir:` line names it; report both.
+  as the dispatch says. A result counts only if `boardproof.__file__` lies inside the worktree and pytest's `rootdir:` line names it; report both.
 - Test in the worktree itself: a `git archive` export has no `.git` and fails
   `test_docs_layout` and `test_skills_tracked`.
 - While a batch gate runs, start no more than 2 other runs (the gate's timing basis, fork P11, assumes few).

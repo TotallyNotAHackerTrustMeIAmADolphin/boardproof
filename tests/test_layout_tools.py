@@ -17,9 +17,9 @@ from pathlib import Path
 import pytest
 from mcp.client.client import Client
 
-from kicad_mcp import board_outline, board_rules
-from kicad_mcp import verify_board as gate
-from kicad_mcp.server import build_server
+from boardproof import board_outline, board_rules
+from boardproof import verify_board as gate
+from boardproof.server import build_server
 from test_board_rules import _build as build_rules_board
 from test_silk_minimums import _build as build_silk_board
 
@@ -41,7 +41,7 @@ _EMPTY = {"violations": [], "unconnected_items": [], "schematic_parity": [], "ig
 
 def _kicad_cli_available() -> bool:
     try:
-        from kicad_mcp.kicad_cli import find_kicad_cli
+        from boardproof.kicad_cli import find_kicad_cli
 
         find_kicad_cli()
         return True
@@ -242,7 +242,7 @@ def _calls_in(source: str) -> list[ast.Call]:
 
 
 def test_source_scan_guard_no_registered_tool_forwards_a_seam() -> None:
-    server = Path(__file__).parent.parent / "src" / "kicad_mcp" / "server.py"
+    server = Path(__file__).parent.parent / "src" / "boardproof" / "server.py"
     callees = set(TOOLS)
     seen: set[str] = set()
     offenders: list[str] = []

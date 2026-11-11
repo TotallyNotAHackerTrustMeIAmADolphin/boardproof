@@ -26,11 +26,11 @@ from pathlib import Path
 
 import pytest
 
-from kicad_mcp.sourcing.asset_fetch import fetch_part_assets
-from kicad_mcp.sourcing.datasheet import fetch_datasheet, inspect_datasheet
-from kicad_mcp.toolsets.library import build as build_library_toolset
-from kicad_mcp.toolsets.project import build as build_project_toolset
-from kicad_mcp.toolsets.sourcing import build as build_sourcing_toolset
+from boardproof.sourcing.asset_fetch import fetch_part_assets
+from boardproof.sourcing.datasheet import fetch_datasheet, inspect_datasheet
+from boardproof.toolsets.library import build as build_library_toolset
+from boardproof.toolsets.project import build as build_project_toolset
+from boardproof.toolsets.sourcing import build as build_sourcing_toolset
 from mcp.server.mcpserver import MCPServer
 
 # RP2040's real, stable, official datasheet URL (Raspberry Pi's own CDN,

@@ -1,4 +1,4 @@
-"""Tests for silkscreen text minimums (src/kicad_mcp/silk_minimums.py).
+"""Tests for silkscreen text minimums (src/boardproof/silk_minimums.py).
 
 Contract: build ticket 20.
 Seams: ``scan_silk_texts``, ``propose_silkscreen_minimums`` and
@@ -20,8 +20,8 @@ from pathlib import Path
 
 import pytest
 
-from kicad_mcp import silk_minimums as sm
-from kicad_mcp import write_layer
+from boardproof import silk_minimums as sm
+from boardproof import write_layer
 from tests import _kicad_faults as faults
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -341,7 +341,7 @@ def test_zero_size_text_is_reported_unhandled_not_guessed(tmp_path: Path) -> Non
 
 
 def test_real_kicad_cli_no_text_violation_after_and_violations_before(tmp_path: Path) -> None:
-    from kicad_mcp.kicad_cli import run_drc
+    from boardproof.kicad_cli import run_drc
 
     pcb = _build(tmp_path / "proj", with_dru=True)
 
@@ -528,7 +528,7 @@ def test_stale_render_cache_is_removed_for_changed_texts_only(tmp_path: Path) ->
 
 
 def test_reused_private_names_exist_in_input_prep() -> None:
-    from kicad_mcp import input_prep
+    from boardproof import input_prep
 
     assert all(hasattr(input_prep, n) for n in sm._REUSED_NAMES)
 

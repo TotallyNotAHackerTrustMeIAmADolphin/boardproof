@@ -14,8 +14,8 @@ from pathlib import Path
 
 import pytest
 
-from kicad_mcp import kicad_cli, pin_wiring, sheet_editing, write_layer
-from kicad_mcp.toolsets import project as project_toolset
+from boardproof import kicad_cli, pin_wiring, sheet_editing, write_layer
+from boardproof.toolsets import project as project_toolset
 from tests.test_sheet_editing import _bytes, _mirror_symbols, _nets, _nodes, _tools
 
 
@@ -376,7 +376,7 @@ def test_the_staged_check_fires_when_the_tool_adds_a_node_it_did_not_report(tmp_
 def test_connect_pins_is_registered_as_a_writing_tool():
     from mcp.server.mcpserver import MCPServer
 
-    from kicad_mcp.toolsets import schematic as schematic_toolset
+    from boardproof.toolsets import schematic as schematic_toolset
 
     mcp = MCPServer("test")
     names = schematic_toolset.build(mcp)
@@ -590,7 +590,7 @@ def test_connect_pins_refuses_while_kicad_holds_a_lock_file(tmp_path, tools):
 def test_the_description_names_the_side_by_side_case_where_via_is_the_way(tmp_path, tools):
     from mcp.server.mcpserver import MCPServer
 
-    from kicad_mcp.toolsets import schematic as schematic_toolset
+    from boardproof.toolsets import schematic as schematic_toolset
 
     mcp = MCPServer("test")
     schematic_toolset.build(mcp)

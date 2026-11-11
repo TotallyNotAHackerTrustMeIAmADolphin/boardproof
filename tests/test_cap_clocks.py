@@ -19,9 +19,9 @@ from pathlib import Path
 
 import pytest
 
-from kicad_mcp import rung_backends, rung_runner
-from kicad_mcp.toolsets import routing as routing_toolset
-from kicad_mcp.routers import kicad_routing_tools as krt_tools
+from boardproof import rung_backends, rung_runner
+from boardproof.toolsets import routing as routing_toolset
+from boardproof.routers import kicad_routing_tools as krt_tools
 
 from test_rung_backends import stress_board  # noqa: F401
 from test_rung_backends_review import FakeRouter, _run

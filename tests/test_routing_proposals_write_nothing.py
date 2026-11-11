@@ -15,7 +15,7 @@ from pathlib import Path
 import pytest
 from mcp.server.mcpserver import MCPServer
 
-from kicad_mcp.toolsets import routing as routing_toolset
+from boardproof.toolsets import routing as routing_toolset
 
 FIXTURES = Path(__file__).parent / "fixtures"
 

@@ -15,9 +15,9 @@ from pathlib import Path
 
 import pytest
 
-from kicad_mcp import write_layer
-from kicad_mcp import rung_backends, rung_runner
-from kicad_mcp.routers import kicad_routing_tools as krt_tools
+from boardproof import write_layer
+from boardproof import rung_backends, rung_runner
+from boardproof.routers import kicad_routing_tools as krt_tools
 
 FIXTURES = Path(__file__).parent / "fixtures"
 needs_krt = pytest.mark.needs_krt  # skip with the probe's reason, or fail in the gate run (build ticket 53)
@@ -280,7 +280,7 @@ def test_freerouting_adapter_works_when_the_run_directory_is_not_a_temp_director
     assert [c.name for c in write_layer.load(stress_board).children].count("segment") == 1
     assert {p.name for p in (run_dir / "router_scratch").iterdir()} >= {"board.dsn", "board.ses"}
     # the KiCad work directory is gone (KiCad itself keeps an org.kicad.kicad folder in TEMP)
-    assert [p.name for p in system_temp.iterdir() if p.name.startswith("kicad_mcp")] == []
+    assert [p.name for p in system_temp.iterdir() if p.name.startswith("boardproof")] == []
 
 
 _ONE_TRACK_SESSION = (
@@ -368,7 +368,7 @@ def test_freerouting_adapter_is_unavailable_without_kicads_python(stress_board, 
 def test_one_real_scored_run_with_krt_and_the_real_gate(stress_board, tmp_path):
     """Real router, real kicad-cli, real gate (3 DRC runs per attempt). Two planned
     attempts instead of five, so the run is honestly labelled unofficial."""
-    from kicad_mcp import verify_board
+    from boardproof import verify_board
 
     baseline = verify_board.snapshot_rules(stress_board)
     plan = rung_runner.load_protocol()["backends"]["krt"]["plan"][:2]

@@ -8,8 +8,8 @@ from pathlib import Path
 
 import pytest
 
-from kicad_mcp.routers import kicad_routing_tools as krt_tools
-from kicad_mcp.toolsets import routing as routing_toolset
+from boardproof.routers import kicad_routing_tools as krt_tools
+from boardproof.toolsets import routing as routing_toolset
 
 
 class _FakePopen:

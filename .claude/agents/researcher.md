@@ -1,6 +1,6 @@
 ---
 name: researcher
-description: Answers one kicad-mcp research question from primary sources and writes one cited findings file.
+description: Answers one boardproof research question from primary sources and writes one cited findings file.
 maxTurns: 100
 tools: Read, Grep, Glob, Bash, Write, Edit, WebFetch, WebSearch, Skill
 ---

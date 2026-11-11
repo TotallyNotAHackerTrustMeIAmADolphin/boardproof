@@ -50,7 +50,7 @@ def exe_or_missing(
 ) -> Path:
     """The ngspice executable, or skip / fail by ``NGSPICE_REQUIRED``."""
     if find is None:
-        from kicad_mcp.toolsets import simulation
+        from boardproof.toolsets import simulation
 
         find = simulation.find_ngspice
     found = find()

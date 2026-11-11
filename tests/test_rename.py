@@ -20,7 +20,7 @@ from pathlib import Path
 
 import pytest
 
-from kicad_mcp import kicad_cli, sheet_editing, sheet_rename, write_layer
+from boardproof import kicad_cli, sheet_editing, sheet_rename, write_layer
 from tests import rename_fixture as F
 
 SExp = write_layer.SExp

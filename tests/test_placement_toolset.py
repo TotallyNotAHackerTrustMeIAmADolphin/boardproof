@@ -13,9 +13,9 @@ from pathlib import Path
 import pytest
 from mcp.server.mcpserver import MCPServer
 
-from kicad_mcp import write_layer
-from kicad_mcp.sourcing.footprint_gen import generate_footprint
-from kicad_mcp.toolsets import placement as placement_toolset
+from boardproof import write_layer
+from boardproof.sourcing.footprint_gen import generate_footprint
+from boardproof.toolsets import placement as placement_toolset
 
 
 def _build_and_get_fns(mcp: MCPServer) -> dict:

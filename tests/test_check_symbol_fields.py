@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from kicad_mcp import field_check, write_layer
+from boardproof import field_check, write_layer
 from tests import test_sheet_pins as _base
 from tests.test_sheet_pins import _bytes
 
@@ -289,8 +289,8 @@ def test_it_writes_nothing(project, tools) -> None:
 def test_it_is_registered_read_only_and_takes_no_lock(project) -> None:
     from mcp.server.mcpserver import MCPServer
 
-    from kicad_mcp import gate_state, server
-    from kicad_mcp.toolsets import schematic as schematic_toolset
+    from boardproof import gate_state, server
+    from boardproof.toolsets import schematic as schematic_toolset
 
     mcp = MCPServer("test")
     server._gate_every_toolset_tool(mcp, gate_state.GateState())
@@ -307,7 +307,7 @@ def test_it_is_registered_read_only_and_takes_no_lock(project) -> None:
 def test_the_tool_text_states_the_contract() -> None:
     from mcp.server.mcpserver import MCPServer
 
-    from kicad_mcp.toolsets import schematic as schematic_toolset
+    from boardproof.toolsets import schematic as schematic_toolset
 
     mcp = MCPServer("test")
     schematic_toolset.build(mcp)
@@ -322,7 +322,7 @@ def test_the_skill_and_the_tool_text_use_the_same_words() -> None:
 
     repo = Path(__file__).resolve().parents[1]
     skill = " ".join((repo / ".claude" / "skills" / "kicad-schematic" / "SKILL.md").read_text(encoding="utf-8").split())
-    tree = ast.parse((repo / "src" / "kicad_mcp" / "toolsets" / "schematic.py").read_text(encoding="utf-8"))
+    tree = ast.parse((repo / "src" / "boardproof" / "toolsets" / "schematic.py").read_text(encoding="utf-8"))
     doc = " ".join(next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == "check_symbol_fields").body[0].value.value.split())
     for phrase in ("`check_symbol_fields` (read-only, no lock;", "`missing`, `empty`, `blank`, `placeholder`", "`case_variant`", "listed apart under `skipped`",
                    "`set_properties`", "`no_gaps` is not a verdict on the board"):

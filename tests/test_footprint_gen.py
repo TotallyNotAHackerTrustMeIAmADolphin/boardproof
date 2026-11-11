@@ -12,7 +12,7 @@ from __future__ import annotations
 from kicad_tools.schema import Footprint as SchemaFootprint
 from kicad_tools.sexp.parser import parse_file
 
-from kicad_mcp.sourcing.footprint_gen import generate_footprint, list_package_types
+from boardproof.sourcing.footprint_gen import generate_footprint, list_package_types
 
 
 def _round_trip_validate(path):

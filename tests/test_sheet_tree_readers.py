@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 from mcp.server.mcpserver import MCPServer
 
-from kicad_mcp import sheet_tree
+from boardproof import sheet_tree
 from tests._sheet_tree_fixture import STRAY_REF, build_stray_project, oracle_netlist, strayify
 
 pytestmark = pytest.mark.filterwarnings("ignore::DeprecationWarning")
@@ -135,7 +135,7 @@ def test_bom_matches_the_oracle_and_reads_no_stray(project, oracle, tmp_path) ->
     working directory first, so the BOM listed C7201... from the stray copy; it gave both uses
     of the sheet the first use's references, so the 29 parts of the second use (C301...) were
     missing; and it listed the project library's power symbols and PWR_FLAGs (#U0101...)."""
-    from kicad_mcp.toolsets import manufacturing
+    from boardproof.toolsets import manufacturing
 
     result = manufacturing.export_manufacturing_package(project.pcb, tmp_path / "mfg")
 
@@ -150,7 +150,7 @@ def test_bom_matches_the_oracle_and_reads_no_stray(project, oracle, tmp_path) ->
 
 
 def test_bom_is_refused_when_a_sub_sheet_is_missing(project, tmp_path) -> None:
-    from kicad_mcp.toolsets import manufacturing
+    from boardproof.toolsets import manufacturing
 
     (project.dir / "ampli_ht.kicad_sch").unlink()
     result = manufacturing.export_manufacturing_package(project.pcb, tmp_path / "mfg")
@@ -161,7 +161,7 @@ def test_bom_is_refused_when_a_sub_sheet_is_missing(project, tmp_path) -> None:
 
 
 def test_schematic_import_plan_matches_the_oracle(project, oracle, tmp_path) -> None:
-    from kicad_mcp import schematic_import
+    from boardproof import schematic_import
 
     plan = schematic_import.propose_schematic_import(project.pcb, output_dir=tmp_path / "imported")
 
@@ -175,7 +175,7 @@ def test_schematic_import_plan_matches_the_oracle(project, oracle, tmp_path) -> 
 
 def test_schematic_import_duplicate_scan_reads_every_live_sheet(project, oracle) -> None:
     """The duplicate-reference scan missed every sub-sheet behind a KiCad 6 ``Sheet file``."""
-    from kicad_mcp import schematic_import
+    from boardproof import schematic_import
 
     refs = {r["reference"] for r in schematic_import._placed_symbols(project.root)}
 
@@ -184,13 +184,13 @@ def test_schematic_import_duplicate_scan_reads_every_live_sheet(project, oracle)
 
 def test_the_gates_annotation_walk_reads_no_stray(project) -> None:
     """The stray .history copies hold ``R?`` references: reading one would be a problem."""
-    from kicad_mcp import verify_board
+    from boardproof import verify_board
 
     assert verify_board._annotation_problems(project.root) == []
 
 
 def test_check_connectivity_reads_every_live_sheet_and_no_stray(project, oracle) -> None:
-    from kicad_mcp.toolsets import schematic
+    from boardproof.toolsets import schematic
 
     result = _tools(schematic)["check_connectivity"](str(project.root))
 
@@ -211,7 +211,7 @@ def test_check_connectivity_reads_every_live_sheet_and_no_stray(project, oracle)
 
 
 def test_check_connectivity_is_the_same_for_both_sheet_file_spellings(kicad_demo, tmp_path) -> None:
-    from kicad_mcp.toolsets import schematic
+    from boardproof.toolsets import schematic
 
     check = _tools(schematic)["check_connectivity"]
     plain = build_stray_project(kicad_demo, tmp_path / "a")
@@ -237,7 +237,7 @@ def _assert_refused_for_legacy_keys(project, result, before) -> None:
 
 
 def test_fix_annotation_reports_every_live_reference(project, oracle) -> None:
-    from kicad_mcp.toolsets import schematic
+    from boardproof.toolsets import schematic
 
     before = _hashes([*project.strays, project.root, project.dir / "ampli_ht.kicad_sch"])
     result = _tools(schematic)["fix_annotation"](str(project.root))
@@ -252,7 +252,7 @@ def test_fix_annotation_reports_every_live_reference(project, oracle) -> None:
 
 
 def test_assign_footprints_verifies_against_the_oracle(project, tmp_path) -> None:
-    from kicad_mcp.toolsets import schematic
+    from boardproof.toolsets import schematic
 
     # C201 and C301 are the two uses of one symbol on the reused sheet, which holds one
     # footprint: both are named (build ticket 25 fix round 2 refuses naming one of them)
@@ -277,7 +277,7 @@ def test_assign_footprints_verifies_against_the_oracle(project, tmp_path) -> Non
 
 
 def test_schematic_tools_leave_no_backup_in_the_project(project) -> None:
-    from kicad_mcp.toolsets import schematic
+    from boardproof.toolsets import schematic
 
     tools = _tools(schematic)
     both = {"C201": "Capacitor_SMD:C_0805_2012Metric", "C301": "Capacitor_SMD:C_0805_2012Metric"}
@@ -288,7 +288,7 @@ def test_schematic_tools_leave_no_backup_in_the_project(project) -> None:
 
 
 def test_project_open_lists_the_live_references(project, oracle) -> None:
-    from kicad_mcp.toolsets import project as project_toolset
+    from boardproof.toolsets import project as project_toolset
 
     opened = project_toolset._project_open(str(project.dir))
 
@@ -298,7 +298,7 @@ def test_project_open_lists_the_live_references(project, oracle) -> None:
 
 
 def test_erc_is_unaffected_by_the_strays(project, kicad_demo, tmp_path) -> None:
-    from kicad_mcp.toolsets import verification
+    from boardproof.toolsets import verification
     from tests._sheet_tree_fixture import use_legacy_sheet_keys
 
     clean = kicad_demo("complex_hierarchy")
@@ -314,7 +314,7 @@ def test_erc_is_unaffected_by_the_strays(project, kicad_demo, tmp_path) -> None:
 
 
 def test_file_schematic_state_names_the_sheet_file_for_both_spellings(project) -> None:
-    from kicad_mcp.ipc import adapter
+    from boardproof.ipc import adapter
 
     backend = adapter.FileBackend(sch_path=project.root)
     state = backend.schematic_state(include=["sheets"])
@@ -329,7 +329,7 @@ def test_file_schematic_state_names_the_sheet_file_for_both_spellings(project) -
 @pytest.mark.parametrize("tool", ["check_connectivity", "fix_annotation", "assign_footprints"])
 def test_schematic_tools_refuse_a_tree_with_a_missing_sheet(project, tool) -> None:
     """kicad_tools' walk skips a missing sub-sheet without a word; the tools say so instead."""
-    from kicad_mcp.toolsets import schematic
+    from boardproof.toolsets import schematic
 
     (project.dir / "ampli_ht.kicad_sch").unlink()
     before = _hashes([project.root, *project.strays])
@@ -345,7 +345,7 @@ def test_schematic_tools_refuse_a_tree_with_a_missing_sheet(project, tool) -> No
 def test_check_connectivity_refuses_when_kicad_tools_reads_a_stray(project, monkeypatch) -> None:
     from kicad_tools.cli import sch_set_footprint
 
-    from kicad_mcp.toolsets import schematic
+    from boardproof.toolsets import schematic
 
     stray = project.dir / "orphan.kicad_sch"
     real = sch_set_footprint._collect_schematic_files
@@ -358,7 +358,7 @@ def test_check_connectivity_refuses_when_kicad_tools_reads_a_stray(project, monk
 
 
 def test_backups_go_outside_the_project_and_hold_every_sheet(kicad_demo, tmp_path) -> None:
-    from kicad_mcp.toolsets import schematic
+    from boardproof.toolsets import schematic
 
     proj = build_stray_project(kicad_demo, tmp_path)
     before = _hashes([proj.root, proj.dir / "ampli_ht.kicad_sch"])
@@ -450,7 +450,7 @@ def test_walk_reports_each_problem_once_for_a_sheet_used_twice(tmp_path) -> None
 
 
 def _export(project_dir_pcb: Path, out: Path, **kw) -> dict:
-    from kicad_mcp.toolsets import manufacturing
+    from boardproof.toolsets import manufacturing
 
     return manufacturing.export_manufacturing_package(project_dir_pcb, out, **kw)
 
@@ -566,7 +566,7 @@ def test_a_multi_unit_part_is_not_a_duplicate(kicad_demo) -> None:
 
 
 def test_assign_footprints_reports_a_reference_it_could_not_assign(plain) -> None:
-    from kicad_mcp.toolsets import schematic
+    from boardproof.toolsets import schematic
 
     result = _tools(schematic)["assign_footprints"](
         str(plain.root), {"C101": "Capacitor_SMD:C_0805_2012Metric", "C999": "Capacitor_SMD:C_0805_2012Metric"}
@@ -578,7 +578,7 @@ def test_assign_footprints_reports_a_reference_it_could_not_assign(plain) -> Non
 
 
 def test_assign_footprints_keeps_backup_dir_when_the_read_back_fails(plain, monkeypatch) -> None:
-    from kicad_mcp.toolsets import schematic
+    from boardproof.toolsets import schematic
 
     before = plain.root.read_bytes()
     calls = []
@@ -600,7 +600,7 @@ def test_assign_footprints_keeps_backup_dir_when_the_read_back_fails(plain, monk
 
 
 def test_fix_annotation_keeps_backup_dir_when_the_read_back_fails(plain, monkeypatch) -> None:
-    from kicad_mcp.toolsets import schematic
+    from boardproof.toolsets import schematic
 
     calls = []
     real = sheet_tree.placed_references
@@ -622,10 +622,10 @@ def test_fix_annotation_keeps_backup_dir_when_the_read_back_fails(plain, monkeyp
 @pytest.mark.parametrize("where", ["bk", "."])
 def test_a_backup_root_inside_the_project_is_refused_and_nothing_is_written(plain, monkeypatch, tool, where) -> None:
     """Backups inside the project would be the very stray copies this ticket is about."""
-    from kicad_mcp.toolsets import schematic
+    from boardproof.toolsets import schematic
 
     backup_root = plain.dir / where
-    monkeypatch.setenv("KICAD_MCP_BACKUP_DIR", str(backup_root))
+    monkeypatch.setenv("BOARDPROOF_BACKUP_DIR", str(backup_root))
     files_before = {p: hashlib.sha256(p.read_bytes()).hexdigest() for p in plain.dir.rglob("*") if p.is_file()}
     args = (str(plain.root), {"C101": "Capacitor_SMD:C_0805_2012Metric"}) if tool == "assign_footprints" else (str(plain.root),)
 
@@ -639,9 +639,9 @@ def test_a_backup_root_inside_the_project_is_refused_and_nothing_is_written(plai
 
 
 def test_backups_go_to_the_configured_durable_directory(plain, tmp_path, monkeypatch) -> None:
-    from kicad_mcp.toolsets import schematic
+    from boardproof.toolsets import schematic
 
-    monkeypatch.setenv("KICAD_MCP_BACKUP_DIR", str(tmp_path / "backups"))
+    monkeypatch.setenv("BOARDPROOF_BACKUP_DIR", str(tmp_path / "backups"))
     result = _tools(schematic)["fix_annotation"](str(plain.root))
 
     assert Path(result["backup_dir"]).parent == tmp_path / "backups"
@@ -650,14 +650,14 @@ def test_backups_go_to_the_configured_durable_directory(plain, tmp_path, monkeyp
 def test_backup_root_defaults_to_a_per_user_data_directory(tmp_path, monkeypatch) -> None:
     import os
 
-    from kicad_mcp.toolsets import schematic
+    from boardproof.toolsets import schematic
 
-    monkeypatch.delenv("KICAD_MCP_BACKUP_DIR", raising=False)
+    monkeypatch.delenv("BOARDPROOF_BACKUP_DIR", raising=False)
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "local"))
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg"))
     expected = (tmp_path / "local") if os.name == "nt" else (tmp_path / "xdg")
 
-    assert schematic.backup_root() == expected / "kicad-mcp" / "schematic-backups"
+    assert schematic.backup_root() == expected / "boardproof" / "schematic-backups"
 
 
 def test_this_projects_instance_entry_wins_over_another_projects(plain, tmp_path) -> None:
@@ -712,7 +712,7 @@ def test_kicad6_symbol_instances_name_the_parts_of_a_reused_sheet(plain, tmp_pat
 
 
 def test_project_open_is_incomplete_when_a_sheet_is_missing(plain) -> None:
-    from kicad_mcp.toolsets import project as project_toolset
+    from boardproof.toolsets import project as project_toolset
 
     (plain.dir / "ampli_ht.kicad_sch").unlink()
     opened = project_toolset._project_open(str(plain.dir))
@@ -788,11 +788,11 @@ def _scan_source(text: str, filename: str) -> list[str]:
 
 
 def test_no_reader_in_src_globs_for_schematics_or_uses_kicad_tools_tree_walkers() -> None:
-    """Static scan of src/kicad_mcp (build ticket 26), see ``_scan_source``."""
-    import kicad_mcp
+    """Static scan of src/boardproof (build ticket 26), see ``_scan_source``."""
+    import boardproof
 
     hits = []
-    for path in Path(kicad_mcp.__file__).parent.rglob("*.py"):
+    for path in Path(boardproof.__file__).parent.rglob("*.py"):
         hits += _scan_source(path.read_text(encoding="utf-8"), path.name)
     assert hits == []
 

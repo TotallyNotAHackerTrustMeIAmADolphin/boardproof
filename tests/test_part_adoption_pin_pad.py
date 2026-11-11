@@ -14,8 +14,8 @@ from pathlib import Path
 import pytest
 from kicad_tools.sexp import SExp
 
-from kicad_mcp import part_adoption as pa
-from kicad_mcp import write_layer
+from boardproof import part_adoption as pa
+from boardproof import write_layer
 from tests import _kicad_demos as demos
 from tests import test_part_adoption as base
 from tests.test_part_adoption import _part_assets, _propose, needs_cli
@@ -42,7 +42,7 @@ def _board(tmp_path: Path) -> Path:
 
 
 def _share() -> Path:
-    from kicad_mcp.kicad_cli import find_kicad_cli
+    from boardproof.kicad_cli import find_kicad_cli
 
     try:
         share = demos.share_dir_next_to(Path(find_kicad_cli()), "symbols").parent
@@ -318,7 +318,7 @@ def test_confirm_fails_when_the_saved_files_have_a_pin_without_a_pad(
 
 
 def _strings(name: str) -> list[str]:
-    tree = ast.parse((REPO / "src" / "kicad_mcp" / "toolsets" / name).read_text(encoding="utf-8"))
+    tree = ast.parse((REPO / "src" / "boardproof" / "toolsets" / name).read_text(encoding="utf-8"))
     return [" ".join(n.value.split()) for n in ast.walk(tree) if isinstance(n, ast.Constant) and isinstance(n.value, str)]
 
 

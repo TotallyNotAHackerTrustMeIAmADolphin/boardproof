@@ -10,8 +10,8 @@ from pathlib import Path
 
 import pytest
 
-from kicad_mcp import write_layer
-from kicad_mcp import rung_backends, rung_runner
+from boardproof import write_layer
+from boardproof import rung_backends, rung_runner
 
 from test_rung_backends import KRT_BASELINE, needs_krt  # noqa: F401
 
@@ -87,7 +87,7 @@ def test_real_router_and_real_gate_on_an_outline_only_pour_leave_no_violation(tm
     """The measured evidence for the allowance: route the outline-only GND pour board with
     KRT 0.22.0 and grade it with the real gate (which refills the zone): no shorts, no
     clearance errors, nothing unconnected."""
-    from kicad_mcp import verify_board
+    from boardproof import verify_board
 
     board = _zone_board(tmp_path, "real", strip_fill=True)
     baseline = verify_board.snapshot_rules(board)

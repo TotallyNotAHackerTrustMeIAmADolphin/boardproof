@@ -14,8 +14,8 @@ from pathlib import Path
 
 import pytest
 
-from kicad_mcp import kicad_cli, no_connects, sheet_authoring, sheet_editing, write_layer
-from kicad_mcp.toolsets import project as project_toolset
+from boardproof import kicad_cli, no_connects, sheet_authoring, sheet_editing, write_layer
+from boardproof.toolsets import project as project_toolset
 from tests.test_sheet_editing import _bytes, _nets, _nodes, _tools
 
 
@@ -363,7 +363,7 @@ def test_a_stray_marker_not_on_a_pin_can_be_deleted_by_point(board, tools):
 def test_both_tools_are_registered_as_writing_tools():
     from mcp.server.mcpserver import MCPServer
 
-    from kicad_mcp.toolsets import schematic as schematic_toolset
+    from boardproof.toolsets import schematic as schematic_toolset
 
     mcp = MCPServer("test")
     names = schematic_toolset.build(mcp)

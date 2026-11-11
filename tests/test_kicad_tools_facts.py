@@ -3,7 +3,7 @@
 Each test pins what the installed ``kicad_tools`` does, keyed by its version, so an upgrade that
 changes a fact turns a test red instead of leaving the known facts stale. Boards are copies of
 KiCad's demos (``kicad_demo``); facts are read back from the raw S-expression through
-``kicad_mcp.write_layer.load`` (hard rule 2), never from the library's properties.
+``boardproof.write_layer.load`` (hard rule 2), never from the library's properties.
 
 None of this licenses a high-level save in ``src/``: the write layer stays the only save path
 (docs/ARCHITECTURE.md decision 1), whatever these tests show ``PCB.save`` doing.
@@ -17,7 +17,7 @@ from pathlib import Path
 import kicad_tools
 import pytest
 
-from kicad_mcp import write_layer as wl
+from boardproof import write_layer as wl
 from tests import _kicad_faults as faults
 
 VERSION = tuple(int(p) for p in kicad_tools.__version__.split(".")[:2])

@@ -17,9 +17,9 @@ import kicad_tools.sexp as sexp_pkg
 import kicad_tools.sexp.parser as parser_mod
 from kicad_tools.sexp import Document
 
-from kicad_mcp import schematic_import as si
-from kicad_mcp import sheet_tree
-from kicad_mcp import verify_board as gate
+from boardproof import schematic_import as si
+from boardproof import sheet_tree
+from boardproof import verify_board as gate
 
 
 @contextmanager

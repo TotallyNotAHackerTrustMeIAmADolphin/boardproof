@@ -11,7 +11,7 @@ from pathlib import Path
 
 from mcp.server.mcpserver import MCPServer
 
-from kicad_mcp.toolsets import diagnostics as diagnostics_toolset
+from boardproof.toolsets import diagnostics as diagnostics_toolset
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -146,7 +146,7 @@ def _fake_worker(tmp_path, body: str):
 
 
 def test_crashing_png_renderer_gives_png_render_failed_and_keeps_svg(tmp_path, monkeypatch):
-    from kicad_mcp import png_render
+    from boardproof import png_render
 
     monkeypatch.setattr(
         png_render, "_WORKER", _fake_worker(tmp_path, "import os\nos._exit(139)\n")
@@ -162,7 +162,7 @@ def test_crashing_png_renderer_gives_png_render_failed_and_keeps_svg(tmp_path, m
 
 
 def test_hung_png_renderer_is_killed_at_timeout(tmp_path, monkeypatch):
-    from kicad_mcp import png_render
+    from boardproof import png_render
 
     monkeypatch.setattr(png_render, "_WORKER", _fake_worker(tmp_path, "import time\ntime.sleep(60)\n"))
     monkeypatch.setattr(png_render, "PNG_TIMEOUT_SECONDS", 1)
@@ -176,7 +176,7 @@ def test_png_renderer_runs_isolated_and_cleans_its_temp_dir(tmp_path, monkeypatc
     import subprocess
     import tempfile
 
-    from kicad_mcp import png_render
+    from boardproof import png_render
 
     seen = {}
     real_run = subprocess.run
@@ -198,7 +198,7 @@ def test_png_renderer_runs_isolated_and_cleans_its_temp_dir(tmp_path, monkeypatc
 
 
 def _direct(tmp_path, out_name="out"):
-    from kicad_mcp import png_render
+    from boardproof import png_render
 
     return png_render.render_pdf_pages(tmp_path / "x.pdf", tmp_path / out_name, "s", 100)
 
@@ -207,7 +207,7 @@ def test_png_renderer_waits_for_the_pdfium_lock_before_spawning(tmp_path, monkey
     import threading
     import time
 
-    from kicad_mcp import png_render
+    from boardproof import png_render
 
     spawned = threading.Event()
     real_run = png_render.subprocess.run
@@ -238,7 +238,7 @@ def test_png_renderer_waits_for_the_pdfium_lock_before_spawning(tmp_path, monkey
 def test_png_renderer_unusable_output_is_png_render_failed(tmp_path, monkeypatch):
     import pytest
 
-    from kicad_mcp import png_render
+    from boardproof import png_render
 
     for i, (body, message) in enumerate(
         [
@@ -269,7 +269,7 @@ _TWO_PNG_WORKER = (
 def test_unwritable_output_dir_is_png_render_failed_not_a_raw_error(tmp_path, monkeypatch):
     import pytest
 
-    from kicad_mcp import png_render
+    from boardproof import png_render
 
     monkeypatch.setattr(png_render, "_WORKER", _fake_worker(tmp_path, _TWO_PNG_WORKER))
     blocker = tmp_path / "file"
@@ -283,7 +283,7 @@ def test_failed_move_leaves_no_half_moved_png_set(tmp_path, monkeypatch):
 
     import pytest
 
-    from kicad_mcp import png_render
+    from boardproof import png_render
 
     monkeypatch.setattr(png_render, "_WORKER", _fake_worker(tmp_path, _TWO_PNG_WORKER))
     real_move = shutil.move
@@ -307,7 +307,7 @@ def test_failed_cleanup_unlink_still_surfaces_png_render_error(tmp_path, monkeyp
 
     import pytest
 
-    from kicad_mcp import png_render
+    from boardproof import png_render
 
     monkeypatch.setattr(png_render, "_WORKER", _fake_worker(tmp_path, _TWO_PNG_WORKER))
     real_move = shutil.move

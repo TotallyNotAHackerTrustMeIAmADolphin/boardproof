@@ -3,7 +3,7 @@
 Hard rule 3: only a ``verify_board`` PASS may be reported as routed or done. The gate-field
 sweep in test_gate_field.py calls every tool once with generic arguments, so it only sees the
 early-return paths; the warnings an autorouter or a placement repair attaches to a real result
-are never reached there. This test reads every string literal in ``src/kicad_mcp`` (outputs,
+are never reached there. This test reads every string literal in ``src/boardproof`` (outputs,
 messages and explicit tool descriptions; docstrings are left out because the tool docstrings
 that serve as descriptions are swept in test_description_gate_wording.py through the server):
 
@@ -37,7 +37,7 @@ from pathlib import Path
 import pytest
 from test_description_gate_wording import has_passes_or_connected
 
-SRC = Path(__file__).resolve().parent.parent / "src" / "kicad_mcp"
+SRC = Path(__file__).resolve().parent.parent / "src" / "boardproof"
 _GATE = "verify_board"
 _GATE_RULE = re.compile(r"\bPASS\b|\bonly\b|\bverdict\b")
 
@@ -45,14 +45,14 @@ _TRUST_PHRASE = re.compile(
     r"before trusting|verify the real result|verified by an independent", re.IGNORECASE
 )
 
-# (file relative to src/kicad_mcp, exact phrase): reviewed, with the reason.
+# (file relative to src/boardproof, exact phrase): reviewed, with the reason.
 _TRUST_PHRASE_ALLOWED = {
     # About trusting a KRT run's CLI-flag snapshot after a router version change, not about
     # the board: "re-run the flag check before trusting this run".
     ("routers/kicad_routing_tools.py", "re-run the flag check before trusting this run"),
 }
 
-# (file relative to src/kicad_mcp, exact phrase): true negations only, each reviewed.
+# (file relative to src/boardproof, exact phrase): true negations only, each reviewed.
 _CLAIM_NEGATIONS = {
     # The pour-step contract: "...does not mean the board is connected or complete".
     ("pour_step.py", "not mean the board is connected"),
@@ -252,8 +252,8 @@ def _success_outputs(tmp_path: Path) -> dict[str, dict]:
 
     from mcp.server.mcpserver import MCPServer
 
-    from kicad_mcp.toolsets import placement as placement_toolset
-    from kicad_mcp.toolsets import routing as routing_toolset
+    from boardproof.toolsets import placement as placement_toolset
+    from boardproof.toolsets import routing as routing_toolset
 
     fixtures = Path(__file__).resolve().parent / "fixtures"
     mcp = MCPServer("test")

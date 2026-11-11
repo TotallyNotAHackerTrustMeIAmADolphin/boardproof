@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from kicad_mcp.sourcing.datasheet import fetch_datasheet, inspect_datasheet
+from boardproof.sourcing.datasheet import fetch_datasheet, inspect_datasheet
 
 FIXTURES = Path(__file__).parent / "fixtures" / "datasheets"
 

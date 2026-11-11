@@ -113,7 +113,7 @@ TRACKED_CASES = [
     "third_party/JLCPCB-Kicad-Library/JLCPCB/C1.3dshapes/C1.step",
     "third_party/JLCPCB-Kicad-Library/lib/C1/C1.txt",
     ".gitmodules",
-    "src/kicad_mcp/sourcing/jlcpcb_basic.py",
+    "src/boardproof/sourcing/jlcpcb_basic.py",
     "evals/ladder_results.json",
     "tests/fixtures/zone_obstacle/zone_obstacle.kicad_pro",
 ]
@@ -121,10 +121,10 @@ TRACKED_CASES = [
 # Future legitimate files the broad old patterns would have swallowed: (path, old pattern, the
 # lines that replaced it). Restoring the old pattern in a mutant must make the file ignored.
 LEGIT_CASES = [
-    ("src/kicad_mcp/runs/store.py", "runs/", ("/runs/",)),
+    ("src/boardproof/runs/store.py", "runs/", ("/runs/",)),
     ("tests/runs/a.json", "runs/", ("/runs/",)),
     ("evals/rung1/project/lib/Rung1_USBC/Rung1_USBC.3dshapes/part.step", "*.3dshapes/", ("C[0-9]*.3dshapes/",)),
-    ("src/kicad_mcp/credentials.py", "credentials*",
+    ("src/boardproof/credentials.py", "credentials*",
      ("credentials*.json", "credentials*.txt", "credentials*.yaml", "credentials*.yml")),
 ]
 

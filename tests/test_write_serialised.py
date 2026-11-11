@@ -15,9 +15,9 @@ from mcp.server.mcpserver import MCPServer
 
 import pytest
 
-from kicad_mcp import gate_state, write_layer
-from kicad_mcp.toolsets import project as project_toolset
-from kicad_mcp.toolsets import schematic as schematic_toolset
+from boardproof import gate_state, write_layer
+from boardproof.toolsets import project as project_toolset
+from boardproof.toolsets import schematic as schematic_toolset
 
 
 def _wrapped_tools() -> dict:

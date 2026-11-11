@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from kicad_mcp import rung_runner
+from boardproof import rung_runner
 
 from test_rung_runner import PASS, fail_result, load, make_run, project  # noqa: F401
 

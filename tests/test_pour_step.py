@@ -1,4 +1,4 @@
-"""Tests for the pour step (src/kicad_mcp/pour_step.py).
+"""Tests for the pour step (src/boardproof/pour_step.py).
 
 Contract: build ticket 4.
 Seams: ``propose_pour_step`` / ``confirm_pour_step`` (public), and
@@ -22,11 +22,11 @@ from pathlib import Path
 
 import pytest
 
-from kicad_mcp import write_layer
-from kicad_mcp import pour_step
-from kicad_mcp import verify_board as gate
-from kicad_mcp.kicad_cli import run_drc
-from kicad_mcp.routers import kicad_routing_tools as krt
+from boardproof import write_layer
+from boardproof import pour_step
+from boardproof import verify_board as gate
+from boardproof.kicad_cli import run_drc
+from boardproof.routers import kicad_routing_tools as krt
 
 FIXTURES = Path(__file__).parent / "fixtures"
 SIMPLE_LED = FIXTURES / "simple_led.kicad_pcb"
@@ -273,7 +273,7 @@ def test_the_original_project_and_rule_baseline_are_byte_identical_after_the_ste
     # the new revision carries the original rules, not the router's rewritten ones
     assert sha(out_dir / "simple_led.kicad_pro") == real_pour["before"]["simple_led.kicad_pro"]
     # and nothing but the zone was added to the board
-    from kicad_mcp import input_prep
+    from boardproof import input_prep
 
     names_before = [c.name for c in input_prep._parse(board).children]
     names_after = [c.name for c in input_prep._parse(out_dir / NAME).children]
@@ -674,7 +674,7 @@ def test_a_refill_that_cannot_run_is_incomplete_not_poured(board, tmp_path):
 
 
 def kicad_cli_error(message):
-    from kicad_mcp.kicad_cli import KicadCliError
+    from boardproof.kicad_cli import KicadCliError
 
     return KicadCliError(message)
 

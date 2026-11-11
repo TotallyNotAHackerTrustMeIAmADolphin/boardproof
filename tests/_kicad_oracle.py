@@ -74,7 +74,7 @@ def copy_board(demos_dir: Path, relative: str, dest_dir: Path) -> Path:
 
 
 def _cli(args: list[str]) -> None:
-    from kicad_mcp import kicad_cli
+    from boardproof import kicad_cli
 
     cli = kicad_cli.ensure_kicad_cli_on_path()
     done = subprocess.run([str(cli), *args], capture_output=True, text=True, timeout=_TIMEOUT_S)
@@ -118,7 +118,7 @@ def ipcd356(board: Path, out: Path) -> list[IpcPad]:
 def kicad_python() -> Path:
     """KiCad's bundled Python next to kicad-cli (Windows), else a ``python3`` that can import
     ``pcbnew`` (Linux packages). Missing: skip, or fail when ``KICAD_DEMOS_REQUIRED`` is set."""
-    from kicad_mcp import kicad_cli
+    from boardproof import kicad_cli
 
     try:
         cli = Path(kicad_cli.ensure_kicad_cli_on_path())
@@ -188,7 +188,7 @@ class BoardOracle:
     def root(self):
         """The board's parsed tree (``write_layer.load``), parsed once: every reader takes it."""
         if "root" not in self._cache:
-            from kicad_mcp import write_layer
+            from boardproof import write_layer
 
             self._cache["root"] = write_layer.load(self.board)
         return self._cache["root"]

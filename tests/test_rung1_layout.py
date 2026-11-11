@@ -29,7 +29,7 @@ def _digest() -> dict[str, str]:
 
 @pytest.fixture(scope="module")
 def flow_result(tmp_path_factory):
-    from kicad_mcp.kicad_cli import find_kicad_cli
+    from boardproof.kicad_cli import find_kicad_cli
 
     try:
         find_kicad_cli()

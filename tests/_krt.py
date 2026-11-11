@@ -54,7 +54,7 @@ def missing(reason: str, env: Mapping[str, str] = os.environ) -> NoReturn:
 def _probe(path: str | None, python: str | None) -> tuple[bool, str]:
     """``check_availability()`` for one setting of the two variables (they are the cache key;
     the probe itself reads them from ``os.environ``)."""
-    from kicad_mcp.routers import kicad_routing_tools as krt
+    from boardproof.routers import kicad_routing_tools as krt
 
     try:
         result = krt.check_availability()
@@ -67,7 +67,7 @@ def _probe(path: str | None, python: str | None) -> tuple[bool, str]:
 
 def availability() -> tuple[bool, str]:
     """``(usable, reason)`` for the KRT that ``os.environ`` points at (cached per setting)."""
-    from kicad_mcp.routers import kicad_routing_tools as krt
+    from boardproof.routers import kicad_routing_tools as krt
 
     return _probe(os.environ.get(krt.ENV_PATH), os.environ.get(krt.ENV_PYTHON))
 
@@ -87,7 +87,7 @@ def checkout_or_missing(env: Mapping[str, str] = os.environ, find: Callable[[], 
     """The ``krt_checkout`` fixture's body: the KRT checkout directory, or skip / fail.
 
     For tests that only read the checkout (its CLI help) and run no route."""
-    from kicad_mcp.routers import kicad_routing_tools as krt
+    from boardproof.routers import kicad_routing_tools as krt
 
     try:
         return Path((find or krt.find_kicad_routing_tools)())

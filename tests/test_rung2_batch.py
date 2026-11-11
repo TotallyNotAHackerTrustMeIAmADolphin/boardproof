@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from kicad_mcp import autonomy_run, rung_runner
+from boardproof import autonomy_run, rung_runner
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -123,7 +123,7 @@ def test_kicad_tools_board_model_adds_the_net_table_the_history_cites(kicad_demo
     adds 112 top-level ``net`` entries (net 0 to net 111) that KiCad 10's file does not have."""
     from kicad_tools.schema import PCB
 
-    from kicad_mcp import write_layer
+    from boardproof import write_layer
 
     source = kicad_demo("pic_programmer") / "pic_programmer.kicad_pcb"
     nets = [c for c in PCB.load(source)._sexp.children if c.name == "net"]
@@ -143,7 +143,7 @@ def test_the_staging_refuses_a_board_whose_group_holds_a_stripped_item(kicad_dem
     write: the board stays byte-equal."""
     from kicad_tools.sexp import SExp
 
-    from kicad_mcp import write_layer
+    from boardproof import write_layer
 
     stage = _stage_module()
     work = tmp_path / "grouped"
@@ -173,7 +173,7 @@ def test_the_staging_refuses_any_node_whose_members_hold_a_stripped_item(kicad_d
     stripping them would leave it dangling. Refuse before any write."""
     from kicad_tools.sexp import SExp
 
-    from kicad_mcp import write_layer
+    from boardproof import write_layer
 
     stage = _stage_module()
     work = tmp_path / "generated"
@@ -202,7 +202,7 @@ def test_the_staging_self_check_fires_on_a_corrupted_write(kicad_demo, tmp_path,
     """Verify before replace: a write that lands a different tree (here one footprint fewer,
     still a board KiCad loads) is refused by the read-back compare; the board is untouched
     and no temporary file is left."""
-    from kicad_mcp import write_layer
+    from boardproof import write_layer
 
     stage = _stage_module()
     source = kicad_demo("pic_programmer")
@@ -241,13 +241,13 @@ def test_the_staging_does_not_use_kicad_tools_board_model(kicad_demo, tmp_path, 
 
 # --- evals/: what its scripts write and launch (build ticket 67) -----------------------------
 #
-# The ratchet in tests/test_ratchets.py scans src/kicad_mcp. This one scans every .py file under
+# The ratchet in tests/test_ratchets.py scans src/boardproof. This one scans every .py file under
 # evals/ and fails closed at the module boundary (fix round 3; two denylist rounds before it
 # each missed a name):
-# - references: every name a script uses from a module outside SAFE_MODULES, kicad_mcp and its
+# - references: every name a script uses from a module outside SAFE_MODULES, boardproof and its
 #   sibling scripts (subprocess, os, shutil, tempfile, asyncio, kicad_tools, pcbnew, mcp, any
 #   third-party library) is resolved through the imports of its scope (``import X as Y``,
-#   ``from X import name [as Y]``, attribute chains) and through the re-exports of kicad_mcp
+#   ``from X import name [as Y]``, attribute chains) and through the re-exports of boardproof
 #   modules and sibling scripts (``write_layer.os.replace`` is ``os.replace``), and must be a
 #   reviewed entry of EVALS_REFERENCES keyed by (file, function, dotted name) with its count. A
 #   kicad_tools writer is therefore a failure by default, whatever its name;
@@ -258,7 +258,7 @@ def test_the_staging_does_not_use_kicad_tools_board_model(kicad_demo, tmp_path, 
 #   import only in its own scope and the functions nested in it), any attribute whose name
 #   starts with ``__`` (``f.__globals__``, ``print.__self__``, ``object.__subclasses__()``)
 #   or names a frame or traceback link (FRAME_ATTRIBUTES: ``tb_frame``, ``f_globals``...), and
-#   a chain from a module, kicad_mcp or a sibling script that leaves it through a module name
+#   a chain from a module, boardproof or a sibling script that leaves it through a module name
 #   (``pathlib.os``) or, in a stdlib module, a private name (``collections._sys``). These are
 #   names and syntax the scan reads; it is a check against accidents and plain idioms, not a
 #   sandbox (see the blind spots);
@@ -267,7 +267,7 @@ def test_the_staging_does_not_use_kicad_tools_board_model(kicad_demo, tmp_path, 
 #   JSON/CSV records listed; a target naming a ``.kicad_`` file, or a call whose text names a
 #   serialiser, fails even when listed;
 # - high-level saves: ``<model>.save`` / ``.write`` / ``save_project`` on any object, not made
-#   through kicad_mcp.write_layer: only the listed rung-1 schematic;
+#   through boardproof.write_layer: only the listed rung-1 schematic;
 # - commits and copies (os.replace/rename, Path.replace/rename, shutil copy/copytree/move, a
 #   ``--save-board`` string), keyed by destination;
 # - launches (subprocess.*, os.system/popen/startfile/spawn*/exec*/posix_spawn*, asyncio
@@ -283,12 +283,12 @@ def test_the_staging_does_not_use_kicad_tools_board_model(kicad_demo, tmp_path, 
 #   launch without a key, so it fails.
 # Blind spots, which the scan cannot resolve statically:
 # - what a listed launch writes (KRT's beautify_labels.py writes
-#   beaut_out/pic_programmer.kicad_pcb, reviewed below) and what kicad_mcp code called from
+#   beaut_out/pic_programmer.kicad_pcb, reviewed below) and what boardproof code called from
 #   evals/ writes (tests/test_ratchets.py covers src/);
 # - the payload of a listed record write: ``out.write_text(x)`` with x built from a serialiser
 #   one statement earlier passes, as long as the target and the count do not change;
 # - a method, other than save/write/save_project, of an object that a listed reference or
-#   kicad_mcp returned (``Schematic.load(...)`` gives a model; only its save and write are seen);
+#   boardproof returned (``Schematic.load(...)`` gives a model; only its save and write are seen);
 # - a value inside the argv changed through a method of its own when it is not a list (a str
 #   or Path has none that changes it), and an argv element computed by a call whose result
 #   differs between runs (keyed by the call's text);
@@ -346,9 +346,9 @@ EVALS_LAUNCHES = {  # (file, function, kind, argv with its names expanded): (cou
      "str(Path(__file__).resolve().parent / 'project' / f\"{'rung1_usbc_attiny1616'}.kicad_sch\")]"):
         (1, "kicad-cli sch export netlist: a netlist file, no KiCad design file"),
     ("rung1/build_rung1_layout.py", "measure", "subprocess.run",
-     "[sys.executable, '-m', 'kicad_mcp.autonomy_run', '--rung', '1', '--backend', "
+     "[sys.executable, '-m', 'boardproof.autonomy_run', '--rung', '1', '--backend', "
      "backend in ('krt', 'freerouting'), '--board', board, '--parity', 'required']"):
-        (1, "python -m kicad_mcp.autonomy_run: writes through kicad_mcp (src ratchets)"),
+        (1, "python -m boardproof.autonomy_run: writes through boardproof (src ratchets)"),
     ("rung2/measure_input_floor.py", "run_beautifier", "subprocess.run",
      "[str(python), str(krt_dir / 'py_placer' / 'beautify_labels.py'), str(src_pcb), str(out_pcb), "
      "'--report-json', str(report)] with cwd=str(krt_dir)"): (1, (
@@ -373,11 +373,11 @@ EVALS_REFERENCES = {  # (file, function, resolved dotted name): (count, why it w
     ("rung1/build_rung1.py", "main", "subprocess.run"): (1, _LAUNCHED),
     ("rung1/build_rung1.py", "main", "tempfile.gettempdir"): (1, "names the temp directory; writes nothing"),
     ("rung1/build_rung1_layout.py", "<module>", "asyncio.run"): (1, (
-        "runs the in-process MCP flow; its tools write through kicad_mcp (src ratchets)")),
+        "runs the in-process MCP flow; its tools write through boardproof (src ratchets)")),
     ("rung1/build_rung1.py", "tools_from", "mcp.server.mcpserver.MCPServer"): (1, (
-        "the in-process MCP server the tools register on; launches nothing, its tools write through kicad_mcp")),
+        "the in-process MCP server the tools register on; launches nothing, its tools write through boardproof")),
     ("rung1/build_rung1_layout.py", "flow", "mcp.client.client.Client"): (1, (
-        "an MCP client on the in-process server object; launches nothing, the tools write through kicad_mcp")),
+        "an MCP client on the in-process server object; launches nothing, the tools write through boardproof")),
     ("rung1/build_rung1_layout.py", "flow", "shutil.copytree"): (2, _COPIED),
     ("rung1/build_rung1_layout.py", "flow", "shutil.rmtree"): (1, _CLEARED),
     ("rung1/build_rung1_layout.py", "measure", "subprocess.run"): (1, _LAUNCHED),
@@ -400,7 +400,7 @@ EVALS_LAUNCH_CALLS = frozenset({
 })
 KICAD_OWN_WRITERS = frozenset({"SaveBoard", "Save", "SaveProject", "SaveAs"})  # pcbnew and friends, by name
 # The only modules a script under evals/ may use without a reviewed entry in EVALS_REFERENCES,
-# besides kicad_mcp (src ratchets) and the scripts beside it (scanned here): stdlib modules
+# besides boardproof (src ratchets) and the scripts beside it (scanned here): stdlib modules
 # that start no program and write no file except through calls the raw-write and commit
 # scans list. Every other module (subprocess, os, shutil, tempfile, asyncio, kicad_tools,
 # pcbnew, mcp, any third-party library) is guarded: each name used from it is a reviewed
@@ -494,13 +494,13 @@ def _module_bindings(key: str, tree, package: list[str]) -> dict[str, str]:
 
 
 def _bindings_of(parts: list[str], file: str, modules: dict) -> dict[str, str] | None:
-    """The bindings of module ``parts`` when its source is known: a ``kicad_mcp`` module, or a
+    """The bindings of module ``parts`` when its source is known: a ``boardproof`` module, or a
     script beside ``file`` under evals/ imported by its bare name. None otherwise."""
     import ast
 
     import test_ratchets as ratchets
 
-    if parts[0] == "kicad_mcp":
+    if parts[0] == "boardproof":
         path = ratchets.SRC.joinpath(*parts[1:])
         if (path / "__init__.py").is_file():
             path, package = path / "__init__.py", parts
@@ -518,7 +518,7 @@ def _bindings_of(parts: list[str], file: str, modules: dict) -> dict[str, str] |
 
 def _follow(dotted: str, file: str, modules: dict) -> str:
     """``dotted`` with every attribute that a known module re-exports replaced by its source:
-    ``kicad_mcp.write_layer.os.replace`` -> ``os.replace``."""
+    ``boardproof.write_layer.os.replace`` -> ``os.replace``."""
     for _ in range(10):
         parts = dotted.split(".")
         for i in range(len(parts) - 1, 0, -1):
@@ -553,7 +553,7 @@ def _evals_scanners():
 
     class Resolving(ratchets._Scanner):
         """Resolves a name through the imports of its scope and the enclosing ones, then
-        through the re-exports of kicad_mcp modules and sibling scripts."""
+        through the re-exports of boardproof modules and sibling scripts."""
 
         def __init__(self, *args, **kwargs):
             super().__init__(*args, **kwargs)
@@ -630,14 +630,14 @@ def _evals_scanners():
             root = parts[0]
             if any(resolved == p or resolved.startswith(p + ".") for p in FORBIDDEN_REFERENCES):
                 self.hit(node, f"forbidden: {resolved}")
-            elif root in SAFE_MODULES or root == "kicad_mcp" or _bindings_of([root], self.file, self.modules) is not None:
+            elif root in SAFE_MODULES or root == "boardproof" or _bindings_of([root], self.file, self.modules) is not None:
                 # Free, unless the chain leaves the module: through a dunder (also refused on any
                 # chain by visit_Attribute), a module name (``pathlib.os``), or, in a stdlib module whose imports are not
-                # followed, a private name (``collections._sys``). kicad_mcp's and the sibling
+                # followed, a private name (``collections._sys``). boardproof's and the sibling
                 # scripts' own imports were followed above, so their private names stay free.
                 import sys
 
-                private = "__" if root == "kicad_mcp" or root not in SAFE_MODULES else "_"
+                private = "__" if root == "boardproof" or root not in SAFE_MODULES else "_"
                 hidden = [p for p in parts[1:] if p != root and (p.startswith(private) or p in sys.stdlib_module_names)]
                 if hidden:
                     self.hit(node, f"forbidden: {resolved} leaves {root} through {hidden[0]}")
@@ -908,13 +908,13 @@ def _evals_problems(found: dict[str, list[tuple]]) -> list[str]:
 
     problems = []
     for key, frozen, fix in (
-        ("raw", EVALS_RAW_WRITES, "write KiCad files with kicad_mcp.write_layer; a new JSON/CSV record "
+        ("raw", EVALS_RAW_WRITES, "write KiCad files with boardproof.write_layer; a new JSON/CSV record "
                                   "needs a reviewed entry in EVALS_RAW_WRITES"),
-        ("save", EVALS_HIGH_LEVEL_SAVES, "save through kicad_mcp.write_layer (save, save_pcb, save_project)"),
+        ("save", EVALS_HIGH_LEVEL_SAVES, "save through boardproof.write_layer (save, save_pcb, save_project)"),
         ("ref", EVALS_REFERENCES, "a name in a guarded module can launch, write, move or load; reach it "
-                                  "through kicad_mcp, or add a reviewed entry to EVALS_REFERENCES saying "
+                                  "through boardproof, or add a reviewed entry to EVALS_REFERENCES saying "
                                   "why it writes no KiCad file"),
-        ("copy", EVALS_COPIES, "let kicad_mcp.write_layer replace the file; a new copy of files KiCad or "
+        ("copy", EVALS_COPIES, "let boardproof.write_layer replace the file; a new copy of files KiCad or "
                                "the layer wrote needs a reviewed entry in EVALS_COPIES"),
         ("launch", EVALS_LAUNCHES, "a launched program can write any file; it needs a reviewed entry "
                                    "in EVALS_LAUNCHES saying what it writes"),
@@ -929,7 +929,7 @@ def _evals_problems(found: dict[str, list[tuple]]) -> list[str]:
                                 f"to {have} (the list only shrinks)")
     for key, code in found["raw"]:
         if ".kicad_" in key[3] or SERIALISER_PAYLOAD.search(code):
-            problems.append(f"raw write of KiCad text in evals/{key[0]} {key[1]}: {code} -> use kicad_mcp.write_layer")
+            problems.append(f"raw write of KiCad text in evals/{key[0]} {key[1]}: {code} -> use boardproof.write_layer")
     for key, code in found["forbidden"]:
         problems.append(f"{key[2]} in evals/{key[0]} {key[1]}: {code} -> never allowed; the scan cannot "
                         "read what it reaches")
@@ -950,7 +950,7 @@ def test_the_evals_scan_catches_a_kicad_file_written_outside_the_layer():
         "def _model(board, pcb):\n"
         "    board.save(pcb)\n"
         "def _layer(root, pcb):\n"
-        "    from kicad_mcp import write_layer\n"
+        "    from boardproof import write_layer\n"
         "    write_layer.save(root, pcb)\n"
         "    write_layer.save_pcb(root, pcb)\n"
     )
@@ -1032,9 +1032,9 @@ _MUTANTS |= {
         "rung2/record_first_batch.py", None, f"import importlib\nimportlib.import_module('subprocess').run({_X})\n"),
     "getattr on a module": ("rung2/record_first_batch.py", None, f"import subprocess\ngetattr(subprocess, 'run')({_X})\n"),
     "a module reached through the layer": (
-        "rung2/stage_input.py", _STRIP_DEF, "    from kicad_mcp import write_layer\n    write_layer.os.replace(pcb, pcb)\n"),
+        "rung2/stage_input.py", _STRIP_DEF, "    from boardproof import write_layer\n    write_layer.os.replace(pcb, pcb)\n"),
     "a name the layer imports": (
-        "rung2/stage_input.py", _STRIP_DEF, "    from kicad_mcp.write_layer import os as o_\n    o_.replace(pcb, pcb)\n"),
+        "rung2/stage_input.py", _STRIP_DEF, "    from boardproof.write_layer import os as o_\n    o_.replace(pcb, pcb)\n"),
     "os.link": ("rung2/stage_input.py", _STRIP_DEF, "    import os\n    os.link(pcb, pcb)\n"),
     "sys.modules": ("rung2/record_first_batch.py", None, f"sys.modules['subprocess'].run({_X})\n"),
     "eval": ("rung2/record_first_batch.py", None, "eval('1')\n"),
@@ -1061,13 +1061,13 @@ _MUTANTS |= {
     "a private attribute of a safe stdlib module": (
         "rung2/record_first_batch.py", None, f"import collections\ncollections._sys.modules['subprocess'].run({_X})\n"),
     "a module reached through the layer's attribute": (
-        "rung2/stage_input.py", _STRIP_DEF, "    from kicad_mcp import write_layer\n    write_layer.load.__globals__\n"),
+        "rung2/stage_input.py", _STRIP_DEF, "    from boardproof import write_layer\n    write_layer.load.__globals__\n"),
     "another KiCad library": (
         "rung2/stage_input.py", _STRIP_DEF, "    from kiutils.board import Board\n    Board.from_file(str(pcb)).to_file()\n"),
     "the MCP stdio client": (
         "rung2/stage_input.py", _STRIP_DEF, "    from mcp.client.stdio import stdio_client\n    stdio_client(None)\n"),
     "a kicad_tools name reached through the layer": (
-        "rung2/stage_input.py", _STRIP_DEF, "    from kicad_mcp import write_layer\n    write_layer.parse_string('(x)')\n"),
+        "rung2/stage_input.py", _STRIP_DEF, "    from boardproof import write_layer\n    write_layer.parse_string('(x)')\n"),
     "a module rebound to a local name": (
         "rung2/record_first_batch.py", None, "import shutil\nhelper = shutil\nhelper.copyfile(out, out)\n"),
 }

@@ -1,4 +1,4 @@
-"""Tests for the board-rules setter (src/kicad_mcp/board_rules.py).
+"""Tests for the board-rules setter (src/boardproof/board_rules.py).
 
 Contract: build ticket 18. Both places
 KiCad reads rules live in the ``.kicad_pro`` JSON (``board.design_settings.rules``
@@ -19,9 +19,9 @@ from pathlib import Path
 
 import pytest
 
-from kicad_mcp import write_layer
-from kicad_mcp import board_rules
-from kicad_mcp.kicad_cli import run_drc
+from boardproof import write_layer
+from boardproof import board_rules
+from boardproof.kicad_cli import run_drc
 
 FIXTURES = Path(__file__).parent / "fixtures"
 GOLDEN_DIR = FIXTURES / "golden_attiny1616_board"
@@ -40,7 +40,7 @@ def _read_pro(pcb: Path) -> dict:
 
 
 def _write_pro(pcb: Path, data: dict) -> None:
-    from kicad_mcp import write_layer
+    from boardproof import write_layer
 
     write_layer.save_project(data, pcb.with_suffix(".kicad_pro"))
 
@@ -408,7 +408,7 @@ def test_readback_mismatch_is_a_critical_failure_and_leaves_nothing(board: Path,
 
 
 def test_kicad_cli_missing_after_write_reports_incomplete_with_the_revision(board: Path, tmp_path: Path) -> None:
-    from kicad_mcp.kicad_cli import KicadCliError
+    from boardproof.kicad_cli import KicadCliError
 
     def missing(path, **_k):
         raise KicadCliError("kicad-cli not found")

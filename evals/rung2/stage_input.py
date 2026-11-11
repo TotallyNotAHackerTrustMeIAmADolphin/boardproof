@@ -77,7 +77,7 @@ def strip_tracks(pcb: Path) -> dict[str, int]:
     is raised. A board where a ``members`` list (a ``group``, a generated tuning pattern, any
     node) names a removed item is refused before any write (``StagingRefused``): it would name
     a uuid that no longer exists."""
-    from kicad_mcp import write_layer
+    from boardproof import write_layer
 
     root = write_layer.load(pcb)
     removed = {name: 0 for name in STRIPPED}
@@ -104,7 +104,7 @@ def strip_tracks(pcb: Path) -> dict[str, int]:
 
 
 def stage(fixture_dir: Path, work_dir: Path) -> dict:
-    from kicad_mcp import autonomy_run
+    from boardproof import autonomy_run
 
     fixture_dir, work_dir = Path(fixture_dir), Path(work_dir)
     if work_dir.exists():

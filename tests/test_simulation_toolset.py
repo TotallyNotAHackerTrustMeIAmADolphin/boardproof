@@ -22,7 +22,7 @@ from pathlib import Path
 import pytest
 from mcp.server.mcpserver import MCPServer
 
-from kicad_mcp.toolsets import simulation as simulation_toolset
+from boardproof.toolsets import simulation as simulation_toolset
 from tests import _kicad_demos
 
 # RC low-pass: Vin --R1-- out --C1-- GND. Round values so the expected
@@ -63,7 +63,7 @@ def rc_filter_schematic(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path
     """
     # KiCad's symbol libraries from the install (KICAD_SYMBOL_DIR, else next to kicad-cli),
     # skip or fail by the KICAD_DEMOS_REQUIRED rule (build ticket 34).
-    from kicad_mcp import kicad_cli
+    from boardproof import kicad_cli
 
     symbols = _kicad_demos.symbols_dir_or_missing(os.environ, kicad_cli.ensure_kicad_cli_on_path)
     monkeypatch.setenv("KICAD_SYMBOL_DIR", str(symbols))

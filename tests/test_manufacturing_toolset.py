@@ -22,7 +22,7 @@ from pathlib import Path
 import pytest
 from mcp.server.mcpserver import MCPServer
 
-from kicad_mcp.toolsets import manufacturing as manufacturing_toolset
+from boardproof.toolsets import manufacturing as manufacturing_toolset
 
 FIXTURES = Path(__file__).parent / "fixtures"
 PCB_FIXTURE = FIXTURES / "simple_led.kicad_pcb"

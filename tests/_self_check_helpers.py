@@ -4,7 +4,7 @@ docs/TESTING.md rule 5 and docs/ARCHITECTURE.md decision 4: every self-check has
 feeds it a corrupted write and shows it fires. The pattern:
 
 1. ``corrupt_writes`` wraps the function a tool writes its file with (for the PCB
-   tools the write layer's ``kicad_mcp.write_layer.save_pcb``, build ticket 42). The
+   tools the write layer's ``boardproof.write_layer.save_pcb``, build ticket 42). The
    real write runs first (temporary sibling, parse check, ``os.replace``); then, while the
    handle is armed and ``when(path)`` holds, ``corrupt(path)`` changes the file that
    was just written. The tool's in-memory model is NOT touched, so the tool still
@@ -67,7 +67,7 @@ def corrupt_writes(
     signatures the helper knows. Any other writer (a lib-table write, ``Path.write_text``) must
     pass it, so a guessed argument position can never corrupt the wrong file."""
     if path_of is None:
-        from kicad_mcp import write_layer
+        from boardproof import write_layer
 
         if not (owner is write_layer and attr in ("save", "save_pcb")):
             raise TypeError(f"corrupt_writes: pass path_of to wrap {getattr(owner, '__name__', owner)}.{attr}")
@@ -93,7 +93,7 @@ def corrupt_pcb_saves(
 ) -> WriteCorruption:
     """``corrupt_writes`` on ``write_layer.save_pcb`` (every board save since build ticket 42)
     with an S-expression edit."""
-    from kicad_mcp import write_layer
+    from boardproof import write_layer
 
     return corrupt_writes(monkeypatch, write_layer, "save_pcb", sexp_edit(edit), when=when)
 

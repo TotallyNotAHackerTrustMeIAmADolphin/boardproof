@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from kicad_mcp import rung_runner, write_layer
+from boardproof import rung_runner, write_layer
 
 BOARD_TEXT = "fake board, version 1\n"
 RULES_TEXT = "fake rules, version 1\n"

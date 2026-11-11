@@ -20,9 +20,9 @@ from pathlib import Path
 import pytest
 from mcp.server.mcpserver import MCPServer
 
-from kicad_mcp import kicad_cli, sheet_authoring, sheet_editing, sheet_pins, sheet_tree, write_layer
-from kicad_mcp.toolsets import project as project_toolset
-from kicad_mcp.toolsets import schematic as schematic_toolset
+from boardproof import kicad_cli, sheet_authoring, sheet_editing, sheet_pins, sheet_tree, write_layer
+from boardproof.toolsets import project as project_toolset
+from boardproof.toolsets import schematic as schematic_toolset
 
 
 @pytest.fixture(autouse=True)
@@ -609,7 +609,7 @@ def test_a_failing_parent_save_puts_the_child_back_byte_for_byte(root, tools, mo
 
 
 def _wrapped() -> dict:
-    from kicad_mcp import gate_state
+    from boardproof import gate_state
 
     mcp = MCPServer("test")
     schematic_toolset.build(mcp)

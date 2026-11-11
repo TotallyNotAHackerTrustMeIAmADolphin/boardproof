@@ -15,10 +15,10 @@ import pytest
 from kicad_tools.sexp import parse_string
 from mcp.server.mcpserver import MCPServer
 
-from kicad_mcp import kicad_cli, sheet_authoring, sheet_editing, write_layer
-from kicad_mcp.toolsets import library as library_toolset
-from kicad_mcp.toolsets import project as project_toolset
-from kicad_mcp.toolsets import schematic as schematic_toolset
+from boardproof import kicad_cli, sheet_authoring, sheet_editing, write_layer
+from boardproof.toolsets import library as library_toolset
+from boardproof.toolsets import project as project_toolset
+from boardproof.toolsets import schematic as schematic_toolset
 
 
 @pytest.fixture(autouse=True)
@@ -190,7 +190,7 @@ def test_two_units_of_one_reference_must_ask_for_the_same_fields(sheet):
 
 def test_the_field_check_fires_on_a_corrupted_write(sheet, monkeypatch):
     """The self-check: a write that drops or alters a field the netlist should carry is write_not_verified, sheet untouched."""
-    from kicad_mcp.toolsets import schematic as sch_mod
+    from boardproof.toolsets import schematic as sch_mod
 
     real = sch_mod._apply_library_fields
 
@@ -362,7 +362,7 @@ def test_an_explicit_footprint_of_one_unannotated_spec_is_not_lost_to_its_neighb
 
 
 def test_the_field_check_compares_only_a_lone_tilde_as_empty(sheet, monkeypatch):
-    from kicad_mcp.toolsets import schematic as sch_mod
+    from boardproof.toolsets import schematic as sch_mod
 
     real = sch_mod._apply_library_fields
 
@@ -385,7 +385,7 @@ def test_the_field_check_compares_only_a_lone_tilde_as_empty(sheet, monkeypatch)
 
 def test_a_further_unit_of_an_already_placed_reference_is_not_field_checked(sheet, monkeypatch):
     """Documented: the netlist keeps one copy of a part's fields, so a reference that was on the sheet before is skipped."""
-    from kicad_mcp.toolsets import schematic as sch_mod
+    from boardproof.toolsets import schematic as sch_mod
 
     assert _tools()["add_symbols"](str(sheet), [_spec("U1", unit=1)])["status"] == "ok"
     real = sch_mod._apply_library_fields
@@ -402,7 +402,7 @@ def test_a_further_unit_of_an_already_placed_reference_is_not_field_checked(shee
 
 
 def test_a_count_of_new_symbols_that_differs_from_the_specs_is_refused_and_writes_nothing(sheet, monkeypatch):
-    from kicad_mcp.toolsets import schematic as sch_mod
+    from boardproof.toolsets import schematic as sch_mod
 
     real = sch_mod._library_field_overrides
     monkeypatch.setattr(sch_mod, "_library_field_overrides", lambda specs: [*real(specs), *real(specs)])
@@ -449,7 +449,7 @@ def test_two_specs_of_one_annotated_reference_and_unit_with_different_mirrors_ar
 
 
 def test_the_mirror_check_names_a_spec_whose_symbol_is_missing_from_the_text(sheet, monkeypatch):
-    from kicad_mcp.toolsets import schematic as sch_mod
+    from boardproof.toolsets import schematic as sch_mod
 
     def drop_new_symbols(root, mirrors, old_uuids):
         for node in sch_mod._new_symbol_nodes(root, old_uuids):

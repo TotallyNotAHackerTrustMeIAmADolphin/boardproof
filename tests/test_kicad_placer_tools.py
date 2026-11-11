@@ -13,9 +13,9 @@ from pathlib import Path
 
 import pytest
 
-from kicad_mcp import write_layer
-from kicad_mcp.routers import kicad_placer_tools as placer
-from kicad_mcp.routers import kicad_routing_tools as krt
+from boardproof import write_layer
+from boardproof.routers import kicad_placer_tools as placer
+from boardproof.routers import kicad_routing_tools as krt
 
 
 def _fake_checkout(root: Path, place_route_loop_body: str) -> Path:
@@ -156,7 +156,7 @@ def test_no_graceful_stop_mechanism_exists_for_the_placer(tmp_path):
 def _tiny_board(path: Path, refs_and_positions: dict[str, tuple[float, float, float]]) -> None:
     from kicad_tools.schema import PCB
 
-    from kicad_mcp.sourcing.footprint_gen import generate_footprint
+    from boardproof.sourcing.footprint_gen import generate_footprint
 
     chip = path.parent / "0402.kicad_mod"
     if not chip.is_file():

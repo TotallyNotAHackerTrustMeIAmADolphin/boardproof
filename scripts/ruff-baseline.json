@@ -5,43 +5,43 @@
     "evals/rung1/build_rung1.py": {
       "E402": 2
     },
-    "src/kicad_mcp/board_outline.py": {
+    "src/boardproof/board_outline.py": {
       "B023": 1,
       "E731": 1
     },
-    "src/kicad_mcp/board_rules.py": {
+    "src/boardproof/board_rules.py": {
       "B905": 1
     },
-    "src/kicad_mcp/input_prep.py": {
+    "src/boardproof/input_prep.py": {
       "F401": 1
     },
-    "src/kicad_mcp/pour_step.py": {
+    "src/boardproof/pour_step.py": {
       "B905": 4
     },
-    "src/kicad_mcp/routers/kicad_placer_tools.py": {
+    "src/boardproof/routers/kicad_placer_tools.py": {
       "F401": 1
     },
-    "src/kicad_mcp/routers/kicad_routing_tools.py": {
+    "src/boardproof/routers/kicad_routing_tools.py": {
       "F401": 1
     },
-    "src/kicad_mcp/rung_runner.py": {
+    "src/boardproof/rung_runner.py": {
       "E741": 9
     },
-    "src/kicad_mcp/silk_minimums.py": {
+    "src/boardproof/silk_minimums.py": {
       "F401": 1
     },
-    "src/kicad_mcp/toolsets/copilot.py": {
+    "src/boardproof/toolsets/copilot.py": {
       "B905": 1,
       "F402": 1
     },
-    "src/kicad_mcp/toolsets/placement.py": {
+    "src/boardproof/toolsets/placement.py": {
       "B905": 1,
       "F841": 1
     },
-    "src/kicad_mcp/toolsets/sourcing.py": {
+    "src/boardproof/toolsets/sourcing.py": {
       "F401": 1
     },
-    "src/kicad_mcp/verify_board.py": {
+    "src/boardproof/verify_board.py": {
       "B905": 1
     },
     "tests/test_autonomy_run_policy.py": {

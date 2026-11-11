@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from kicad_mcp import kicad_cli, write_layer
+from boardproof import kicad_cli, write_layer
 from tests import test_check_symbol_fields as _check
 from tests import test_sheet_pins as _base
 from tests.test_check_symbol_fields import FULL, _sym, _uuid
@@ -252,8 +252,8 @@ def test_it_writes_nothing(project, tools) -> None:
 def _listed():
     from mcp.server.mcpserver import MCPServer
 
-    from kicad_mcp import gate_state, server
-    from kicad_mcp.toolsets import schematic as schematic_toolset
+    from boardproof import gate_state, server
+    from boardproof.toolsets import schematic as schematic_toolset
 
     mcp = MCPServer("test")
     server._gate_every_toolset_tool(mcp, gate_state.GateState())

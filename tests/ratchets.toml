@@ -1,7 +1,7 @@
 # Frozen lists for tests/test_ratchets.py (build ticket 29; docs/ARCHITECTURE.md decision 4).
 #
 # Frozen 2026-10-19 on main at 34a429b (src/ unchanged since ticket 07's audit at 045ffc9).
-# Keys are file (relative to src/kicad_mcp) + function (dotted, without <locals>) + kind. Raw
+# Keys are file (relative to src/boardproof) + function (dotted, without <locals>) + kind. Raw
 # writes and high-level saves also key on code, the call's exact normalised text (ast.unparse),
 # so retargeting a listed call (open(log) -> open(board)) fails as new + stale; the other lists
 # carry a count. Never line numbers. Code strings are TOML literal strings (triple single quotes).
@@ -435,7 +435,7 @@ note = "raw_geometry.Arc.end, fed to arc_extent; not a kicad_tools property."
 # High-level saves: <x>.save(...), <x>.write(...) on anything but a file or buffer handle,
 # save_project, and kicad_tools' CLI writers run_set_footprint / run_fix_annotation. Decision 1:
 # no new high-level save; build ticket 42 moves these onto the write layer's save and shrinks
-# this list. Calls that resolve through an import to the module kicad_mcp.write_layer are
+# this list. Calls that resolve through an import to the module boardproof.write_layer are
 # exempt; a method on an object the layer returns (doc.save()) is not.
 # Frozen at 31: 21 PCB.save + 1 Footprint.save + 5 Schematic.write + 2 save_project + 2 CLI
 # writers. Build ticket 42 moved all 21 PCB.save sites to write_layer.save_pcb and both
@@ -777,7 +777,7 @@ note = "Reloads the panel and checks the footprint multiple; no sabotage test ye
 
 [writing_tool.confirm_board_outline]
 self_check = "reload-verify"
-note = "Whole-file exact reload compare in kicad_mcp._self_check (build ticket 31)."
+note = "Whole-file exact reload compare in boardproof._self_check (build ticket 31)."
 proof = [
     "tests/test_board_outline.py::test_reload_self_check_fires_on_a_corrupted_write",
     "tests/test_board_outline.py::test_reload_self_check_compares_the_written_nodes_not_only_their_summary",
@@ -786,7 +786,7 @@ proof = [
 
 [writing_tool.confirm_pour_step]
 self_check = "reload-verify"
-note = "Whole-file exact reload compare of the carry-over in kicad_mcp._self_check (build ticket 31)."
+note = "Whole-file exact reload compare of the carry-over in boardproof._self_check (build ticket 31)."
 proof = [
     "tests/test_pour_step.py::test_reload_self_check_fires_on_a_corrupted_write",
     "tests/test_pour_step.py::test_reload_self_check_compares_the_carried_content_not_only_its_uuid",

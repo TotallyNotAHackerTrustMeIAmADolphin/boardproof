@@ -4,13 +4,13 @@ This page is for a reader who has never seen the repository. It says what the pr
 
 ## Purpose and honest status
 
-boardproof is a Python MCP server (code in `src/kicad_mcp/`) that lets an AI agent do KiCad 10 design work: part sourcing, schematic construction, placement, routing, verification, SPICE simulation and manufacturing export. It works on the project files and on `kicad-cli`; no KiCad GUI has to run.
+boardproof is a Python MCP server (code in `src/boardproof/`) that lets an AI agent do KiCad 10 design work: part sourcing, schematic construction, placement, routing, verification, SPICE simulation and manufacturing export. It works on the project files and on `kicad-cli`; no KiCad GUI has to run.
 
 The project exists because an earlier run on a real board claimed "routed" and was wrong. Since then the rule is that an agent's word, a router's score and a library's convenience property are never evidence. Evidence is the output of `kicad-cli`, read in full.
 
 As of 2026-10-29 no board has passed the acceptance gate as a plain PASS. The first official batches under protocol 6 gave Freerouting 5 of 5 `PASS (necked)` on rung 1 and KiCadRoutingTools 0 of 5. The rung-1 board changed afterwards (protocols 7 and 8) and has no official batch under the current protocol. Rung 2 cannot pass for any router because its input already carries 6 silkscreen errors. The product promise is therefore tiered: the **Copilot tier** (you own power routing and zones) is the default, and the **Autonomous tier** is earned one board class at a time. [README.md](../README.md) has the numbers and [docs/ROADMAP.md](ROADMAP.md) the ladder.
 
-## Map of `src/kicad_mcp/`
+## Map of `src/boardproof/`
 
 | Path | What it is |
 |---|---|
@@ -24,7 +24,7 @@ As of 2026-10-29 no board has passed the acceptance gate as a plain PASS. The fi
 | `routers/` | Wrappers around KiCadRoutingTools and its placer, and KiCad's own Specctra export and import for Freerouting |
 | `rung_runner.py`, `rung_backends.py`, `autonomy_run.py`, `autonomy_protocol.json` | The rung runner: one measured attempt of one rung on one backend, and the frozen protocol it follows |
 | `sourcing/`, `manufacturing_profiles/`, `ipc/` | Part search and assets, fab capability profiles, the live-IPC adapter. `sourcing/data/jlcpcb_basic_index.json` is the JLCPCB part-tier index; the library it was built from is the optional submodule `third_party/JLCPCB-Kicad-Library` (see the README) |
-| `schematic_readability.py` | A read-only schematic readability checker, run as `python -m kicad_mcp.schematic_readability` |
+| `schematic_readability.py` | A read-only schematic readability checker, run as `python -m boardproof.schematic_readability` |
 
 The server starts with 19 tools and the remaining 65 sit in ten toolsets that load on demand (84 in total).
 

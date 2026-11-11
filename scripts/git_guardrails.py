@@ -110,7 +110,7 @@ PROTECTED_BRANCH = "main"
 ROOT = Path(__file__).resolve().parents[1]  # the repository this guard lives in
 
 _BLOCK_PREFIX = (
-    "BLOCKED by the kicad-mcp git guardrail (build ticket 45; playbook fork P2 and P8): "
+    "BLOCKED by the boardproof git guardrail (build ticket 45; playbook fork P2 and P8): "
 )
 _BLOCK_SUFFIX = (
     " Normal pushes are allowed; force pushes and deleting main are not. Do not look for a way"

@@ -16,8 +16,8 @@ from typing import Any
 import pytest
 from kicad_tools.sexp import parse_file, parse_string
 
-from kicad_mcp import board_view as bv
-from kicad_mcp import schematic_import as si
+from boardproof import board_view as bv
+from boardproof import schematic_import as si
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
 BOARDS = ["simple_led.kicad_pcb", "krt_stress_congestion.kicad_pcb", "krt_pad_geometry_isolated.kicad_pcb", "graphics_removal_board.kicad_pcb"]
@@ -102,7 +102,7 @@ def test_the_view_equals_a_full_parse_on_the_71_mb_vme_wren_board(kicad_demos_di
 def test_the_view_reads_the_file_every_call_and_never_serves_a_stale_one(tmp_path: Path) -> None:
     import shutil
 
-    from kicad_mcp import write_layer
+    from boardproof import write_layer
 
     board = tmp_path / "b.kicad_pcb"
     shutil.copy(FIXTURES / "simple_led.kicad_pcb", board)
@@ -364,7 +364,7 @@ def _copy_demo(kicad_demos_dir: Path, tmp_path: Path, name: str) -> Path:
 
 
 def test_check_schematic_reads_the_placed_instances_once(kicad_demos_dir: Path, tmp_path: Path, monkeypatch) -> None:
-    from kicad_mcp import sheet_tree
+    from boardproof import sheet_tree
 
     sch = _copy_demo(kicad_demos_dir, tmp_path, "complex_hierarchy") / "complex_hierarchy.kicad_sch"
     netlist, raw, nodes = si._load_netlist(sch, None)
@@ -383,7 +383,7 @@ def test_check_schematic_reads_the_placed_instances_once(kicad_demos_dir: Path, 
 
 
 def test_netlist_disagreement_gives_the_same_answer_with_records_passed_in(kicad_demos_dir: Path, tmp_path: Path) -> None:
-    from kicad_mcp import sheet_tree
+    from boardproof import sheet_tree
 
     sch = _copy_demo(kicad_demos_dir, tmp_path, "complex_hierarchy") / "complex_hierarchy.kicad_sch"
     tree = sheet_tree.walk(sch)

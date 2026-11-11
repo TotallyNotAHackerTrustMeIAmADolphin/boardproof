@@ -1,4 +1,4 @@
-"""Tests for the verification toolset (src/kicad_mcp/toolsets/verification.py).
+"""Tests for the verification toolset (src/boardproof/toolsets/verification.py).
 
 Runs tools through the real MCPServer.call_tool path (not the bare
 functions) so the toolset registration contract from registry.py is
@@ -13,8 +13,8 @@ from pathlib import Path
 import pytest
 from mcp.server.mcpserver import MCPServer
 
-from kicad_mcp import write_layer
-from kicad_mcp.toolsets import verification
+from boardproof import write_layer
+from boardproof.toolsets import verification
 
 FIXTURES = Path(__file__).parent / "fixtures"
 PCB_FIXTURE = FIXTURES / "simple_led.kicad_pcb"
@@ -126,7 +126,7 @@ async def test_pcb_check_collisions_detects_a_real_overlap(mcp: MCPServer, tmp_p
     # each other and confirm a real, non-zero, correctly-shaped result.
     from kicad_tools.schema import PCB
 
-    from kicad_mcp.sourcing.footprint_gen import generate_footprint
+    from boardproof.sourcing.footprint_gen import generate_footprint
 
     fp_path = tmp_path / "R_0402.kicad_mod"
     gen = generate_footprint("chip", fp_path, size="0402", name="R_0402_1005Metric")

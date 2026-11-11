@@ -1,4 +1,4 @@
-"""The schematic readability checker (``kicad_mcp.schematic_readability``, build ticket 10).
+"""The schematic readability checker (``boardproof.schematic_readability``, build ticket 10).
 
 The base is ``tests/fixtures/simple_led.kicad_sch`` loaded into memory with the project's write
 layer (``write_layer.load``), its one diagonal wire redrawn as two orthogonal ones. The checker
@@ -19,8 +19,8 @@ from pathlib import Path
 
 import pytest
 
-from kicad_mcp import schematic_readability as sr
-from kicad_mcp import write_layer
+from boardproof import schematic_readability as sr
+from boardproof import write_layer
 
 FIXTURES = Path(__file__).parent / "fixtures"
 SIMPLE_LED = FIXTURES / "simple_led.kicad_sch"

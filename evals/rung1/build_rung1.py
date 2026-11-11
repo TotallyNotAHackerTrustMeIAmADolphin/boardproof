@@ -34,7 +34,7 @@ NGSPICE_FALLBACK = (
 
 from mcp.server.mcpserver import MCPServer  # noqa: E402
 
-from kicad_mcp.kicad_cli import find_kicad_cli  # noqa: E402
+from boardproof.kicad_cli import find_kicad_cli  # noqa: E402
 
 # tier/stock: JLCPCB parts API, 2026-10-11.
 PARTS = [
@@ -171,8 +171,8 @@ def _without_local_paths(value):
 
 
 def main() -> int:
-    from kicad_mcp import kicad_cli
-    from kicad_mcp.toolsets import library, project, schematic, simulation, sourcing
+    from boardproof import kicad_cli
+    from boardproof.toolsets import library, project, schematic, simulation, sourcing
 
     src = find_kicad_cli().parent.parent / "share" / "kicad" / "symbols"
     stage = Path(tempfile.gettempdir()) / "rung1_symbols"

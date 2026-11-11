@@ -19,7 +19,7 @@ from pathlib import Path
 
 import pytest
 
-from kicad_mcp import rung_runner
+from boardproof import rung_runner
 
 from test_rung_runner import PASS, fail_result, make_run, project  # noqa: F401
 

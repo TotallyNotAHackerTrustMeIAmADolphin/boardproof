@@ -13,8 +13,8 @@ from pathlib import Path
 
 import pytest
 
-from kicad_mcp import write_layer
-from kicad_mcp.manufacturing_profiles import (
+from boardproof import write_layer
+from boardproof.manufacturing_profiles import (
     BUILTIN_DEFAULTS,
     CANONICAL_FROM_FAB_FIELD,
     JLCPCB_PROFILE,
@@ -256,7 +256,7 @@ def test_canonical_floor_separates_via_annular_ring_from_pth() -> None:
 
     # And the raw .kicad_dru parser itself must produce that canonical_rule
     # for an `annular_width` constraint type, not annular_ring_mm.
-    from kicad_mcp.manufacturing_profiles.board_rules import _DRU_CONSTRAINT_KEYS
+    from boardproof.manufacturing_profiles.board_rules import _DRU_CONSTRAINT_KEYS
 
     assert _DRU_CONSTRAINT_KEYS["annular_width"] == "via_annular_ring_mm"
 
@@ -592,7 +592,7 @@ def test_jlcpcb_capabilities_page_still_publishes_our_numbers() -> None:
         JLCPCB_CAPABILITIES_URL,
         timeout=30.0,
         follow_redirects=True,
-        headers={"User-Agent": "Mozilla/5.0 (compatible; kicad-mcp profile verification)"},
+        headers={"User-Agent": "Mozilla/5.0 (compatible; boardproof profile verification)"},
     )
     response.raise_for_status()
     text = response.text.replace(" ", " ")

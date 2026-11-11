@@ -6,7 +6,7 @@
 Reads the symbol libraries of CDFER/JLCPCB-Kicad-Library (default: the git submodule at
 ``third_party/JLCPCB-Kicad-Library``) through ``sourcing.jlcpcb_basic.build_index``, prints how the
 index changes (commit, part counts, tier moves with a sample, parts added or removed) and rewrites
-``src/kicad_mcp/sourcing/data/jlcpcb_basic_index.json``. ``Stock`` and ``Price`` are never read into
+``src/boardproof/sourcing/data/jlcpcb_basic_index.json``. ``Stock`` and ``Price`` are never read into
 the index: upstream rewrites them daily. The library is only read, never modified or executed.
 
 The index also records ``source.commit_date``, the committer date of the source commit (``git show -s
@@ -45,7 +45,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 # importlib, not an import statement: the path above must come first.
-jlc = importlib.import_module("kicad_mcp.sourcing.jlcpcb_basic")
+jlc = importlib.import_module("boardproof.sourcing.jlcpcb_basic")
 
 DEFAULT_LIBRARY = ROOT / jlc.SUBMODULE_RELATIVE_PATH
 _SHA = re.compile(r"^[0-9a-f]{40}$")

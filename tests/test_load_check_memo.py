@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 from kicad_tools.sexp import Document, SExp
 
-from kicad_mcp import write_layer as wl
+from boardproof import write_layer as wl
 
 
 def _project(kicad_demo) -> Path:
@@ -39,7 +39,7 @@ def _count_upgrades(monkeypatch) -> list[list[str]]:
 def _break(sheet: Path) -> None:
     """A sub-sheet KiCad cannot load, made through kicad_tools' Document API (as test_write_layer does)."""
     doc = Document.load(sheet)
-    doc.root.children.append(SExp.list("kicad_mcp_marker", 1))
+    doc.root.children.append(SExp.list("boardproof_marker", 1))
     doc.save(sheet)
 
 
@@ -93,7 +93,7 @@ def test_a_change_of_the_kicad_environment_or_executable_misses(kicad_demo, monk
     seen = _count_upgrades(monkeypatch)
     wl.save(wl.load(root), root)
     quiet = len(seen)
-    monkeypatch.setenv("KICAD_MCP_TEST_MARKER", "other")
+    monkeypatch.setenv("BOARDPROOF_TEST_MARKER", "other")
     seen.clear()
     wl.save(wl.load(root), root)
     assert len(seen) > quiet

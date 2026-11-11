@@ -22,8 +22,8 @@ import pytest
 from kicad_tools.sexp import parse_file
 from mcp.server.mcpserver import MCPServer
 
-from kicad_mcp import kicad_cli
-from kicad_mcp import write_layer as wl
+from boardproof import kicad_cli
+from boardproof import write_layer as wl
 
 # vme-wren's front-panel-io sheet is the one KiCad 7 file among KiCad 10.0's demos (format
 # 20230819; the vme-wren root does not use it). Counted from its raw tokens, 2026-10-21.
@@ -41,7 +41,7 @@ BUILDER_TOOLS = sorted(HARMLESS)
 
 @pytest.fixture
 def sch_tools() -> dict:
-    from kicad_mcp.toolsets import schematic
+    from boardproof.toolsets import schematic
 
     mcp = MCPServer("test")
     schematic.build(mcp)
@@ -245,7 +245,7 @@ def test_writing_tool_keeps_every_count_but_its_own_addition(tool: str, demo: st
 def _corrupt_written_text(monkeypatch, old: str, new: str) -> None:
     """The text the builder tools write, with ``old`` replaced by ``new`` (still a sheet
     KiCad loads), as a faulty serialiser would produce it."""
-    from kicad_mcp.toolsets import schematic
+    from boardproof.toolsets import schematic
 
     real = schematic._schematic_text
 
@@ -365,7 +365,7 @@ def _verify_with_netlists(sheet: Path, monkeypatch, before: dict, after: dict, a
     """Run ``_verify_schematic_write`` on ``sheet`` written unchanged (the token check passes),
     with kicad-cli's census of the sheet replaced by ``before`` and of the written file by
     ``after``. Returns the refusal as ``_not_verified_result`` shapes it."""
-    from kicad_mcp.toolsets import schematic
+    from boardproof.toolsets import schematic
 
     monkeypatch.setattr(schematic, "_netlist_census", lambda s, replacement=None: before if replacement is None else after)
     with pytest.raises(schematic.SchematicWriteNotVerified) as raised:
@@ -413,7 +413,7 @@ def test_netlist_check_refuses_a_lost_component_even_when_the_count_balances(kic
 
 def test_netlist_check_passes_a_net_join_and_a_new_part(kicad_demo, monkeypatch) -> None:
     """The refusals above are not blanket: joined nets and an added part pass."""
-    from kicad_mcp.toolsets import schematic
+    from boardproof.toolsets import schematic
 
     sheet = kicad_demo("interf_u") / "interf_u.kicad_sch"
     before = _fake_census(["R1", "R2"], [{("R1", "1")}, {("R2", "1")}])

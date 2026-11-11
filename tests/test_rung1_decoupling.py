@@ -22,7 +22,7 @@ from pathlib import Path
 
 import pytest
 
-from kicad_mcp import raw_geometry, write_layer
+from boardproof import raw_geometry, write_layer
 
 ROOT = Path(__file__).resolve().parents[1]
 DRIVER = ROOT / "evals" / "rung1" / "build_rung1_layout.py"

@@ -18,8 +18,8 @@ import kicad_tools
 import pytest
 from mcp.server.mcpserver import MCPServer
 
-from kicad_mcp.toolsets import schematic as schematic_toolset
-from kicad_mcp.toolsets import verification as verification_toolset
+from boardproof.toolsets import schematic as schematic_toolset
+from boardproof.toolsets import verification as verification_toolset
 
 FIXTURE = Path(__file__).parent / "fixtures" / "simple_led.kicad_sch"
 
@@ -434,7 +434,7 @@ def _label_texts(path: Path) -> list[str]:
 def _labels_as_kicad_reads_them(path: Path, workdir: Path) -> list[str]:
     import subprocess
 
-    from kicad_mcp.kicad_cli import find_kicad_cli
+    from boardproof.kicad_cli import find_kicad_cli
 
     try:
         cli = find_kicad_cli()

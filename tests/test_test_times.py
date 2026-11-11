@@ -1,7 +1,7 @@
 """The per-test START/END timestamps the batch gate asks pytest for (issue 65).
 
 The hook lives in ``tests/_test_times.py`` and is re-exported by ``tests/conftest.py``; it writes only
-when ``KICAD_MCP_TEST_TIMES`` names a file. Each case runs a tiny test file in a subprocess pytest.
+when ``BOARDPROOF_TEST_TIMES`` names a file. Each case runs a tiny test file in a subprocess pytest.
 """
 
 from __future__ import annotations
@@ -13,7 +13,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-VAR = "KICAD_MCP_TEST_TIMES"
+VAR = "BOARDPROOF_TEST_TIMES"
 LINE = re.compile(r"^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3} (START|END) (\S+)$")
 
 TINY = "def test_ok():\n    pass\n\n\ndef test_bad():\n    assert False\n"

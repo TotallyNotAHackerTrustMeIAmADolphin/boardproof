@@ -8,7 +8,7 @@ on the board) the name of ``NET_SETTINGS.GetEffectiveNetClass(net)`` and its val
 The host (``tests/test_board_rules_netclass_oracle.py``) starts it in a throwaway working
 directory that is also ``KICAD_CONFIG_HOME``; the script refuses any other profile, and routes wx
 logging to stderr before ``pcbnew`` is imported, so no KiCad dialog can open. Test helper only:
-nothing in ``kicad_mcp`` imports it.
+nothing in ``boardproof`` imports it.
 """
 
 from __future__ import annotations

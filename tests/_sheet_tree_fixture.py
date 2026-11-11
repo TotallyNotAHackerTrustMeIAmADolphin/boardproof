@@ -25,7 +25,7 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
-from kicad_mcp.kicad_cli import ensure_kicad_cli_on_path
+from boardproof.kicad_cli import ensure_kicad_cli_on_path
 
 DEMO = "complex_hierarchy"
 STRAY_REF = re.compile(r"^[A-Z]+[789]\d{3}$|\?")  # what the stray copies hold, never a live ref

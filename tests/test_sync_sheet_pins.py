@@ -24,7 +24,7 @@ from pathlib import Path
 
 import pytest
 
-from kicad_mcp import sheet_authoring, sheet_pins, write_layer
+from boardproof import sheet_authoring, sheet_pins, write_layer
 from tests import test_sheet_pins as _base
 from tests.test_sheet_pins import _bytes, _labels, _pins
 
@@ -39,8 +39,8 @@ def _wrapped() -> dict:
     dict reaches ``attach_gate_field``, so a read-only tool is not serialised)."""
     from mcp.server.mcpserver import MCPServer
 
-    from kicad_mcp import gate_state, server
-    from kicad_mcp.toolsets import schematic as schematic_toolset
+    from boardproof import gate_state, server
+    from boardproof.toolsets import schematic as schematic_toolset
 
     mcp = MCPServer("test")
     server._gate_every_toolset_tool(mcp, gate_state.GateState())
@@ -260,7 +260,7 @@ def test_sync_through_the_wrapper_waits_for_a_writer_of_the_child(root):
 
 
 def _project(tmp_path, tools):
-    from kicad_mcp.toolsets import project as project_toolset
+    from boardproof.toolsets import project as project_toolset
 
     made = project_toolset._project_create(str(tmp_path / "proj"), "demo")
     return Path(made["schematic_path"])
@@ -446,7 +446,7 @@ def test_the_no_op_note_does_not_claim_all_labels_have_a_pin_when_one_was_skippe
 def test_the_tools_are_registered_with_the_pinned_texts():
     from mcp.server.mcpserver import MCPServer
 
-    from kicad_mcp.toolsets import schematic as schematic_toolset
+    from boardproof.toolsets import schematic as schematic_toolset
 
     mcp = MCPServer("t")
     names = schematic_toolset.build(mcp)

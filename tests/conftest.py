@@ -27,7 +27,7 @@ from tests._test_times import pytest_runtest_logfinish as pytest_runtest_logfini
 from tests._test_times import pytest_runtest_logstart as pytest_runtest_logstart
 from tests._test_times import pytest_sessionstart as pytest_sessionstart  # issue 154: xdist controller writes none
 
-# Issue 172: the opt-in replay cache of kicad-cli upgrade runs (KICAD_MCP_CLI_REPLAY=1); docs/TESTING.md
+# Issue 172: the opt-in replay cache of kicad-cli upgrade runs (BOARDPROOF_CLI_REPLAY=1); docs/TESTING.md
 from tests import _cli_replay
 from tests._cli_replay import pytest_sessionfinish as pytest_sessionfinish
 from tests._cli_replay import pytest_terminal_summary as pytest_terminal_summary
@@ -71,7 +71,7 @@ _RUNG_TEST_PREFIXES = ("test_rung_runner", "test_autonomy_run", "test_rung_backe
 def _seams_lifted_for_rung_tests(request, monkeypatch):
     name = request.module.__name__.rsplit(".", 1)[-1]
     if name.startswith(_RUNG_TEST_PREFIXES) and "enforce_seams" not in request.fixturenames:
-        from kicad_mcp import rung_runner
+        from boardproof import rung_runner
 
         monkeypatch.setattr(rung_runner, "SEAMS_ENFORCED", False)
 
@@ -90,7 +90,7 @@ def _no_default_router_folder_of_this_machine(request, monkeypatch, tmp_path_fac
     an empty directory. Opt-out: the tests that need the real router (``needs_krt``, ``krt_checkout``)."""
     if request.node.get_closest_marker("needs_krt") or "krt_checkout" in request.fixturenames:
         return
-    from kicad_mcp.routers import kicad_routing_tools as krt
+    from boardproof.routers import kicad_routing_tools as krt
 
     monkeypatch.setattr(krt, "REPO_ROOT", tmp_path_factory.mktemp("no-default-krt"))
 
@@ -99,7 +99,7 @@ def _no_default_router_folder_of_this_machine(request, monkeypatch, tmp_path_fac
 def _write_layer_load_memo_is_per_test():
     """Issue 172: the write layer remembers sheets that KiCad loaded (one ``sch upgrade`` per distinct
     content). A test that fakes kicad-cli's answer, or counts its runs, must not see another test's memory."""
-    from kicad_mcp import write_layer
+    from boardproof import write_layer
 
     write_layer.clear_load_check_memo()
     yield
@@ -109,7 +109,7 @@ def _write_layer_load_memo_is_per_test():
 def _schematic_backups_in_tmp(monkeypatch, tmp_path_factory):
     """assign_footprints and fix_annotation back up every sheet to a durable per-user
     directory (build ticket 26); tests send those copies to a temporary directory instead."""
-    monkeypatch.setenv("KICAD_MCP_BACKUP_DIR", str(tmp_path_factory.mktemp("schematic-backups")))
+    monkeypatch.setenv("BOARDPROOF_BACKUP_DIR", str(tmp_path_factory.mktemp("schematic-backups")))
 
 
 @pytest.fixture(scope="session")
@@ -121,7 +121,7 @@ def kicad_demos_dir(demo_install_guard) -> Path:
     Read only: tests that write use ``kicad_demo``, which hands out a copy. The whole tree is
     hashed here, before any test sees it, and checked at session end by ``demo_install_guard``.
     """
-    from kicad_mcp import kicad_cli
+    from boardproof import kicad_cli
 
     path = _kicad_demos.demos_dir_or_missing(os.environ, kicad_cli.ensure_kicad_cli_on_path)
     demo_install_guard.record(path)

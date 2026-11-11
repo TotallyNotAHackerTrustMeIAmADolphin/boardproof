@@ -29,7 +29,7 @@ The helper `scripts/issues.py` refuses a text that `scripts/check_publishable.py
 ## Comments are the record
 
 - **Answer**: when the work is done, the builder posts one comment: the reproduction, the changes
-  per acceptance item, the test counts with the evidence line (`kicad_mcp.__file__` inside the
+  per acceptance item, the test counts with the evidence line (`boardproof.__file__` inside the
   worktree and pytest's `rootdir:`), the decisions with the default taken, the batch-gate verdict.
   A gate that went RED and was fixed gets a new comment, not an edit of the old one.
 - **Review verdict**: after each adversarial review, the coordinator posts the reviewed (full) sha,

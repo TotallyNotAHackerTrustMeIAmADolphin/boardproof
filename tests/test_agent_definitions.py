@@ -17,7 +17,7 @@ AGENTS = Path(__file__).resolve().parents[1] / ".claude" / "agents"
 
 REQUIRED = {
     "builder": [
-        "kicad_mcp.__file__",  # the worktree test check (fork P6)
+        "boardproof.__file__",  # the worktree test check (fork P6)
         "rootdir:",
         "`.kicad_pcb`",  # no hand edits of KiCad files (hard rule 1)
         "raw",  # geometry from the raw S-expression (hard rule 2)
@@ -75,7 +75,7 @@ REQUIRED = {
     "reviewer": [
         "git worktree add --detach",
         "never in the builder's worktree and never in a `git archive` export",
-        "kicad_mcp.__file__",
+        "boardproof.__file__",
         "rootdir:",
         "Mutation",
         "write_not_verified",

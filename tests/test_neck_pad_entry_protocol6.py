@@ -31,7 +31,7 @@ from pathlib import Path
 import pytest
 from kicad_tools.sexp import parse_string
 
-from kicad_mcp import rung_backends, rung_runner, write_layer
+from boardproof import rung_backends, rung_runner, write_layer
 
 ROOT = Path(__file__).resolve().parents[1]
 RUNG1 = ROOT / "evals" / "rung1" / "layout_run" / "07_poured"

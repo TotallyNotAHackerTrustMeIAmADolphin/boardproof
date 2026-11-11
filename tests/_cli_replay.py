@@ -1,5 +1,5 @@
 """Replay cache for kicad-cli runs in the test session (issue 172). Test infrastructure only: it lives in
-``tests/``, is installed by ``tests/conftest.py`` only when ``KICAD_MCP_CLI_REPLAY=1`` and is never
+``tests/``, is installed by ``tests/conftest.py`` only when ``BOARDPROOF_CLI_REPLAY=1`` and is never
 imported by ``src/``.
 
 What it does. A test run calls ``kicad-cli ... upgrade`` many times on byte-identical inputs (every write
@@ -27,7 +27,7 @@ The key (everything that can change the answer, else the call is a miss and runs
     not only the files named in the argv: sub-sheets, ``.kicad_pro``, ``.kicad_dru``, library tables),
   * the ``KICAD*``/``KIPRJMOD*`` environment variables, cwd, and the text/encoding arguments.
 
-Verify mode (``KICAD_MCP_CLI_REPLAY_VERIFY=1``): on a hit the real call runs too and the two are compared
+Verify mode (``BOARDPROOF_CLI_REPLAY_VERIFY=1``): on a hit the real call runs too and the two are compared
 (return code, stdout, stderr, every restored file); a difference raises ``ReplayMismatch``. This is how the
 fidelity of the replay was measured over the full suite.
 """
@@ -43,9 +43,9 @@ import tempfile
 import threading
 from pathlib import Path
 
-ENV_ON = "KICAD_MCP_CLI_REPLAY"
-ENV_DIR = "KICAD_MCP_CLI_REPLAY_DIR"
-ENV_VERIFY = "KICAD_MCP_CLI_REPLAY_VERIFY"
+ENV_ON = "BOARDPROOF_CLI_REPLAY"
+ENV_DIR = "BOARDPROOF_CLI_REPLAY_DIR"
+ENV_VERIFY = "BOARDPROOF_CLI_REPLAY_VERIFY"
 
 # first words of the argv (after the executable) that may be replayed
 CACHEABLE: tuple[tuple[str, ...], ...] = (
@@ -198,7 +198,7 @@ def _key(argv, kw, dirs, snaps) -> str:
     cwd = kw.get("cwd")
     env = kw.get("env")
     env_items = sorted((k, v) for k, v in (env if env is not None else os.environ).items()
-                       if k.upper().startswith(("KICAD", "KIPRJMOD")) and not k.startswith("KICAD_MCP_CLI_REPLAY"))
+                       if k.upper().startswith(("KICAD", "KIPRJMOD")) and not k.startswith("BOARDPROOF_CLI_REPLAY"))
     doc = {
         "version": _cli_version(str(argv[0])),
         "exe": os.path.basename(str(argv[0])).lower(),
@@ -214,7 +214,7 @@ def _key(argv, kw, dirs, snaps) -> str:
 def _store_dir() -> Path:
     d = os.environ.get(ENV_DIR)
     if not d:
-        d = tempfile.mkdtemp(prefix="kicad-mcp-cli-replay-")
+        d = tempfile.mkdtemp(prefix="boardproof-cli-replay-")
         os.environ[ENV_DIR] = d
     p = Path(d)
     p.mkdir(parents=True, exist_ok=True)
@@ -384,12 +384,12 @@ def _enabled() -> bool:
 
 
 def pytest_configure(config) -> None:
-    """Install the wrapper when ``KICAD_MCP_CLI_REPLAY=1``. The controller (or a serial run) makes the store
+    """Install the wrapper when ``BOARDPROOF_CLI_REPLAY=1``. The controller (or a serial run) makes the store
     directory and names it in the environment before any xdist worker is started, so workers share it."""
     if not _enabled():
         return
     if not hasattr(config, "workerinput") and not os.environ.get(ENV_DIR):
-        os.environ[ENV_DIR] = tempfile.mkdtemp(prefix="kicad-mcp-cli-replay-")
+        os.environ[ENV_DIR] = tempfile.mkdtemp(prefix="boardproof-cli-replay-")
         config._cli_replay_owns_store = True
     install()
 

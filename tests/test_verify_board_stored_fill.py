@@ -21,8 +21,8 @@ from pathlib import Path
 import pytest
 from kicad_tools.sexp import parse_string
 
-from kicad_mcp import verify_board as gate
-from kicad_mcp import write_layer
+from boardproof import verify_board as gate
+from boardproof import write_layer
 
 FIXTURES = Path(__file__).parent / "fixtures"
 RUNG1 = [FIXTURES / "uw" / "r1fr" / "out", FIXTURES / "uw" / "r1krt" / "out"]
@@ -256,7 +256,7 @@ def test_the_real_gate_reports_the_empty_stored_fill_beside_its_verdict(tmp_path
 async def test_the_tool_description_says_a_pass_is_not_the_stored_fill() -> None:
     from mcp.client.client import Client
 
-    from kicad_mcp.server import build_server
+    from boardproof.server import build_server
 
     async with Client(build_server(), mode="auto") as client:
         tools = {t.name: t for t in (await client.list_tools()).tools}

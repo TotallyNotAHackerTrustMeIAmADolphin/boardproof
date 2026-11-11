@@ -26,7 +26,7 @@ from pathlib import Path
 
 import pytest
 
-from kicad_mcp import autonomy_run, gate_state, rung_runner
+from boardproof import autonomy_run, gate_state, rung_runner
 from tests import _kicad_faults as faults
 
 from test_autonomy_run_review import _measure
@@ -134,7 +134,7 @@ def test_any_other_byte_change_in_a_covered_file_changes_the_pin(tmp_path, relat
 def test_a_board_moved_through_kicad_tools_changes_both_pins(tmp_path):
     from kicad_tools.schema import PCB
 
-    from kicad_mcp import write_layer
+    from boardproof import write_layer
 
     pcb = _eol_copy(RUNG1_DIR, tmp_path / "p", b"\n") / RUNG1_NAME
     before = _pins(pcb)
@@ -384,7 +384,7 @@ def _demos_dir() -> Path:
     override = os.environ.get("KICAD_DEMOS_DIR")
     if override:
         return Path(override)
-    from kicad_mcp import kicad_cli
+    from boardproof import kicad_cli
 
     try:
         cli = Path(kicad_cli.ensure_kicad_cli_on_path())

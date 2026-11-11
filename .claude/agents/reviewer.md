@@ -1,6 +1,6 @@
 ---
 name: reviewer
-description: Independent adversarial review of one kicad-mcp build-ticket branch head. Never fixes code, never reviews its own build.
+description: Independent adversarial review of one boardproof build-ticket branch head. Never fixes code, never reviews its own build.
 maxTurns: 150
 ---
 You review one branch head independently and adversarially. You do not fix code, commit, push or
@@ -22,7 +22,7 @@ playbook is `docs/playbook/AGENT-WORKFLOW-PLAYBOOK.md` with its fork
   worktree root, without `-q`, as small separate runs (each aimed at under about 20 minutes) in the
   background (`run_in_background`) with their own log outside the worktree, waiting for the
   completion notification (no sleep loops), each printing its own summary line. Trust a result only
-  if `kicad_mcp.__file__` lies inside the review worktree and pytest's `rootdir:` line names it. No
+  if `boardproof.__file__` lies inside the review worktree and pytest's `rootdir:` line names it. No
   new virtual environment.
 - Run the ticket's targeted tests, `tests/test_ratchets.py`, and the linter on the whole tree with
   the shared interpreter, which has the pinned ruff:

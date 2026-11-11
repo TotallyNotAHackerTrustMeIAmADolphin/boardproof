@@ -1,4 +1,4 @@
-"""Tests for src/kicad_mcp/ipc/ -- discovery, connection lifecycle, and the
+"""Tests for src/boardproof/ipc/ -- discovery, connection lifecycle, and the
 copilot/autopilot adapter seam.
 
 Two tiers, per this project's standing testing convention (see
@@ -27,7 +27,7 @@ from pathlib import Path
 
 import pytest
 
-from kicad_mcp.ipc import adapter, connection, discovery
+from boardproof.ipc import adapter, connection, discovery
 
 FIXTURES = Path(__file__).parent / "fixtures"
 PCB_FIXTURE = FIXTURES / "simple_led.kicad_pcb"

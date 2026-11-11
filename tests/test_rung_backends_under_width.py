@@ -22,7 +22,7 @@ from pathlib import Path
 import pytest
 from kicad_tools.sexp import parse_file
 
-from kicad_mcp import rung_runner
+from boardproof import rung_runner
 
 ROOT = Path(__file__).resolve().parents[1]
 TICKET04 = Path(__file__).resolve().parent / "fixtures" / "uw" / "r1fr"
@@ -83,7 +83,7 @@ def test_reproduction_ticket04_freerouting_under_width_was_never_flagged(tmp_pat
 
 
 def test_the_shared_check_fails_ticket04_freerouting_delivery_and_names_each_item(tmp_path):
-    from kicad_mcp import rung_backends
+    from boardproof import rung_backends
 
     recorded = _ticket04_attempt0()
     report = _run_one(tmp_path, rung_backends.with_under_width_check(_replay(recorded["router_facts"])))
@@ -131,7 +131,7 @@ def _add_copper(board: Path, tracks=(), vias=()):
     """Add tracks ``(x, width, net)`` and vias ``(x, size, drill, net)`` through kicad_tools."""
     from kicad_tools.schema import PCB
 
-    from kicad_mcp import write_layer
+    from boardproof import write_layer
 
     pcb = PCB.load(board)
     for x, width, net in tracks:
@@ -154,7 +154,7 @@ def _router(tracks=(), vias=(), facts=None, status="ok", calls=None):
 def _set_project(board: Path, change):
     from kicad_tools.core import project_file
 
-    from kicad_mcp import write_layer
+    from boardproof import write_layer
 
     pro = board.with_suffix(".kicad_pro")
     data = project_file.load_project(pro)
@@ -163,7 +163,7 @@ def _set_project(board: Path, change):
 
 
 def _check(board: Path, backend, tmp_path):
-    from kicad_mcp import rung_backends
+    from boardproof import rung_backends
 
     return rung_backends.with_under_width_check(backend)(board, {}, 60.0, tmp_path / "a" / "router.log")
 
@@ -250,7 +250,7 @@ def test_an_under_width_arc_is_judged(stress_board, tmp_path):
     """Review round 1, finding 2: an arc's raw (width ...) is judged like a segment's."""
     from kicad_tools.sexp import SExp
 
-    from kicad_mcp import write_layer
+    from boardproof import write_layer
 
     def arc_router(board, params, timeout_s, log):
         _add_copper(Path(board), tracks=[(4.0, 0.2, "SIG1"), (5.0, 0.25, "SIG1")])
@@ -282,7 +282,7 @@ def test_a_microvia_is_judged_by_the_microvia_class_values(stress_board, tmp_pat
     def micro_router(board, params, timeout_s, log):
         from kicad_tools.schema import PCB
 
-        from kicad_mcp import write_layer
+        from boardproof import write_layer
 
         pcb = PCB.load(board)
         pcb.add_via(7.0, 9.0, size=0.25, drill=0.08, net="SIG1", dedupe=False, via_type="micro")
@@ -368,7 +368,7 @@ def test_a_net_kicad_would_class_through_its_bus_members_refuses_the_attempt(str
     pattern matches the text inside its braces, is classed by KiCad through its members; its
     requirement is unknown here, so the attempt is refused before the router runs. Rung 2's
     ``/VPP{slash}MCLR`` under patterns that match no member is judged as usual."""
-    from kicad_mcp import pour_step
+    from boardproof import pour_step
 
     real = pour_step.board_net_names
     monkeypatch.setattr(pour_step, "board_net_names", lambda path: real(path) | {"Q{VDD}", "/VPP{slash}MCLR"})
@@ -395,7 +395,7 @@ def test_a_bus_vector_net_refuses_the_attempt(stress_board, tmp_path, monkeypatc
     """Round 5 (delta review 4, finding 1): KiCad classes ``D[0..1]`` through its expanded
     members D0 and D1 (``D?`` gives it the class); its requirement is unknown here, so the
     attempt is refused before the router runs instead of judging it as Default."""
-    from kicad_mcp import pour_step
+    from boardproof import pour_step
 
     real = pour_step.board_net_names
     monkeypatch.setattr(pour_step, "board_net_names", lambda path: real(path) | {"D[0..1]"})
@@ -414,13 +414,13 @@ def test_a_bus_vector_net_refuses_the_attempt(stress_board, tmp_path, monkeypatc
 
 
 def _project_of(board: Path) -> dict:
-    from kicad_mcp import board_rules
+    from boardproof import board_rules
 
     return board_rules._read_project(board.with_suffix(".kicad_pro"))
 
 
 def test_under_width_items_raises_its_own_error_on_such_a_pattern(stress_board):
-    from kicad_mcp import board_rules, rung_backends
+    from boardproof import board_rules, rung_backends
 
     _set_project(stress_board, _pwr_case_insensitive)
     project = board_rules._read_project(stress_board.with_suffix(".kicad_pro"))
@@ -432,7 +432,7 @@ def test_a_check_that_cannot_read_the_delivery_fails_an_ok_attempt(stress_board,
     """Fail closed: copper on a net the board does not define cannot be judged."""
     from kicad_tools.schema import PCB
 
-    from kicad_mcp import write_layer
+    from boardproof import write_layer
 
     def bad_router(board, params, timeout_s, log):
         _add_copper(Path(board), tracks=[(4.0, 0.25, "SIG1")])
@@ -460,7 +460,7 @@ def test_a_routers_own_report_is_kept_for_the_audit_but_never_replaces_the_check
 
 def test_krt_strict_sizes_flag_still_fails_the_attempt_through_the_runner(stress_board, tmp_path):
     """KRT's existing behaviour: exit 3 alone is a policy hit, with or without the raw check."""
-    from kicad_mcp import rung_backends
+    from boardproof import rung_backends
 
     backend = rung_backends.with_under_width_check(_router(facts={
         "strict_sizes_violated": True, "delivered_below_requested": []}))
@@ -482,7 +482,7 @@ def test_krt_strict_sizes_flag_still_fails_the_attempt_through_the_runner(stress
 
 @pytest.mark.parametrize("name", ["krt", "freerouting"])
 def test_every_real_backend_is_built_behind_the_one_check(name):
-    from kicad_mcp import rung_backends
+    from boardproof import rung_backends
 
     backend = rung_backends.make_backend(name)
     assert getattr(backend, "under_width_checked", False) is True
@@ -492,7 +492,7 @@ def test_every_real_backend_is_built_behind_the_one_check(name):
 def test_the_check_has_one_call_site_and_no_backend_copy():
     import ast
 
-    src = ROOT / "src" / "kicad_mcp"
+    src = ROOT / "src" / "boardproof"
     callers = []
     for path in sorted(src.rglob("*.py")):
         tree = ast.parse(path.read_text(encoding="utf-8"))
@@ -514,7 +514,7 @@ def test_a_measurement_without_an_injected_backend_judges_every_attempt(name, tm
     """autonomy_run hands the runner ``make_backend``'s result: a delivery below its net
     class fails every attempt, whichever router delivered it, and the CLI summary names
     each item."""
-    from kicad_mcp import autonomy_run, rung_backends
+    from boardproof import autonomy_run, rung_backends
 
     from test_autonomy_run_review import OK_INFO, _drc
     from test_input_prep import _build_fixture
