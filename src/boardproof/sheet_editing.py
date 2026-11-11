@@ -1425,6 +1425,22 @@ def _library_units(entry: SExp) -> set[int]:
     return units
 
 
+def _require_unit_block_names(entry: SExp, lib_id: str) -> None:
+    """KiCad 10 loads a library symbol only when each drawing block is named ``<symbol name>_<unit>_<style>`` (unit 0 =
+    shared by all units): measured, a block named otherwise (``Name_A``, ``Name_1``, another symbol's prefix) makes
+    kicad-cli refuse the library and every sheet that embeds it. Say so instead of the generic parse failure."""
+    base = (entry.get_string(0) or lib_id).split(":", 1)[-1]
+    bad = [n for n in (sub.get_string(0) or "" for sub in _kids(entry, "symbol"))
+           if not (n.startswith(base + "_") and len(n.rsplit("_", 2)) == 3 and n[len(base) + 1:].count("_") == 1
+                   and all(part.isdigit() for part in n[len(base) + 1:].split("_")))]
+    if bad:
+        raise SheetAuthoringError(
+            "unit_block_name_invalid",
+            f"{lib_id} has drawing block(s) named {bad} but KiCad needs each to be named '{base}_<unit>_<style>' "
+            f"(for example '{base}_1_1'; unit 0 is shared by all units); nothing was written",
+            lib_id=lib_id)
+
+
 def _load_library_entry(sheet_path: Path, lib_id: str) -> list[SExp]:
     """The embeddable ``(symbol "Lib:Name" ...)`` node of ``lib_id`` read from its library file (the
     project's tables first, then KiCad's own folder), the same source ``add_symbols`` seeds from."""
@@ -1445,6 +1461,8 @@ def _load_library_entry(sheet_path: Path, lib_id: str) -> list[SExp]:
             last = exc
             continue
         if nodes:
+            for node in nodes:
+                _require_unit_block_names(node, lib_id)
             return nodes
     raise SheetAuthoringError("lib_unresolved", f"cannot read {lib_id!r} from its library: {last}; nothing was written", lib_id=lib_id)
 

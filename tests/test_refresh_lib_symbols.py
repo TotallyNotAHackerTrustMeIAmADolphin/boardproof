@@ -655,3 +655,18 @@ def test_a_kicad_cli_that_fails_leaves_a_sheet_with_nothing_to_refresh_unchanged
     out = _refresh(sheet)
     assert out["ok"] is True and out["written"] is False and out["count"] == 0 and out["erc_mismatch_read"] is False, out
     assert "parts:Part" in out["unchanged"]
+
+
+@pytest.mark.parametrize("renamed", ['"Part_A"', '"Part_1"', '"Other_1_1"'])
+def test_a_library_block_not_named_name_unit_style_is_refused_with_the_expected_form(sheet, renamed):
+    """Issue 192: KiCad 10 loads a library symbol only when its blocks are named <name>_<unit>_<style>. The library file is
+    written without the write layer's load check (kicad_tools' serialiser) because the write layer, like KiCad, refuses it."""
+    from tests._kicad_faults import write_unchecked
+
+    bad = _part(P1, P2).replace('"Part_1_1"', renamed)
+    write_unchecked(parse_string(_lib_text(bad, OTHER)), _project(sheet) / "lib" / "parts.kicad_sym")
+    before = _bytes(sheet)
+    out = _refresh(sheet, lib_ids=["parts:Part"])
+    assert out["ok"] is False and out["code"] == "unit_block_name_invalid", out
+    assert "Part_<unit>_<style>" in out["reason"] and renamed.strip(chr(34)) in out["reason"], out
+    assert _bytes(sheet) == before

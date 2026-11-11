@@ -2150,3 +2150,17 @@ kind = "write_text"
 count = 1
 use = "stub"
 note = "Issues 98 and 125: a stand-in text file (not KiCad syntax, never parsed) committed to a second throwaway git repository, to show that a GIT_DIR of the caller does not redirect diff_schematic's git calls."
+
+[[test_kicad_fault_call]]
+file = "test_refresh_lib_symbols.py"
+function = "test_a_library_block_not_named_name_unit_style_is_refused_with_the_expected_form"
+kind = "write_unchecked"
+code = '''write_unchecked(parse_string(_lib_text(bad, OTHER)), _project(sheet) / 'lib' / 'parts.kicad_sym')'''
+note = "A library symbol whose drawing block is not named <name>_<unit>_<style> (issue 192): KiCad 10 and the write layer both refuse to write one."
+
+[[test_kicad_fault_call]]
+file = "test_replace_symbols.py"
+function = "test_a_library_block_not_named_name_unit_style_is_refused_with_the_expected_form"
+kind = "write_unchecked"
+code = '''write_unchecked(parse_string(_LIB[:-1] + ' ' + bad + ')'), lib)'''
+note = "A library symbol whose drawing block is not named <name>_<unit>_<style> (issue 192): KiCad 10 and the write layer both refuse to write one."

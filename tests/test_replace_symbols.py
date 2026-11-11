@@ -559,3 +559,24 @@ def test_a_new_pin_landing_on_anything_is_new_pin_attached(sheet, kind):
     landed = [c for c in result["connectivity"]["changes"]["items"] if c["type"] == "new_pin_attached"]
     assert [c["pin"] for c in landed] == ["3"], (kind, result["connectivity"])
     assert _bytes(sheet) == before
+
+
+@pytest.mark.parametrize("renamed", ['"Odd_A"', '"Odd_1"', '"Other_1_1"'])
+def test_a_library_block_not_named_name_unit_style_is_refused_with_the_expected_form(sheet, renamed):
+    """Issue 192: KiCad 10 loads a library symbol only when its blocks are named <name>_<unit>_<style> (measured: kicad-cli
+    refuses the library and every sheet that embeds it). The refusal names the expected form, not a generic parse failure.
+    The library is written with kicad_tools' serialiser, without the write layer's load check, which refuses it too."""
+    from tests._kicad_faults import write_unchecked
+
+    bad = _symbol("Odd", [[_P1, _P2]]).replace('"Odd_1_1"', renamed)
+    lib = sheet.parent / "lib" / "parts.kicad_sym"
+    write_unchecked(parse_string(_LIB[:-1] + " " + bad + ")"), lib)
+    before = _bytes(sheet)
+    out = _replace(sheet, [{"reference": "R1", "lib_id": "parts:Odd"}])
+    assert out["ok"] is False and out["code"] == "unit_block_name_invalid", out
+    assert "Odd_<unit>_<style>" in out["reason"] and renamed.strip(chr(34)) in out["reason"], out
+    assert _bytes(sheet) == before
+
+
+def test_a_well_named_library_block_is_not_refused_by_the_name_check(sheet):
+    assert _replace(sheet, [{"reference": "R1", "lib_id": "parts:Quad"}], dry_run=True)["ok"] is True
