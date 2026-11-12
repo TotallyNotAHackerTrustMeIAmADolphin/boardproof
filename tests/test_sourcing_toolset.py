@@ -64,6 +64,7 @@ def test_build_registers_expected_tools():
         "propose_component_match",
         "confirm_component_match",
         "lookup_jlcpcb_part_tiers",
+        "check_bom_against_lcsc",
         "jlcpcb_library_status",
         "resolve_jlcpcb_assets",
         "fetch_datasheet",

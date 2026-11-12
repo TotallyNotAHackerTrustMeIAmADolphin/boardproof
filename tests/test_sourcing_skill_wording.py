@@ -55,3 +55,26 @@ def test_skill_pins_missing_package_handling():
 
 def test_description_and_skill_agree_on_missing_package():
     assert _having("sourcing.py", "Retrieve a ready KiCad symbol/footprint/3D model", "status incomplete with the install command")
+
+
+def test_skill_pins_the_bom_check_and_its_offline_behaviour():
+    assert "`check_bom_against_lcsc(sch_path)`" in SKILL
+    assert "a package that disagrees with the footprint is an ERROR line" in SKILL
+    assert "unknown means no data, never a pass" in SKILL
+    assert "the stock only with `include_stock=true`" in SKILL
+    assert "wide, exposed-pad and connector packages" in SKILL and "have unknown fit" in SKILL
+
+
+def test_bom_check_description_and_skill_agree():
+    assert _having("sourcing.py", "Read-only batch check of every placed part", "A package that disagrees with the placed footprint", "is an ERROR line")
+    assert _having("sourcing.py", "Offline: stage and package fit use only the shipped index", "unknown means no data")
+    assert _having("sourcing.py", "Offline behaviour, also stated in the result under data", "stage unknown (not Extended)")
+    assert _having("sourcing.py", "Fit compares package family, pin count and imperial passive size only", "wide, exposed-pad and connector packages come back unknown")
+    assert _having("sourcing.py", "A W (wide) suffix, a wide body, an exposed-pad (-nEP) variant", "an SMA coax connector")
+
+
+def test_same_size_note_is_pinned_in_skill_description_and_docstring():
+    note = "does not tell R, C, L, D and LED apart (a resistor part on an LED_0603 footprint is a match)"
+    assert note in SKILL
+    assert _having("sourcing.py", "Read-only batch check of every placed part", note)
+    assert _having("sourcing.py", "Offline behaviour, also stated in the result under data", note)

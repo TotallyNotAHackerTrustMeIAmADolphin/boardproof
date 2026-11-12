@@ -2164,3 +2164,10 @@ function = "test_a_library_block_not_named_name_unit_style_is_refused_with_the_e
 kind = "write_unchecked"
 code = '''write_unchecked(parse_string(_LIB[:-1] + ' ' + bad + ')'), lib)'''
 note = "A library symbol whose drawing block is not named <name>_<unit>_<style> (issue 192): KiCad 10 and the write layer both refuse to write one."
+
+[[test_kicad_fault_call]]
+file = "test_bom_lcsc.py"
+function = "test_an_unreadable_board_is_a_refusal_not_a_fall_back_to_the_schematic"
+kind = "rewrite_bytes"
+code = '''_faults.rewrite_bytes(bad, lambda data: data[:len(data) // 2])'''
+note = "Issue 123: a copy of the simple_led board cut in half, a truncated file no write_layer.save can produce; the read-only BOM check must refuse it (pcb_unreadable) and not fall back to the schematic footprint."

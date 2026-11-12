@@ -585,6 +585,52 @@ def build(mcp: MCPServer) -> list[str]:
         """
         return jlc.classify_parts(identifiers)
 
+    def check_bom_against_lcsc(
+        sch_path: str, references: list[str] | None = None, root_sch: str | None = None,
+        pcb_path: str | None = None, include_stock: bool = False, max_stock_lookups: int = 50,
+    ) -> dict:
+        """Read-only, one call for the whole project: check the placed parts against LCSC data. Never loop
+        it per part. It writes nothing and takes no write lock.
+
+        sch_path: any sheet of the project; the read starts at the root sheet (root_sch when it cannot be
+        found) and follows the sheet symbols, so every sheet is read. references: exact references to
+        check; omitted, every placed part (power, off-board and DNP symbols are listed under skipped, not
+        checked). pcb_path: optional board; given, the footprint placed on the board is checked, else the
+        Footprint property of the schematic symbol.
+
+        One line per reference (a multi-unit part is one line): lcsc (the LCSC property), stage (Basic,
+        Preferred Extended, Extended or unknown), stock, footprint_fit and findings, each with a severity.
+        A package that disagrees with the placed footprint (a 0402 part on a 0603 footprint) is an ERROR
+        line, code package_footprint_mismatch; a missing or malformed LCSC number, a missing footprint and
+        a known stock of 0 are warnings. The totals give error_count, error_references, the stage counts
+        and the fit counts; nothing is truncated.
+
+        Offline behaviour, also stated in the result under data. Local data, no network: the stage and the
+        part's package come from the vendored JLCPCB index (889 Basic, Preferred and a few Extended parts;
+        shipped with the server, nothing is cached on disk). A part that is not in the index has stage
+        unknown (not Extended) and its fit is unknown, because no package is available offline for it and
+        the placed footprint's name says nothing about the part. What is compared is the package
+        family with its pin count (and pitch and body width for the SO packages), or the imperial passive
+        size: R, C, L, D, LED, FB and fuse sizes 01005 to 2512; SOIC and SOP as one family (narrow 3.9 mm
+        body); SSOP, TSSOP, MSOP; SOT-23, SOT-323, SOT-363, SOT-223, SOT-89; SOD-123/323/523; SMA/SMB/SMC
+        on diode footprints only. A W (wide) suffix, a wide body, an exposed-pad (-nEP) variant, a
+        universal two-size footprint and a connector package (an SMA coax connector) come back unknown, and
+        so does every other package: unknown, never a match. SSOP, TSSOP and MSOP of one pin count in two
+        different families are unknown too. Fit compares package size and family only: it does not tell R, C, L, D
+        and LED apart (a resistor part on an LED_0603 footprint is a match).
+        Network, only with include_stock=true: one provider search per distinct LCSC number, at most
+        max_stock_lookups (0 to 200, default 50). The LCSC provider is a scrape behind a bot wall and
+        often fails; then stock is unknown with provider_errors, not zero, and after 3 failed searches in
+        a row the rest are not queried. Without include_stock no network call is made and stock is unknown.
+
+        This reports; unknown means no data, and a result with no error line is not a statement that
+        the BOM can be built. Refusals: invalid_spec, file_not_found, parent_not_in_tree, root_not_found,
+        sheet_tree_incomplete, pcb_unreadable.
+        """
+        from boardproof import bom_lcsc
+
+        return bom_lcsc.check_bom(sch_path, references, root_sch, pcb_path, include_stock, max_stock_lookups)
+
     def jlcpcb_library_status() -> dict:
         """Report what JLCPCB part data is available locally: the vendored
         tier index (always shipped) and, separately, whether a local checkout
@@ -819,6 +865,28 @@ def build(mcp: MCPServer) -> list[str]:
         },
     )
     mcp.add_tool(
+        check_bom_against_lcsc,
+        name="check_bom_against_lcsc",
+        description=(
+            "Read-only batch check of every placed part of a project (or of the given references) "
+            "against LCSC data in one call: the LCSC number, the stage (Basic / Preferred Extended / "
+            "Extended / unknown) from the local JLCPCB index with no network call, the stock only where "
+            "a sourcing provider supplies it (include_stock=true, network; otherwise stock is unknown, "
+            "never guessed), and whether the placed footprint fits the part's package. A package that "
+            "disagrees with the placed footprint (a 0402 part on a 0603 footprint) is an ERROR line. "
+            "Offline: stage and package fit use only the shipped index; a part that is not in it has "
+            "stage unknown (not Extended) and fit unknown. Fit compares package family, pin count and imperial passive size only; "
+            "wide, exposed-pad and connector packages come back unknown. It does not tell R, C, L, D and LED apart (a resistor part on an LED_0603 footprint is a match). It reports, and a result without an error "
+            "line does not say the BOM can be built; unknown means no data."
+        ),
+        annotations={
+            "readOnlyHint": True,
+            "destructiveHint": False,
+            "idempotentHint": True,
+            "openWorldHint": True,
+        },
+    )
+    mcp.add_tool(
         jlcpcb_library_status,
         name="jlcpcb_library_status",
         description=(
@@ -929,6 +997,7 @@ def build(mcp: MCPServer) -> list[str]:
         "propose_component_match",
         "confirm_component_match",
         "lookup_jlcpcb_part_tiers",
+        "check_bom_against_lcsc",
         "jlcpcb_library_status",
         "resolve_jlcpcb_assets",
         "fetch_datasheet",
