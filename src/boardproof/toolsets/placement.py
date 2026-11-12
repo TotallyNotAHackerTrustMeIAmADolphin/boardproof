@@ -544,6 +544,30 @@ def _read_outline(pcb_path: str | Path) -> tuple[dict, str | None, str | None, l
     return fields, problem, outline_problem, footprints
 
 
+_SNAP_ANCHORS = ("outline", "absolute")
+
+
+def _read_grid_origin(pcb_path: str | Path) -> tuple[float, float]:
+    """The board's user grid origin, page millimetres, from the RAW ``(setup (grid_origin x y))``
+    token; (0, 0) when the token is absent. A token that is not exactly two finite numbers
+    raises ValueError (the caller refuses; nothing is guessed)."""
+    import math
+
+    from kicad_tools.sexp import parse_file
+
+    setup = parse_file(Path(pcb_path)).find("setup")
+    node = setup.find("grid_origin") if setup is not None else None
+    if node is None:
+        return (0.0, 0.0)
+    try:
+        values = [float(v) for v in node.values]
+    except (TypeError, ValueError):
+        values = []
+    if len(values) != 2 or not all(math.isfinite(v) for v in values):
+        raise ValueError("the board's (setup (grid_origin ...)) is not two finite numbers")
+    return (values[0], values[1])
+
+
 def _frame_fields(pcb_path: Any) -> dict:
     try:
         if isinstance(pcb_path, (str, Path)) and Path(pcb_path).is_file():
@@ -869,10 +893,15 @@ def build(mcp: MCPServer) -> list[str]:
         return {"status": "ok", "axis": axis, "moved": moved}
 
     @_with_frame
-    def snap_footprints_to_grid(pcb_path: str, refs: list[str], grid_mm: float) -> dict:
+    def snap_footprints_to_grid(pcb_path: str, refs: list[str], grid_mm: float, anchor: str = "outline") -> dict:
         """Snap a batch of footprints' positions to the nearest multiple of
         grid_mm, in one call. The grid is anchored at the outline corner, so snapped
         parts are not on the editor's absolute grid unless the corner is.
+        anchor chooses the grid (default "outline", the behaviour above): anchor="absolute"
+        snaps the PAGE coordinate to a grid whose origin is the grid origin KiCad stores in
+        the board (the raw (setup (grid_origin x y)) token, honoured; page (0, 0) when none); a malformed grid_origin refuses in that mode,
+        and any other anchor value refuses, writing nothing. The result carries anchor and
+        grid_anchor_mm (the page point of the grid's origin; local positions are reported either way).
         Coordinates are BOARD-LOCAL millimetres: local (0,0) is the top-left corner of the
         bounding box of the Edge.Cuts outline (arc bulges and circles included); the
         tool refuses an outline it cannot read exactly (a curve, an arc inside a
@@ -887,6 +916,11 @@ def build(mcp: MCPServer) -> list[str]:
 
         if grid_mm <= 0:
             return {"status": "error", "reason": "grid_mm must be > 0"}
+        if anchor not in _SNAP_ANCHORS:
+            return {
+                "status": "error",
+                "reason": f'anchor must be "outline" or "absolute", got {anchor!r}: nothing was moved',
+            }
 
         path = Path(pcb_path)
         if not path.exists():
@@ -899,8 +933,23 @@ def build(mcp: MCPServer) -> list[str]:
         if refusal is not None:
             return refusal
 
+        # page point of the grid's origin: the outline corner (local 0, 0) or the user grid origin
+        page_origin = tuple(_read_outline(path)[0]["origin_mm"])
+        grid_anchor = list(page_origin)
+        if anchor == "absolute":
+            try:
+                grid_anchor = list(_read_grid_origin(path))
+            except ValueError as exc:
+                return {"status": "error", "reason": f"{exc}: nothing was moved"}
+
         def snap(v: float) -> float:
             return round(v / grid_mm) * grid_mm
+
+        def snap_absolute(v: float, axis: int) -> float:
+            # _frame_gate cross-checked page_origin against the origin the library applies
+            page = v + page_origin[axis]
+            snapped = grid_anchor[axis] + round((page - grid_anchor[axis]) / grid_mm) * grid_mm
+            return round(snapped - page_origin[axis], 6)
 
         missing: list[str] = []
         moved: list[dict] = []
@@ -910,7 +959,10 @@ def build(mcp: MCPServer) -> list[str]:
                 missing.append(ref)
                 continue
             x, y = fp.position
-            new_x, new_y = snap(x), snap(y)
+            if anchor == "absolute":
+                new_x, new_y = snap_absolute(x, 0), snap_absolute(y, 1)
+            else:
+                new_x, new_y = snap(x), snap(y)
             board.update_footprint_position(ref, new_x, new_y, None)
             moved.append({"reference": ref, "x": new_x, "y": new_y})
         if missing:
@@ -922,7 +974,7 @@ def build(mcp: MCPServer) -> list[str]:
             if (locked := write_layer.as_lock_refusal(exc)) is not None:
                 return locked
             return {"status": "incomplete", "reason": f"snapped in-memory but failed to save: {exc}"}
-        return {"status": "ok", "grid_mm": grid_mm, "moved": moved}
+        return {"status": "ok", "grid_mm": grid_mm, "anchor": anchor, "grid_anchor_mm": grid_anchor, "moved": moved}
 
     def pack_footprints_densely(pcb_path: str, refs: list[str], min_clearance_mm: float = 0.2) -> dict:
         """Tighten spacing between an already-aligned row/column of
@@ -1571,7 +1623,7 @@ def build(mcp: MCPServer) -> list[str]:
     mcp.add_tool(
         snap_footprints_to_grid,
         name="snap_footprints_to_grid",
-        description=("Snap a batch of footprints' positions to the nearest grid point in one call." + " " + _FRAME_RULE + " The grid is anchored at the outline corner, so snapped parts are not on the editor's absolute grid unless the corner is." + " " + write_layer.LOCK_SENTENCE),
+        description=("Snap a batch of footprints' positions to the nearest grid point in one call." + " " + _FRAME_RULE + " The grid is anchored at the outline corner, so snapped parts are not on the editor's absolute grid unless the corner is." + ' Optional anchor (default "outline", unchanged): anchor="absolute" snaps the page coordinate to a grid whose origin is the grid origin KiCad stores in the board (setup grid_origin, honoured; page (0, 0) when none); a malformed grid_origin or any other anchor value refuses and writes nothing. The result carries anchor and grid_anchor_mm.' + " " + write_layer.LOCK_SENTENCE),
         annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
     )
     mcp.add_tool(
