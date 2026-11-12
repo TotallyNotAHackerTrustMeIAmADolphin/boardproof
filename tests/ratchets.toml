@@ -2092,6 +2092,34 @@ code = '''faults.write_unchecked(root, sch)'''
 note = "Issue 197: a sheet whose paper token KiCad cannot load (A6, Letter, a trailing landscape or numbers after a named size, User without both numbers), measured to exit 3; the layer refuses to write one, and the tool must refuse to start from it."
 
 [[test_kicad_fault_call]]
+file = "test_text_edit.py"
+function = "test_an_unreadable_paper_is_reported_and_is_never_read_as_clean"
+kind = "write_unchecked"
+code = '''faults.write_unchecked(root, sch)'''
+note = "Issue 198: a sheet whose paper token KiCad cannot load (A6, measured to exit 3 in issue 197); the layer refuses to write one, and check_project's out-of-page note must report such a sheet as not checked, never as inside its page."
+
+[[test_kicad_fault_call]]
+file = "test_text_edit.py"
+function = "test_an_object_that_cannot_be_measured_makes_the_sheet_unchecked_not_clean"
+kind = "write_unchecked"
+code = '''faults.write_unchecked(root, sch)'''
+note = "Issue 198: a sheet holding an object kind sheet_extents cannot measure (a table, which KiCad 10 writes with cells and this stub lacks); the page note must report the sheet as not checked."
+
+[[test_kicad_fault_call]]
+file = "test_text_edit.py"
+function = "test_an_unchecked_sheet_alone_makes_no_findings_false"
+kind = "write_unchecked"
+code = '''faults.write_unchecked(root, sch)'''
+note = "Issue 198: a sheet holding a table node (sheet_extents measures none), otherwise clean, so that only the unchecked page note can keep no_findings false."
+
+[[test_kicad_fault_call]]
+file = "test_text_edit.py"
+function = "test_an_unreadable_sheet_file_is_unchecked_with_a_reason"
+kind = "rewrite_bytes"
+code = '''faults.rewrite_bytes(sheet, lambda data: data[:len(data) // 2])'''
+note = "Issue 198: a sheet truncated mid-file; check_project's page note must report it as not checked, never as inside its page."
+
+[[test_kicad_fault_call]]
 file = "test_silk_minimums.py"
 function = "test_footprint_level_unknown_silk_text_node_is_listed_unhandled"
 kind = "write_unchecked"

@@ -1,0 +1,9 @@
+[writing_tool.delete_text]
+self_check = "reload-verify"
+note = "Issue 198: text_edit.delete_text removes the selected texts and text boxes from a copy of the sheet's tree in memory, checks that exactly those nodes are gone and every other node is unchanged (staged check), compares kicad-cli's netlist of the project before and after on scratch copies (connectivity_changed, no override) and its ERC census (write_not_verified, check erc_unchanged), and only then saves through write_layer.save, whose verify reloads the temporary sibling and compares it with the serialised tree before os.replace."
+proof = [
+    "tests/test_text_edit.py::test_delete_text_corrupted_write_is_refused_and_leaves_the_sheet_alone",
+    "tests/test_text_edit.py::test_delete_text_staged_check_fires_when_a_delete_removes_more_than_was_selected",
+    "tests/test_text_edit.py::test_delete_text_netlist_oracle_fires_when_the_selection_reaches_a_label",
+    "tests/test_text_edit.py::test_delete_text_erc_check_fires_when_the_census_moves",
+]

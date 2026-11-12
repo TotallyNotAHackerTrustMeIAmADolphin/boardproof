@@ -2646,6 +2646,83 @@ def build(mcp: MCPServer) -> list[str]:
 
         return add_text_module.add_text(sch_path, items, root_sch, snap=snap, grid=grid, dry_run=dry_run)
 
+    def move_text(
+        sch_path: str, moves: list[dict], snap: bool = True, grid: float = 1.27, dry_run: bool = False,
+        root_sch: str | None = None,
+    ) -> dict:
+        """Move or turn free texts (notes made by add_text) and text boxes of a sheet in one call, absolute or
+        relative. Net labels are not texts: use move_labels for them.
+
+        moves: a list of objects; each holds selector keys (all must match) and one of `to` [x, y] (absolute,
+        mm; the selector must pick exactly one object) or `offset` [dx, dy] (relative, mm), and optionally
+        `rotation`. An item with `rotation` and neither `to` nor `offset` only turns the object where it is
+        (position unchanged, not snapped). Selector keys: texts (exact texts), uuids, pattern (shell pattern on
+        the text), region [x1, y1, x2, y2] (the object's anchor, the `(at)` point, lies inside it; for a text box
+        the anchor too, not the whole frame), kind (text or text_box). One call can bring every note that lies
+        below the page back onto it: {"region": [0, 215, 420, 300], "offset": [0, -150]}. An object may be picked
+        by one move only. A selector that picks nothing, or a listed text or uuid that does not exist on the
+        sheet, refuses the whole call (selector_matched_nothing, not_found; nothing written); anything else
+        malformed is refused with invalid_spec.
+
+        rotation: a free text keeps 0 and 90 (KiCad reads 180 as 0 and 270 as 90, so those are refused for a
+        text); a text box keeps 0, 90, 180 and 270. A text box moves as a whole (its size is not changed).
+        snap (default true) and grid (default 1.27 mm) round the new position; each moved entry lists asked and
+        snapped.
+
+        Free text joins nothing, and the call proves it: kicad-cli's netlist of the project is read from a scratch
+        copy before and after and must be unchanged (connectivity_changed otherwise; there is no override), and
+        its ERC census must be the same too (write_not_verified, check erc_unchanged). Every other node of the
+        sheet is checked against the original, and the written file is reloaded and compared before it replaces
+        the original. dry_run true computes and returns everything (would_move) and writes nothing. Works on a
+        sheet that a parent sheet symbol uses. root_sch names the project's root sheet when sch_path is a
+        sub-sheet and its folder holds several projects.
+
+        Out-of-page note: outside_page_after lists the moved objects that still lie outside the sheet's paper
+        (kind, uuid, label, box in mm, origin at the page's top left corner), page_mm is the page. A text is
+        measured by its anchor only (not the extent of its words), a text box by its corners; text box rotation
+        is not measured. It is information, never a refusal.
+
+        Refuses with file_open_in_kicad, naming the lock file, while KiCad holds a lock file for a file it would
+        write; close the file in KiCad, then retry.
+
+        Returns moved (uuid, kind, text, from, to, rotation_from, rotation, asked, snapped), count, grid,
+        snapped, page_mm, outside_page_after, connectivity (nets_before, nets_after, changed, changes) and written.
+        """
+        from boardproof import text_edit
+
+        return text_edit.move_text(sch_path, moves, root_sch, snap=snap, grid=grid, dry_run=dry_run)
+
+    def delete_text(sch_path: str, selectors: list[dict], dry_run: bool = False, root_sch: str | None = None) -> dict:
+        """Delete free texts (notes made by add_text) and text boxes from a sheet in one call. Net labels are
+        not texts: use delete_labels for them.
+
+        Selectors (`selectors`, a list of objects; the keys of one object must all match, the objects are
+        joined): texts (exact texts), uuids, pattern (shell pattern on the text), region [x1, y1, x2, y2] (the
+        object's anchor, the `(at)` point, lies inside it), kind (text or text_box). A selector that selects
+        nothing, or a listed text or uuid that does not exist on the sheet, refuses the whole call
+        (selector_matched_nothing, not_found; nothing written). dry_run true returns what would be removed
+        (would_delete) and writes nothing; look at it first, a delete cannot be undone by this tool.
+
+        Free text joins nothing, and the call proves it: kicad-cli's netlist of the project is read from a scratch
+        copy before and after and must be unchanged (connectivity_changed otherwise; there is no override), and
+        its ERC census must be the same too (write_not_verified, check erc_unchanged). Every other node of the
+        sheet is checked against the original, and the written file is reloaded and compared before it replaces
+        the original. root_sch names the project's root sheet when sch_path is a sub-sheet and its folder holds
+        several projects.
+
+        Refuses with file_open_in_kicad, naming the lock file, while KiCad holds a lock file for a file it would
+        write; close the file in KiCad, then retry.
+
+        A deleted text that is a member of a group is dropped from the group's members (KiCad drops it silently on its next
+        save); a group left with no member is removed, as KiCad does. Both are listed: group_members_removed, groups_removed.
+
+        Returns deleted (uuid, kind, text, at, rotation), count, connectivity (nets_before, nets_after, changed,
+        changes) and written.
+        """
+        from boardproof import text_edit
+
+        return text_edit.delete_text(sch_path, selectors, root_sch, dry_run=dry_run)
+
     def replicate_group(
         sch_path: str, region: dict, copies: int, pitch: dict, numbered_labels: str | list[str] = "auto",
         grid: float = 1.27, dry_run: bool = False, root_sch: str | None = None,
@@ -3527,6 +3604,16 @@ def build(mcp: MCPServer) -> list[str]:
         ERC sheet that matches no sheet file under erc_unmapped, both counted in totals; a sheet use that the
         ERC report lacks is marked reported false (erc_unreported_paths). no_findings is true only when
         covered is true, both checks ran (checks omitted) and nothing was found; covered true means every sheet loaded and every requested check ran, and an ERC run that failed never gives no_findings.
+
+        Out-of-page note (issue 198, always, whatever checks asks for, read from the sheet files): every sheet entry has
+        outside_page: the objects of that sheet file that do not lie wholly inside its own paper (page_mm, count, by_kind,
+        listed with kind, uuid, label and box in mm, origin at the page's top left corner, at most 50 listed and truncated
+        says so), severity warning, and not_measured, what the box does not cover (a text, label or note is measured by its
+        anchor point only, not the extent of its words; image size; text box rotation; the drawing sheet's border margin).
+        totals.outside_page is the sum. Any object outside a page makes no_findings false; status, ok and covered are not
+        changed by it. checked false, with a reason (and the objects under unmeasured), means the sheet's paper is not one
+        KiCad reads or an object could not be measured: such a sheet is never read as inside its page, and no_findings is false.
+        Bring notes back with move_text, remove them with delete_text, or change the paper with set_paper.
 
         Refusals: file_not_found, root_not_found, parent_not_in_tree, invalid_spec (checks), and a root sheet
         that cannot be loaded at all (sheet_tree_incomplete). check_connectivity and sch_run_erc stay for a

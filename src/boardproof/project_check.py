@@ -24,7 +24,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from boardproof import sheet_authoring, sheet_tree
+from boardproof import sheet_authoring, sheet_extents, sheet_tree, write_layer
 from boardproof.sheet_authoring import SheetAuthoringError
 
 CHECKS = ("connectivity", "erc")
@@ -40,6 +40,35 @@ def _checks(value: Any) -> list[str]:
     if bad or len(set(value)) != len(value):
         raise SheetAuthoringError("invalid_spec", f"checks must be distinct names drawn from {list(CHECKS)}; got {value}", checks=value)
     return [c for c in CHECKS if c in value]
+
+
+MAX_LISTED = 50
+
+
+def page_note(path: Path) -> dict[str, Any]:
+    """The out-of-page note of one sheet file (issue 198): the objects whose box is not wholly inside the sheet's own paper,
+    measured by ``sheet_extents`` from the raw tokens (a warning, never an error). ``checked`` is false, with a ``reason``, when the
+    file cannot be read, its paper is not one KiCad reads, or an object cannot be measured at all (listed under ``unmeasured``):
+    such a sheet is never read as inside its page."""
+    note: dict[str, Any] = {"severity": "warning", "not_measured": list(sheet_extents.NOT_MEASURED)}
+    try:
+        root = write_layer.load(path)
+        papers = root.find_children("paper")
+        page = sheet_extents.page_size_mm(papers[0]) if papers else None
+        entries = sheet_extents.sheet_extents(root)
+    except Exception as exc:  # noqa: BLE001 - an unreadable sheet is reported, never read as inside its page
+        return {**note, "checked": False, "page_mm": None, "count": 0, "reason": f"the sheet could not be read: {exc}"}
+    if page is None:
+        return {**note, "checked": False, "page_mm": None, "count": 0, "reason": "the paper token of the sheet is missing or is not one KiCad reads"}
+    outside = sheet_extents.outside_page(entries, page)
+    unknown = [e for e in entries if e["measured"] == "none"]
+    note.update(
+        page_mm=[page[0], page[1]], checked=not unknown, count=len(outside), by_kind=dict(sorted(Counter(e["kind"] for e in outside).items())),
+        listed=[{k: e[k] for k in ("kind", "uuid", "label", "x1", "y1", "x2", "y2")} for e in outside[:MAX_LISTED]], truncated=len(outside) > MAX_LISTED)
+    if unknown:
+        note["reason"] = f"{len(unknown)} object(s) cannot be measured, so the page check of this sheet is incomplete"
+        note["unmeasured"] = [{"kind": e["kind"], "uuid": e["uuid"], "label": e["label"]} for e in unknown[:MAX_LISTED]]
+    return note
 
 
 def _item_sheet(item: Any) -> str:
@@ -242,6 +271,17 @@ def _check_tree(wanted: list[str], root_file: Path, scratch_root: Path, tree: An
                     "unconnected_pins": len(result.get("unconnected_pins", [])), "no_connect_pins": len(result.get("no_connect_pins", [])),
                     "connection_issues": len(result.get("connection_issues", [])), "missing_from_netlist": len(result.get("missing_from_netlist", []))})
 
+    page_unchecked = 0
+    page_total = 0
+    for file in tree.files:
+        note = page_note(file)
+        sheets[tree.rel(file)]["outside_page"] = note
+        page_total += note["count"]
+        page_unchecked += 0 if note["checked"] else 1
+    totals["outside_page"] = page_total
+    if page_unchecked:
+        totals["outside_page_unchecked_sheets"] = page_unchecked
+
     erc_unreported: list[str] = []
     if "erc" in wanted:
         from boardproof import kicad_cli
@@ -273,7 +313,8 @@ def _check_tree(wanted: list[str], root_file: Path, scratch_root: Path, tree: An
     complete = not not_run and not tree.problems and not library_problems and not erc_unmapped and not erc_unreported
     unattributed_count = sum(len(v) for v in unattributed.values())
     has_findings = bool(
-        totals.get("unconnected_pins") or totals.get("connection_issues") or totals.get("missing_from_netlist") or totals.get("erc_violations"))
+        totals.get("unconnected_pins") or totals.get("connection_issues") or totals.get("missing_from_netlist") or totals.get("erc_violations")
+        or page_total or page_unchecked)
     reasons = []
     if tree.problems:
         reasons.append("sheets that cannot be loaded: " + "; ".join(tree.problems))
