@@ -89,6 +89,17 @@ git submodule update --init --depth 1 third_party/JLCPCB-Kicad-Library
 
 Without it, asset lookups fall back to `easyeda2kicad` (a core dependency) and say so. The server looks for the library in this order: the `BOARDPROOF_JLCPCB_LIBRARY` environment variable, the submodule above, KiCad's third-party directory (a Plugin and Content Manager install). `jlcpcb_library_status` reports what it found and, for an empty or missing submodule, the command above. A new git worktree starts with the submodule empty; set `BOARDPROOF_JLCPCB_LIBRARY` to another checkout's `third_party/JLCPCB-Kicad-Library` to share it. To rebuild the index after moving the pin: `python scripts/refresh_jlcpcb_index.py`.
 
+#### Refreshing the library to upstream's newest commit
+
+The pin stays on one commit so the shipped index is reproducible. To move it, run in a checkout whose submodule is initialised (the command above), from a clean tree:
+
+```
+python scripts/refresh_jlcpcb_index.py --update --dry-run   # plan only: fetches into a scratch repository, changes nothing here
+python scripts/refresh_jlcpcb_index.py --update             # moves the pin, rewrites the index, stages both
+```
+
+It prints upstream's commit, the part counts and every part that changes tier (Basic, Preferred, Extended), then stages the new submodule commit and the index; you review and commit. It refuses, and moves nothing, when a symbol library that holds parts today holds none upstream (`library_emptied`), when the part count falls below 80% of the old one (`index_would_shrink`) or when a symbol file fails to parse. There is no override flag: to follow a real loss, move the pin by hand. The apply is all-or-nothing: if the index replace, the submodule checkout or `git add` fails, the old submodule commit, the old index bytes and the old staging are put back (or the exact commands to do so are printed). `--ref` must be a plain ref name and `--upstream` an https URL (a local directory only when typed on the command line); every fetch runs with `--` and with all git transports except https (and a typed local path) switched off. Upstream's newest commit was still broken when this was written (18 of 20 symbol files hold only a header), so the command refuses it today. Without the submodule the dry run works and the real run says what to fetch first.
+
 ## MCP client configuration
 
 ```json
