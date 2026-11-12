@@ -119,6 +119,16 @@ Renamed from kicad-mcp (package `kicad_mcp`, environment prefix `KICAD_MCP_`) in
 
 The server starts with 19 tools: the three toolset tools (`list_toolsets`, `load_toolset`, `unload_toolset`), `project_create`, `project_open`, the gate (`verify_board`, `pin_rule_baseline`) and the checkpointed pairs for input preparation, pour step, schematic import, board rules, board outline and silkscreen minimums. Ten more toolsets load on demand with `load_toolset`: `verification` (9 tools), `sourcing` (13), `diagnostics` (2), `library` (3), `schematic` (7), `placement` (12), `manufacturing` (2), `routing` (6), `copilot` (9) and `simulation` (2). That is 65 more tools, 84 in total (counted from a running server on 2026-10-29).
 
+## Usage log (local, anonymous, off with one variable)
+
+The server keeps a small log of which of its own tools get called, so that unused tools can be found and slow ones fixed. It is **on by default and stays on your machine**: nothing is sent anywhere, and the logging code imports no networking module (a test checks it).
+
+- **What is recorded**, one JSON line per tool call: the UTC start time, the tool's name, its toolset, the duration in milliseconds, the outcome (one of a fixed set of words: `ok`, `error`, `cancelled`, or the result's own status word such as `PASS`, `FAIL` or `INCOMPLETE` if it is on the reviewed list in `usage_log.RESULT_WORDS`; any other word is recorded as `other`, never copied) and a random id that is new for each server process.
+- **What is never recorded:** arguments, results, file paths, part numbers, net names, user or machine names, environment values.
+- **Where:** `usage.jsonl` in the `boardproof` folder of `%LOCALAPPDATA%` on Windows, `~/Library/Application Support/boardproof/usage.jsonl` on macOS, `$XDG_DATA_HOME/boardproof/usage.jsonl` (else `~/.local/share/boardproof/usage.jsonl`) elsewhere. The file is capped at 1 MB and rotates once to `usage.jsonl.1`. Set `BOARDPROOF_USAGE_LOG` to a file path to write there instead.
+- **Turn it off:** set `BOARDPROOF_USAGE_LOG=off` in the server's environment (for example in the `env` block of the MCP client configuration). **Delete it:** delete `usage.jsonl` and `usage.jsonl.1`.
+- **Read it:** `python scripts/usage_report.py` prints, per tool, the count, share, median and 95th-percentile duration, error rate and last use, then the tools that were never called (`--since DAYS`, `--json`, `--log FILE`).
+
 ## Principles
 
 - **Evidence-gated:** a check that did not fully run says so and never reports clean.

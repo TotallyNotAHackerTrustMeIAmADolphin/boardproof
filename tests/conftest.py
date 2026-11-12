@@ -34,6 +34,12 @@ from tests._cli_replay import pytest_terminal_summary as pytest_terminal_summary
 from tests._cli_replay import pytest_unconfigure as pytest_unconfigure
 
 
+# Issue 45: the suite never writes the real usage log. Set at import (before any server is built) so
+# every test and every subprocess a test spawns inherits "off"; tests of the log itself point it at
+# tmp_path. tests/test_usage_log.py proves the real data directory stays untouched.
+os.environ["BOARDPROOF_USAGE_LOG"] = "off"
+
+
 def pytest_configure(config):
     config.addinivalue_line("markers", _krt.MARKER_HELP)
     _cli_replay.pytest_configure(config)

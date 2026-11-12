@@ -2171,3 +2171,26 @@ function = "test_an_unreadable_board_is_a_refusal_not_a_fall_back_to_the_schemat
 kind = "rewrite_bytes"
 code = '''_faults.rewrite_bytes(bad, lambda data: data[:len(data) // 2])'''
 note = "Issue 123: a copy of the simple_led board cut in half, a truncated file no write_layer.save can produce; the read-only BOM check must refuse it (pcb_unreadable) and not fall back to the schematic footprint."
+
+[[raw_write]]
+file = "usage_log.py"
+function = "UsageLog._open"
+kind = "open"
+code = '''open(self.path, 'a', encoding='utf-8', newline='\n')'''
+kicad_file = false
+count = 2
+note = "Issue 45: appends one JSON line to the local usage log (a file in the user's data directory or BOARDPROOF_USAGE_LOG), never a KiCad file; two call sites, the second after creating the directory."
+
+[[high_level_save]]
+file = "usage_log.py"
+function = "UsageLog.record"
+kind = "write"
+code = '''handle.write(line + '\n')'''
+note = "Issue 45: a plain text write of one JSON line to the usage log; not a kicad_tools model and not a KiCad file."
+
+[[commit]]
+file = "usage_log.py"
+function = "UsageLog.record"
+kind = "os.replace"
+code = '''os.replace(self.path, self.path.with_name(self.path.name + '.1'))'''
+note = "Issue 45: rotation of the usage log to <name>.1 when the size cap is reached; both files are in the log's own directory, neither is a KiCad file."

@@ -46,6 +46,13 @@ class ToolsetRegistry:
             for ts in self._toolsets.values()
         ]
 
+    def toolset_of(self, tool_name: str) -> str:
+        """The toolset a loaded tool belongs to; ``core`` for the always-available tools."""
+        for ts in self._toolsets.values():
+            if tool_name in ts.registered_tools:
+                return ts.name
+        return "core"
+
     def load_toolset(self, name: str) -> dict:
         ts = self._toolsets.get(name)
         if ts is None:

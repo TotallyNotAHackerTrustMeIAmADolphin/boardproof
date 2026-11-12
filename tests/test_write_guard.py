@@ -504,6 +504,8 @@ UNGUARDED_REVIEWED = {
 }
 # Reviewed: functions that write or rename a file that is not a KiCad design or library file.
 NON_KICAD_RAW = {
+    ("usage_log.py", "UsageLog.record"): "the local usage log (JSON lines) and its rotation, never a KiCad file (issue 45)",
+    ("usage_log.py", "UsageLog._open"): "opens the local usage log for appending, never a KiCad file (issue 45)",
     ("routers/kicad_routing_tools.py", "write_fab_overrides"): "KRT --fab-overrides text file in a scratch dir",
     ("routers/kicad_routing_tools.py", "request_graceful_stop"): "a stop-request marker file for a router run",
     ("rung_runner.py", "_write_json"): "run records (JSON) in the ladder's own run directory",

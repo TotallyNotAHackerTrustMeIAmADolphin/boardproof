@@ -12,7 +12,7 @@ from typing import Literal
 
 from mcp.server.mcpserver import Context, MCPServer
 
-from boardproof import argument_hints, write_layer
+from boardproof import argument_hints, usage_log, write_layer
 from boardproof.gate_state import GateState, attach_gate_field
 from boardproof.toolsets.registry import ToolsetRegistry
 
@@ -275,6 +275,10 @@ def build_server() -> MCPServer:
 
     for name in STARTER_TOOLSETS:
         registry.load_toolset(name)
+
+    # Last, so it is the outermost wrapper of call_tool: every tool, sync or async, raising or not.
+    # A local, anonymous call log (docs/ARCHITECTURE.md "Usage log"); off with BOARDPROOF_USAGE_LOG=off.
+    usage_log.install(mcp, registry.toolset_of)
 
     return mcp
 
