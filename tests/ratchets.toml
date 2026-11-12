@@ -2085,6 +2085,13 @@ code = '''faults.rewrite_bytes(broken, lambda data: data[:len(data) // 2])'''
 note = "A board truncated mid-file (unbalanced parens): the loader and kicad-cli must fail loudly."
 
 [[test_kicad_fault_call]]
+file = "test_set_paper.py"
+function = "_put_unloadable"
+kind = "write_unchecked"
+code = '''faults.write_unchecked(root, sch)'''
+note = "Issue 197: a sheet whose paper token KiCad cannot load (A6, Letter, a trailing landscape or numbers after a named size, User without both numbers), measured to exit 3; the layer refuses to write one, and the tool must refuse to start from it."
+
+[[test_kicad_fault_call]]
 file = "test_silk_minimums.py"
 function = "test_footprint_level_unknown_silk_text_node_is_listed_unhandled"
 kind = "write_unchecked"

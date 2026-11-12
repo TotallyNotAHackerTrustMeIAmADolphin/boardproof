@@ -1,0 +1,7 @@
+[writing_tool.set_paper]
+self_check = "reload-verify"
+note = "Issue 197: sheet_paper.set_paper replaces only the paper node of each named sheet on a copy of the sheet's tree in memory (typed atoms), checks that every other node is unchanged and the paper node is exactly the asked one (staged check), measures the objects of each sheet against the new page (sheet_extents; an object that cannot be measured refuses the call), compares on scratch copies kicad-cli's SVG page size of every edited sheet with the asked size, its netlist nets and its ERC violation counts before and after, and only then saves each sheet through write_layer.save, whose verify reloads the temporary sibling and compares it with the serialised tree before os.replace; a failed later write restores the sheets already written."
+proof = [
+    "tests/test_set_paper.py::test_a_corrupted_write_is_refused_and_leaves_the_sheet_alone",
+    "tests/test_set_paper.py::test_the_staged_check_fires_when_the_edit_touches_more_than_the_paper",
+]

@@ -2561,6 +2561,53 @@ def build(mcp: MCPServer) -> list[str]:
 
         return title_block.set_title_block(sch_path, items, root_sch, dry_run=dry_run)
 
+    def set_paper(sch_path: str, items: list[dict], dry_run: bool = False, root_sch: str | None = None) -> dict:
+        """Set the paper size of one or several sheets of a schematic project in one call, and report which
+        objects of each sheet lie outside the new page.
+
+        items: a list of objects {sheet, size, portrait, width, height}. sheet is a sheet of the project (its
+        path from the root sheet's folder, or an absolute path; left out it is sch_path itself); two items
+        may not name one sheet, and a sheet file used twice in the hierarchy is one file and is changed once.
+        size is KiCad's spelling of one of A5 A4 A3 A2 A1 A0, A B C D E, USLetter USLegal USLedger or User
+        (anything else, "A6" or "Letter" or "a4" for example, is refused with invalid_spec: KiCad cannot load
+        some of them). portrait true turns a named size (A4 is then 210 x 297 mm); it is written as
+        (paper "A4" portrait). For User give width and height in mm, from 25.4 to 3048 (KiCad clamps
+        anything else silently, so it is refused), as the page really is; portrait is refused with User
+        (KiCad reads it as a swap of the two numbers and does not write it back). KiCad rounds a User size
+        to a mil (0.0254 mm).
+
+        Result, per sheet: paper_from and paper_to (the raw paper token), page_mm_from and page_mm_to
+        (width, height), and fit: the extents of all objects (x1, y1, x2, y2 in mm, origin at the page's
+        top left corner), the number of objects, and outside_page: the count, the counts by kind and the
+        list (kind, uuid, label, box) of the objects not wholly inside the NEW page, at most 50 listed
+        (truncated tells). An object outside the new page is a warning outside_page (never a refusal), so
+        dry_run true is the test of a smaller paper: it computes and returns everything and writes nothing.
+        An object that cannot be measured at all (a kind or a coordinate this tool cannot read) refuses the
+        call with object_not_classified, listing it; so does a sheet whose paper token is not one KiCad reads
+        (paper_unusual).
+
+        What the fit measures: a symbol by its origin, its library graphics and its pin ends; a wire or bus
+        by its ends; a rectangle, polyline, circle, arc, sheet symbol and text box by their corners;
+        junctions, no-connect markers, labels, texts and images by their anchor point only. Not measured
+        (listed in not_measured with every result): the extent of any text beyond its anchor (labels, notes,
+        Reference and Value fields, pin names), image size, text box rotation and the drawing sheet's
+        border margin; a bezier curve counts by its control points, so its box can be slightly too large. An object inside the page by its anchor can still print partly outside.
+
+        Nothing but the paper changes: every other node of each sheet is compared with the original, kicad-cli's
+        SVG export of each edited sheet must have the asked page size, its netlist must have the nets it had
+        and its ERC violation counts must be the same as before, or the call is refused with write_not_verified
+        (nothing written). Each written file is reloaded and compared before it replaces the original; if one
+        sheet fails, the sheets already written are restored. A call that asks for the paper already there
+        writes nothing. Objects are not moved. root_sch names the project's root sheet when sch_path is a
+        sub-sheet and its folder holds several projects.
+
+        Refuses with file_open_in_kicad, naming the lock file, while KiCad holds a lock file for a file
+        it would write; close the file in KiCad, then retry.
+        """
+        from boardproof import sheet_paper
+
+        return sheet_paper.set_paper(sch_path, items, root_sch, dry_run=dry_run)
+
     def add_text(
         sch_path: str, items: list[dict], snap: bool = True, grid: float = 1.27, dry_run: bool = False,
         root_sch: str | None = None,
