@@ -29,6 +29,16 @@ Tests that need an external tool (KiCad's demos, KiCadRoutingTools, ngspice, Fre
 
 The maintainers' clone installs two reviewed hooks from `scripts/git-hooks/` into the common git directory, so that every worktree has them: `cp scripts/git-hooks/pre-push "$(git rev-parse --git-common-dir)/hooks/pre-push"` (refuses force pushes, deleting `main`, and a push that adds a commit with a private author or committer e-mail) and `cp scripts/git-hooks/commit-msg "$(git rev-parse --git-common-dir)/hooks/commit-msg"` (refuses a commit whose author or committer e-mail is not the public alias's noreply address). `python scripts/batch_gate.py --publishable-only` runs the publishability check on the tracked files before a push; it needs the private pattern file named by `BOARDPROOF_FORBIDDEN_FILE`. Details: [docs/TESTING.md](docs/TESTING.md).
 
+**Identity, before the first commit.** A fresh clone has no git identity, and git then guesses one from the operating-system account (its user name and the machine's host name), which can put a private name or address into a commit. The commit-msg hook refuses such a commit and the pre-push hook refuses to publish it, but set the identity first. Set it in the repository's own configuration (not `--global`; the configuration is shared by every worktree of the clone):
+
+```
+git config user.name TotallyNotAHackerTrustMeIAmADolphin
+git config user.email 60357333+TotallyNotAHackerTrustMeIAmADolphin@users.noreply.github.com
+git config user.useConfigOnly true
+```
+
+`user.useConfigOnly` makes git fail on a commit without a configured identity instead of guessing one. `git var GIT_AUTHOR_IDENT GIT_COMMITTER_IDENT` prints the identity the next commit will carry. The hooks are copied, not linked, so copy them again after `scripts/git-hooks/` changes. They are installed by `cp` and not by setting `core.hooksPath`, because the git guardrail (`scripts/git_guardrails.py`) refuses every `core.hooksPath` setting: it would switch the pre-push guard off.
+
 ## What a good pull request looks like
 
 - **Focused.** One change, one purpose. Unrelated clean-ups go in their own pull request.

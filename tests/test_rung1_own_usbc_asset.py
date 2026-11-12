@@ -23,10 +23,12 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import re
 import shutil
 from pathlib import Path
 
 import pytest
+from tests._hermetic_git import run_git
 
 from boardproof import kicad_cli, write_layer
 
@@ -293,9 +295,18 @@ def _lf(path: Path) -> bytes:
     return path.read_bytes().replace(b"\r\n", b"\n")
 
 
+def _no_generator(data: bytes) -> bytes:
+    return re.sub(rb'\(generator "[^"]*"\)', b'(generator "*")', data)
+
+
 def test_the_committed_asset_is_what_the_builder_writes():
     mod = _load_asset_script()
-    assert _lf(ASSET_FOOTPRINT) == (write_layer.serialise(mod.footprint_tree()) + "\n").encode("utf-8")
+    # The committed footprint is pinned by the protocol hashes (the stage copies in layout_run, the rung-1 board and
+    # its project sha), and its `(generator "kicad_mcp")` token is a rename leftover: the builder now writes
+    # "boardproof" (issue 196, option a). So the generator token is normalised on both sides and every other byte
+    # must match. The byte-equality test of the stage copies below is unchanged.
+    built = (write_layer.serialise(mod.footprint_tree()) + "\n").encode("utf-8")
+    assert _no_generator(_lf(ASSET_FOOTPRINT)) == _no_generator(built)
     assert _lf(ASSET_SYMBOL) == (write_layer.serialise(mod.symbol_tree()) + "\n").encode("utf-8")
 
 
@@ -347,12 +358,21 @@ def test_the_symbol_self_check_fires_on_a_wrong_pin_type(tmp_path):
 
 # --------------------------------------------------------------------------------- the old asset stays out
 
-def _walk_repo():
-    for path in sorted(ROOT.rglob("*")):
-        rel = path.relative_to(ROOT)
-        if any(part.startswith(".") or part in ("__pycache__", "node_modules") for part in rel.parts):
+def _walk_repo(root: Path = ROOT):
+    """Every tracked file and every directory that holds one (issue 9: `git ls-files`, so the result
+    does not depend on untracked files lying around in the checkout)."""
+    if shutil.which("git") is None:
+        pytest.skip("git is not available")
+    listed = run_git("ls-files", "-z", cwd=root).stdout.decode("utf-8").split("\0")
+    paths = set()
+    for name in filter(None, listed):
+        rel = Path(name)
+        paths.add(rel)
+        paths.update(rel.parents)
+    for rel in sorted(paths):
+        if rel == Path(".") or any(part.startswith(".") or part in ("__pycache__", "node_modules") for part in rel.parts):
             continue
-        yield path
+        yield root / rel
 
 
 def _name_hit(path: Path) -> bool:
@@ -397,3 +417,13 @@ def test_the_old_asset_scan_catches_a_reappearing_copy():
     # with one of the pinned hashes by monkeypatching nothing: the rule is "hash in the set")
     assert not _content_hits(b"unrelated")
     assert "834f2d160237b72d6662caacda31443349b95e638bbb25935f59fdae1f3d87b1" in OLD_ASSET_SHA256
+
+
+def test_the_repository_walk_lists_tracked_files_and_their_directories_only(tmp_path):
+    (tmp_path / "keep" / "C456012").mkdir(parents=True)
+    (tmp_path / "keep" / "C456012" / "a.txt").write_text("x")
+    (tmp_path / "untracked_c456012.txt").write_text("x")
+    run_git("init", cwd=tmp_path)
+    run_git("add", "keep", cwd=tmp_path)
+    seen = {p.relative_to(tmp_path).as_posix() for p in _walk_repo(tmp_path)}
+    assert seen == {"keep", "keep/C456012", "keep/C456012/a.txt"}

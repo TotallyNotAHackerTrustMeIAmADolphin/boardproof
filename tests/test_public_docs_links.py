@@ -198,16 +198,43 @@ CLAIM_DOCS = PUBLIC_DOCS + [
 _QUALIFIERS = ("with_under_width_check", "never clear", "nothing ever clears", "never clears")
 
 
+# Verbs that say the flag goes away (issue 9 item 1): "clear" alone let "resets", "drops" or "removes" pass.
+_CLEAR_VERBS = (r"clear(?:s|ed|ing)?|re-?set(?:s|ting)?|drop(?:s|ped|ping)?|remov(?:e|es|ed|ing)|unset(?:s|ting)?|"
+                r"un-?flag(?:s|ged|ging)?|lift(?:s|ed|ing)?|waiv(?:e|es|ed|ing)|suppress(?:es|ed|ing)?|"
+                r"wip(?:e|es|ed|ing)|eras(?:e|es|ed|ing)|overrid(?:e|es|ing)|overrode|overridden|flip(?:s|ped|ping)?|"
+                r"no\s+longer\s+applies|(?:goes|go|went|gone)\s+away|discard(?:s|ed|ing)?|ignor(?:e|es|ed|ing)|turn(?:s|ed|ing)?\s+off|set(?:s|ting)?\s+(?:it\s+)?to\s+false")
+# This list can never be complete: known misses are "no longer set after", "disappears", "toggled off". A reviewer
+# who finds another way to say it adds the verb here with a test; the list is a net, not a proof.
+# A `--flag` such as --fab-overrides is removed before the search (not a verb); "auto-clears" still is one.
+_VERB = re.compile(rf"(?<!\w)(?<!--)(?:{_CLEAR_VERBS})\b", re.IGNORECASE)
+_CLAUSE_SPLIT = re.compile(r";|:|\s[-–—]{1,2}\s|,\s+(?:and|but|while|whereas)\s")
+_FLAG = re.compile(r"(?<!\w)--[\w-]+")  # a --command-line-flag is never a verb
+_NEGATION = re.compile(r"\b(?:not|never|nothing|no)\b|n't", re.IGNORECASE)
+
+
 def unqualified_clear_claims(text: str) -> list[str]:
-    """Sentences that talk of clearing the strict-sizes flag without naming who does it (or denying it)."""
+    """Sentences that talk of clearing the strict-sizes flag without naming who does it (or denying it).
+
+    The qualifier has to stand in the same clause as the verb (clauses split at ; : dashes and
+    ", and/but"), so a sentence that merely mentions `with_under_width_check` elsewhere does not excuse it.
+    One elliptical form is allowed: a NEGATED verb clause followed by a clause that begins with the qualifier
+    ("Retry does not clear the flag; `with_under_width_check` does."). The qualifier before the verb never counts.
+    """
     sentences = re.split(r"(?<=[.!?])\s+", text.replace("\n", " "))
-    return [
-        s.strip()
-        for s in sentences
-        if re.search(r"strict[_-]sizes", s, re.IGNORECASE)
-        and re.search(r"\bclear(s|ed|ing)?\b", s, re.IGNORECASE)
-        and not any(q in s for q in _QUALIFIERS)
-    ]
+    found = []
+    for s in sentences:
+        if not re.search(r"strict[_-]sizes", s, re.IGNORECASE):
+            continue
+        clauses = _CLAUSE_SPLIT.split(s)
+        for index, clause in enumerate(clauses):
+            if not _VERB.search(_FLAG.sub(" ", clause)) or any(q in clause.lower() for q in _QUALIFIERS):
+                continue
+            following = clauses[index + 1].lower().lstrip(" `*_(\"'") if index + 1 < len(clauses) else ""
+            if _NEGATION.search(clause) and following.removeprefix("only ").lstrip(" `").startswith(_QUALIFIERS[0]):
+                continue
+            found.append(s.strip())
+            break
+    return found
 
 
 @pytest.mark.parametrize("doc", CLAIM_DOCS)
@@ -233,3 +260,91 @@ def test_mutant_the_old_unqualified_wording_is_caught():
     assert len(unqualified_clear_claims(old)) == 1
     new = "Only the rung runner (`rung_backends.with_under_width_check`) clears a stale `strict_sizes_violated` flag."
     assert unqualified_clear_claims(new) == []
+
+
+@pytest.mark.parametrize("verb", ["resets", "drops", "removes", "unsets", "lifts", "suppresses", "ignores", "turns off"])
+def test_mutant_other_verbs_for_clearing_the_flag_are_caught(verb):
+    assert len(unqualified_clear_claims(f"The wrapper {verb} the `strict_sizes_violated` flag after the raw check.")) == 1
+
+
+def test_mutant_a_qualifier_in_another_clause_does_not_excuse_the_claim():
+    text = ("The rung runner uses `with_under_width_check`, and the wrapper also resets the `strict_sizes_violated` flag "
+            "when the check passes.")
+    assert len(unqualified_clear_claims(text)) == 1
+    ok = "The wrapper resets the `strict_sizes_violated` flag only through `with_under_width_check`."
+    assert unqualified_clear_claims(ok) == []
+
+
+@pytest.mark.parametrize(
+    "phrase",
+    [
+        "The wrapper wipes the `strict_sizes_violated` flag.",
+        "The wrapper erases the `strict_sizes_violated` flag.",
+        "A later step overrides the `strict_sizes_violated` flag.",
+        "The router flips the `strict_sizes_violated` flag back.",
+        "After the check the `strict_sizes_violated` flag no longer applies.",
+        "The `strict_sizes_violated` flag goes away once the check passes.",
+        "The wrapper RESETS the `strict_sizes_violated` flag.",
+    ],
+)
+def test_more_verbs_without_a_qualifier_are_caught(phrase):
+    assert len(unqualified_clear_claims(phrase)) == 1
+
+
+@pytest.mark.parametrize(
+    "phrase",
+    [
+        "Nothing ever clears `strict_sizes_violated`.",
+        "NOTHING EVER CLEARS `strict_sizes_violated`.",
+        "Retry does not clear the `strict_sizes_violated` flag; `with_under_width_check` does.",
+        "Only `with_under_width_check` wipes the `strict_sizes_violated` flag.",
+        "The tools never clear `strict_sizes_violated`.",
+        "`strict_sizes_violated` is reported and kept.",
+    ],
+)
+def test_qualified_or_unrelated_phrasings_pass(phrase):
+    assert unqualified_clear_claims(phrase) == []
+
+
+def test_a_command_line_flag_is_not_a_verb():
+    assert unqualified_clear_claims("Run it with --strict-sizes --fab-overrides F and read `strict_sizes_violated`.") == []
+
+
+def test_semicolon_clauses_the_qualifier_before_the_semicolon_does_not_excuse_the_verb_after_it():
+    text = ("The runner uses `with_under_width_check`; the wrapper also resets the `strict_sizes_violated` flag "
+            "when the check passes.")
+    assert len(unqualified_clear_claims(text)) == 1
+
+
+@pytest.mark.parametrize(
+    "phrase",
+    [
+        "Retry does not clear the `strict_sizes_violated` flag; `with_under_width_check` does.",
+        "Nothing clears the `strict_sizes_violated` flag; only `with_under_width_check` does.",
+        "The tools never reset `strict_sizes_violated`; `with_under_width_check` does.",
+    ],
+)
+def test_an_elliptical_qualifier_after_a_negated_clause_passes(phrase):
+    assert unqualified_clear_claims(phrase) == []
+
+
+@pytest.mark.parametrize(
+    "phrase",
+    [
+        "Retry clears the `strict_sizes_violated` flag; `with_under_width_check` does too.",  # no negation: affirmative claim
+        "Retry does not clear the `strict_sizes_violated` flag; the wrapper does.",  # the qualifier is not named
+        "Retry does not clear the `strict_sizes_violated` flag; the wrapper does; `with_under_width_check` does too.",  # three clauses: only the next clause counts
+    ],
+)
+def test_an_elliptical_continuation_needs_a_negated_first_clause_and_the_qualifier_itself(phrase):
+    assert len(unqualified_clear_claims(phrase)) == 1
+
+
+@pytest.mark.parametrize("verb", ["auto-clears", "re-sets", "self-resets", "auto-removes"])
+def test_a_hyphenated_verb_is_still_a_verb(verb):
+    assert len(unqualified_clear_claims(f"The wrapper {verb} the `strict_sizes_violated` flag.")) == 1
+
+
+def test_a_double_dash_flag_is_not_a_verb():
+    assert unqualified_clear_claims("Pass --fab-overrides and read `strict_sizes_violated`.") == []
+    assert unqualified_clear_claims("Pass --fab-overrides F, then it auto-clears `strict_sizes_violated`.") != []

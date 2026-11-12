@@ -3,7 +3,7 @@
  "source": {
   "repository": "https://github.com/CDFER/JLCPCB-Kicad-Library",
   "license": "MIT",
-  "copyright": "Copyright (c) 2023 Chris (Chris Dirks)",
+  "copyright": "Copyright (c) 2023 Chris",
   "commit": "e37fb96f4a4b54013293b80963efb1208d573d43",
   "symbol_libraries": [
    "JLCPCB-Analog",

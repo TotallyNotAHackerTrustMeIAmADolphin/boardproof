@@ -919,6 +919,7 @@ def build_index(library_root: str | Path, *, commit: str | None = None) -> dict:
     parts: list[dict] = []
     skipped: list[dict] = []
     libraries: list[str] = []
+    parse_failed: list[str] = []
     for sym_file in sorted(layout["symbols_dir"].glob("JLCPCB-*.kicad_sym")):
         lib_name = sym_file.stem
         libraries.append(lib_name)
@@ -926,6 +927,7 @@ def build_index(library_root: str | Path, *, commit: str | None = None) -> dict:
             doc = parse_file(str(sym_file))
         except Exception as exc:  # noqa: BLE001 -- report, don't abort the whole build
             skipped.append({"library": lib_name, "reason": f"parse failed: {exc}"})
+            parse_failed.append(lib_name)  # kept apart: `skipped` is capped, a failure must never fall off it
             continue
         for symbol in doc.find_children("symbol"):
             props = _symbol_properties(symbol)
@@ -974,7 +976,7 @@ def build_index(library_root: str | Path, *, commit: str | None = None) -> dict:
         "source": {
             "repository": UPSTREAM_REPO_URL,
             "license": "MIT",
-            "copyright": "Copyright (c) 2023 Chris (Chris Dirks)",
+            "copyright": "Copyright (c) 2023 Chris",
             "commit": commit,
             "symbol_libraries": libraries,
             "note": (
@@ -986,6 +988,7 @@ def build_index(library_root: str | Path, *, commit: str | None = None) -> dict:
         "parts": parts,
         "skipped": skipped[:50],
         "skipped_count": len(skipped),
+        **({"parse_failed_libraries": parse_failed} if parse_failed else {}),
     }
 
 

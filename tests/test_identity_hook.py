@@ -13,7 +13,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
-from tests._hermetic_git import run_git
+from tests._hermetic_git import hermetic_env, run_git
 
 ROOT = Path(__file__).resolve().parents[1]
 HOOK = ROOT / "scripts" / "git-hooks" / "commit-msg"
@@ -268,3 +268,96 @@ def test_mutant_pre_push_without_the_identity_check_lets_the_wrong_commit_throug
     remote, clone = _clone(tmp_path / "m", pre_push=mutant)
     _plant(clone, "cherry-pick")
     assert _git(clone, "push", "origin", "main", check=False).returncode == 0
+
+
+# --- issue 9 item 7 ----------------------------------------------------------------------------
+
+
+def _new_branch_with_a_wrong_commit_in_the_middle(clone: Path) -> None:
+    _git(clone, "checkout", "-q", "-b", "feature")
+    (clone / "b.txt").write_text("b\n")
+    _git(clone, "add", "b.txt")
+    _git(clone, "commit", "-qm", "b", env={"GIT_AUTHOR_EMAIL": WRONG})  # wrong, and not the tip
+    (clone / "c.txt").write_text("c\n")
+    _git(clone, "add", "c.txt")
+    _git(clone, "commit", "-qm", "c")  # the tip has the alias
+
+
+def test_push_of_a_new_branch_whose_wrong_commit_is_in_the_middle_is_refused(tmp_path):
+    remote, clone = _clone(tmp_path)
+    _new_branch_with_a_wrong_commit_in_the_middle(clone)
+    r = _git(clone, "push", "origin", "feature", check=False)
+    assert r.returncode != 0 and "e-mail" in r.stderr
+    assert _git(remote, "branch", "--list", "feature").stdout.strip() == ""
+
+
+def test_mutant_pre_push_that_looks_only_at_the_tip_of_a_new_branch_lets_the_middle_commit_through(tmp_path):
+    text = PRE_PUSH.read_text(encoding="utf-8")
+    assert 'range="$2 --not --remotes"' in text
+    mutant = tmp_path / "pre-push-mutant"
+    mutant.write_text(text.replace('range="$2 --not --remotes"', 'range="$2 --max-count=1"'),
+                      encoding="utf-8", newline="\n")
+    (tmp_path / "m").mkdir()
+    remote, clone = _clone(tmp_path / "m", pre_push=mutant)
+    _new_branch_with_a_wrong_commit_in_the_middle(clone)
+    assert _git(clone, "push", "origin", "feature", check=False).returncode == 0  # the mutant misses it
+
+
+def _hook_run(clone: Path, hook: Path, local_sha: str) -> subprocess.CompletedProcess:
+    """The pre-push hook run directly, as git would: one line on stdin for a new branch."""
+    line = f"refs/heads/feature {local_sha} refs/heads/feature {'0' * 40}\n"
+    done = subprocess.run(["sh", str(hook), "origin", "url"], cwd=clone, input=line.encode(),
+                          capture_output=True, env=hermetic_env(), check=False)  # bytes: no CRLF translation
+    done.stderr = done.stderr.decode("utf-8", errors="replace")
+    return done
+
+
+def _clone_with_a_missing_object(tmp_path: Path, hook: Path = PRE_PUSH) -> tuple[Path, str]:
+    """A new branch b -> c where the loose object of b is gone: `git log c --not --remotes` fails."""
+    remote, clone = _clone(tmp_path, pre_push=hook)
+    _git(clone, "checkout", "-q", "-b", "feature")
+    (clone / "b.txt").write_text("b\n")
+    _git(clone, "add", "b.txt")
+    _git(clone, "commit", "-qm", "b")
+    middle = _git(clone, "rev-parse", "HEAD").stdout.strip()
+    (clone / "c.txt").write_text("c\n")
+    _git(clone, "add", "c.txt")
+    _git(clone, "commit", "-qm", "c")
+    tip = _git(clone, "rev-parse", "HEAD").stdout.strip()
+    gone = clone / ".git" / "objects" / middle[:2] / middle[2:]
+    gone.chmod(0o700)  # git writes objects read-only
+    gone.unlink()
+    assert _git(clone, "log", "--format=%h", tip, "--not", "--remotes", check=False).returncode != 0
+    return clone, tip
+
+
+def test_a_git_log_that_fails_is_a_refusal_not_a_pass(tmp_path):
+    clone, tip = _clone_with_a_missing_object(tmp_path)
+    done = _hook_run(clone, PRE_PUSH, tip)
+    assert done.returncode == 1
+    assert "pre-push guard: BLOCKED" in done.stderr and "could not be checked" in done.stderr
+
+
+def test_mutant_pre_push_that_ignores_a_failing_git_log_passes_the_unchecked_range(tmp_path):
+    text = PRE_PUSH.read_text(encoding="utf-8")
+    assert "could not be checked" in text
+    mutant = tmp_path / "pre-push-mutant"
+    mutant.write_text(text.replace("if ! log=$(git log", "if false && log=$(git log"), encoding="utf-8", newline="\n")
+    assert mutant.read_text(encoding="utf-8") != text
+    (tmp_path / "m").mkdir()
+    clone, tip = _clone_with_a_missing_object(tmp_path / "m", mutant)
+    assert _hook_run(clone, mutant, tip).returncode == 0  # the mutant waves the unchecked range through
+
+
+def test_the_block_messages_of_pre_push_have_no_stray_tabs():
+    """Only leading indentation may be a tab: a tab inside a line is part of the message text."""
+    text = PRE_PUSH.read_text(encoding="utf-8")
+    inner = [line for line in text.splitlines() if "\t" in line.lstrip("\t")]
+    assert inner == []
+
+
+def test_pre_push_does_not_claim_a_tag_on_a_non_commit_fails_git_log():
+    """Measured: `git log <tree> --not --remotes` exits 0 with no output, so that example was false."""
+    text = PRE_PUSH.read_text(encoding="utf-8")
+    assert "non-commit" not in text
+    assert "missing or corrupt object" in text

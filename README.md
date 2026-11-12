@@ -126,7 +126,7 @@ The server starts with 19 tools: the three toolset tools (`list_toolsets`, `load
 
 ## Tests
 
-Around 4,490 tests (4,486 without the network-marked ones; collected on 2026-10-29). From the repository root:
+Several thousand tests (the current count is the last line of `python -m pytest --collect-only -q -m "not network"`). From the repository root:
 
 ```
 python -m pytest -m "not network"

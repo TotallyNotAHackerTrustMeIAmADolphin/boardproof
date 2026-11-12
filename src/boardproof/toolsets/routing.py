@@ -379,11 +379,12 @@ _JAVA_CANDIDATE_GLOBS: dict[str, list[str]] = {
 
 
 def find_java() -> Path:
-    """Resolve a `java` executable. Freerouting 2.3.0 requires a JVM built
-    with a sufficiently recent class-file version (confirmed: JRE 21 is NOT
-    enough -- UnsupportedClassVersionError, class file version 69 needed;
-    JRE 25 works) -- an older JVM being present on PATH doesn't mean it's
-    usable for this specific Freerouting version, so a caller that hits
+    """Resolve a `java` executable. The pinned Freerouting 2.5.0 requires a JVM
+    built with a sufficiently recent class-file version (confirmed: JRE 21 is
+    NOT enough -- UnsupportedClassVersionError, class file version 69 needed;
+    JRE 25 works; Freerouting 2.4 and later is compiled for Java 25,
+    docs/ARCHITECTURE.md) -- an older JVM being present on PATH doesn't mean
+    it's usable for this specific Freerouting version, so a caller that hits
     FreeroutingError should check the JVM version, not just its presence.
     """
     env_override = os.environ.get("JAVA_PATH")
@@ -405,7 +406,7 @@ def find_java() -> Path:
     raise FreeroutingError(
         "java not found. Set JAVA_PATH, add java to PATH, or install a JRE "
         "(e.g. `winget install EclipseAdoptium.Temurin.25.JRE`). Freerouting "
-        "2.3.0 needs a fairly recent JVM (JRE 21 is confirmed NOT sufficient)."
+        "2.5.0 needs a fairly recent JVM (JRE 21 is confirmed NOT sufficient)."
     )
 
 

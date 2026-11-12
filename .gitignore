@@ -9,8 +9,8 @@ __pycache__/
 .coverage.*
 htmlcov/
 *.egg-info/
-build/
-dist/
+/build/
+/dist/
 
 # KiCad-generated sidecar artifacts, not project/fixture content -- created
 # as a side effect of opening a project in a real KiCad GUI (e.g. Phase 6

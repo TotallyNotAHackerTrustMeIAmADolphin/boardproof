@@ -25,6 +25,20 @@ from pathlib import Path
 SCHEMA = 1
 # A Windows drive path; directory names may hold spaces, the last segment ends at white space.
 _WIN_PATH = re.compile(r'[A-Za-z]:[\\/](?:[^\\/:*?"<>|\r\n]+[\\/])*[^\\/:*?"<>|\s]*')
+# The "scheme://" PREFIX of a URL is consumed first and kept: the "s:/" of "https://" is part of a scheme, not a
+# drive (issue 9). Only the prefix is exempt, never the rest of the URL: a drive path in its tail or glued after it
+# (a query "?f=C:\Users\s", "cwdD:\work") is still a path.
+_URL_PREFIX = r"[A-Za-z][A-Za-z0-9+.-]*://"
+_URL_OR_WIN = re.compile(rf"(?P<url>{_URL_PREFIX})|(?P<win>{_WIN_PATH.pattern})")
+
+
+def _drop_win_paths(text: str) -> str:
+    return _URL_OR_WIN.sub(lambda m: m.group(0) if m.group("url") else "<path>", text)
+
+
+def has_machine_path(text: str) -> bool:
+    """True when ``text`` still holds a Windows drive path (outside URLs) or a POSIX home path."""
+    return _drop_win_paths(text) != text or bool(_POSIX_HOME.search(text))
 _POSIX_HOME = re.compile(r"/(?:Users|home)/[^\s\"']+")
 _ATTEMPT_KEYS = ("index", "lever", "parameters", "status", "status_label", "cause", "detail",
                  "necked_count", "necked_length_mm", "delivered_below_requested_count",
@@ -34,7 +48,7 @@ _ATTEMPT_KEYS = ("index", "lever", "parameters", "status", "status_label", "caus
 def sanitise(value):
     """Every machine path in every string, recursively, becomes ``<path>``."""
     if isinstance(value, str):
-        return _POSIX_HOME.sub("<path>", _WIN_PATH.sub("<path>", value))
+        return _POSIX_HOME.sub("<path>", _drop_win_paths(value))
     if isinstance(value, list):
         return [sanitise(v) for v in value]
     if isinstance(value, dict):
@@ -86,6 +100,19 @@ def _detail(report: dict) -> dict:
     }
 
 
+class ExportError(Exception):
+    """The runs root cannot be exported completely; nothing is written."""
+
+
+def _require_complete(report, stamp: str) -> None:
+    """A report must be an object with a list of attempts, each carrying its gate result."""
+    if not isinstance(report, dict) or not isinstance(report.get("attempts"), list):
+        raise ExportError(f"batch {stamp}: report.json has no list of attempts")
+    for position, attempt in enumerate(report["attempts"]):
+        if not isinstance(attempt, dict) or not isinstance(attempt.get("gate"), dict):
+            raise ExportError(f"batch {stamp}: attempt {position} of report.json has no gate result")
+
+
 def export(runs_root: Path) -> dict:
     runs_root = Path(runs_root)
     rows, batches = [], {}
@@ -98,10 +125,17 @@ def export(runs_root: Path) -> dict:
             continue
         report_path = runs_root / str(line["rung"]) / line["backend"] / re.split(
             r"[\\/]", str(line["run_dir"]).rstrip("\\/"))[-1] / "report.json"
-        if report_path.is_file():
-            detail = _detail(json.loads(report_path.read_text(encoding="utf-8")))
-            detail["date_started"] = line.get("date")
-            batches[rows[-1]["run_dir"]] = detail
+        stamp = rows[-1]["run_dir"]
+        if not report_path.is_file():
+            raise ExportError(f"batch {stamp}: report.json is missing")  # fail closed: no silent skip
+        try:
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as exc:
+            raise ExportError(f"batch {stamp}: report.json is unreadable ({exc})") from exc
+        _require_complete(report, stamp)
+        detail = _detail(report)
+        detail["date_started"] = line.get("date")
+        batches[stamp] = detail
     return {
         "schema": SCHEMA,
         "note": ("Sanitised history of the ladder's measured batches (protocols 2 onward). "
@@ -117,9 +151,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("runs_root", type=Path)
     parser.add_argument("--out", type=Path, default=Path(__file__).resolve().parents[1] / "evals" / "ladder_results.json")
     args = parser.parse_args(argv)
-    data = export(args.runs_root)
+    try:
+        data = export(args.runs_root)
+    except ExportError as exc:
+        print(f"refused, nothing written: {exc}", file=sys.stderr)
+        return 2
     text = json.dumps(data, indent=1, sort_keys=True) + "\n"
-    if _WIN_PATH.search(text) or _POSIX_HOME.search(text):
+    if has_machine_path(text):
         print("a machine path survived the sanitiser; nothing written", file=sys.stderr)
         return 1
     args.out.write_text(text, encoding="utf-8", newline="\n")

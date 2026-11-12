@@ -19,7 +19,7 @@ wins over both.
 > without a per-issue review: owner, 2026-10-19; build ticket 48); any change to the frozen openMPPT
 > board; providing a Freerouting jar (GPLv3, never downloaded automatically); spending (the owner
 > will not pay for GitHub, 2026-10-19). Licence attribution of the `pic_programmer` copies is
-> recorded in `.scratch/pivot-ladder/runs/ATTRIBUTION-pic_programmer.md` (CC BY-SA 4.0); demos read
+> recorded in `THIRD_PARTY.md` (CC BY-SA 4.0); demos read
 > from the install at test time are never vendored. **Committing and pushing are pre-authorised**
 > (owner, 2026-10-19, ticket 13 amendment Q8): commit after every closed ticket and push right
 > away, without asking, with the full suite run first (P11). Every commit on `main` and every

@@ -17,6 +17,7 @@ from __future__ import annotations
 import os
 import re
 import shutil
+import stat
 import tempfile
 from collections import Counter
 from collections.abc import Callable
@@ -106,8 +107,24 @@ _LIB_MAX_DIRS = 2000
 _LIB_MAX_BYTES = 200 * 1024 * 1024
 
 
+def _is_junction(path: Path) -> bool:
+    """A Windows junction. ``os.path.isjunction`` exists from Python 3.12 only (pyproject allows 3.11): there, a
+    mount-point reparse tag that is not a symlink is the same test (as in scripts/check_publishable.py)."""
+    isjunction = getattr(os.path, "isjunction", None)
+    if isjunction is not None:
+        return bool(isjunction(path))
+    try:
+        info = os.lstat(path)
+    except OSError:
+        return False
+    return (
+        not stat.S_ISLNK(info.st_mode)
+        and getattr(info, "st_reparse_tag", 0) == getattr(stat, "IO_REPARSE_TAG_MOUNT_POINT", -1)
+    )
+
+
 def _is_link(path: Path) -> bool:
-    return path.is_symlink() or os.path.isjunction(path)
+    return path.is_symlink() or _is_junction(path)
 
 
 def _inside(path: Path, base: Path) -> bool:

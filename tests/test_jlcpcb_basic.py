@@ -18,6 +18,7 @@ from kicad_tools.sexp.parser import SExp, serialize_sexp
 
 from boardproof.sourcing import PartResult
 from boardproof.sourcing import jlcpcb_basic as jlc
+from tests._jlcpcb_library import real_library
 
 
 # --- fixtures --------------------------------------------------------------
@@ -592,11 +593,9 @@ def test_checkout_root_is_this_repository_and_matches_gitmodules():
 
 @pytest.fixture
 def real_submodule():
-    root = jlc._checkout_root()
-    path = root / jlc.SUBMODULE_RELATIVE_PATH if root else None
-    if path is None or jlc._library_layout(path) is None:
-        pytest.skip(f"JLCPCB library submodule not initialised; fetch it with: {jlc.SUBMODULE_FETCH_COMMAND}")
-    return path
+    """The real library: BOARDPROOF_JLCPCB_LIBRARY if set, else the submodule; a skip becomes a failure
+    with BOARDPROOF_JLCPCB_LIBRARY_REQUIRED (tests/_jlcpcb_library.py)."""
+    return real_library()
 
 
 def test_vendored_index_is_what_the_pinned_submodule_builds(real_submodule):
@@ -606,6 +605,7 @@ def test_vendored_index_is_what_the_pinned_submodule_builds(real_submodule):
     assert built["status"] == "ok"
     assert built["parts"] == vendored["parts"]
     assert built["counts"] == vendored["counts"]
+    assert built["source"]["copyright"] == vendored["source"]["copyright"]  # issue 9: header line
 
 
 def test_resolve_assets_finds_a_real_part_in_the_submodule(real_submodule):

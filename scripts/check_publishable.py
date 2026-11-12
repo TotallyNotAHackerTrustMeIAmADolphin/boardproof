@@ -27,7 +27,9 @@ it (for example ``.scratch``).
 Paths declared in ``<dir>/.gitmodules`` are git submodules: another project's content (publish-prep
 ticket 03b). They are skipped as if ``--exclude``d, and each skip is printed as
 ``submodule skipped: <path>`` so it is never silent; ``--scan-submodules`` scans them too. Only
-safe relative paths count (see ``submodule_paths``). ``.gitmodules`` itself is scanned.
+safe relative paths count (see ``submodule_paths``), and only where a checked-out gitlink really sits
+(a ``.git`` entry directly inside the directory; issue 9): a declared path with ordinary files and no
+``.git`` is scanned and announced as ``submodule not skipped: <path>``. ``.gitmodules`` itself is scanned.
 
 Text files (UTF-8, or UTF-16/UTF-8 with a BOM) are scanned line by line. A file with a NUL byte in
 its first 8 KiB is binary: it is scanned bytewise, as one block, against the same patterns. Stated
@@ -176,6 +178,21 @@ def submodule_paths(root: Path) -> list[str]:
     return paths
 
 
+def _submodule_state(path: Path) -> str:
+    """``checked-out`` (a ``.git`` entry sits directly in it: git cannot track a path named ``.git``, so
+    it is the working-tree face of a gitlink), ``empty`` (missing or empty: a gitlink exported by the
+    gate, nothing to hide) or ``plain`` (files and no ``.git``: ``.gitmodules`` names ordinary content,
+    which is scanned). Issue 9: ``.gitmodules`` is trusted for the list, never for the verdict."""
+    try:
+        if os.path.lexists(path / ".git"):
+            return "checked-out"
+        if not path.is_dir() or not any(path.iterdir()):
+            return "empty"
+    except OSError:
+        return "plain"
+    return "plain"
+
+
 def _scan_line(
     line: str, forbidden: list[re.Pattern[str]], binary: bool = False
 ) -> list[tuple[str, str]]:
@@ -212,6 +229,12 @@ _ARCHIVE_MAGIC = (b"PK\x03\x04", b"PK\x05\x06", b"\x1f\x8b", b"7z\xbc\xaf\x27\x1
 
 
 def _is_archive(data: bytes) -> bool:
+    """True when the leading bytes look like an archive (or a PDF with a Flate stream).
+
+    Honest limit: the test is magic bytes only. A plain text file that begins with ``BZh`` or has
+    ``ustar`` at offset 257 is named as an archive too, a false notice and never a miss: the notice
+    asks for a look and does not fail the run unless --strict-archives is given.
+    """
     if data.startswith(_ARCHIVE_MAGIC):
         return True
     if data[257:262] == b"ustar":  # tar (POSIX and GNU headers)
@@ -345,7 +368,14 @@ def main(argv: list[str] | None = None) -> int:
             return EXIT_CANNOT_RUN
 
     excludes = [e.strip("/\\").replace("\\", "/") for e in args.exclude]
-    skipped_submodules = [] if args.scan_submodules else submodule_paths(args.directory)
+    skipped_submodules = []
+    if not args.scan_submodules:
+        for sub in submodule_paths(args.directory):
+            kind = _submodule_state(args.directory / sub)
+            if kind == "checked-out":
+                skipped_submodules.append(sub)
+            elif kind == "plain":
+                print(f"submodule not skipped: {sub} (declared in .gitmodules, but no checked-out gitlink there; scanned)")
     excludes += skipped_submodules
     for sub in skipped_submodules:
         print(f"submodule skipped: {sub} (declared in .gitmodules; another project's content)")

@@ -291,3 +291,54 @@ def test_the_commit_date_is_part_of_the_write_check(tmp_path, capsys, monkeypatc
     index = tmp_path / "index.json"
     code, _out, err = _run(capsys, "--library", _library(tmp_path / "lib"), "--commit", COMMIT_A, "--index", index)
     assert code == 2 and "write_not_verified" in err and not index.exists()
+
+
+# --- issue 9 item 6: a symbol file that fails to parse is never followed silently ----------------
+
+
+def _library_with_a_file_that_will_not_parse(root: Path, monkeypatch) -> Path:
+    """Ten good parts in one file plus a second file whose parse is forced to fail."""
+    symbols = root / "symbols"
+    symbols.mkdir(parents=True)
+    _write_lib(symbols / "JLCPCB-Resistors.kicad_sym", *[
+        _symbol(f"R{n}", LCSC=f"C{n}", Part=f"RES{n}", Manufacturer="m", Class="Basic Component",
+                Footprint="PCM_JLCPCB:R0603") for n in range(10)
+    ])
+    _write_lib(symbols / "JLCPCB-Broken.kicad_sym", _symbol("X1", LCSC="C99", Part="X", Class="Basic Component"))
+    import kicad_tools.sexp.parser as parser
+
+    real = parser.parse_file
+
+    def failing(path, *a, **k):
+        if "JLCPCB-Broken" in str(path):
+            raise ValueError("unbalanced parenthesis")
+        return real(path, *a, **k)
+
+    monkeypatch.setattr(parser, "parse_file", failing)
+    return root
+
+
+def test_a_symbol_file_that_fails_to_parse_is_refused_even_when_most_parts_remain(tmp_path, capsys, monkeypatch):
+    lib = _library_with_a_file_that_will_not_parse(tmp_path / "lib", monkeypatch)
+    index = tmp_path / "index.json"
+    # an old index of 10 parts: the new one has all 10, so the 80 percent rule alone would let it through
+    good = _library(tmp_path / "good")
+    monkeypatch.undo()
+    assert _run(capsys, "--library", good, "--commit", COMMIT_A, "--index", index)[0] == 0
+    before = index.read_bytes()
+    lib = _library_with_a_file_that_will_not_parse(tmp_path / "lib2", monkeypatch)
+
+    code, out, err = _run(capsys, "--library", lib, "--commit", COMMIT_B, "--index", index)
+
+    assert code == 2
+    assert "JLCPCB-Broken" in err and "parse failed" in err and "--allow-shrink" in err
+    assert index.read_bytes() == before
+    code, out, err = _run(capsys, "--library", lib, "--commit", COMMIT_B, "--index", index, "--allow-shrink")
+    assert code == 0, err
+    assert "JLCPCB-Broken" in out  # still named when it is accepted
+
+
+def test_the_parse_failure_survives_the_cap_on_the_skipped_list(tmp_path, monkeypatch):
+    lib = _library_with_a_file_that_will_not_parse(tmp_path / "lib", monkeypatch)
+    built = refresh.jlc.build_index(lib, commit=COMMIT_A)
+    assert built["parse_failed_libraries"] == ["JLCPCB-Broken"]

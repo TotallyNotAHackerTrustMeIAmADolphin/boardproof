@@ -8,7 +8,10 @@ hierarchical labels, matching sheet pins), MCU (R20 unconnected, a sheet pin wit
 
 from __future__ import annotations
 
+import os
 import shutil
+import stat as _stat
+import types as _types
 from collections import Counter
 from pathlib import Path
 
@@ -616,3 +619,55 @@ def test_the_tool_text_names_every_bound_and_the_unreadable_case() -> None:
 
     text = (schematic.__doc__ or "") + Path(schematic.__file__).read_text(encoding="utf-8")
     assert "2000 files, 2000 directories or 200 MB" in text and "cannot be read (an OS error)" in text
+
+
+def test_the_library_copy_runs_on_a_python_without_os_path_isjunction(tmp_path, monkeypatch) -> None:
+    """Issue 9: os.path.isjunction exists from Python 3.12 only (pyproject allows 3.11); the copy used to crash."""
+    sch = _library_project(tmp_path)
+    monkeypatch.delattr(os.path, "isjunction", raising=False)
+    assert not hasattr(os.path, "isjunction")
+    problems, scratch = _copy(sch.parent, tmp_path)
+    assert problems == []
+    assert any(f.startswith("lib/") for f in _files(scratch)), _files(scratch)
+
+
+# --- the Python 3.11 fallback of the junction test (issue 9) --------------------------------------------------------
+
+
+def _fake_lstat(mode: int, tag: int | None):
+    attrs = _stat.FILE_ATTRIBUTE_REPARSE_POINT if tag is not None else 0
+    info = _types.SimpleNamespace(st_mode=mode, st_file_attributes=attrs)
+    if tag is not None:
+        info.st_reparse_tag = tag
+    return info
+
+
+def test_the_junction_fallback_recognises_a_mount_point_reparse_tag_and_nothing_else(tmp_path, monkeypatch) -> None:
+    monkeypatch.delattr(os.path, "isjunction", raising=False)
+    target = tmp_path / "x"
+    cases = {
+        "junction": (_fake_lstat(_stat.S_IFDIR, _stat.IO_REPARSE_TAG_MOUNT_POINT), True),
+        "symlink": (_fake_lstat(_stat.S_IFLNK, _stat.IO_REPARSE_TAG_SYMLINK), False),
+        "symlink tag on a directory mode": (_fake_lstat(_stat.S_IFDIR, _stat.IO_REPARSE_TAG_SYMLINK), False),
+        "mount point tag but a symlink mode": (_fake_lstat(_stat.S_IFLNK, _stat.IO_REPARSE_TAG_MOUNT_POINT), False),
+        "plain directory": (_fake_lstat(_stat.S_IFDIR, None), False),
+    }
+    for name, (info, expected) in cases.items():
+        monkeypatch.setattr(os, "lstat", lambda p, info=info: info)
+        assert project_check._is_junction(target) is expected, name
+        monkeypatch.undo()
+        monkeypatch.delattr(os.path, "isjunction", raising=False)
+    # a missing path and a real directory are not junctions either
+    assert project_check._is_junction(tmp_path / "missing") is False
+    assert project_check._is_junction(tmp_path) is False
+    assert project_check._is_link(tmp_path) is False
+
+
+def test_the_junction_fallback_makes_is_link_true_for_a_mount_point(tmp_path, monkeypatch) -> None:
+    monkeypatch.delattr(os.path, "isjunction", raising=False)
+    junction = tmp_path / "j"
+    real = os.lstat
+    monkeypatch.setattr(os, "lstat", lambda p, *a, **k: _fake_lstat(_stat.S_IFDIR, _stat.IO_REPARSE_TAG_MOUNT_POINT)
+                        if str(p) == str(junction) else real(p, *a, **k))
+    monkeypatch.setattr(Path, "is_symlink", lambda self: False)
+    assert project_check._is_link(junction) is True

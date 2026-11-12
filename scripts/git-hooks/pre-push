@@ -38,11 +38,21 @@ check_identity() {
 		range="$2 --not --remotes"
 	fi
 	# shellcheck disable=SC2086
-	bad=$(git log --format='%h %ae %ce' $range 2>/dev/null | while read -r h a c; do
+	if ! log=$(git log --format='%h %ae %ce' $range 2>/dev/null); then
+		# Fail closed (issue 9): a log that cannot run (a missing or corrupt object, an unreadable
+		# repository) proves nothing. (A tag on a tree or blob does NOT fail it: exit 0, no commits, nothing to check.)
+		echo "pre-push guard: BLOCKED push of $local_ref to $remote_name: the commits it adds" \
+			"could not be checked (git log failed, for example on a missing or corrupt object)." >&2
+		return 1
+	fi
+	bad=$(printf '%s\n' "$log" | while read -r h a c; do
+		[ -n "$h" ] || continue
 		{ [ "$a" = "$allowed_email" ] && [ "$c" = "$allowed_email" ]; } || printf '%s ' "$h"
 	done)
 	if [ -n "$bad" ]; then
-		echo "pre-push guard: BLOCKED push of $local_ref to $remote_name: commit(s) $bad have an author or" 			"committer e-mail that is not the public alias's noreply address ($allowed_email)." 			"Rewrite them with that identity before publishing (publish-prep ticket 03a)." >&2
+		echo "pre-push guard: BLOCKED push of $local_ref to $remote_name: commit(s) $bad have an author or" \
+			"committer e-mail that is not the public alias's noreply address ($allowed_email)." \
+			"Rewrite them with that identity before publishing (publish-prep ticket 03a)." >&2
 		return 1
 	fi
 	return 0

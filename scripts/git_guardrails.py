@@ -102,6 +102,7 @@ import json
 import os
 import posixpath
 import re
+import stat
 import sys
 import time
 from pathlib import Path
@@ -1398,6 +1399,22 @@ def _is_absolute(path: str) -> bool:
     return bool(re.match(r"[\\/~]|[A-Za-z]:[\\/]", path))
 
 
+def _is_junction(path: str) -> bool:
+    """A Windows junction. ``os.path.isjunction`` exists from Python 3.12 only (pyproject allows 3.11):
+    there, a mount-point reparse tag that is not a symlink is the same test (as in check_publishable.py)."""
+    isjunction = getattr(os.path, "isjunction", None)
+    if isjunction is not None:
+        return bool(isjunction(path))
+    try:
+        info = os.lstat(path)
+    except OSError:
+        return False
+    return (
+        not stat.S_ISLNK(info.st_mode)
+        and getattr(info, "st_reparse_tag", 0) == getattr(stat, "IO_REPARSE_TAG_MOUNT_POINT", -1)
+    )
+
+
 def _absolute_start_holds_git(path: str, follow: bool = False) -> bool:
     """True when the absolute find start ``path`` is, or lies above, a directory holding ``.git``,
     or when the guard cannot tell (fix round 1, finding 4)."""
@@ -1428,7 +1445,7 @@ def _absolute_start_holds_git(path: str, follow: bool = False) -> bool:
         if seen > _FIND_SCAN_LIMIT or errors or time.monotonic() > deadline:
             return True
         if not follow:
-            dirnames[:] = [d for d in dirnames if not os.path.isjunction(os.path.join(dirpath, d))]
+            dirnames[:] = [d for d in dirnames if not _is_junction(os.path.join(dirpath, d))]
     return bool(errors)
 
 

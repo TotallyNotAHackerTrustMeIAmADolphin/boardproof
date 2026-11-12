@@ -200,12 +200,21 @@ def main(argv: list[str] | None = None) -> int:
         except (OSError, ValueError) as exc:
             print(f"note: the existing index cannot be read ({type(exc).__name__}); diffing against none")
     print(format_diff(diff_payloads(old, built), max(args.sample, 0)))
+    failed = built.get("parse_failed_libraries") or []
+    for name in failed:
+        print(f"parse failed: {name}.kicad_sym (its parts are missing from the new index)")
     old_total = (old or {}).get("counts", {}).get("total", 0)
     if not args.allow_shrink and built["counts"]["total"] < SHRINK_LIMIT * old_total:
         return _fail(
             f"index_would_shrink: {old_total} -> {built['counts']['total']} parts (below {SHRINK_LIMIT:.0%}). "
             "The library at this commit may be broken upstream; nothing written. "
             "Pass --allow-shrink if the loss is real."
+        )
+    if failed and not args.allow_shrink:
+        return _fail(
+            f"parse failed for {len(failed)} symbol librar{'y' if len(failed) == 1 else 'ies'} "
+            f"({', '.join(failed)}); nothing written, even though {built['counts']['total']} parts remain. "
+            "Fix the library or pass --allow-shrink if the loss is real."
         )
     if args.dry_run:
         print("dry run: nothing written")

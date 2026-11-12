@@ -11039,7 +11039,7 @@
    "planned": 5,
    "protocol_sha256": "c8f26c2277a3f55bd7c2d62d030904a28007a1c760ab1bf1a69a98ff8eb50ca3",
    "protocol_version": "2",
-   "reason": "FREEROUTING_JAR_PATH is not set. Download a Freerouting release jar (http<path>/github.com/freerouting/freerouting/releases) and set FREEROUTING_JAR_PATH to it. Freerouting is GPLv3 -- deliberately not bundled with or auto-downloaded by this project, see ARCHITECTURE.md.",
+   "reason": "FREEROUTING_JAR_PATH is not set. Download a Freerouting release jar (https://github.com/freerouting/freerouting/releases) and set FREEROUTING_JAR_PATH to it. Freerouting is GPLv3 -- deliberately not bundled with or auto-downloaded by this project, see ARCHITECTURE.md.",
    "run_dir": "history/2/freerouting/20261011T180121Z",
    "rung": 2
   },
@@ -11063,7 +11063,7 @@
    "planned": 5,
    "protocol_sha256": "a261686a6f06e61314c614675a717f3a94159f3e7c2157156c33d51a873d7bd3",
    "protocol_version": "3",
-   "reason": "FREEROUTING_JAR_PATH is not set. Download a Freerouting release jar (http<path>/github.com/freerouting/freerouting/releases) and set FREEROUTING_JAR_PATH to it. Freerouting is GPLv3 -- deliberately not bundled with or auto-downloaded by this project, see ARCHITECTURE.md.",
+   "reason": "FREEROUTING_JAR_PATH is not set. Download a Freerouting release jar (https://github.com/freerouting/freerouting/releases) and set FREEROUTING_JAR_PATH to it. Freerouting is GPLv3 -- deliberately not bundled with or auto-downloaded by this project, see ARCHITECTURE.md.",
    "run_dir": "history/1/freerouting/20261011T200418Z",
    "rung": 1
   },

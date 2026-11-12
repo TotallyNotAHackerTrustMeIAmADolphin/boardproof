@@ -1042,3 +1042,55 @@ def test_commit_without_no_verify_stays_allowed(command):
 
 def test_commit_no_verify_blocks_in_powershell():
     assert guard.check_command("git commit --no-verify -m x", "powershell")
+
+
+# Issue 9 item 2: os.path.isjunction exists from Python 3.12 only, pyproject allows 3.11.
+def test_absolute_find_scan_works_without_os_path_isjunction(tmp_path, monkeypatch):
+    (tmp_path / "sub").mkdir()
+    (tmp_path / "sub" / "a.txt").write_text("x")
+    monkeypatch.delattr(os.path, "isjunction", raising=False)
+    assert not hasattr(os.path, "isjunction")
+    assert guard.check_command(_find_all(tmp_path), "bash") is None
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="junctions are a Windows feature")
+def test_absolute_find_scan_does_not_enter_a_junction_without_os_path_isjunction(tmp_path, monkeypatch):
+    """A junction to a folder that holds .git is not entered by a find without -L, with the fallback too."""
+    repo = tmp_path / "elsewhere" / "repo"
+    repo.mkdir(parents=True)
+    (repo / ".git").mkdir()
+    scan = tmp_path / "scan"
+    scan.mkdir()
+    made = subprocess.run(["cmd", "/c", "mklink", "/J", str(scan / "j"), str(repo)], capture_output=True)
+    if made.returncode != 0:
+        pytest.skip("cannot create a junction here")
+    with_native = guard.check_command(_find_all(scan), "bash")
+    monkeypatch.delattr(os.path, "isjunction", raising=False)
+    assert guard.check_command(_find_all(scan), "bash") == with_native
+
+
+def test_issue9_the_junction_fallback_recognises_a_mount_point_reparse_tag_and_nothing_else(tmp_path, monkeypatch):
+    import stat
+    import types
+
+    monkeypatch.delattr(os.path, "isjunction", raising=False)
+
+    def fake(mode, tag):
+        info = types.SimpleNamespace(st_mode=mode, st_file_attributes=stat.FILE_ATTRIBUTE_REPARSE_POINT if tag else 0)
+        if tag:
+            info.st_reparse_tag = tag
+        return info
+
+    for info, expected in [
+        (fake(stat.S_IFDIR, stat.IO_REPARSE_TAG_MOUNT_POINT), True),
+        (fake(stat.S_IFLNK, stat.IO_REPARSE_TAG_MOUNT_POINT), False),
+        (fake(stat.S_IFLNK, stat.IO_REPARSE_TAG_SYMLINK), False),
+        (fake(stat.S_IFDIR, stat.IO_REPARSE_TAG_SYMLINK), False),
+        (fake(stat.S_IFDIR, 0), False),
+    ]:
+        monkeypatch.setattr(os, "lstat", lambda p, info=info: info)
+        assert guard._is_junction(str(tmp_path / "x")) is expected
+    monkeypatch.undo()
+    monkeypatch.delattr(os.path, "isjunction", raising=False)
+    assert guard._is_junction(str(tmp_path / "missing")) is False
+    assert guard._is_junction(str(tmp_path)) is False

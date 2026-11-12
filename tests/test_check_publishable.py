@@ -683,6 +683,7 @@ def _with_submodule(root: Path, gitmodules_path: str = SUBMODULE) -> None:
     )
     inside = root / gitmodules_path
     inside.mkdir(parents=True)
+    (inside / ".git").write_text("gitdir: ../../.git/modules/x\n", encoding="utf-8")  # what a checkout of a gitlink holds
     (inside / "notes.md").write_text(PLANTED["email-address"] + "\n", encoding="utf-8")
 
 
@@ -752,3 +753,87 @@ def test_the_real_repository_declares_the_jlcpcb_library_and_the_checker_skips_i
     """The pinned library path in `.gitmodules` is the one the sourcing module expects."""
     declared = check.submodule_paths(ROOT)
     assert "third_party/JLCPCB-Kicad-Library" in declared
+
+
+def test_issue9_item3_the_checker_states_its_own_false_notice_limit():
+    """The limit of the magic list is stated where the next reader of the checker looks, not only here."""
+    doc = check._is_archive.__doc__ or ""
+    assert "BZh" in doc and "ustar" in doc and "false notice" in doc and "never a miss" in doc
+
+
+def test_issue9_item6_a_gitmodules_entry_naming_a_plain_directory_hides_nothing(tmp_path, capsys):
+    """`.gitmodules` is trusted for the list, not for the verdict: a path without a checked-out gitlink
+    (no `.git` entry; git cannot track one) is scanned like any other, and the refusal to skip is announced."""
+    _clean_tree(tmp_path)
+    (tmp_path / ".gitmodules").write_text("[submodule \"s\"]\n\tpath = pkg\n", encoding="utf-8")
+    (tmp_path / "pkg").mkdir()
+    (tmp_path / "pkg" / "leak.md").write_text(PLANTED["email-address"] + "\n", encoding="utf-8")
+
+    code, out = _run(tmp_path, capsys)
+
+    assert code == 1
+    assert "pkg/leak.md:1:" in out.out
+    assert "submodule skipped" not in out.out
+    assert "submodule not skipped: pkg" in out.out
+
+
+def test_issue9_item6_an_empty_declared_submodule_directory_is_not_announced_as_skipped(tmp_path, capsys):
+    """The export of the gate holds a gitlink as an empty directory: nothing to skip, nothing hidden."""
+    _clean_tree(tmp_path)
+    (tmp_path / ".gitmodules").write_text("[submodule \"s\"]\n\tpath = third_party/Lib\n", encoding="utf-8")
+    (tmp_path / "third_party" / "Lib").mkdir(parents=True)
+
+    code, out = _run(tmp_path, capsys)
+
+    assert code == 0
+    assert "submodule skipped" not in out.out
+
+
+def test_issue9_item6_a_declared_path_that_cannot_be_read_is_scanned_and_announced(tmp_path, capsys, monkeypatch):
+    """Fail closed: an OSError while looking at a declared path is `plain` (scanned, announced), never `empty`."""
+    _clean_tree(tmp_path)
+    (tmp_path / ".gitmodules").write_text("[submodule \"s\"]\n\tpath = pkg\n", encoding="utf-8")
+    (tmp_path / "pkg").mkdir()
+    (tmp_path / "pkg" / "leak.md").write_text(PLANTED["email-address"] + "\n", encoding="utf-8")
+    real = Path.iterdir
+
+    def unreadable(self):
+        if self.name == "pkg":
+            raise PermissionError("denied")
+        return real(self)
+
+    monkeypatch.setattr(Path, "iterdir", unreadable)
+
+    code, out = _run(tmp_path, capsys)
+
+    assert code == 1
+    assert "pkg/leak.md:1:" in out.out
+    assert "submodule not skipped: pkg" in out.out
+
+
+def test_issue9_the_junction_fallback_recognises_a_mount_point_reparse_tag_and_nothing_else(tmp_path, monkeypatch):
+    import stat
+    import types
+
+    monkeypatch.delattr(os.path, "isjunction", raising=False)
+
+    def fake(mode, tag):
+        info = types.SimpleNamespace(st_mode=mode, st_file_attributes=stat.FILE_ATTRIBUTE_REPARSE_POINT if tag else 0)
+        if tag:
+            info.st_reparse_tag = tag
+        return info
+
+    cases = [
+        (fake(stat.S_IFDIR, stat.IO_REPARSE_TAG_MOUNT_POINT), True),
+        (fake(stat.S_IFLNK, stat.IO_REPARSE_TAG_MOUNT_POINT), False),
+        (fake(stat.S_IFLNK, stat.IO_REPARSE_TAG_SYMLINK), False),
+        (fake(stat.S_IFDIR, stat.IO_REPARSE_TAG_SYMLINK), False),
+        (fake(stat.S_IFDIR, 0), False),
+    ]
+    for info, expected in cases:
+        monkeypatch.setattr(os, "lstat", lambda p, info=info: info)
+        assert check._is_junction(tmp_path / "x") is expected
+    monkeypatch.undo()
+    monkeypatch.delattr(os.path, "isjunction", raising=False)
+    assert check._is_junction(tmp_path / "missing") is False
+    assert check._is_junction(tmp_path) is False
