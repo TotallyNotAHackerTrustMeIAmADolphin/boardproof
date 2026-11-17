@@ -53,10 +53,10 @@ FILTER_NAMES = (
 )
 
 HOW_TO_GET = (
-    "Download the jlcparts cache yourself (the jlcparts project publishes it as cache.zip with split "
-    "parts cache.z01, cache.z02, ...; extract cache.sqlite3 with 7-Zip) and point BOARDPROOF_PARTS_INDEX "
-    "at the extracted file, or pass index_path. Nothing is shipped with this server; a download tool is "
-    "a separate, later addition."
+    "Ask the user whether to download the jlcparts cache with refresh_parts_index (a dry run first: the "
+    "download is large), or let them download it themselves (the jlcparts project publishes it as cache.zip "
+    "with split parts cache.z01, cache.z02, ...; extract cache.sqlite3 with 7-Zip). Then point "
+    "BOARDPROOF_PARTS_INDEX at the file, or pass index_path. Nothing is shipped with this server."
 )
 
 _REQUIRED = {
@@ -227,6 +227,7 @@ def open_index(index_path: str | None) -> tuple[sqlite3.Connection, dict]:
     """Open the index read-only and immutable; returns ``(connection, columns)``. Never writes."""
     path = resolve_index_path(index_path)
     uri = path.resolve().as_uri() + "?mode=ro&immutable=1"
+    conn = None
     try:
         conn = sqlite3.connect(uri, uri=True)
         conn.execute("PRAGMA query_only = ON")
@@ -235,6 +236,8 @@ def open_index(index_path: str | None) -> tuple[sqlite3.Connection, dict]:
         for table in ("components", "categories", "manufacturers"):
             columns[table] = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})")}
     except sqlite3.Error as exc:
+        if conn is not None:
+            conn.close()  # an open handle would keep the file locked on Windows
         raise IndexRefusal("index_unreadable", f"{path.name} is not a readable SQLite database: {exc}") from exc
     missing = {t: [c for c in need if c not in columns[t]] for t, need in _REQUIRED.items()}
     missing = {t: cols for t, cols in missing.items() if cols}

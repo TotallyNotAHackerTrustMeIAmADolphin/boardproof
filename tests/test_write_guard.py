@@ -516,6 +516,7 @@ NON_KICAD_RAW = {
     ("toolsets/manufacturing.py", "_bom_from_root"): "BOM CSV output",
     ("toolsets/simulation.py", "run_spice_simulation"): "SPICE run output file",
     ("render_region.py", "render_region"): "the region PNG in the caller's output directory (issue 98)",
+    ("sourcing/parts_index_refresh.py", "refresh"): "moves the validated downloaded parts index (a SQLite file) over the old one in the user's index directory, never a KiCad file; the target is refused inside a git repository or a KiCad project folder (issue 200)",
     ("schematic_diff.py", "materialise"): "writes the .kicad_sch, .kicad_pro and library table bytes of a git revision (from the object database) into a TemporaryDirectory of the tool (issues 98 and 125); a KiCad-file write, but on scratch only, never the caller's project folder (ratchets.toml: kicad_file = true with read_only_reach)"
 }
 _DOTTED_WRITES = {"os.replace", "os.rename", "shutil.move"}

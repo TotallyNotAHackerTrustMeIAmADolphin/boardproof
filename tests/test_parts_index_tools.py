@@ -13,8 +13,10 @@ from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 
 from boardproof.sourcing import parts_index as pi
+from boardproof.sourcing import parts_index_refresh as pir
 from boardproof.toolsets import sourcing as sourcing_toolset
 from tests._parts_index_fixture import FIXTURE_DATE, build_fixture
+from tests._parts_index_zip import FakeOpener, single_files
 
 REPO = Path(__file__).resolve().parents[1]
 SKILL = " ".join((REPO / ".claude" / "skills" / "kicad-sourcing" / "SKILL.md").read_text(encoding="utf-8").split())
@@ -220,3 +222,83 @@ def test_descriptions_and_skill_name_the_new_result_fields():
     assert "`non_numeric_values` and `non_numeric_parts` say how much of it is not a quantity, so its `numeric_range` covers the numeric values only" in SKILL
     assert "a null `unit` comes with a `unit_note`; `skipped_categories` counts categories that cannot be listed" in SKILL
     assert "`skipped_unreadable_rows` and `unreadable_rows` count index rows that were left out or could not be read as a part, so a total is not the whole index" in SKILL
+
+
+# ---------------------------------------------------------------- refresh_parts_index (issue 200)
+
+
+
+@pytest.mark.asyncio
+async def test_refresh_parts_index_is_registered_as_a_destructive_open_world_tool(mcp):
+    ann = (await _tool(mcp, "refresh_parts_index")).annotations
+    assert ann.read_only_hint is False and ann.destructive_hint is True and ann.open_world_hint is True
+    assert ann.idempotent_hint is False
+
+
+@pytest.mark.asyncio
+async def test_refresh_parts_index_takes_exactly_target_dir_and_dry_run(mcp):
+    tool = await _tool(mcp, "refresh_parts_index")
+    assert set(tool.input_schema["properties"]) == {"target_dir", "dry_run"}
+    assert tool.input_schema["properties"]["dry_run"]["default"] is True
+    with pytest.raises(ToolError, match="unknown argument.*opener"):
+        await _call(mcp, "refresh_parts_index", {"opener": "x"})
+    with pytest.raises(ToolError, match="unknown argument.*base_url"):
+        await _call(mcp, "refresh_parts_index", {"base_url": "https://evil.example/"})
+
+
+def test_refresh_description_pins_the_wording():
+    (text,) = _having("on the user's say-so")
+    for needle in ("never automatic", "downloads the data to their own disk", "nothing ships with this server",
+                   "no claim about the terms the data is published under", "The download is large", "about 316 MB", "dry_run is true by default",
+                   "downloads nothing", "dry_run=false", "old_index_kept", "does not change BOARDPROOF_PARTS_INDEX",
+                   "path inside a git repository or a KiCad project folder is refused", "Writes no KiCad file"):
+        assert needle in text, needle
+    assert "ensure" not in text.lower() and "guarantee" not in text.lower()
+
+
+def test_the_read_tools_name_the_refresh_tool_when_there_is_no_index():
+    assert "refresh_parts_index" in pi.HOW_TO_GET and "dry run first" in pi.HOW_TO_GET
+
+
+@pytest.mark.asyncio
+async def test_a_plain_call_is_a_dry_run_that_writes_nothing(mcp, tmp_path, monkeypatch):
+    opener = FakeOpener(single_files("cache.sqlite3", b"x" * 100))
+    monkeypatch.setattr(pir, "build_opener", lambda: opener)
+    target = tmp_path / "idx"
+    r = await _call(mcp, "refresh_parts_index", {"target_dir": str(target)})
+    assert r["ok"] is True and r["status"] == "planned" and r["written"] is False
+    assert not target.exists() and {m for m, _ in opener.calls} == {"HEAD"}
+
+
+@pytest.mark.asyncio
+async def test_a_real_call_replaces_the_index_through_the_tool(mcp, tmp_path, monkeypatch, idx):
+    data = Path(idx).read_bytes()
+    monkeypatch.setattr(pir, "build_opener", lambda: FakeOpener(single_files("cache.sqlite3", data)))
+    target = tmp_path / "idx"
+    r = await _call(mcp, "refresh_parts_index", {"target_dir": str(target), "dry_run": False})
+    assert r["ok"] is True and r["status"] == "refreshed" and r["index"]["part_count"] > 0
+    assert (target / "cache.sqlite3").read_bytes() == data
+    out = await _call(mcp, "filter_parts", {"category": "Diodes", "index_path": r["set_env"][pi.ENV_VAR]})
+    assert out["ok"] is True
+
+
+def test_no_test_seam_is_reachable_from_the_tool_surface():
+    """The registered function passes only target_dir and dry_run; the opener is a module-level seam, not an argument."""
+    tree = ast.parse((REPO / "src" / "boardproof" / "toolsets" / "sourcing.py").read_text(encoding="utf-8"))
+    (fn,) = [n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == "refresh_parts_index"]
+    assert [a.arg for a in fn.args.args] == ["target_dir", "dry_run"]
+    calls = [n for n in ast.walk(fn) if isinstance(n, ast.Call)]
+    assert len(calls) == 1 and [k.arg for k in calls[0].keywords] == [] and len(calls[0].args) == 2
+
+
+def test_the_skill_paragraph_and_its_wording_pins():
+    (item,) = [p for p in SKILL.split(" 8. **") if p.startswith("Getting or updating")]
+    for needle in ("only when the user asks for it or agrees", "the download is large", "make no statement about the terms it is published under",
+                   "default `dry_run=true`", "downloads nothing and writes nothing", "only after they agree", "old_index_kept", "means do not proceed",
+                   "never changes `BOARDPROOF_PARTS_INDEX`", "target_path", "never start a refresh on your own"):
+        assert needle in item, needle
+
+
+def test_refresh_description_says_a_failed_probe_is_not_ok():
+    (text,) = _having("on the user's say-so")
+    assert "if the probe fails it answers ok false with would_fail true" in text

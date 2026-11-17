@@ -2229,3 +2229,30 @@ function = "UsageLog.record"
 kind = "os.replace"
 code = '''os.replace(self.path, self.path.with_name(self.path.name + '.1'))'''
 note = "Issue 45: rotation of the usage log to <name>.1 when the size cap is reached; both files are in the log's own directory, neither is a KiCad file."
+
+# ISSUE 200 BLOCK: the explicit parts index refresh (sourcing/parts_index_refresh.py). Writes only a scratch folder
+# below the user's index directory and the index file itself, never a KiCad file or a project.
+
+[[raw_write]]
+file = "sourcing/parts_index_refresh.py"
+function = "_download_all"
+kind = "open"
+code = '''archive.open('wb')'''
+kicad_file = false
+note = "Issue 200: the downloaded archive segments, concatenated, into a temporary folder created inside the target index directory (never a project or repository: _check_target refuses those); not a KiCad file; removed after the run."
+
+[[raw_write]]
+file = "sourcing/parts_index_refresh.py"
+function = "_inflate"
+kind = "open"
+code = '''out_path.open('wb')'''
+kicad_file = false
+note = "Issue 200: the extracted cache.sqlite3 of the downloaded archive, into the same temporary folder, size-capped and CRC-checked while written; moved over the old index only after the parts index reader accepts it; not a KiCad file."
+
+[[commit]]
+file = "sourcing/parts_index_refresh.py"
+function = "refresh"
+kind = "os.replace"
+code = '''os.replace(extracted, out_path)'''
+note = "Issue 200: moves the validated temporary index over the old cache.sqlite3 in the same directory (all or nothing; a failure keeps the old file); a SQLite file in a user data directory, not a KiCad file."
+

@@ -1,0 +1,7 @@
+[not_a_file_writer.refresh_parts_index]
+reason = "Issue 200: downloads the jlcparts cache on request into a temporary folder inside the user's index directory, extracts and validates it and replaces the old local parts index (a SQLite file) in one step; never a KiCad file, a project or a repository (the target is refused there)."
+reaches = [
+    "sourcing/parts_index_refresh.py | _download_all | open",
+    "sourcing/parts_index_refresh.py | _inflate | open",
+    "sourcing/parts_index_refresh.py | refresh | os.replace",
+]

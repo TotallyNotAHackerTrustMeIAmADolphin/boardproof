@@ -61,6 +61,7 @@ def test_build_registers_expected_tools():
         "search_parts",
         "list_part_filters",
         "filter_parts",
+        "refresh_parts_index",
         "list_sourcing_providers",
         "select_component",
         "propose_component_match",

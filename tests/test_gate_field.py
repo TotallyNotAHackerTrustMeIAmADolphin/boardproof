@@ -181,6 +181,7 @@ _SWEEP_SKIP = {
     "unload_toolset": "meta tool, no board state",
     "search_parts": "needs the network (LCSC bot wall)",
     "fetch_datasheet": "needs the network",
+    "refresh_parts_index": "its dry run contacts the network (HEAD requests)",
     "fetch_part_assets": "needs the network",
     "resolve_jlcpcb_assets": "needs the network",
     "lookup_jlcpcb_part_tiers": "needs the network",

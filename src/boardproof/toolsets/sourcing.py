@@ -30,7 +30,7 @@ from pydantic import BaseModel, ConfigDict, Field, create_model, model_validator
 from boardproof import write_layer
 from boardproof.sourcing import PROVIDER_REGISTRY, PartResult
 from boardproof.sourcing import jlcpcb_basic as jlc
-from boardproof.sourcing import parts_index
+from boardproof.sourcing import parts_index, parts_index_refresh
 from boardproof.sourcing.asset_fetch import fetch_part_assets as _fetch_part_assets
 from boardproof.sourcing.datasheet import fetch_datasheet as _fetch_datasheet
 from boardproof.sourcing.datasheet import inspect_datasheet as _inspect_datasheet
@@ -808,6 +808,10 @@ def build(mcp: MCPServer) -> list[str]:
         except sqlite3.Error as exc:
             return parts_index.IndexRefusal("index_unreadable", f"The parts index could not be read: {exc}").as_result()
 
+    def refresh_parts_index(target_dir: str | None = None, dry_run: bool = True) -> dict:
+        """Download the jlcparts cache into a local directory (dry run by default); see the registered description."""
+        return parts_index_refresh.run(target_dir, dry_run)
+
     mcp.add_tool(
         search_parts,
         name="search_parts",
@@ -878,6 +882,29 @@ def build(mcp: MCPServer) -> list[str]:
         annotations={"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
     )
     _refuse_extra_arguments(mcp, "filter_parts", parts_index.FILTER_NAMES, hint="nothing was read")
+    mcp.add_tool(
+        refresh_parts_index,
+        name="refresh_parts_index",
+        description=(
+            "Download or update the local parts index (the jlcparts cache that list_part_filters and filter_parts read) on the "
+            "user's say-so; never automatic, never part of another tool. The user downloads the data to their own disk, nothing "
+            "ships with this server, and this tool makes no claim about the terms the data is published under. The download is large (about 316 MB "
+            "when last measured by HEAD request; the extracted file is bigger): say so before a real run. dry_run is "
+            "true by default: it reports the target path, the download URLs, their sizes (HEAD requests, so it contacts the "
+            "network but downloads nothing) and the index already there, and writes nothing, not even the directory; if the probe fails it answers ok false with would_fail true, "
+            "because a real run would fail too. With "
+            "dry_run=false it fetches cache.z01, cache.z02 ... and cache.zip from the project's GitHub Pages (https, one allow-"
+            "listed host, redirects re-checked, size and time caps), assembles the split zip, extracts only cache.sqlite3, "
+            "checks that it opens read-only with the tables the reader needs and holds parts, and only then replaces the old "
+            "file in one step. Any failure keeps the old index untouched and says so (old_index_kept). target_dir is an absolute "
+            "local path, default the platform's user data directory below boardproof/parts-index; a network path, a path inside "
+            "a git repository or a KiCad project folder is refused. The result carries index.index_date and set_env: this tool "
+            "does not change BOARDPROOF_PARTS_INDEX, so tell the user to set it to target_path or pass index_path. Writes no "
+            "KiCad file."
+        ),
+        annotations={"readOnlyHint": False, "destructiveHint": True, "idempotentHint": False, "openWorldHint": True},
+    )
+    _refuse_extra_arguments(mcp, "refresh_parts_index", ("target_dir", "dry_run"), hint="nothing was downloaded or written")
     mcp.add_tool(
         list_sourcing_providers,
         name="list_sourcing_providers",
@@ -1091,6 +1118,7 @@ def build(mcp: MCPServer) -> list[str]:
         "search_parts",
         "list_part_filters",
         "filter_parts",
+        "refresh_parts_index",
         "list_sourcing_providers",
         "select_component",
         "propose_component_match",
