@@ -2786,7 +2786,7 @@ def build(mcp: MCPServer) -> list[str]:
             sch_path, region, copies, pitch, numbered_labels, root_sch, grid=grid, dry_run=dry_run)
 
     def set_property_positions(
-        sch_path: str, items: list[dict], dry_run: bool = False, root_sch: str | None = None,
+        sch_path: str, items: list[dict], dry_run: bool = False, root_sch: str | None = None, detail: bool = False,
     ) -> dict:
         """Set the position, angle and justification of the property texts (Reference, Value, Footprint,
         Datasheet, any other field) of placed symbols in one call, for example to move texts off bodies
@@ -2800,10 +2800,13 @@ def build(mcp: MCPServer) -> list[str]:
         left, right, top, bottom, mirror, for example "left bottom"; "" removes it). A property the symbol
         does not have is refused (property_not_found).
 
-        Returns updated: per symbol and property, the text's at, angle and justify, the symbol's at and its
-        pins (number, name, x, y), so the texts can be put clear of them. The flag fields_autoplaced is
-        removed from each edited symbol, because its texts are no longer where KiCad's auto-placement put
-        them. No net can change, so no netlist comparison is made; the staged check (nothing but the
+        Returns a short result by default: count (property texts changed), symbols, changed_references (every
+        reference, sorted), and updated, the first 20 entries of {reference, uuid, property, at, angle,
+        justify}, with truncated true when more were changed. detail true lists every entry and adds the
+        symbol's at and its pins (number, name, x, y), so the texts can be put clear of them (one entry
+        is about 300 bytes with detail, so a broad selector like every R* is large only on request). The
+        flag fields_autoplaced is removed from each edited symbol, because its texts are no longer where
+        KiCad's auto-placement put them. No net can change, so no netlist comparison is made; the staged check (nothing but the
         selected symbols differs) and the reload check of the write apply. dry_run true returns what would
         be set and writes nothing.
 
@@ -2812,7 +2815,7 @@ def build(mcp: MCPServer) -> list[str]:
         """
         from boardproof import sheet_editing
 
-        return sheet_editing.set_property_positions(sch_path, items, root_sch, dry_run=dry_run)
+        return sheet_editing.set_property_positions(sch_path, items, root_sch, dry_run=dry_run, detail=detail)
 
     def align_items(
         sch_path: str, groups: list[dict], box: str = "pins", move_wires: bool = True, snap: bool = True, grid: float = 1.27,

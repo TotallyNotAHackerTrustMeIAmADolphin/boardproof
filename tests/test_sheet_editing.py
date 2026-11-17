@@ -10,6 +10,7 @@ pin position must put that pin on the label's net.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -361,7 +362,7 @@ def test_set_property_positions_moves_and_justifies_the_texts_and_lists_the_pins
     result = sheet_editing.set_property_positions(str(sheet), [
         {"pattern": "R*", "properties": {"Reference": {"offset": [3.81, -1.27], "justify": "left"},
                                          "Value": {"offset": [3.81, 1.27], "angle": 90, "justify": "left bottom"}}},
-    ], None, dry_run=False)
+    ], None, dry_run=False, detail=True)
     assert result["ok"] is True and result["count"] == 4, result
     r1 = _symbol(sheet, "R1")
     ref = sheet_editing._property(r1, "Reference")
@@ -391,6 +392,47 @@ def test_set_property_positions_refuses_a_missing_property_or_bad_justify(sheet)
     assert _bytes(sheet) == before
 
 
+def test_set_property_positions_default_result_is_short_and_detail_has_the_pins(sheet):
+    items = [{"pattern": "R*", "properties": {"Reference": {"offset": [3.81, -1.27]}, "Value": {"offset": [3.81, 1.27]}}}]
+    full = sheet_editing.set_property_positions(str(sheet), items, None, dry_run=True, detail=True)
+    short = sheet_editing.set_property_positions(str(sheet), items, None, dry_run=True)
+    assert full["ok"] and short["ok"], (full, short)
+    assert "pins" in full["would_update"][0] and "symbol_at" in full["would_update"][0]
+    assert short["count"] == full["count"] == 4 and short["symbols"] == 2
+    assert short["changed_references"] == ["R1", "R2"]
+    assert short["detail"] is False and short["truncated"] is False
+    assert all("pins" not in e and "symbol_at" not in e for e in short["would_update"]), short
+    assert {(e["reference"], e["property"]) for e in short["would_update"]} == {(e["reference"], e["property"]) for e in full["would_update"]}
+    assert len(json.dumps(short)) < len(json.dumps(full))
+
+
+def test_set_property_positions_default_result_is_capped_with_counts(sheet, monkeypatch):
+    monkeypatch.setattr(sheet_editing, "PROPERTY_SAMPLE", 1)
+    items = [{"pattern": "R*", "properties": {"Reference": {"offset": [3.81, -1.27]}, "Value": {"offset": [3.81, 1.27]}}}]
+    short = sheet_editing.set_property_positions(str(sheet), items, None, dry_run=True)
+    assert len(short["would_update"]) == 1 and short["count"] == 4 and short["truncated"] is True, short
+    assert short["changed_references"] == ["R1", "R2"], short  # the list of references is never cut
+    full = sheet_editing.set_property_positions(str(sheet), items, None, dry_run=True, detail=True)
+    assert len(full["would_update"]) == 4 and full["truncated"] is False  # detail lists everything
+
+
+def test_set_property_positions_detail_must_be_a_bool(sheet):
+    r = sheet_editing.set_property_positions(str(sheet), [{"references": ["R1"], "properties": {"Value": {"angle": 90}}}], None, dry_run=True, detail="yes")
+    assert r["ok"] is False and r["code"] == "invalid_spec", r
+
+
+def test_set_property_positions_text_says_the_result_is_short_by_default(tools):
+    """Issue 193: the tool description and the skill say what the default result holds and that detail lists the rest."""
+    from pathlib import Path as _P
+    import inspect
+    import boardproof.toolsets.schematic as mod
+    src = " ".join(inspect.getsource(mod).split())
+    assert "Returns a short result by default: count" in src and "detail true lists every entry" in src
+    skill = " ".join((_P(__file__).resolve().parents[1] / ".claude" / "skills" / "kicad-schematic" / "SKILL.md").read_text(encoding="utf-8").split())
+    assert "the default result is short: counts, every changed reference and the first 20 entries; `detail: true` lists every entry" in skill
+    assert sheet_editing.PROPERTY_SAMPLE == 20
+
+
 # --------------------------------------------------------------------------- the registered tools
 
 
@@ -403,6 +445,8 @@ def test_the_registered_tools_run_and_move_wires_defaults_to_true(sheet, tools):
     assert tools["delete_symbols"](str(sheet), [{"references": ["C1"]}])["count"] == 1
     assert tools["move_labels"](str(sheet), [{"texts": ["GNDX"], "offset": [0, 1.27]}], allow_connectivity_change=True)["ok"] is True
     assert tools["set_property_positions"](str(sheet), [{"references": ["R1"], "properties": {"Reference": {"angle": 90}}}])["ok"] is True
+    full = tools["set_property_positions"](str(sheet), [{"references": ["R1"], "properties": {"Reference": {"angle": 0}}}], detail=True)
+    assert full["ok"] is True and "pins" in full["updated"][0], full
 
 
 # --------------------------------------------------------------------------- self-checks
