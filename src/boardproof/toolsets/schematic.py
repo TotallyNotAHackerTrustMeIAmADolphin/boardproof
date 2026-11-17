@@ -985,10 +985,30 @@ def _check_mirrors(content: str, mirrors: list[str], old_uuids: set[str]) -> Non
             {"missing": [w["reference"] for w in wrong], "unexpected": [], "tolerated": []}, None)
 
 
+def _hide_power_references(root: Any, old_uuids: set[str]) -> int:
+    """Hide the Reference text of each symbol this call added whose Reference starts with ``#`` (a power symbol or a
+    PWR_FLAG), as KiCad does when it places one (issue 202; measured: no ``#`` reference of the installed demo sheets is
+    visible). Symbols already on the sheet are never touched. Returns how many were hidden."""
+    from boardproof import sheet_editing
+
+    done = 0
+    for node in root.children:
+        if node.is_atom or node.name != "symbol" or not node.find_children("lib_id") or not node.find_children("uuid"):
+            continue
+        if node.find_children("uuid")[0].get_string(0) in old_uuids or not sheet_editing._ref(node).startswith("#"):
+            continue
+        prop = sheet_editing._property(node, "Reference")
+        if prop is not None and not sheet_editing._hidden(prop):
+            sheet_editing._set_hidden(prop, True)
+            done += 1
+    return done
+
+
 def _write_schematic_utf8(
     sch: Any, path: Path, *, added_refs: set[str] = frozenset(), reattach: bool = False,
     mirrors: list[str] | None = None, old_uuids: set[str] = frozenset(),
-    field_overrides: list[dict] | None = None, dry_run: bool = False, report: dict | None = None,
+    field_overrides: list[dict] | None = None, hide_power_references: bool = False, dry_run: bool = False,
+    report: dict | None = None,
 ) -> dict | None:
     """Write a kicad_tools high-level ``Schematic`` to ``path`` as UTF-8.
 
@@ -1043,6 +1063,10 @@ def _write_schematic_utf8(
             content = write_layer.serialise(node) + chr(10)
         except _FieldPairingError as exc:
             deferred = exc  # raised after the token and netlist checks, so a damaged text is reported by those first
+    if hide_power_references:  # GitHub issue 202: KiCad hides the Reference of every power symbol it places
+        node = write_layer.parse_string(content)
+        if _hide_power_references(node, set(old_uuids)):
+            content = write_layer.serialise(node) + chr(10)
     if "\r" in content:  # backstop: the tools refuse \r in their input before this
         raise ValueError("carriage return in the schematic text; kicad_tools would write it unescaped")
     scratch = tempfile.TemporaryDirectory(prefix="boardproof-sch-dry-") if dry_run else None
@@ -1307,6 +1331,12 @@ def build(mcp: MCPServer) -> list[str]:
         unit, in_bom, dnp, snap, mirror, properties (optional). Batch-oriented -- never loop this one
         symbol at a time.
 
+        A symbol this call places whose reference starts with # (a power symbol, a PWR_FLAG) gets its Reference
+        text hidden, as KiCad does when it places one (issue 202); other references stay visible. There is deliberately no opt-out
+        (a visible #PWR text is clutter KiCad never draws, and a spec key for it would be one more thing to get wrong):
+        add_symbols and add_labels always hide a # Reference, and set_properties shows one afterwards. Existing symbols
+        are not touched.
+
         Library fields (issue 162): like a symbol placed by hand in KiCad, each new instance takes over every
         field of its library symbol -- Footprint, Datasheet, Description, LCSC and any custom field -- with the
         library's hidden state, and the library's Value unless the spec gives `value`. A field the library
@@ -1427,7 +1457,7 @@ def build(mcp: MCPServer) -> list[str]:
             stage: dict = {}
             instance_data = _write_schematic_utf8(sch, path, added_refs=set(placed), reattach=True,
                                   mirrors=[spec.get("mirror", "") for spec in specs], old_uuids=before_uuids,
-                                  field_overrides=_library_field_overrides(specs), dry_run=dry_run, report=stage)
+                                  field_overrides=_library_field_overrides(specs), hide_power_references=True, dry_run=dry_run, report=stage)
         except SchematicWriteNotVerified as exc:
             return _not_verified_result(exc)
         except InstanceDataUnproven as exc:
@@ -1652,7 +1682,7 @@ def build(mcp: MCPServer) -> list[str]:
         x, y (required); text (required for label/global/hier/power -- for
         "power" it's the power symbol lib_id, e.g. "power:GND", resolved through the project
         sym-lib-table, then the global one, then KiCad's folder, as add_symbols does; the symbol is placed as
-        add_symbols places a power lib_id, so its instance data is the same: the project's name and the
+        add_symbols places a power lib_id (its #PWR Reference text is hidden, issue 202), so its instance data is the same: the project's name and the
         use path(s) on an attached sheet, and a reference #PWR01.. that is new in the whole sheet tree; a call with a
         power spec is refused as unproven_instance_data when the project's tree cannot prove where the sheet is used,
         and its result carries `instance_data` {reattached, reason, note} as add_symbols' does; labels, no-connects
@@ -1715,6 +1745,7 @@ def build(mcp: MCPServer) -> list[str]:
             pins = pin_wiring.connector_points(write_layer.load(path))
             grid = float(getattr(sch, "grid", 1.27) or 1.27)
             next_power = _highest_power_number(path)
+            before_uuids = pin_wiring.symbol_uuids(write_layer.load(path))
             placed = []
             snapped: list[dict] = []
             landed: list[dict] = []
@@ -1748,7 +1779,8 @@ def build(mcp: MCPServer) -> list[str]:
             # only a power symbol carries instance data; labels, markers and wires do not, so a call without one
             # does not depend on the project's sheet tree
             stage: dict = {}
-            instance_data = _write_schematic_utf8(sch, path, reattach=bool(power_ids), dry_run=dry_run, report=stage)
+            instance_data = _write_schematic_utf8(sch, path, reattach=bool(power_ids), old_uuids=before_uuids,
+                                                  hide_power_references=bool(power_ids), dry_run=dry_run, report=stage)
         except SchematicWriteNotVerified as exc:
             return _not_verified_result(exc)
         except InstanceDataUnproven as exc:
@@ -3044,7 +3076,7 @@ def build(mcp: MCPServer) -> list[str]:
     ) -> dict:
         """Replace placed symbols by another library symbol in one call, for example a placeholder by the
         final part, keeping what the sheet already has: the uuid, the reference, the position, the
-        rotation, the mirror, the unit, the property texts and the instance data stay as they are.
+        rotation, the mirror, the unit, the property texts and the instance data stay as they are (its Reference text and its hidden state stay as they are too; a replacement places no new symbol, so the hiding of # References that add_symbols does (issue 202) does not apply here).
 
         replacements: a list of objects {reference | uuid, lib_id, pin_map, library_fields}. reference (exact, one placed
         symbol; use uuid when several share a reference such as "R?") or uuid picks the symbol; lib_id is
@@ -3175,7 +3207,14 @@ def build(mcp: MCPServer) -> list[str]:
         with set_property_positions. A property set to the value it already has is reported `unchanged`; when
         nothing changes the file is not written.
 
-        Not allowed: setting the Reference (refused, reference_not_settable: fix_annotation owns it) and
+        Reference hidden (issue 202): `set: {Reference: {hidden: true|false}}` (exactly that object, no value)
+        hides or shows the Reference text of the symbol, every unit of a multi-unit part, and leaves the text,
+        its position and the instance data alone; the result row has the symbol's own reference as value and
+        previous, and `unchanged` when the state already was the asked one. Use it to hide the visible #PWR text
+        of power symbols placed before add_symbols and add_labels hid it themselves.
+
+        Not allowed: setting the Reference text (a string or a `value` key is refused, reference_not_settable:
+        fix_annotation owns it) and
         removing the Reference, the Value or the uuid (property_not_removable; set a Value instead). Removing
         a property no unit of the symbol has is property_not_found. Removing the Footprint is allowed, and the
         result carries a note: the netlist then holds an empty footprint. Other refusals: not_found (a

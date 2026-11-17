@@ -1791,6 +1791,19 @@ def _property_value(spec: Any, where: str) -> tuple[str, bool | None]:
     return value, hidden
 
 
+def _reference_hidden_only(spec: Any, where: str) -> bool:
+    """The ``hidden`` flag of a ``set`` entry for the Reference (issue 202): exactly ``{"hidden": true|false}``. The text
+    of the Reference stays with fix_annotation, so any value (a string, or a ``value`` key) is ``reference_not_settable``."""
+    if isinstance(spec, str) or (isinstance(spec, dict) and "value" in spec):
+        raise SheetAuthoringError(
+            "reference_not_settable",
+            f"{where}: the Reference text cannot be set here (fix_annotation owns references); only its visibility, "
+            f"as {{\"hidden\": true|false}}; nothing was written")
+    if not isinstance(spec, dict) or set(spec) != {"hidden"} or not isinstance(spec["hidden"], bool):
+        raise SheetAuthoringError("invalid_spec", f"{where} must be exactly {{\"hidden\": true|false}}, got {spec!r}")
+    return spec["hidden"]
+
+
 def _check_property_items(items: Any) -> list[dict]:
     """Validate every item before anything is selected; returns ``[{selector, set, remove}]``."""
     if not isinstance(items, list) or not items:
@@ -1805,16 +1818,15 @@ def _check_property_items(items: Any) -> list[dict]:
         key = "reference" if "reference" in item else "uuid"
         if not isinstance(item[key], str) or not item[key]:
             raise SheetAuthoringError("invalid_spec", f"{where}.{key} must be a non-empty string")
-        sets: dict[str, tuple[str, bool | None]] = {}
+        sets: dict[str, tuple[str | None, bool | None]] = {}  # a value of None: the Reference, whose hidden state only is set
         if "set" in item:
             if not isinstance(item["set"], dict) or not item["set"]:
                 raise SheetAuthoringError("invalid_spec", f"{where}.set must be a non-empty object {{property name: value | {{value, hidden}}}}")
             for name, spec in item["set"].items():
                 name = _property_name(name, f"{where}.set")
                 if name == "Reference":
-                    raise SheetAuthoringError(
-                        "reference_not_settable",
-                        f"{where}: the Reference cannot be set here (fix_annotation owns references); nothing was written")
+                    sets[name] = (None, _reference_hidden_only(item["set"][name], f"{where}.set['Reference']"))
+                    continue
                 if name == "uuid":
                     raise SheetAuthoringError("invalid_spec", f"{where}.set: 'uuid' is the identity of the symbol, not a property")
                 sets[name] = _property_value(spec, f"{where}.set[{name!r}]")
@@ -2141,6 +2153,16 @@ def set_properties(path: str, items: list[dict], root_sch: str | None, *, allow_
                 rows = []
                 for name, (value, hidden) in item["set"].items():
                     prop = _property(node, name)
+                    if value is None:  # the Reference: its visibility only, never its text (issue 202)
+                        if prop is None:
+                            raise SheetAuthoringError("property_not_found", f"{_ref(node)} has no Reference property; nothing was written")
+                        was_hidden = _hidden(prop)
+                        if hidden != was_hidden:
+                            _set_hidden(prop, hidden)
+                        any_change |= hidden != was_hidden
+                        rows.append({"name": name, "action": "changed" if hidden != was_hidden else "unchanged",
+                                     "value": _ref(node), "previous": _ref(node), "hidden": _hidden(prop)})
+                        continue
                     if prop is None:
                         new_hidden = True if hidden is None else hidden
                         _new_property(node, name, value, new_hidden)
@@ -2170,7 +2192,7 @@ def set_properties(path: str, items: list[dict], root_sch: str | None, *, allow_
                         notes.append("Footprint was removed: the netlist then carries an empty footprint for that symbol, "
                                      "and a board made from it has no footprint to place; assign_footprints sets one again.")
                 outcome.changed.add(_uuid(node))
-                expected.append({"uuid": _uuid(node), "set": {n: v for n, (v, _h) in item["set"].items()}, "remove": list(item["remove"])})
+                expected.append({"uuid": _uuid(node), "set": {n: v for n, (v, _h) in item["set"].items() if v is not None}, "remove": list(item["remove"])})
                 listed.append({"reference": _ref(node), "uuid": _uuid(node), "unit": _unit(node), "properties": rows})
         outcome.report = {"updated": listed, "count": len(listed)}
         outcome.post_netlist = _netlist_follows(expected, records)
