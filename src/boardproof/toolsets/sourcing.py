@@ -19,6 +19,7 @@ confirmation can't silently re-apply.
 
 from __future__ import annotations
 
+import sqlite3
 import time
 import uuid
 from typing import Annotated, Literal
@@ -29,6 +30,7 @@ from pydantic import BaseModel, ConfigDict, Field, create_model, model_validator
 from boardproof import write_layer
 from boardproof.sourcing import PROVIDER_REGISTRY, PartResult
 from boardproof.sourcing import jlcpcb_basic as jlc
+from boardproof.sourcing import parts_index
 from boardproof.sourcing.asset_fetch import fetch_part_assets as _fetch_part_assets
 from boardproof.sourcing.datasheet import fetch_datasheet as _fetch_datasheet
 from boardproof.sourcing.datasheet import inspect_datasheet as _inspect_datasheet
@@ -356,9 +358,24 @@ def is_match_ambiguous(candidates: list[PartResult], datasheet_inspection: dict 
 
 
 _FOOTPRINT_TOP_LEVEL = ("package_type", "output_path", "params")
+_LIST_FILTERS_ARGUMENTS = ("category", "subcategory", "attributes", "max_values", "index_path")
 
 
-def _refuse_extra_arguments(mcp: MCPServer, tool_name: str, allowed: tuple[str, ...]) -> None:
+class AttributeFilter(BaseModel):
+    """One parametric condition for filter_parts (issue 199)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(description="Attribute name exactly as list_part_filters shows it for the category.")
+    op: Literal["eq", "ne", "lt", "le", "gt", "ge", "contains"] = Field(
+        default="eq", description="eq, ne, lt, le, gt, ge compare numerically when both sides are quantities, else as text.")
+    value: str | float | int = Field(description='A quantity such as "10k", "100nF", "50V", or text such as "X7R".')
+
+
+def _refuse_extra_arguments(
+    mcp: MCPServer, tool_name: str, allowed: tuple[str, ...],
+    hint: str = "generator parameters belong inside params; nothing was written",
+) -> None:
     """Make one registered tool refuse, by name, any argument its signature does not
     name. The SDK's argument model ignores extras, so a caller's top-level ``prefix`` was
     dropped and the call came back ok (build ticket 69, fix round 2). Scoped to one tool:
@@ -375,7 +392,7 @@ def _refuse_extra_arguments(mcp: MCPServer, tool_name: str, allowed: tuple[str, 
             if extra:
                 raise ValueError(
                     f"unknown argument(s) {', '.join(extra)}: {tool_name} takes only {', '.join(allowed)}; "
-                    "generator parameters belong inside params; nothing was written"
+                    + hint
                 )
         return data
 
@@ -757,6 +774,40 @@ def build(mcp: MCPServer) -> list[str]:
             },
         }
 
+    def list_part_filters(
+        category: str | None = None, subcategory: str | None = None, attributes: list[str] | None = None,
+        max_values: int = 10, index_path: str | None = None,
+    ) -> dict:
+        """Read-only. List what filter_parts can filter on, from a local parts index (see filter_parts)."""
+        try:
+            return parts_index.list_filters(index_path, category, subcategory, attributes, max_values)
+        except parts_index.IndexRefusal as exc:
+            return exc.as_result()
+        except sqlite3.Error as exc:
+            return parts_index.IndexRefusal("index_unreadable", f"The parts index could not be read: {exc}").as_result()
+
+    def filter_parts(
+        category: str | None = None, subcategory: str | None = None, attributes: list[AttributeFilter] | None = None,
+        package: str | None = None, manufacturer: str | None = None, min_stock: int | None = None,
+        max_price: float | None = None, price_quantity: int = 1,
+        tiers: list[Literal["basic", "preferred", "extended"]] | None = None,
+        text: str | None = None, sort_by: Literal["stock", "price", "lcsc"] = "stock",
+        sort_order: Literal["asc", "desc"] | None = None, limit: int = 20, offset: int = 0, index_path: str | None = None,
+    ) -> dict:
+        """Read-only. Filter a local parts index (see the registered description)."""
+        try:
+            return parts_index.filter_parts(
+                index_path, category=category, subcategory=subcategory,
+                attributes=None if attributes is None else [a.model_dump() for a in attributes],
+                package=package, manufacturer=manufacturer, min_stock=min_stock, max_price=max_price,
+                price_quantity=price_quantity, tiers=tiers, text=text, sort_by=sort_by, sort_order=sort_order,
+                limit=limit, offset=offset,
+            )
+        except parts_index.IndexRefusal as exc:
+            return exc.as_result()
+        except sqlite3.Error as exc:
+            return parts_index.IndexRefusal("index_unreadable", f"The parts index could not be read: {exc}").as_result()
+
     mcp.add_tool(
         search_parts,
         name="search_parts",
@@ -781,6 +832,52 @@ def build(mcp: MCPServer) -> list[str]:
             "openWorldHint": True,
         },
     )
+    mcp.add_tool(
+        list_part_filters,
+        name="list_part_filters",
+        description=(
+            "Read-only. Start here before filter_parts: list what it can filter on, from a local parts index in the "
+            "jlcparts cache format that the user downloaded (nothing ships with this server; set BOARDPROOF_PARTS_INDEX "
+            "or pass index_path). Without category: every category with its part count. With category (and optional "
+            "subcategory): the subcategories, and every attribute name of that scope with its real values and counts, its "
+            "unit and numeric range, so an attribute name is never guessed (max_values values per attribute, attributes=[names] "
+            "for chosen ones). Every answer carries index.index_date and index.index_stale (true when the index is more than "
+            f"{parts_index.STALE_AFTER_DAYS} days old: stock and price may have changed). No index: refused with "
+            "index_not_configured or index_not_found and how_to_get; an unknown category, subcategory or attribute name is "
+            "refused with the valid names. Per attribute: numeric_values and non_numeric_values count the distinct values that do "
+            "and do not read as a quantity, non_numeric_parts the parts holding a non-numeric value; unit is null with a unit_note "
+            "saying why; numeric_range comes from the numeric values only, and range_note says so when some are not numeric. "
+            "skipped_categories counts category rows whose name is not text, which cannot be listed."
+        ),
+        annotations={"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
+    )
+    _refuse_extra_arguments(mcp, "list_part_filters", _LIST_FILTERS_ARGUMENTS, hint="nothing was read")
+    mcp.add_tool(
+        filter_parts,
+        name="filter_parts",
+        description=(
+            "Read-only. Filter parts in a local parts index (the jlcparts cache, downloaded by the user; BOARDPROOF_PARTS_INDEX "
+            "or index_path), one call for the whole question, never one part per call. Call list_part_filters first for the "
+            "real category and attribute names. Filters, all optional and ANDed: category and subcategory; attributes, a list "
+            "of {name, op, value} with op eq (default), ne, lt, le, gt, ge or contains, numeric when both sides are quantities "
+            'with SI prefixes and units ("10k", "100nF", "50V"; a value without unit matches any unit, a unit must agree) and '
+            "text otherwise, needing a category; package and manufacturer (exact, case-insensitive); min_stock; max_price (unit "
+            "price at price_quantity, default 1; a part without a price is excluded and counted); tiers (basic, preferred, "
+            "extended); text (every word must occur in the MPN, description, manufacturer or LCSC number). sort_by stock "
+            "(default, descending), price (ascending; unpriced parts last) or lcsc; limit 1 to 40, offset. Each item is {part: "
+            "a PartResult (lcsc_id, stock, price_breaks, datasheet_url, jlcpcb_class), package, category, subcategory, "
+            "description, attributes}; a part with no parameter data has attributes null and a note, and no attribute filter "
+            "matches it (counted in excluded_without_attribute). Every answer carries index.index_date and index.index_stale "
+            f"(true when more than {parts_index.STALE_AFTER_DAYS} days old). A misspelled filter name, attribute name, op, tier or "
+            "sort field is refused with the valid names, never ignored; no index is refused with how_to_get; more than "
+            f"{parts_index.MAX_CANDIDATES} candidates is refused (narrow the scope). Prices have no recorded currency. The "
+            "index is never written. skipped_unreadable_rows counts index rows left out because their stock is not a whole "
+            "number (they are not in total_count); unreadable_rows counts listed items whose row could not be read as a part, "
+            "shown as only lcsc_id and unreadable."
+        ),
+        annotations={"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
+    )
+    _refuse_extra_arguments(mcp, "filter_parts", parts_index.FILTER_NAMES, hint="nothing was read")
     mcp.add_tool(
         list_sourcing_providers,
         name="list_sourcing_providers",
@@ -992,6 +1089,8 @@ def build(mcp: MCPServer) -> list[str]:
     )
     return [
         "search_parts",
+        "list_part_filters",
+        "filter_parts",
         "list_sourcing_providers",
         "select_component",
         "propose_component_match",

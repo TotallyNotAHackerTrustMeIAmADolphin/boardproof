@@ -59,6 +59,8 @@ def test_build_registers_expected_tools():
     names = sourcing_toolset.build(mcp)
     assert set(names) == {
         "search_parts",
+        "list_part_filters",
+        "filter_parts",
         "list_sourcing_providers",
         "select_component",
         "propose_component_match",

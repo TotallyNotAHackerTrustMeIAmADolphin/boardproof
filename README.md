@@ -89,6 +89,8 @@ git submodule update --init --depth 1 third_party/JLCPCB-Kicad-Library
 
 Without it, asset lookups fall back to `easyeda2kicad` (a core dependency) and say so. The server looks for the library in this order: the `BOARDPROOF_JLCPCB_LIBRARY` environment variable, the submodule above, KiCad's third-party directory (a Plugin and Content Manager install). `jlcpcb_library_status` reports what it found and, for an empty or missing submodule, the command above. A new git worktree starts with the submodule empty; set `BOARDPROOF_JLCPCB_LIBRARY` to another checkout's `third_party/JLCPCB-Kicad-Library` to share it. To rebuild the index after moving the pin: `python scripts/refresh_jlcpcb_index.py`.
 
+Optional parts index for `list_part_filters` and `filter_parts` (parametric part search): download the jlcparts cache yourself (`cache.sqlite3`, published as `cache.zip` in split parts by the jlcparts project) and set `BOARDPROOF_PARTS_INDEX` to the extracted file, or pass `index_path`. It is only read, never written; nothing is shipped or downloaded by this server, and every answer states the index date and flags an index older than 7 days.
+
 #### Refreshing the library to upstream's newest commit
 
 The pin stays on one commit so the shipped index is reproducible. To move it, run in a checkout whose submodule is initialised (the command above), from a clean tree:
@@ -121,7 +123,7 @@ The installed script does the same: `"command": "path/to/.venv/Scripts/boardproo
 
 Renamed from kicad-mcp (package `kicad_mcp`, environment prefix `KICAD_MCP_`) in build ticket 74: the package, the start command and the MCP server name are `boardproof`, and the environment variables `KICAD_MCP_*` are now `BOARDPROOF_*` with no fallback. After pulling the rename run `pip install -e .` again in the virtual environment and change the MCP client configuration (`-m kicad_mcp.server` becomes `-m boardproof.server`). Schematic backups made before the rename stay in the old backup directory (`%LOCALAPPDATA%\kicad-mcp\schematic-backups`) and are not read by the new name.
 
-The server starts with 19 tools: the three toolset tools (`list_toolsets`, `load_toolset`, `unload_toolset`), `project_create`, `project_open`, the gate (`verify_board`, `pin_rule_baseline`) and the checkpointed pairs for input preparation, pour step, schematic import, board rules, board outline and silkscreen minimums. Ten more toolsets load on demand with `load_toolset`: `verification` (9 tools), `sourcing` (13), `diagnostics` (2), `library` (3), `schematic` (7), `placement` (12), `manufacturing` (2), `routing` (6), `copilot` (9) and `simulation` (2). That is 65 more tools, 84 in total (counted from a running server on 2026-10-29).
+The server starts with 19 tools: the three toolset tools (`list_toolsets`, `load_toolset`, `unload_toolset`), `project_create`, `project_open`, the gate (`verify_board`, `pin_rule_baseline`) and the checkpointed pairs for input preparation, pour step, schematic import, board rules, board outline and silkscreen minimums. Ten more toolsets load on demand with `load_toolset`: `verification` (10 tools), `sourcing` (16), `diagnostics` (3), `library` (5), `schematic` (47), `placement` (12), `manufacturing` (2), `routing` (6), `copilot` (9) and `simulation` (2). That is 112 more tools, 131 in total (counted from a running server on 2026-11-17; tests/test_docs_tool_counts.py keeps these numbers equal to the live registry).
 
 ## Usage log (local, anonymous, off with one variable)
 
