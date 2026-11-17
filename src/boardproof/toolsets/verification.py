@@ -686,6 +686,38 @@ def build(mcp: MCPServer) -> list[str]:
     # filesystem/kicad-cli subprocess, so openWorldHint is False for all six
     # too, despite pcb_run_drc/sch_run_erc shelling out to kicad-cli --
     # that's a local process, not an external/open-world entity.
+    def compare_spice_netlist(
+        sch_path: str, spice_netlist: str, root_sch: str | None = None, mapping: dict | None = None, compare_values: bool = False
+    ) -> dict:
+        """Read-only, topology only, never a verdict on the circuit: does a SPICE netlist (an LTspice .net or .cir export, read as
+        text; no simulator is run) connect the same pins as the schematic project? Use it before trusting a simulation of a design: a
+        simulation can still hold a part or a connection the schematic does not have, or lack one it has.
+
+        sch_path: any sheet of the project (root_sch as in check_project); spice_netlist: the netlist text file. An LTspice .asc is
+        not read (export its netlist from LTspice). The schematic side is kicad-cli's netlist of the project. Net names differ between
+        the tools (VCC against N001), so nodes and nets are matched by a consistent pairing (the pairing that most pins agree with), never by
+        name; ground 0 (and GND) is an ordinary node in it.
+
+        mapping (optional): names {simulation name: schematic reference} (default: the same name, case-insensitive: R1 is R1);
+        ignore [names]: simulation-only helpers (a discharger, a probe) AND schematic references without a simulation role (a
+        connector, a test point), each dropped from extra_parts or missing_parts; pin_map {simulation name: {pin index (1-based, the
+        order of the nodes on the SPICE line): schematic pin number, or null for a pin with no counterpart}}. R, C and L need no pin_map (pins 1 and 2, in the node order of the SPICE line: it follows how the part was drawn, so a swapped R, C or L shows as a mismatch with a hint, which can appear on a neighbouring part; give a pin_map to say which pin is which); any
+        other element, and any subcircuit instance X, needs one or it is listed in uncompared_parts and not guessed.
+        compare_values: also compare the values of R, C and L (SI suffixes read; a value that is not a plain number is listed, not called a difference).
+
+        Ignored parts also drop their pins from net membership. Three cases keep topology_matches false: a connected pin the simulation lacks (schematic_pins_not_in_simulation), a pin number the schematic part lacks, and an element line this reader cannot read (U, A, O, N, P, K, malformed: uncompared_parts with reason element_not_read). Result: topology_matches (true only when every element was compared and nothing is missing, extra, uncompared or differently connected), parts
+        (per compared part: connections_match and per pin the simulation node, the schematic net, matches), mismatched_parts, missing_parts
+        (in the schematic, not in the simulation), extra_parts (in the simulation, not in the schematic), uncompared_parts, uncompared_pins, ignored,
+        ignore_unmatched, mapping_unused (an entry for a part the simulation does not have), node_map, node_map_ambiguous (equal support: the mismatch may sit on another part than the one named), value_differences
+        (with compare_values) and not_compared. What is not compared, always: models and .subckt bodies, element parameters, source definitions,
+        analysis directives, the contents of .include and .lib files, element lines after .end (listed, not read; other lines after .end are ignored) and values (unless asked); KiCad's simulation fields. A true topology says nothing about whether the circuit works.
+        Refusals: file_not_found, root_not_found, sheet_tree_incomplete, unsupported_input (.asc), invalid_netlist, invalid_spec,
+        ambiguous_reference, duplicate_sim_name, netlist_not_trustworthy.
+        """
+        from boardproof import spice_compare
+
+        return spice_compare.compare_spice_netlist(sch_path, spice_netlist, root_sch, mapping, compare_values)
+
     _READ_ONLY_LOCAL = {
         "readOnlyHint": True,
         "destructiveHint": False,
@@ -706,6 +738,7 @@ def build(mcp: MCPServer) -> list[str]:
         list_manufacturer_profiles,
         pcb_get_design_rules,
         pcb_check_manufacturability,
+        compare_spice_netlist,
     ]
     for tool_fn in tools:
         mcp.add_tool(tool_fn, annotations=dict(_READ_ONLY_LOCAL))
