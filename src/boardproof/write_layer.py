@@ -491,13 +491,61 @@ def _lines(node: SExp, depth: int, out: list[str]) -> None:
     out.append(tabs + ")")
 
 
+# A sheet's layout is KiCad's own (GitHub issue 194, measured with kicad-cli 10.0.7 on 40 demo
+# sheets; ``tests/test_sheet_layout.py``). A list holding no list is one line, however long; any
+# other list is a head line (its leading atoms), one line per child, then ``)``. Consecutive
+# ``(xy ..)`` children of ``(pts ..)`` share a line until it holds ``_PTS_LINE_BREAK`` characters
+# or more, each tab of the indent counting one character (the threshold is a total of 99: at
+# indent depth 3 a line breaks at 96 characters of text, at depth 6 at 93; measured with kicad-cli
+# 10.0.7 at those two depths, both sides of the threshold). The strings of an image's ``(data ..)`` take a line each.
+_SHEET_ROOT = "kicad_sch"
+_PTS_LINE_BREAK = 99
+
+
+def _sheet_lines(node: SExp, depth: int, out: list[str]) -> None:
+    tabs = "\t" * depth
+    children = node.children
+    data = node.name == "data" and len(children) > 1
+    if not data and all(c.is_atom for c in children):
+        out.append(tabs + _compact(node))
+        return
+    head = [node.name] if node.name else []
+    i = 0
+    while i < len(children) and children[i].is_atom and not (data and i >= 1):
+        head.append(atom_text(children[i]))
+        i += 1
+    out.append(tabs + "(" + " ".join(head))
+    while i < len(children):
+        child = children[i]
+        if child.is_atom:
+            out.append(tabs + "\t" + atom_text(child))
+            i += 1
+        elif node.name == "pts" and child.name == "xy":
+            run: list[str] = []
+            width = 0
+            while i < len(children) and not children[i].is_atom and children[i].name == "xy" and width < _PTS_LINE_BREAK:
+                run.append(_compact(children[i]))
+                width = depth + 1 + len(" ".join(run))
+                i += 1
+            out.append(tabs + "\t" + " ".join(run))
+        else:
+            _sheet_lines(child, depth + 1, out)
+            i += 1
+    out.append(tabs + ")")
+
+
 def serialise(node: SExp, *, compact: bool = False) -> str:
     """``node`` as KiCad S-expression text. ``compact`` gives one line with single spaces
-    (what the self-checks compare); otherwise one tab per level, short lists on one line."""
+    (what the self-checks compare); otherwise one tab per level. A whole sheet (root
+    ``kicad_sch``) is laid out as KiCad lays it out; every other node, a board, a library or a
+    sub-tree, keeps one tab per level with short lists on one line."""
     if compact or node.is_atom:
         return _compact(node)
     out: list[str] = []
-    _lines(node, 0, out)
+    if node.name == _SHEET_ROOT:
+        _sheet_lines(node, 0, out)
+    else:
+        _lines(node, 0, out)
     return "\n".join(out)
 
 
