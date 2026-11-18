@@ -318,6 +318,8 @@ def _as_revision(result: dict, source: str) -> dict:
 
 
 def _register_layout_tools(mcp: MCPServer) -> None:
+    from boardproof import schematic_import  # the tool text pins a sentence defined next to the code
+
     @mcp.tool(
         annotations=_READ_ONLY,
         description=(
@@ -328,7 +330,8 @@ def _register_layout_tools(mcp: MCPServer) -> None:
             "fp-lib-table / installed libraries blocks the proposal (status blocked, no token) "
             "and is named. Staged footprints are not placed: placement is a separate step. "
             "schematic_path defaults to the board's own .kicad_sch; staging_origin is [x, y] "
-            "in page mm (default: right of the Edge.Cuts box). " + _LAYOUT_ORDER
+            "in page mm (default: right of the Edge.Cuts box). " + schematic_import.STALE_NETS_SENTENCE + " "
+            + _LAYOUT_ORDER
         ),
     )
     def propose_schematic_import(
@@ -356,7 +359,8 @@ def _register_layout_tools(mcp: MCPServer) -> None:
             "Apply a propose_schematic_import proposal: writes a NEW board revision with the "
             "schematic's footprints and every pad net, verified by a fresh reload against the "
             "kicad-cli netlist; an unresolved footprint fails the whole confirm and nothing is "
-            "written. The revision_token is single use. " + _LAYOUT_ORDER
+            "written. The revision_token is single use. " + schematic_import.STALE_NETS_SENTENCE + " "
+            + _LAYOUT_ORDER
             + " "
             + write_layer.LOCK_SENTENCE
         ),

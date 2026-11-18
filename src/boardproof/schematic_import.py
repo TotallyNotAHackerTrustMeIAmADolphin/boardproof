@@ -75,6 +75,14 @@ _DEFAULT_SPACING = 15.0
 
 NetlistExporter = Callable[[Path, Path], Any]
 
+# Tool text (GitHub issue 69); tests/test_import_stale_nets.py pins it in both tool descriptions.
+STALE_NETS_SENTENCE = (
+    "Orphaned nets (declared on the board, used by no pad, track, arc, via or zone, and absent from "
+    "the netlist) are listed in stale_nets_removed and removed by the confirm, as KiCad's Update PCB "
+    "from Schematic does; a net that still has a pad or copper, or whose use cannot be read, is never "
+    "removed and keeps the refusal, which names it."
+)
+
 
 # --- small helpers ------------------------------------------------------------
 
@@ -773,6 +781,81 @@ def _copper_on_nets(root: Any, names: set[str]) -> list[str]:
     return hits
 
 
+def _net_number(node: Any) -> int | None:
+    """The first value of a raw ``(net ...)`` node as an int, or None when it is not one."""
+    if not node.values:
+        return None
+    try:
+        return int(str(node.values[0]))
+    except (TypeError, ValueError):
+        return None
+
+
+def _stale_net_evidence(pcb_path: Path, stale: Sequence[str]) -> tuple[dict[str, int], dict[str, list[str]]]:
+    """Which of the net names ``stale`` (declared on the board, absent from the netlist) may be
+    removed. ``(removable {name: number}, blocked {name: reasons})``.
+
+    GitHub issue 69. The evidence is a fresh full parse of the raw board (never a ``kicad_tools``
+    convenience property, never the partial view): a net is removable only when it is declared
+    exactly once with a readable number, no other declaration shares the number, and nowhere in the
+    tree (pads, segments, arcs, vias, zones, footprint-embedded zones) does a ``(net ...)`` node, a
+    ``(net_name ...)`` or an ``(add_net ...)`` refer to it by number or by name. A ``(net ...)``
+    reference whose number cannot be read could refer to any net, so it blocks every stale net.
+    Anything not shown to be unused is blocked, so the refusal stays."""
+    root = _parse(pcb_path)
+    declared: list[tuple[int | None, str]] = []
+    table_nodes = [n for n in root.children if n.name == "net"]
+    for n in table_nodes:
+        if len(n.values) > 1:
+            declared.append((_net_number(n), str(n.values[1])))
+    wanted = set(stale)
+    numbers = {name: [num for num, nm in declared if nm == name] for name in wanted}
+    blocked: dict[str, list[str]] = {name: [] for name in wanted}
+    uses: dict[str, list[str]] = {name: [] for name in wanted}
+    unreadable: list[str] = []
+    by_number: dict[int, list[str]] = {}
+    for num, nm in declared:
+        if num is not None:
+            by_number.setdefault(num, []).append(nm)
+    skip = {id(n) for n in table_nodes}
+    stack = [(c, c.name) for c in root.children if id(c) not in skip]
+    while stack:
+        node, owner = stack.pop()
+        if node.name == "pad":
+            owner = "pad"
+        if node.name == "net":
+            num = _net_number(node)
+            name = str(node.values[1]) if len(node.values) > 1 else None
+            if num is None and name is None:
+                unreadable.append(f"{owner} (net {' '.join(str(v) for v in node.values)})")
+            else:
+                for nm in wanted:
+                    if name == nm or (num is not None and num in numbers[nm]):
+                        uses[nm].append(owner)
+        elif node.name in ("net_name", "add_net") and node.values and str(node.values[0]) in wanted:
+            uses[str(node.values[0])].append(f"{owner} ({node.name})")
+        for child in node.children:
+            if not child.is_atom:
+                stack.append((child, owner))
+    for name in sorted(wanted):
+        nums = numbers[name]
+        if not nums:
+            blocked[name].append("its declaration could not be read")
+        elif len(nums) > 1:
+            blocked[name].append(f"it is declared {len(nums)} times")
+        elif nums[0] is None:
+            blocked[name].append("its net number is not a number")
+        elif len(by_number.get(nums[0], [])) > 1:
+            blocked[name].append(f"its net number {nums[0]} is shared with another declaration")
+        if uses[name]:
+            kinds = sorted(set(uses[name]))
+            blocked[name].append(f"{len(uses[name])} use(s): {', '.join(kinds[:5])}")
+        if unreadable:
+            blocked[name].append(f"a (net ...) reference could not be read ({unreadable[0]})")
+    removable = {n: numbers[n][0] for n in sorted(wanted) if not blocked[n]}
+    return removable, {n: r for n, r in blocked.items() if r}
+
+
 def _check_net_reconciliation(
     root: Any,
     nets: dict[str, list[str]],
@@ -781,12 +864,15 @@ def _check_net_reconciliation(
     present: set[str],
     components: dict[str, Any],
     renetted: list[dict],
+    blocked_stale: dict[str, list[str]],
 ) -> None:
-    """Raise ``_Blocked`` for the two changes this version cannot apply consistently."""
-    stale = sorted(n for n in set(_net_table(root).values()) - {""} if n not in nets)
-    if stale:
+    """Raise ``_Blocked`` for the two changes this version cannot apply consistently.
+
+    ``blocked_stale`` holds the declared nets absent from the netlist that are NOT shown to be
+    unused (GitHub issue 69); the unused ones are removed by the confirm instead."""
+    if blocked_stale:
         moves = []
-        for old in stale:
+        for old in sorted(blocked_stale):
             targets = sorted(
                 {
                     pin_net[(ref, pad)]
@@ -798,6 +884,8 @@ def _check_net_reconciliation(
         raise _Blocked(
             "net renamed or removed in the schematic: reconcile the net table (not supported in this version): "
             + "; ".join(moves)
+            + ". Not removed as an orphan because "
+            + "; ".join(f"{old}: {'; '.join(blocked_stale[old])}" for old in sorted(blocked_stale))
         )
     if renetted:
         affected = {r["board_net"] for r in renetted} | {r["schematic_net"] for r in renetted}
@@ -883,7 +971,10 @@ def _plan(
         want = pin_net.get((ref, pad))
         if want is not None and board_nets != {want}:
             renetted.append({"reference": ref, "pad": pad, "board_net": sorted(board_nets)[0], "schematic_net": want})
-    _check_net_reconciliation(root, nets, pin_net, pads, present, components, renetted)
+    declared = {str(n.values[1]) for n in root.children if n.name == "net" and len(n.values) > 1} - {""}
+    stale = sorted(declared - set(nets))
+    removable, blocked_stale = _stale_net_evidence(pcb_path, stale) if stale else ({}, {})
+    _check_net_reconciliation(root, nets, pin_net, pads, present, components, renetted, blocked_stale)
     digest = hashlib.sha256(
         json.dumps(
             {
@@ -893,6 +984,7 @@ def _plan(
                     for f in footprints
                 ],
                 "unresolved": [(u["reference"], u["library_id"]) for u in unresolved],
+                "stale_nets": sorted(removable.items()),
                 "project_libs": sorted((k, _rel(v, resolver.project_dir)) for k, v in resolver.project.items()),
                 "global_libs": sorted((k, str(v)) for k, v in resolver.global_libs.items()),
             },
@@ -907,6 +999,7 @@ def _plan(
         "footprint_mismatches": mismatches,
         "orphans": orphans,
         "renetted": renetted,
+        "stale_nets": removable,
         "staging": staging,
         "nets": nets,
         "plan_hash": digest,
@@ -969,6 +1062,8 @@ def propose_schematic_import(
         "footprint_mismatches": plan["footprint_mismatches"],
         "orphans": plan["orphans"],
         "renetted": plan["renetted"],
+        # declared on the board, used by no pad or copper, absent from the netlist (issue 69)
+        "stale_nets_removed": sorted(plan["stale_nets"]),
         "staging": plan["staging"],
         "nets": plan["nets"],
         "net_count": len(plan["nets"]),
@@ -1110,8 +1205,9 @@ def _verify(
     after = _tag_counts(fresh)
     for tag in set(before) | set(after):
         if tag == "net":
-            if after[tag] < before[tag]:
-                return "net table shrank during import", "top-level net count", f"at least {before[tag]}", after[tag]
+            floor = before[tag] - len(plan["stale_nets"])
+            if after[tag] < floor:
+                return "net table shrank during import", "top-level net count", f"at least {floor}", after[tag]
             continue
         want = before[tag] + (len(planned) if tag == "footprint" else 0)
         if after[tag] != want:
@@ -1137,6 +1233,12 @@ def _verify(
                 f"{key[0]}.{key[1]}: carries net {sorted(pads[key])} but is on no net in the netlist",
                 f"pad {key[0]}.{key[1]} net", "", sorted(pads[key]),
             )
+    dangling = _dangling_net_reference(fresh) if plan["stale_nets"] else None
+    if dangling:
+        return (
+            f"a net declaration still in use was removed: {dangling}",
+            "copper net reference", "a declared net", dangling,
+        )
     board_nets = {str(n.values[1]) for n in fresh.children if n.name == "net" and len(n.values) > 1} - {""}
     netlist_nets = {n.name for n in netlist.nets if n.name}
     if board_nets != netlist_nets:
@@ -1218,6 +1320,7 @@ def _build_inner(
         _apply_symbol_link(node, spec)
         node.set_value(0, spec["library_id"])  # nickname as KiCad's update-from-schematic writes it
     stats = board.assign_nets_from_netlist(plan["netlist"])
+    _remove_stale_nets(board._sexp, plan)
     if stats["missing_pads"] or stats["missing_footprints"]:
         raise checkpoint.Failed(
             "error",
@@ -1226,6 +1329,33 @@ def _build_inner(
         )
     write_layer.save_pcb(board, tmp_pcb)
     return {"pcb": tmp_pcb, "plan": plan, "before": before, "present": present, "before_facts": before_facts}
+
+
+def _remove_stale_nets(root: Any, plan: dict) -> None:
+    """Drop the top-level ``(net N "name")`` declarations the plan proved unused (issue 69), by
+    identity, through the node list (the write layer's low-level path)."""
+    gone = {(num, name) for name, num in plan["stale_nets"].items()}
+    drop = [
+        n for n in root.children
+        if n.name == "net" and len(n.values) > 1 and (_net_number(n), str(n.values[1])) in gone
+    ]
+    if len(drop) != len(gone):
+        raise checkpoint.Failed(
+            "error", f"expected to remove {len(gone)} orphaned net declaration(s) and found {len(drop)}: nothing was written"
+        )
+    ids = {id(n) for n in drop}
+    root.children[:] = [c for c in root.children if id(c) not in ids]
+
+
+def _dangling_net_reference(fresh: Any) -> str | None:
+    """The first top-level copper item whose ``(net N)`` names a number the net table no longer declares."""
+    known = {_net_number(n) for n in fresh.children if n.name == "net"} | {0}
+    for n in fresh.children:
+        if n.name in ("segment", "arc", "via", "zone"):
+            ref = n.find("net")
+            if ref is not None and len(ref.values) == 1 and _net_number(ref) not in known:
+                return f"{n.name} refers to net {ref.values[0]}"
+    return None
 
 
 def _verify_revision(tmp: Path, state: dict) -> dict:
@@ -1286,6 +1416,7 @@ def confirm_schematic_import(
         "footprint_mismatches": plan["footprint_mismatches"],
         "orphans": plan["orphans"],
         "renetted": plan["renetted"],
+        "stale_nets_removed": sorted(plan["stale_nets"]),
         "staging": plan["staging"],
         "nets": plan["nets"],
         "net_count": len(plan["nets"]),

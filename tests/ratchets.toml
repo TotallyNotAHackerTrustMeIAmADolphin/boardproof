@@ -2207,6 +2207,13 @@ kind = "rewrite_bytes"
 code = '''_faults.rewrite_bytes(bad, lambda data: data[:len(data) // 2])'''
 note = "Issue 123: a copy of the simple_led board cut in half, a truncated file no write_layer.save can produce; the read-only BOM check must refuse it (pcb_unreadable) and not fall back to the schematic footprint."
 
+[[test_kicad_fault_call]]
+file = "test_import_stale_nets.py"
+function = "test_a_net_entry_with_an_unreadable_number_is_undetermined_and_blocks"
+kind = "write_unchecked"
+code = '''faults.write_unchecked(root, board)'''
+note = "Issue 69: a board net declaration whose number is a bare word; kicad-cli pcb upgrade crashes on it (0xC0000005), so write_layer.save refuses to build it. The import must treat such a net as undetermined evidence and keep its refusal."
+
 [[raw_write]]
 file = "usage_log.py"
 function = "UsageLog._open"
