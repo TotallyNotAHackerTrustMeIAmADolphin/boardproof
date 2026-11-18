@@ -2269,3 +2269,17 @@ kind = "os.replace"
 code = '''os.replace(extracted, out_path)'''
 note = "Issue 200: moves the validated temporary index over the old cache.sqlite3 in the same directory (all or nothing; a failure keeps the old file); a SQLite file in a user data directory, not a KiCad file."
 
+
+[[test_kicad_fault_call]]
+file = "test_file_version_guard.py"
+function = "with_version"
+kind = "write_unchecked"
+code = '''faults.write_unchecked(root, dest)'''
+note = "Issue 208: the committed rung-1 board or schematic with only its top-level (version N) changed (newer than KiCad 10.0.7 writes, or removed); the layer's save would refuse it because kicad-cli 10.0.7 cannot load a newer file, and the guard under test must refuse it too."
+
+[[test_kicad_fault_call]]
+file = "test_file_version_guard.py"
+function = "test_load_refuses_a_version_that_is_not_a_number"
+kind = "write_unchecked"
+code = '''faults.write_unchecked(root, tmp_path / 'x.kicad_pcb')'''
+note = "Issue 208: the rung-1 board with its (version) value turned into the string soon; no tool writes that, the guard must refuse it."

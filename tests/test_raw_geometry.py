@@ -444,7 +444,8 @@ def test_every_edge_cuts_kind_in_turned_back_side_footprints_matches_pcbnew(synt
 def _tree(*items):
     from kicad_tools.sexp import SExp
 
-    return SExp.list("kicad_pcb", *items)
+    # a board root as KiCad 10.0.7 writes it: the readers refuse one without a version (issue 208)
+    return SExp.list("kicad_pcb", SExp.list("version", 20260206), *items)
 
 
 def test_an_outline_item_the_reader_cannot_measure_is_named_in_problems():

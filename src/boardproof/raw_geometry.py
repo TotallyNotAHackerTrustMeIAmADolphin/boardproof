@@ -171,6 +171,9 @@ def _root(board: Any) -> Any:
         board = write_layer.load(board)
     if getattr(board, "name", None) != "kicad_pcb":
         raise RawGeometryError(f"not a kicad_pcb root: {getattr(board, 'name', board)!r}")
+    from boardproof import write_layer
+
+    write_layer.check_file_version(board)  # a parsed tree not made by write_layer.load is checked too
     return board
 
 

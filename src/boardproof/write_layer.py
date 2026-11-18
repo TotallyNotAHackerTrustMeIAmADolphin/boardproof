@@ -150,6 +150,53 @@ class WriteLayerError(RuntimeError):
         self.details = details
 
 
+class UnsupportedFileVersionError(WriteLayerError):
+    """A ``.kicad_pcb`` or ``.kicad_sch`` whose ``(version N)`` is newer than
+    ``NEWEST_MEASURED_VERSION``, or has none. ``details`` carries ``file``, ``kind``,
+    ``version_found`` (``None`` when unreadable) and ``newest_accepted``."""
+
+
+# The newest ``(version N)`` of each file type this project has measured: what KiCad 10.0.7 writes
+# (``kicad-cli pcb|sch upgrade --force`` of a copy of the rung-1 board and schematic; a test repeats
+# it). A newer file may store things differently (a KiCad 11 nightly's ``.kicad_pcb`` 20261031 has
+# no footprint ``(at)``, and the raw readers returned wrong positions without an error), so the layer
+# and the raw readers refuse it (GitHub issue 208, docs/research-kicad11-nightly.md). Raise a value
+# here only after measuring the new format; the research note's 20260101 for the schematic is the
+# demos' version, not the newest KiCad 10.0.7 writes.
+NEWEST_MEASURED_VERSION = {"kicad_pcb": 20260206, "kicad_sch": 20260306}
+
+
+def check_file_version(root: SExp, path: str | Path | None = None) -> None:
+    """Raise ``UnsupportedFileVersionError`` for a board or schematic root whose version is newer
+    than ``NEWEST_MEASURED_VERSION`` or not a readable integer. Other roots pass."""
+    kind = root.name or ""
+    newest = NEWEST_MEASURED_VERSION.get(kind)
+    if newest is None:
+        return
+    # direct children only: ``find`` descends, and every KiCad 10 footprint carries its own (version)
+    nodes = [c for c in root.children if not c.is_atom and c.name == "version"]
+    raw = nodes[0].values[0] if nodes and nodes[0].values else None
+    found = raw if isinstance(raw, int) and not isinstance(raw, bool) else None
+    if isinstance(raw, float) and raw.is_integer():
+        found = int(raw)
+    if len(nodes) > 1:  # KiCad writes exactly one; a second token could hide a newer version
+        found, raw = None, f"{len(nodes)} version tokens"
+    where = f" in {Path(path).name}" if path is not None else ""
+    if found is None:
+        raise UnsupportedFileVersionError(
+            "unsupported_file_version",
+            f"no readable (version N){where} (found {raw!r}); the newest {kind} version accepted is {newest}",
+            file=str(path) if path is not None else None, kind=kind, version_found=None, newest_accepted=newest,
+        )
+    if found > newest:
+        raise UnsupportedFileVersionError(
+            "unsupported_file_version",
+            f"{kind} version {found}{where} is newer than {newest}, the newest this project has measured "
+            "(KiCad 10.0.7); it may store geometry differently, so it is refused",
+            file=str(path) if path is not None else None, kind=kind, version_found=found, newest_accepted=newest,
+        )
+
+
 # --------------------------------------------------------------------------- KiCad's lock files
 
 # The one sentence every writing tool's description carries (GitHub issue 68; pinned by
@@ -557,7 +604,9 @@ def load(path: str | Path) -> SExp:
     return inside a string survives; ``kicad_tools.sexp.parse_file`` turns it into ``\n``)."""
     with open(path, encoding="utf-8", newline="") as fh:
         text = fh.read()
-    return parse_string(text)
+    root = parse_string(text)
+    check_file_version(root, path)
+    return root
 
 
 # --------------------------------------------------------------------------- the parse check
