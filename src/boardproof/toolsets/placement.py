@@ -1242,7 +1242,7 @@ def build(mcp: MCPServer) -> list[str]:
         if outline is None:
             return {"status": "error", "code": "no_outline",
                     "reason": "the board has no Edge.Cuts outline to anchor to (propose_board_outline makes one): nothing was moved"}
-        new_at, info, problems = placement_anchor.plan_edge_placement(parts, outline.box, specs)
+        new_at, info, problems = placement_anchor.plan_edge_placement(parts, outline.box, specs, outline.cutouts)
         if problems:
             return {"status": "error", "code": problems[0]["code"], "problems": problems,
                     "reason": f"{len(problems)} problem(s), nothing was moved"}
@@ -1371,6 +1371,8 @@ def build(mcp: MCPServer) -> list[str]:
             region = (0.0, 0.0, max(50.0, *(w for _, w, _ in sizes)), float("inf"))
         moving = set(movable)
         blocked = [(local(p.box), p.sides()) for p in parts if p.reference not in moving]
+        if outline is not None:  # slots (issue 132) are missing material on both sides of the board
+            blocked += [(local(cut), {"front", "back"}) for cut in outline.cutouts]
         centres, unplaced = placement_anchor.pack(
             sizes, region, blocked, {r: by_ref[r][0].sides() for r in movable}, spacing_mm
         )
@@ -1468,6 +1470,8 @@ def build(mcp: MCPServer) -> list[str]:
                 boxes[ref] = placement_anchor.shift(part.box, target[0] - part.at[0], target[1] - part.at[1])
                 if outline is not None and not placement_anchor.inside(boxes[ref], outline.box):
                     problems.append(f"{ref} would lie outside the outline")
+                if outline is not None and any(placement_anchor.overlap(boxes[ref], cut) for cut in outline.cutouts):
+                    problems.append(f"{ref} would overlap a slot of the outline")
             if not problems:
                 overlaps = placement_anchor.collisions(boxes, parts)
                 if overlaps:

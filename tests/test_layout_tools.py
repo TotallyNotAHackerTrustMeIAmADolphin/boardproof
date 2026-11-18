@@ -17,7 +17,7 @@ from pathlib import Path
 import pytest
 from mcp.client.client import Client
 
-from boardproof import board_outline, board_rules
+from boardproof import board_outline, board_rules, isolation
 from boardproof import verify_board as gate
 from boardproof.server import build_server
 from test_board_rules import _build as build_rules_board
@@ -34,6 +34,7 @@ TOOLS = [
     "propose_board_rules", "confirm_board_rules",
     "propose_board_outline", "confirm_board_outline",
     "propose_silkscreen_minimums", "confirm_silkscreen_minimums",
+    "propose_keepouts_and_slots", "confirm_keepouts_and_slots",
 ]
 SEAMS = {"drc", "footprint_dirs", "netlist_exporter", "_clock", "router", "fill"}
 _EMPTY = {"violations": [], "unconnected_items": [], "schematic_parity": [], "ignored_checks": []}
@@ -52,7 +53,10 @@ def _kicad_cli_available() -> bool:
 @pytest.fixture(autouse=True)
 def fake_boundaries(monkeypatch: pytest.MonkeyPatch) -> None:
     """Seams added HERE only: the DRC of rules/outline, and the gate's grading."""
-    for module, name in ((board_rules, "confirm_board_rules"), (board_outline, "confirm_board_outline")):
+    for module, name in (
+        (board_rules, "confirm_board_rules"), (board_outline, "confirm_board_outline"),
+        (isolation, "confirm_keepouts_and_slots"),
+    ):
         original = getattr(module, name)
 
         def seamed(pcb_path, token, *args, _original=original, **kwargs):
@@ -99,6 +103,15 @@ def _outline_case(tmp: Path):
             "confirm_board_outline", {}, "built")
 
 
+def _isolation_case(tmp: Path):
+    shutil.copytree(GOLDEN_DIR, tmp / "proj")
+    args = dict(
+        keepouts=[{"name": "MAINS", "rect": {"x": 138, "y": 95, "width": 20, "height": 5}, "layers": ["F.Cu"]}],
+        slots=[{"x1": 140, "y1": 112, "x2": 156, "y2": 112, "width_mm": 1.5, "ends": "round"}],
+    )
+    return (tmp / "proj" / GOLDEN_NAME, "propose_keepouts_and_slots", args, "confirm_keepouts_and_slots", {}, "built")
+
+
 def _silk_case(tmp: Path):
     board = build_silk_board(tmp / "proj")
     return board, "propose_silkscreen_minimums", {}, "confirm_silkscreen_minimums", {}, "applied"
@@ -114,6 +127,7 @@ def _import_case(tmp: Path):
 
 CASES = {
     "rules": _rules_case, "outline": _outline_case, "silk": _silk_case, "import": _import_case,
+    "isolation": _isolation_case,
 }
 
 
@@ -142,6 +156,11 @@ async def test_all_pairs_are_listed_with_hints_and_no_seam_parameter() -> None:
     assert {"allow_overlap", "mounting_holes", "origin", "outline"} <= set(
         tools["propose_board_outline"].input_schema["properties"]
     )
+    assert set(tools["propose_keepouts_and_slots"].input_schema["properties"]) == {
+        "pcb_path", "keepouts", "slots", "remove_keepouts", "remove_slots", "output_dir",
+        "edge_margin_mm", "copper_margin_mm",
+    }
+    assert set(tools["confirm_keepouts_and_slots"].input_schema["properties"]) == {"pcb_path", "revision_token"}
 
 
 @pytest.mark.asyncio

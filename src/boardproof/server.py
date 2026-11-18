@@ -506,6 +506,73 @@ def _register_layout_tools(mcp: MCPServer) -> None:
     @mcp.tool(
         annotations=_READ_ONLY,
         description=(
+            "Dry run of adding or removing keepout zones (rule areas that forbid tracks, vias, pads, "
+            "footprints or copper pour per copper layer) and slots (closed cut-outs inside the board "
+            "outline in Edge.Cuts, for example a milled isolation slot between a mains side and a "
+            "low-voltage side) in one batch; lists what would change and every existing item a slot or "
+            "keepout would hit, and writes nothing; returns a revision_token. keepouts: [{name, rect: "
+            "{x, y, width, height} | polygon: [[x, y], ...], layers: \"all\" or [copper layer names], "
+            "rules?: {tracks, vias, pads, copperpour, footprints: \"allowed\" | \"not_allowed\"}}] "
+            "(default rules: tracks, vias and copperpour not_allowed). slots: [{x1, y1, x2, y2, "
+            "width_mm, ends: \"round\" | \"square\"}], a centre line and a width; round ends are "
+            "semicircles centred on both end points, square ends make the rectangle between them. "
+            "remove_keepouts: names; remove_slots: slot ids as listed by this tool. Coordinates are "
+            "page mm. A slot must lie inside the outline (edge_margin_mm, default 0.5, from it and from "
+            "other slots) and keep copper_margin_mm (default 0.5) from every track, via, pad and "
+            "courtyard: kicad-cli DRC does not report items that lie wholly inside a slot, so any such "
+            "item refuses the whole proposal and is named; a keepout over items its own rules forbid is "
+            "refused the same way. A slot that lies over, around or on an item is a conflict at any "
+            "margin (0 included), every margin also holds a 0.005 mm sampling tolerance for arcs and "
+            "circles, and negative margins are refused. There is no override. Copper pours under a slot or a copperpour "
+            "keepout are listed as zone_overlaps and need a refill. With nothing asked it lists the "
+            "board's keepouts and slots (nothing_to_do). " + _LAYOUT_ORDER
+        ),
+    )
+    def propose_keepouts_and_slots(
+        pcb_path: str,
+        keepouts: list[dict] | None = None,
+        slots: list[dict] | None = None,
+        remove_keepouts: list[str] | None = None,
+        remove_slots: list[str] | None = None,
+        output_dir: str | None = None,
+        edge_margin_mm: float = 0.5,
+        copper_margin_mm: float = 0.5,
+    ) -> dict:
+        from boardproof import isolation
+
+        return isolation.propose_keepouts_and_slots(
+            pcb_path,
+            keepouts=keepouts,
+            slots=slots,
+            remove_keepouts=remove_keepouts,
+            remove_slots=remove_slots,
+            output_dir=output_dir,
+            edge_margin_mm=edge_margin_mm,
+            copper_margin_mm=copper_margin_mm,
+        )
+
+    @mcp.tool(
+        annotations=_DESTRUCTIVE,
+        description=(
+            "Apply a propose_keepouts_and_slots proposal: writes a NEW board revision with the keepout "
+            "zones and slots, verified by a fresh reload that compares the whole file and by kicad-cli "
+            "DRC, which must report no new outline, board-edge or keepout error; the revision is not "
+            "produced otherwise. Removing a keepout or a slot is a loosening of the board's protection: "
+            "it is applied only because the proposal named it. The revision_token is single use. "
+            + _LAYOUT_ORDER
+            + " "
+            + write_layer.LOCK_SENTENCE
+        ),
+    )
+    def confirm_keepouts_and_slots(pcb_path: str, revision_token: str) -> dict:
+        from boardproof import isolation
+
+        result = isolation.confirm_keepouts_and_slots(pcb_path, revision_token)
+        return _as_revision(result, pcb_path)
+
+    @mcp.tool(
+        annotations=_READ_ONLY,
+        description=(
             "Dry run of raising every silkscreen text below the fab minimums (height and "
             "stroke) on a NEW revision; lists each text with its before and after size, and "
             "any text it cannot handle under `unhandled`; writes nothing and returns a "

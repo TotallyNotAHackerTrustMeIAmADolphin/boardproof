@@ -1,0 +1,7 @@
+[writing_tool.confirm_keepouts_and_slots]
+self_check = "reload-verify"
+note = "Issue 132: isolation._write builds the new revision in a temporary sibling directory (checkpoint.build_revision) from write_layer.load, a node remove and append on the tree (no kicad_tools setter, no PCB.save) and write_layer.save; isolation._verify reloads the saved file and refuses (write_not_verified, source untouched, nothing left behind) unless the whole file equals the source minus the removed nodes plus the written ones (_self_check.reload_differences), the outer outline is unchanged, the slot ids and shapes and the keepout names, layers, rules and polygons are the planned ones, and kicad-cli DRC reports no new invalid_outline, malformed_outline, copper_edge_clearance or items_not_allowed."
+proof = [
+    "tests/test_isolation.py::test_the_self_check_fires_on_a_corrupted_write",
+    "tests/test_isolation.py::test_the_whole_file_compare_alone_catches_an_unrelated_node_lost",
+]

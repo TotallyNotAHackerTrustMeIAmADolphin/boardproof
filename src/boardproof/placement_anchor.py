@@ -24,7 +24,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
-from boardproof import _self_check, raw_geometry, write_layer
+from boardproof import _self_check, edge_loops, raw_geometry, write_layer
 from boardproof.raw_geometry import Point, RawGeometryError
 
 Box = tuple[float, float, float, float]  # (min x, min y, max x, max y), page mm, y down
@@ -44,9 +44,11 @@ class NotVerified(Exception):
 
 @dataclass(frozen=True)
 class Outline:
-    """The board outline as an axis-aligned rectangle, page frame."""
+    """The board outline as an axis-aligned rectangle, page frame. ``cutouts`` are the bounding
+    boxes of the slots (closed Edge.Cuts loops inside it, issue 132): material is missing there."""
 
     box: Box
+    cutouts: tuple[Box, ...] = ()
 
     @property
     def origin(self) -> Point:
@@ -195,12 +197,25 @@ def outline_rect(root: Any) -> tuple[Outline | None, str | None]:
     if any(item.footprint_uuid is not None for item in outline.items):
         return None, "a footprint carries Edge.Cuts items"
     x0, y0, x1, y1 = outline.bbox_mm  # type: ignore[misc]
-    kinds = [item.kind for item in outline.items]
+    items = list(outline.items)
+    cutouts: tuple[Box, ...] = ()
+    if len(items) > 1:
+        # Slots (issue 132): closed loops strictly inside the outer loop. The rectangle test is made on
+        # the outer loop's own items; the slots are reported as cutouts, never as part of the outline.
+        parts = edge_loops.classify(root)
+        if parts.outer is not None and parts.slots and not parts.problems and all(parts.outer.uuids):
+            keep = set(parts.outer.uuids)
+            outer_items = [item for item in items if item.uuid in keep]
+            if len(outer_items) == len(parts.outer.uuids):
+                items = outer_items
+                x0, y0, x1, y1 = parts.outer.box
+                cutouts = tuple(slot.box for slot in parts.slots)
+    kinds = [item.kind for item in items]
     if kinds == ["rect"]:
-        return Outline((x0, y0, x1, y1)), None
+        return Outline((x0, y0, x1, y1), cutouts), None
     if kinds == ["line"] * 4:
         sides = set()
-        for item in outline.items:
+        for item in items:
             (ax, ay), (bx, by) = item.points
             if abs(ax - bx) < _EPS and abs(min(ay, by) - y0) < _EPS and abs(max(ay, by) - y1) < _EPS:
                 if abs(ax - x0) < _EPS:
@@ -213,7 +228,7 @@ def outline_rect(root: Any) -> tuple[Outline | None, str | None]:
                 elif abs(ay - y1) < _EPS:
                     sides.add("bottom")
         if sides == set(EDGES):
-            return Outline((x0, y0, x1, y1)), None
+            return Outline((x0, y0, x1, y1), cutouts), None
     return None, (
         "the outline is not one axis-aligned rectangle (one gr_rect, or four closing gr_line); "
         f"its items are {sorted(set(kinds))}"
@@ -411,10 +426,13 @@ def _finite(value: Any) -> bool:
     return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
 
 
-def plan_edge_placement(parts: list[Part], rect: Box, specs: list[dict]) -> tuple[dict[str, tuple[float, float]], dict[str, dict], list[dict]]:
+def plan_edge_placement(
+    parts: list[Part], rect: Box, specs: list[dict], cutouts: tuple[Box, ...] = ()
+) -> tuple[dict[str, tuple[float, float]], dict[str, dict], list[dict]]:
     """``(new_at, info, problems)``: for every valid spec the new page ``(x, y)`` of the footprint
     and its facts; each problem is ``{"reference", "code", "reason"}``. All or nothing: the caller
-    writes only when ``problems`` is empty."""
+    writes only when ``problems`` is empty. ``cutouts`` are the slot boxes of the outline
+    (``Outline.cutouts``): a courtyard that would overlap one is the problem ``in_cutout``."""
     by_ref: dict[str, list[Part]] = {}
     for p in parts:
         by_ref.setdefault(p.reference, []).append(p)
@@ -463,6 +481,9 @@ def plan_edge_placement(parts: list[Part], rect: Box, specs: list[dict]) -> tupl
         if not inside(box, rect):
             bad(ref, "outside_outline", f"at edge {edge}, offset {offset} and along {along} its courtyard "
                                         f"{[round(v, 6) for v in box]} leaves the outline {[round(v, 6) for v in rect]}")
+            continue
+        if any(overlap(box, cut) for cut in cutouts):
+            bad(ref, "in_cutout", f"its courtyard {[round(v, 6) for v in box]} would overlap a slot of the outline")
             continue
         new_at[ref] = (round(part.at[0] + dx, 6), round(part.at[1] + dy, 6))
         boxes[ref] = box

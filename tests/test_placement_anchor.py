@@ -282,6 +282,9 @@ def _outline_variant(tmp_path, chips, kind):
         for n in lines:
             root.children.remove(n)
     elif kind == "circle":
+        # the whole outline is one circle (a circle INSIDE the rectangle is a round cut-out since issue 132)
+        for n in lines:
+            root.children.remove(n)
         root.children.append(SExp.list(
             "gr_circle", SExp.list("center", 120, 100), SExp.list("end", 125, 100),
             SExp.list("stroke", SExp.list("width", 0.1), SExp.list("type", "default")),
