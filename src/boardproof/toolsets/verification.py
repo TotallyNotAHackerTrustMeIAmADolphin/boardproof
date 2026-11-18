@@ -718,6 +718,32 @@ def build(mcp: MCPServer) -> list[str]:
 
         return spice_compare.compare_spice_netlist(sch_path, spice_netlist, root_sch, mapping, compare_values)
 
+    def report_clearance_coverage(pcb_path: str, check_loading: bool = True, offset: int = 0, limit: int = 200) -> dict:
+        """Read-only: which clearance rule holds EVERY pair of nets apart, and does KiCad load the custom rules file at all?
+
+        Resolves every unordered pair of the board's nets the way KiCad does (measured on kicad-cli 10.0.7): the LAST matching
+        clearance rule of the .kicad_dru wins and REPLACES the net class clearance and the board minimum (in either direction); with
+        no matching rule the largest of the two net classes' clearances and the board minimum applies. Use it after
+        propose_board_rules / confirm_board_rules with pair_clearances, and for any board with a hand-written .kicad_dru: KiCad drops
+        EVERY rule of a rules file that has one defect (a length without a unit, an unknown constraint or condition function, an
+        unbalanced parenthesis, no (version 1)), silently, with exit code 0, so a rule that never reports a violation proves nothing.
+        check_loading (default true) runs one kicad-cli DRC on a scratch copy with two probe rules at the end of the file and reports
+        rules_file_loaded_by_kicad true, false or null (the board has no track, via or hole the probe can fire on); when the file is
+        not loaded (or has defects this tool can see) the matrix shows what applies WITHOUT the file and status is partial.
+
+        Result: rules (every rule of the file, hand-written and managed, with condition, constraints, layer, severity and text),
+        class_pairs (one row per pair of effective net classes with clearance_mm, source rule | netclass | board_minimum, the rule
+        name and how many net pairs it covers; no pair is left out), net_pairs (every pair {a, b, a_class, b_class, clearance_mm, source, rule,
+        checked, severity}; total, offset, returned, all_listed and next_offset: page with offset and limit up to 2000), classes with
+        their nets, and notes. A rule whose condition this tool cannot evaluate (an item type, a layer, a wildcard) is never guessed:
+        it is listed as may_be_overridden_by on every pair it could touch and the status is partial. checked false means a matching
+        rule has severity ignore: KiCad does not report that pair at all. Only copper-to-copper clearance of two different nets is
+        covered; this is not a verdict on the board (verify_board is).
+        """
+        from boardproof import clearance_coverage
+
+        return clearance_coverage.report_clearance_coverage(pcb_path, check_loading=check_loading, offset=offset, limit=limit)
+
     _READ_ONLY_LOCAL = {
         "readOnlyHint": True,
         "destructiveHint": False,
@@ -738,6 +764,7 @@ def build(mcp: MCPServer) -> list[str]:
         list_manufacturer_profiles,
         pcb_get_design_rules,
         pcb_check_manufacturability,
+        report_clearance_coverage,
         compare_spice_netlist,
     ]
     for tool_fn in tools:

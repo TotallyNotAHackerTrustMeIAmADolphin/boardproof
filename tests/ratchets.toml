@@ -184,7 +184,8 @@ function = "save_bytes"
 kind = "open"
 code = '''open(temp, 'xb')'''
 kicad_file = true
-note = "Build ticket 76: the write layer's byte-exact save for a KiCad file kicad-cli cannot parse-check, today only fp-lib-table / sym-lib-table (register_library_asset). The caller's bytes go unchanged into a new, uniquely named temporary sibling (.<name>.<hex>.tmp, mode xb: never an existing file), removed if the write fails; the caller's required verify runs on it before os.replace (_commit), which removes it on any failure. library._verify_insertion checks that the bytes are the source's plus the one new row and that the reparse is the source's children plus that row, in order."
+note = "Build ticket 76: the write layer's byte-exact save for a KiCad file kicad-cli cannot parse-check, fp-lib-table / sym-lib-table (register_library_asset) and, since issue 131, a .kicad_dru rules file (board_rules._write, dru.load_probe). The caller's bytes go unchanged into a new, uniquely named temporary sibling (.<name>.<hex>.tmp, mode xb: never an existing file), removed if the write fails; the caller's required verify runs on it before os.replace (_commit), which removes it on any failure. library._verify_insertion checks that the bytes are the source's plus the one new row and that the reparse is the source's children plus that row, in order."
+read_only_reach = "Issue 131: dru.load_probe (reached by report_clearance_coverage) saves the rules text plus two probe rules into a scratch copy of the project inside a TemporaryDirectory that is removed in a finally block; the path is never one the caller gave. The same function also writes the .kicad_dru of a new revision for board_rules._write (a writing tool with its own self-check)."
 
 [[raw_write]]
 file = "write_layer.py"
@@ -1104,6 +1105,14 @@ reaches = [
 [read_only_tool_writes.verify_board]
 reason = "Copies the project into scratch directories for its three refilled kicad-cli DRC runs."
 reaches = ["verify_board.py | _copy_project | shutil.copytree"]
+
+[read_only_tool_writes.report_clearance_coverage]
+reason = "Issue 131: the load probe (dru.load_probe) copies the project into a scratch directory, writes the board's rules text plus two probe rules there through write_layer.save_bytes and runs one kicad-cli DRC on it; the scratch directory is removed in a finally block and the board's own files are never written (tests/test_clearance_coverage.py::test_the_report_never_writes)."
+reaches = [
+    "checkpoint.py | copy_project | shutil.copytree",
+    "write_layer.py | _commit | os.replace",
+    "write_layer.py | save_bytes | open",
+]
 
 [read_only_tool_writes.pin_rule_baseline]
 reason = "One DRC run on a scratch copy of the project (snapshot_rules)."

@@ -44,7 +44,7 @@ from typing import Any
 
 from kicad_tools.core import project_file as _pf
 
-from boardproof import checkpoint, write_layer
+from boardproof import checkpoint, dru, kicad_cli, write_layer
 from boardproof import verify_board as gate
 
 # request argument -> key under board.design_settings.rules
@@ -619,70 +619,12 @@ def _cli_version() -> str | None:
 # --- custom rules (.kicad_dru) ----------------------------------------------------
 
 
-class _Str(str):
-    """A quoted string token (a rule name or condition), as opposed to a bare atom."""
-
-
-def _tokenize_dru(text: str) -> list[Any]:
-    """Parse ``.kicad_dru`` text into nested lists: ``#`` comments, double-quoted strings
-    with backslash escapes, bare atoms. Unbalanced input is closed at end of file."""
-    root: list[Any] = []
-    stack: list[list[Any]] = [root]
-    i, n = 0, len(text)
-    while i < n:
-        char = text[i]
-        if char.isspace():
-            i += 1
-        elif char == "#":
-            while i < n and text[i] not in "\r\n":
-                i += 1
-        elif char == "(":
-            child: list[Any] = []
-            stack[-1].append(child)
-            stack.append(child)
-            i += 1
-        elif char == ")":
-            if len(stack) > 1:
-                stack.pop()
-            i += 1
-        elif char == '"':
-            i += 1
-            chars: list[str] = []
-            while i < n and text[i] != '"':
-                if text[i] == "\\" and i + 1 < n:
-                    i += 1
-                chars.append(text[i])
-                i += 1
-            i += 1  # closing quote (or end of file)
-            stack[-1].append(_Str("".join(chars)))
-        else:
-            start = i
-            while i < n and not text[i].isspace() and text[i] not in '()"#':
-                i += 1
-            stack[-1].append(text[start:i])
-    return root
-
-
-def _atom(node: Any) -> str | None:
-    return node.lower() if isinstance(node, str) and not isinstance(node, _Str) else None
-
-
-def _render(node: Any) -> str:
-    if isinstance(node, list):
-        return "(" + " ".join(_render(c) for c in node) + ")"
-    return f'"{node}"' if isinstance(node, _Str) else str(node)
-
-
-def _constraints_in(node: Any) -> list[str]:
-    found: list[str] = []
-    if isinstance(node, list):
-        if node and _atom(node[0]) == "constraint" and len(node) > 1:
-            kind = _atom(node[1])
-            if kind:
-                found.append(kind)
-        for child in node:
-            found.extend(_constraints_in(child))
-    return found
+# The tokenizer and rule model moved to boardproof.dru (issue 131); the old names stay for callers.
+_Str = dru.Str
+_tokenize_dru = dru.tokenize
+_atom = dru.atom
+_render = dru.render
+_constraints_in = dru.constraints_in
 
 
 def _custom_rules(pcb_path: Path) -> tuple[str | None, list[dict]]:
@@ -728,11 +670,279 @@ def _custom_rule_warnings(file_name: str | None, rules: list[dict], wanted: dict
     return out
 
 
+# --- pair clearances between net classes (issue 131) --------------------------------------
+
+
+def _normalise_pairs(
+    pairs: list[dict] | None, removals: list[dict] | None
+) -> tuple[dict[tuple[str, str], float], set[tuple[str, str]], str | None]:
+    """``({pair: mm}, {pair to remove}, problem)``; a pair is an unordered class pair (sorted)."""
+    wanted: dict[tuple[str, str], float] = {}
+    for raw in pairs or []:
+        if not isinstance(raw, dict) or set(raw) - {"a", "b", "clearance"}:
+            return {}, set(), f"pair_clearances entries are {{a, b, clearance}} objects, got {raw!r}"
+        for side in ("a", "b"):
+            problem = dru.class_name_problem(raw.get(side))
+            if problem:
+                return {}, set(), f"pair_clearances: {problem}"
+        value = raw.get("clearance")
+        if not _valid_mm(value) or not dru.representable(float(value)):
+            return {}, set(), (
+                f"pair_clearances {raw.get('a')!r} / {raw.get('b')!r}: clearance must be a finite number of millimetres "
+                f"in (0, {_MAX_MM:g}] with at most four decimals, got {value!r}"
+            )
+        key = dru.pair_key(raw["a"], raw["b"])
+        if key in wanted:
+            return {}, set(), f"pair {key[0]!r} / {key[1]!r} is listed twice (the order of a and b does not matter)"
+        wanted[key] = float(value)
+    gone: set[tuple[str, str]] = set()
+    for raw in removals or []:
+        if not isinstance(raw, dict) or set(raw) - {"a", "b"}:
+            return {}, set(), f"remove_pair_clearances entries are {{a, b}} objects, got {raw!r}"
+        for side in ("a", "b"):
+            problem = dru.class_name_problem(raw.get(side))
+            if problem:
+                return {}, set(), f"remove_pair_clearances: {problem}"
+        key = dru.pair_key(raw["a"], raw["b"])
+        if key in wanted:
+            return {}, set(), f"pair {key[0]!r} / {key[1]!r} is both set and removed in one request"
+        if key in gone:
+            return {}, set(), f"pair {key[0]!r} / {key[1]!r} is removed twice"
+        gone.add(key)
+    names = sorted({n for key in [*wanted, *gone] for n in key})
+    folded: dict[str, str] = {}
+    for name in names:
+        other = folded.setdefault(name.lower(), name)
+        if other != name:
+            return {}, set(), (
+                f"net classes {other!r} and {name!r} differ only in case: KiCad compares class names in a rule "
+                "condition without regard to case (measured), so one rule would match both"
+            )
+    return wanted, gone, None
+
+
+def _rules_text(pcb_path: Path) -> tuple[str | None, str | None]:
+    """``(text of the board's .kicad_dru or None when there is none, problem)``; read as bytes so a
+    line ending survives, UTF-8 only."""
+    path = pcb_path.with_suffix(dru.DRU_SUFFIX)
+    if not path.is_file():
+        return None, None
+    try:
+        return path.read_bytes().decode("utf-8"), None
+    except UnicodeDecodeError as exc:
+        return None, f"{path.name} is not UTF-8 text ({exc}): it is left alone"
+
+
+def _board_minimum(data: dict, wanted: dict[str, float]) -> float:
+    if "min_clearance" in wanted:
+        return wanted["min_clearance"]
+    return _constraint_before(data, "min_clearance")[0] or 0.0
+
+
+def _floor(data: dict, a: str, b: str, board_min: float) -> float:
+    """What KiCad holds two nets of these classes apart by without a rule (measured): the largest of
+    the two classes' clearances and the board minimum."""
+    return max(_class_value(data, a, "clearance") or 0.0, _class_value(data, b, "clearance") or 0.0, board_min)
+
+
+def _pair_plan(
+    src: Path,
+    data: dict,
+    new: dict,
+    set_pairs: dict[tuple[str, str], float],
+    remove: set[tuple[str, str]],
+    wanted: dict[str, float],
+) -> dict:
+    """What the pair request does to the rules file: ``{"error": reason}``, or ``{"text", "current",
+    "target", "changes", "loosened", "warnings", "rules_file"}`` (``text`` is the new file text,
+    None when the file stays as it is). Nothing is written."""
+    text, problem = _rules_text(src)
+    if problem:
+        return {"error": problem}
+    block = dru.split_block(text) if text and (dru.BLOCK_BEGIN in text or dru.BLOCK_END in text) else None
+    if block and block[3]:
+        return {
+            "error": "; ".join(block[3])
+            + ": this tool will not overwrite it; restore the block or delete it in KiCad's own editor"
+        }
+    current = dict(block[2]) if block else {}
+    missing = sorted(k for k in remove if k not in current)
+    if missing:
+        return {"error": f"no managed pair clearance to remove for {[list(k) for k in missing]}"}
+    defined = [c.get("name") for c in _pf.get_netclass_definitions(new) if isinstance(c.get("name"), str)]
+    for key in [*set_pairs, *remove]:
+        for name in key:
+            clash = sorted(d for d in defined if d != name and d.lower() == name.lower())
+            if clash:
+                return {
+                    "error": f"net class {name!r} differs only in case from {clash}: KiCad compares class names in a "
+                    "rule condition without regard to case (measured), so the rule would match both"
+                }
+    unknown = sorted({c for key in set_pairs for c in key if c != _DEFAULT_CLASS and _class_by_name(new, c) is None})
+    if unknown:
+        return {
+            "error": f"net classes not in the project: {unknown} (define them in the same request through netclasses)",
+            "unknown_classes": unknown,
+        }
+    target = {k: v for k, v in current.items() if k not in remove} | set_pairs
+    old_min, new_min = _board_minimum(data, {}), _board_minimum(new, wanted)
+    hand_rules = [r for r in dru.parse(text)[0] if not r.managed] if text else []
+    changes: list[dict] = []
+    loosened: list[dict] = []
+    unsure_warnings: list[str] = []
+    for key in sorted(set_pairs):
+        before = current.get(key)
+        if before == set_pairs[key]:
+            continue
+        floor = max(_floor(data, *key, old_min), _floor(new, *key, new_min))
+        hand, unsure = _hand_minimum(hand_rules, *key)
+        where = f"pair_clearance:{key[0]} / {key[1]}"
+        changes.append(
+            {"where": where, "key": "clearance", "before": before, "after": set_pairs[key], "net_class_floor": floor}
+        )
+        reference = max(before or 0.0, floor, hand)
+        if unsure:
+            unsure_warnings.append(
+                f"hand-written rule(s) {unsure} may also match {key[0]} / {key[1]} and this report cannot evaluate them: "
+                "the pair rule replaces what they ask for where it matches, so a lower value relaxes them"
+            )
+        if set_pairs[key] < reference:
+            loosened.append(
+                {
+                    "kind": "pair_clearance",
+                    "where": where,
+                    "key": "clearance",
+                    "before": reference,
+                    "after": set_pairs[key],
+                    "before_source": (
+                        "hand-written rule"
+                        if hand >= max(before or 0.0, floor) and hand > 0
+                        else "pair rule" if (before or 0.0) >= floor else "net class or board minimum"
+                    ),
+                    "note": "a rule REPLACES the class clearance and the board minimum for the pairs it matches (measured): a lower value relaxes them",
+                }
+            )
+    for key in sorted(remove):
+        floor = max(_floor(new, *key, new_min), _hand_minimum(hand_rules, *key)[0])
+        where = f"pair_clearance:{key[0]} / {key[1]}"
+        changes.append({"where": where, "key": "clearance", "before": current[key], "after": None, "net_class_floor": floor})
+        if floor < current[key]:
+            loosened.append(
+                {
+                    "kind": "pair_clearance",
+                    "where": where,
+                    "key": "clearance",
+                    "before": current[key],
+                    "after": floor,
+                    "before_source": "pair rule",
+                    "note": "without the rule the net classes and the board minimum apply",
+                }
+            )
+    warnings: list[str] = list(dict.fromkeys(unsure_warnings))
+    if target and text is not None:
+        rules, _version, _problems = dru.parse(text)
+        managed_at = [r.order for r in rules if r.managed]
+        later = sorted(
+            r.name for r in rules if not r.managed and managed_at and r.order > min(managed_at) and r.clearance() is not None
+        )
+        if later:
+            warnings.append(
+                f"hand-written clearance rule(s) {later} come after the managed block: the last matching rule wins, "
+                "so they win where they match"
+            )
+    new_text = dru.with_pairs(text, target) if (set_pairs or remove) else None
+    if new_text is not None and new_text == text:
+        new_text = None
+    return {
+        "text": new_text,
+        "current": current,
+        "target": target,
+        "changes": changes,
+        "loosened": loosened,
+        "warnings": warnings,
+        "rules_file": src.with_suffix(dru.DRU_SUFFIX).name,
+        "had_file": text is not None,
+    }
+
+
+def _hand_minimum(rules: list, a: str, b: str) -> tuple[float, list[str]]:
+    """``(largest minimum of the hand-written clearance rules that match nets of classes a and b, names of the
+    rules that might match but cannot be evaluated)``. A condition naming a net, an item type, a layer or a
+    wildcard is not evaluated for a pair of classes: it is reported, never guessed."""
+    best, unsure = 0.0, []
+    first, second = dru.NetCtx("", (a,)), dru.NetCtx("", (b,))
+    for rule in rules:
+        clearance = rule.clearance()
+        if clearance is None or clearance.min_mm is None:
+            continue
+        condition = rule.condition or ""
+        verdict = None if ("NetName" in condition or rule.layer) else dru.matches(rule.condition, first, second)
+        if verdict is True:
+            best = max(best, clearance.min_mm)
+        elif verdict is None:
+            unsure.append(rule.name)
+    return best, unsure
+
+
+def _pair_list(pairs: dict[tuple[str, str], float]) -> list[dict]:
+    return [{"a": a, "b": b, "clearance_mm": v, "rule": dru.pair_name(a, b)} for (a, b), v in sorted(pairs.items())]
+
+
+def _dru_check(out_pcb: Path, source_text: str | None, target: dict, drc: Any) -> dict:
+    """The self-check of a written rules file (read-back, then KiCad itself); raises
+    ``checkpoint.NotVerified``. Returns ``{"loaded": True | None, "reason": ...}``."""
+    dru_path = out_pcb.with_suffix(dru.DRU_SUFFIX)
+    name = dru_path.name
+    try:
+        written = dru_path.read_bytes().decode("utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise checkpoint.NotVerified(
+            f"CRITICAL: the written {name} cannot be read back: {exc}",
+            [checkpoint.mismatch(name, "rules file", "readable UTF-8 text", str(exc))],
+        ) from exc
+    block = dru.split_block(written) if dru.BLOCK_BEGIN in written or dru.BLOCK_END in written else None
+    clean = block is not None and not block[3]
+    found = block[2] if clean else {}
+    if found != target or (block is not None and not clean):
+        raise checkpoint.NotVerified(
+            f"CRITICAL: the reloaded {name} does not carry the requested pair clearances",
+            [
+                checkpoint.mismatch(name, f"pair {a} / {b}", target.get((a, b)), found.get((a, b)))
+                for (a, b) in sorted(set(target) | set(found))
+                if target.get((a, b)) != found.get((a, b))
+            ]
+            or [checkpoint.mismatch(name, "managed block", "a clean block", "; ".join(block[3]))],
+        )
+    original = dru.outside_block(source_text) if source_text is not None else "(version 1)"
+    if dru.outside_block(written).rstrip() != original.rstrip():
+        raise checkpoint.NotVerified(
+            f"CRITICAL: the text of {name} outside the managed block changed",
+            [checkpoint.mismatch(name, "hand-written rules", "unchanged", "differs after reload")],
+        )
+    if not target:
+        return {"loaded": None, "reason": "no pair rule is left in the file"}
+    _rules, _version, problems = dru.parse(written)
+    result = dru.load_probe(out_pcb, written, drc or kicad_cli.run_drc, max_bytes=gate._MAX_COPY_BYTES)
+    if result["loaded"] is False:
+        raise checkpoint.NotVerified(
+            f"CRITICAL: kicad-cli does not load the written {name}: its rules would not be checked"
+            + (f" (defects seen in the text: {problems})" if problems else ""),
+            [checkpoint.mismatch(name, "KiCad loads the rules file", True, result["reason"])]
+            + [checkpoint.mismatch(name, "rules file", "loadable by KiCad", p) for p in problems],
+        )
+    if result["loaded"] is None and problems:  # KiCad could not be asked: the parser's defects stand
+        raise checkpoint.NotVerified(
+            f"CRITICAL: {name} has defects that make KiCad drop every rule in it: {problems}",
+            [checkpoint.mismatch(name, "rules file", "loadable by KiCad", p) for p in problems],
+        )
+    return result
+
+
 # --- planning --------------------------------------------------------------------
 
 
 def _normalise_request(
-    constraints: dict[str, float], netclasses: list[dict] | None
+    constraints: dict[str, float], netclasses: list[dict] | None, *, has_pairs: bool = False
 ) -> tuple[dict[str, float], list[dict], str | None]:
     wanted: dict[str, float] = {}
     for arg, value in constraints.items():
@@ -776,8 +986,8 @@ def _normalise_request(
         classes.append(
             {"name": name, "values": values, "nets": list(dict.fromkeys(nets)), "priority": priority}
         )
-    if not wanted and not classes:
-        return {}, [], "nothing requested: give at least one constraint or net class"
+    if not wanted and not classes and not has_pairs:
+        return {}, [], "nothing requested: give at least one constraint, net class or pair clearance"
     return wanted, classes, None
 
 
@@ -1012,12 +1222,23 @@ def propose_board_rules(
     min_via_annular_width: float | None = None,
     min_through_hole_diameter: float | None = None,
     netclasses: list[dict] | None = None,
+    pair_clearances: list[dict] | None = None,
+    remove_pair_clearances: list[dict] | None = None,
     allow_loosen: bool = False,
     allow_incoherent: bool = False,
     output_dir: str | Path | None = None,
 ) -> dict:
     """Dry run. Reports every value that would change, every loosening and every
     incoherence; writes nothing.
+
+    ``pair_clearances`` is a list of ``{"a", "b", "clearance"}``: the clearance in mm between nets
+    of net class ``a`` and nets of net class ``b`` (the order does not matter; ``a == b`` holds the
+    nets of one class apart from each other). Each becomes a rule in a managed block at the end of
+    the board's ``.kicad_dru`` (created when missing); hand-written rules are never touched.
+    ``remove_pair_clearances`` is a list of ``{"a", "b"}`` naming managed pairs to drop. KiCad lets
+    such a rule REPLACE the class clearance and the board minimum for the pairs it matches
+    (measured), so a value below what the classes already demand is a loosening, refused unless
+    ``allow_loosen``. ``report_clearance_coverage`` lists which rule applies to every net pair.
 
     Board-wide minimums (``board.design_settings.rules``): ``min_clearance``,
     ``min_track_width``, ``via_diameter`` (-> ``min_via_diameter``),
@@ -1048,7 +1269,10 @@ def propose_board_rules(
         "min_via_annular_width": min_via_annular_width,
         "min_through_hole_diameter": min_through_hole_diameter,
     }
-    wanted, classes, problem = _normalise_request(constraints, netclasses)
+    pair_set, pair_remove, pair_problem = _normalise_pairs(pair_clearances, remove_pair_clearances)
+    if pair_problem:
+        return {"status": "error", "reason": pair_problem}
+    wanted, classes, problem = _normalise_request(constraints, netclasses, has_pairs=bool(pair_set or pair_remove))
     if problem:
         return {"status": "error", "reason": problem}
     try:
@@ -1092,6 +1316,11 @@ def propose_board_rules(
                     ),
                 }
     changes, loosened = _plan(data, new, wanted, classes, known)
+    pair_plan = _pair_plan(src, data, new, pair_set, pair_remove, wanted)
+    if "error" in pair_plan:
+        return {"status": "error", **{k: v for k, v in pair_plan.items() if k != "error"}, "reason": pair_plan["error"]}
+    changes += pair_plan["changes"]
+    loosened += pair_plan["loosened"]
     old_incoherent, old_moot = _coherence(data)
     now_incoherent, now_moot = _coherence(new)
     incoherent = _new_findings(old_incoherent, now_incoherent)
@@ -1099,7 +1328,7 @@ def propose_board_rules(
     moot = _new_findings(old_moot, now_moot)
     version = _cli_version()
     unverified = version is None or not version.startswith(_MEASURED_ON)
-    warnings = _custom_rule_warnings(dru_name, dru_rules, wanted)
+    warnings = _custom_rule_warnings(dru_name, dru_rules, wanted) + pair_plan["warnings"]
     if unverified:
         warnings.append(
             f"KICAD_RULE_DEFAULTS were measured on kicad-cli {_MEASURED_ON}x; this is "
@@ -1119,6 +1348,13 @@ def propose_board_rules(
         "warnings": warnings,
         "revision_token": None,
     }
+    if pair_set or pair_remove:
+        common["pair_clearances"] = {
+            "rules_file": pair_plan["rules_file"],
+            "rules_file_exists": pair_plan["had_file"],
+            "before": _pair_list(pair_plan["current"]),
+            "after": _pair_list(pair_plan["target"]),
+        }
     if not changes:
         return {"status": "nothing_to_do", **common}
     blocked = []
@@ -1145,7 +1381,16 @@ def propose_board_rules(
         return {"status": "error", "reason": problem}
 
     try:
-        token = _PENDING.issue(src, {"out_dir": str(out_dir), "wanted": wanted, "classes": classes})
+        token = _PENDING.issue(
+            src,
+            {
+                "out_dir": str(out_dir),
+                "wanted": wanted,
+                "classes": classes,
+                "pairs": sorted((a, b, v) for (a, b), v in pair_set.items()),
+                "remove_pairs": sorted(pair_remove),
+            },
+        )
     except checkpoint.Refused as exc:
         return {"status": "incomplete", "reason": str(exc)}
     return {
@@ -1187,27 +1432,47 @@ def _expected_readback(wanted: dict, classes: list[dict]) -> dict:
     }
 
 
-def _build_revision(src: Path, out_dir: Path, wanted: dict, classes: list[dict]) -> dict:
+def _build_revision(
+    src: Path, out_dir: Path, wanted: dict, classes: list[dict], pairs: dict | None = None, drc: Any = None
+) -> dict:
     return checkpoint.build_revision(
         out_dir,
         source_pcb=src,
-        write=lambda tmp: _write(src, tmp, wanted, classes),
-        verify=lambda tmp, state: _verify(src, state, wanted, classes),
+        write=lambda tmp: _write(src, tmp, wanted, classes, pairs),
+        verify=lambda tmp, state: _verify(src, state, wanted, classes, drc),
         success="built",
         before_verified="writing the rules failed before a revision was verified",
     )
 
 
-def _write(src: Path, tmp: Path, wanted: dict, classes: list[dict]) -> dict:
+def _write(src: Path, tmp: Path, wanted: dict, classes: list[dict], pairs: dict | None = None) -> dict:
     tmp_pcb = checkpoint.copy_project(src, tmp, max_bytes=gate._MAX_COPY_BYTES)
     tmp_pro = tmp_pcb.with_suffix(".kicad_pro")
     original = _read_project(tmp_pro)
     updated = _apply_request(original, wanted, classes)
     _write_project(tmp_pro, updated)
-    return {"pcb": tmp_pcb, "pro": tmp_pro, "updated": updated}
+    state: dict[str, Any] = {"pcb": tmp_pcb, "pro": tmp_pro, "updated": updated, "pairs": None}
+    if pairs is not None:
+        plan = _pair_plan(src, original, updated, pairs["set"], pairs["remove"], wanted)
+        if "error" in plan:
+            raise checkpoint.Failed("error", plan["error"])
+        state["pairs"] = {"target": plan["target"], "source_text": _rules_text(src)[0], "changed": plan["text"] is not None}
+        if plan["text"] is not None:
+            write_layer.save_bytes(
+                plan["text"].encode("utf-8"),
+                tmp_pcb.with_suffix(dru.DRU_SUFFIX),
+                verify=_rules_text_written,
+            )
+    return state
 
 
-def _verify(src: Path, state: dict, wanted: dict, classes: list[dict]) -> dict:
+def _rules_text_written(_temporary: Path) -> None:
+    """The ``verify`` the write layer requires for a rules file. The real self-check (``_dru_check``: a
+    reload of the file in the new revision, then KiCad itself) runs in the checkpoint's verify step,
+    before the revision replaces anything and with the result reported as ``write_not_verified``."""
+
+
+def _verify(src: Path, state: dict, wanted: dict, classes: list[dict], drc: Any = None) -> dict:
     # Non-negotiable: verify from a fresh parse of the saved file, never the in-memory dict.
     tmp_pcb, tmp_pro, updated = state["pcb"], state["pro"], state["updated"]
     try:
@@ -1242,7 +1507,14 @@ def _verify(src: Path, state: dict, wanted: dict, classes: list[dict]) -> dict:
             "CRITICAL: the board file changed during the copy",
             [checkpoint.mismatch(tmp_pcb.name, "file bytes", _sha256(src), _sha256(tmp_pcb))],
         )
-    return {"readback": readback}
+    extra: dict[str, Any] = {}
+    if state.get("pairs") is not None:
+        pairs = state["pairs"]
+        probe = _dru_check(tmp_pcb, pairs["source_text"], pairs["target"], drc)
+        extra["rules_file_loaded_by_kicad"] = probe["loaded"]
+        extra["rules_file_probe"] = probe["reason"]
+        extra["pair_clearances_written"] = _pair_list(pairs["target"])
+    return {"readback": readback, **extra}
 
 
 def _baseline_diff(before: dict, after: dict) -> dict[str, list[str]]:
@@ -1281,7 +1553,10 @@ def confirm_board_rules(
     if problem:
         return {"status": "error", "reason": problem}
 
-    built = _build_revision(src, out_dir, entry["wanted"], entry["classes"])
+    pair_set = {(a, b): v for a, b, v in entry.get("pairs", [])}
+    pair_remove = {tuple(k) for k in entry.get("remove_pairs", [])}
+    pairs = {"set": pair_set, "remove": pair_remove} if (pair_set or pair_remove) else None
+    built = _build_revision(src, out_dir, entry["wanted"], entry["classes"], pairs, drc)
     if built["status"] != "built":
         return built
     _PENDING.spend(revision_token)
@@ -1290,6 +1565,10 @@ def confirm_board_rules(
     data = _read_project(project)
     new = _apply_request(data, entry["wanted"], entry["classes"])
     changes, loosened = _plan(data, new, entry["wanted"], entry["classes"], _board_net_names(src))
+    if pairs is not None:
+        recomputed = _pair_plan(src, data, new, pair_set, pair_remove, entry["wanted"])
+        changes += recomputed.get("changes", [])
+        loosened += recomputed.get("loosened", [])
     dru_name, dru_rules = _custom_rules(src)
     raw = project.read_bytes()
     has_newline = "yes" if raw.endswith(b"\n") else "no"
@@ -1299,9 +1578,20 @@ def confirm_board_rules(
         "changes": changes,
         "loosened": loosened,
         "readback": built["readback"],
+        **{k: built[k] for k in ("rules_file_loaded_by_kicad", "rules_file_probe", "pair_clearances_written") if k in built},
         "custom_rules_file": dru_name,
         "custom_rules": dru_rules,
-        "warnings": _custom_rule_warnings(dru_name, dru_rules, entry["wanted"]),
+        "warnings": _custom_rule_warnings(dru_name, dru_rules, entry["wanted"])
+        + (
+            [
+                "kicad-cli could not confirm that KiCad loads the written rules file: "
+                + str(built.get("rules_file_probe"))
+                + ". The pair rules are written and read back, but whether KiCad enforces them is NOT proven; check "
+                "report_clearance_coverage once the board has a track, via or hole"
+            ]
+            if pairs is not None and built.get("rules_file_loaded_by_kicad") is None
+            else []
+        ),
         "file_format_note": (
             "the .kicad_pro revision is written by the write layer's save_project (json.dumps, indent 2): "
             "it has no trailing newline (KiCad writes one) and escapes non-ASCII characters as "

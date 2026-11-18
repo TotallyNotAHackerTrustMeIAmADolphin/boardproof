@@ -381,6 +381,14 @@ def _register_layout_tools(mcp: MCPServer) -> None:
             "revision_token. Lengths are mm. A key absent from the project counts as KiCad's "
             "built-in default, never as unset. netclasses: [{name, clearance?, track_width?, "
             "via_diameter?, via_drill?, priority?, nets?: [exact net names]}]. "
+            "pair_clearances: [{a, b, clearance}] holds nets of net class a at least clearance mm from nets of net class "
+            "b (order of a and b irrelevant; a = b is allowed): each becomes a rule in a managed block at the end of the "
+            "board's .kicad_dru (created when missing, hand-written rules are never touched). A rule REPLACES the class "
+            "clearance and the board minimum for the pairs it matches, so a value below what the classes demand is a "
+            "loosening. remove_pair_clearances: [{a, b}] drops managed pairs. KiCad silently ignores a whole rules file "
+            "that has one defect: the confirm runs kicad-cli on the written file and refuses (the source stays untouched) "
+            "when it is not loaded. report_clearance_coverage (verification toolset) lists the rule that applies to every "
+            "net pair. "
             "allow_loosen: lowering a rule is refused unless this is true; " + _FLAG_RULE + ". "
             "allow_incoherent: a class value below a board minimum is refused unless this is "
             "true; " + _FLAG_RULE + ". " + _LAYOUT_ORDER
@@ -394,6 +402,8 @@ def _register_layout_tools(mcp: MCPServer) -> None:
         min_via_annular_width: float | None = None,
         min_through_hole_diameter: float | None = None,
         netclasses: list[dict] | None = None,
+        pair_clearances: list[dict] | None = None,
+        remove_pair_clearances: list[dict] | None = None,
         allow_loosen: bool = False,
         allow_incoherent: bool = False,
         output_dir: str | None = None,
@@ -408,6 +418,8 @@ def _register_layout_tools(mcp: MCPServer) -> None:
             min_via_annular_width=min_via_annular_width,
             min_through_hole_diameter=min_through_hole_diameter,
             netclasses=netclasses,
+            pair_clearances=pair_clearances,
+            remove_pair_clearances=remove_pair_clearances,
             allow_loosen=allow_loosen,
             allow_incoherent=allow_incoherent,
             output_dir=output_dir,
@@ -416,8 +428,8 @@ def _register_layout_tools(mcp: MCPServer) -> None:
     @mcp.tool(
         annotations=_DESTRUCTIVE,
         description=(
-            "Apply a propose_board_rules proposal: writes a NEW project revision with the rules, "
-            "verified by a fresh reload, then pins the rule baseline of that revision and grades "
+            "Apply a propose_board_rules proposal: writes a NEW project revision with the rules (pair clearances in the "
+            ".kicad_dru included), verified by a fresh reload, then pins the rule baseline of that revision and grades "
             "it (the `grading` field is not a verdict). Any rule change makes every earlier "
             "baseline pin and verdict void: use the returned `baseline` and re-run verify_board "
             "on output_pcb. The revision_token is single use. parity: \"required\" or "

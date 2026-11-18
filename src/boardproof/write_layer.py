@@ -856,6 +856,7 @@ def save_project(data: dict, path: str | Path, *, verify: Callable[[Path], None]
 
 
 _BYTE_EXACT_FILES = ("fp-lib-table", "sym-lib-table")
+_RULES_SUFFIX = ".kicad_dru"  # a custom-rules text file: no kicad-cli parse check exists (issue 131)
 
 
 def save_bytes(data: bytes, path: str | Path, *, verify: Callable[[Path], None]) -> Path:
@@ -863,17 +864,19 @@ def save_bytes(data: bytes, path: str | Path, *, verify: Callable[[Path], None])
     temporary sibling, call ``verify(temporary_path)`` (it raises to refuse), then
     ``os.replace``. Only for a ``fp-lib-table`` or ``sym-lib-table`` whose bytes the caller
     keeps as they were (build ticket 76): kicad-cli cannot parse-check a lib table, so
-    ``verify`` is required and is the only check. Any other file name raises
+    ``verify`` is required and is the only check. The same holds for a ``.kicad_dru`` rules file (issue
+    131): kicad-cli has no loader to run on it and silently drops a file with any defect, so the caller's
+    ``verify`` reads it back and ``dru.load_probe`` runs the real DRC on a copy. Any other file name raises
     ``WriteLayerError("unsupported_file")`` and a missing ``verify`` ``TypeError``, both before
     any file exists; its callers are frozen in tests/test_ratchets.py (``SAVE_BYTES_CALLERS``).
     On any failure ``path`` is untouched and the temporary file is removed."""
     path = Path(path)
     check_writable(path)
-    if path.name not in _BYTE_EXACT_FILES:
+    if path.name not in _BYTE_EXACT_FILES and path.suffix != _RULES_SUFFIX:
         raise WriteLayerError(
             "unsupported_file",
-            f"save_bytes writes only {' and '.join(_BYTE_EXACT_FILES)}, not {path.name}; a KiCad design file goes "
-            "through save",
+            f"save_bytes writes only {' and '.join(_BYTE_EXACT_FILES)} and a {_RULES_SUFFIX} rules file, not "
+            f"{path.name}; a KiCad design file goes through save",
             file=str(path),
         )
     if not callable(verify):

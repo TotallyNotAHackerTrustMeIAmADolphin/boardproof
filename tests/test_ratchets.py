@@ -178,9 +178,20 @@ FIX_COMMIT = (
 )
 # write_layer.save_bytes writes raw bytes to a lib table with the caller's verify as the only
 # check (build ticket 76). Its callers are frozen here: (file, function) of each reference.
-SAVE_BYTES_CALLERS = frozenset({("toolsets/library.py", "_write_table")})
+# Issue 131 added the .kicad_dru rules file: board_rules._write saves the pair-clearance block into the new
+# revision (its self-check is board_rules._dru_check: a reload of the file, then kicad-cli itself; proof tests
+# test_wrong_value_on_disk_fails_the_reload_comparison, test_changed_hand_written_text_fails_the_reload_comparison,
+# test_probe_that_does_not_fire_fails_the_self_check in tests/test_pair_clearance_rules.py) and dru.load_probe
+# saves a SCRATCH copy of the rules text plus two probe rules (test_the_report_never_writes: the board's files are not touched).
+SAVE_BYTES_CALLERS = frozenset(
+    {
+        ("toolsets/library.py", "_write_table"),
+        ("board_rules.py", "_write"),
+        ("dru.py", "load_probe"),
+    }
+)
 FIX_SAVE_BYTES = (
-    "write_layer.save_bytes is for fp-lib-table and sym-lib-table only and has no parse check of "
+    "write_layer.save_bytes is for fp-lib-table, sym-lib-table and a .kicad_dru rules file only and has no parse check of "
     "its own: a new caller needs its own reload-and-compare verify, a self-check proof test with a "
     "corrupted write, and a reviewed entry in SAVE_BYTES_CALLERS in tests/test_ratchets.py. A "
     "KiCad design file goes through write_layer.save (decision 1)."
