@@ -54,7 +54,8 @@ RESULT_WORDS = frozenset(
      "match_with_mechanical_pads", "matches", "mismatch", "needs_acknowledgement", "none",
      "not_connected", "not_loaded", "not_published_by_fab", "not_queried", "not_run",
      "nothing_to_do", "ok", "opened", "partial", "partly_compared", "pass", "pending_confirmation",
-     "poured", "prepared", "present", "proposed", "ready", "refused", "rejected", "selected",
+     "planned", "poured", "prepared", "present", "probe_failed", "proposed", "ready", "refreshed",
+     "refused", "rejected", "selected",
      "stale", "timeout", "unavailable", "undetermined", "unhandled_only", "unknown", "unloaded",
      "unreadable", "unsupported", "unsupported_package_type",
     }
