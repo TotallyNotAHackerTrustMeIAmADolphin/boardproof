@@ -127,7 +127,7 @@ FROZEN_WITHOUT_PROVEN_SELF_CHECK = frozenset(
         # register_library_asset, build ticket 76)
         "place_footprints",
         "align_footprints", "distribute_footprints", "snap_footprints_to_grid",
-        "confirm_autoplacement", "add_traces", "project_create",
+        "add_traces", "project_create",
         "generate_footprint",
         # return-value (2)
         "move_reference_designators_to_layer", "fetch_part_assets",

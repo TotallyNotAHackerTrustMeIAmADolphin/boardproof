@@ -739,8 +739,12 @@ self_check = "none"
 note = "No check."
 
 [writing_tool.confirm_autoplacement]
-self_check = "none"
-note = "applied is the proposal's keys."
+self_check = "reload-verify"
+note = "Issue 133: writes only each footprint's raw (at x y) through placement_anchor.write_positions (write_layer.set_number on the tree, saved by write_layer.save), whose verify reloads the temporary sibling and refuses (write_not_verified, token kept, board file untouched) unless every other top-level node equals the source and each footprint holds exactly the intended (at), with angle and lock unchanged. Before writing it re-measures the proposal against the board as it is (locked since, rotated, outside the outline, overlapping: refused, token kept)."
+proof = [
+    "tests/test_placement_anchor.py::test_autoplacement_confirm_self_check_fires_on_a_corrupted_write",
+    "tests/test_placement_anchor_guards.py::test_position_check_alone_fires_when_confirm_autoplacement_writes_a_wrong_position",
+]
 
 [writing_tool.add_traces]
 self_check = "none"

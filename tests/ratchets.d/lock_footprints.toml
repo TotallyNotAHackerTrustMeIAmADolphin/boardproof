@@ -1,0 +1,7 @@
+[writing_tool.lock_footprints]
+self_check = "reload-verify"
+note = "Issue 133: placement_anchor.write_lock_state sets or removes the raw (locked yes) token on a copy of the board tree in memory (write_layer.symbol and a list insert, no kicad_tools setter, no PCB.save), saves through write_layer.save, whose verify reloads the temporary sibling and refuses (write_not_verified, board file untouched) unless every top-level node other than the changed footprints equals the source (_self_check.reload_differences) and the raw lock state of each requested footprint is exactly the requested one."
+proof = [
+    "tests/test_placement_anchor.py::test_lock_self_check_fires_when_the_token_is_not_written",
+    "tests/test_placement_anchor_guards.py::test_lock_state_check_alone_fires_when_the_edit_does_not_lock",
+]

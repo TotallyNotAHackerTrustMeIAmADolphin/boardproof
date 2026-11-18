@@ -1,0 +1,11 @@
+[writing_tool.place_footprints_at_edge]
+self_check = "reload-verify"
+note = "Issue 133: placement_anchor.write_positions sets only the footprint's raw (at x y) with write_layer.set_number on a copy of the board tree in memory (no kicad_tools setter, no PCB.save), saves through write_layer.save, whose verify reloads the temporary sibling and refuses (write_not_verified, board file untouched) unless every other top-level node equals the source, every footprint is at the intended (at) with its angle and lock unchanged, and each placed courtyard, re-measured from the reloaded raw tokens, is offset_mm from its edge and inside the outline."
+proof = [
+    "tests/test_placement_anchor.py::test_edge_placement_self_check_fires_on_a_corrupted_write",
+    "tests/test_placement_anchor_guards.py::test_tree_compare_alone_fires_when_a_neighbouring_node_is_corrupted",
+    "tests/test_placement_anchor_guards.py::test_position_check_alone_fires_when_the_edit_itself_is_wrong",
+    "tests/test_placement_anchor_guards.py::test_angle_check_alone_fires_when_the_edit_turns_the_part",
+    "tests/test_placement_anchor_guards.py::test_lock_check_alone_fires_when_the_edit_locks_the_part",
+    "tests/test_placement_anchor_guards.py::test_gap_check_alone_fires_when_the_plan_is_wrong",
+]

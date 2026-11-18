@@ -49,6 +49,8 @@ def test_build_registers_expected_tools():
     names = placement_toolset.build(mcp)
     assert set(names) == {
         "place_footprints",
+        "place_footprints_at_edge",
+        "lock_footprints",
         "move_reference_designators_to_layer",
         "align_footprints",
         "distribute_footprints",

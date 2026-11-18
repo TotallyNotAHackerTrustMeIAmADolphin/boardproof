@@ -18,7 +18,7 @@ from typing import Any
 
 from mcp.server.mcpserver import MCPServer
 
-from boardproof import write_layer
+from boardproof import placement_anchor, write_layer
 
 # _courtyard_polygon / Layer are internal (underscore) API, not a documented
 # public surface -- consistent with this project's existing acceptance of
@@ -627,8 +627,50 @@ def _with_frame(fn):
     return wrapper
 
 
+_LOCKED_NOTE = (
+    "A locked footprint (a raw (locked yes) token; lock_footprints sets and clears it) is never moved "
+    "by this tool."
+)
+
+
+class _LockUnreadable(Exception):
+    """The raw tokens could not be read, so no footprint can be said to be unlocked."""
+
+
+def _locked_references(path: Path) -> set[str]:
+    """References of the locked footprints, read from the RAW tokens. Fails closed: when the
+    file cannot be read the lock state is unknown and the tool refuses (``_fail_closed``)."""
+    try:
+        return placement_anchor.locked_references(write_layer.load(path))
+    except Exception as exc:  # noqa: BLE001
+        raise _LockUnreadable(f"the lock state of {path.name} cannot be read ({exc})") from exc
+
+
+def _fail_closed(fn):
+    """A tool that reads locks answers ``lock_state_unreadable`` (nothing written) when it cannot."""
+    import functools
+
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        try:
+            return fn(*args, **kwargs)
+        except _LockUnreadable as exc:
+            return {"status": "error", "code": "lock_state_unreadable",
+                    "reason": f"{exc}: nothing was moved"}
+
+    return wrapper
+
+
+def _not_verified(exc: placement_anchor.NotVerified) -> dict:
+    return {
+        "status": "error", "ok": False, "code": "write_not_verified", "reason": exc.reason,
+        "mismatches": exc.mismatches[:20], "note": "the board file was left untouched",
+    }
+
+
 def build(mcp: MCPServer) -> list[str]:
     @_with_frame
+    @_fail_closed
     def place_footprints(pcb_path: str, specs: list[dict]) -> dict:
         """Place or move a batch of footprints on a board in one call.
         Coordinates are BOARD-LOCAL millimetres: local (0,0) is the top-left corner of the
@@ -667,6 +709,7 @@ def build(mcp: MCPServer) -> list[str]:
         moved: list[str] = []
         rotation_kept: list[str] = []
         errors: list[dict] = []
+        locked = _locked_references(path)
         for spec in specs:
             ref = spec.get("reference")
             if not ref:
@@ -676,6 +719,10 @@ def build(mcp: MCPServer) -> list[str]:
             rotation = spec.get("rotation")  # None: keep an existing footprint's rotation
             layer = spec.get("layer", "F.Cu")
             existing = board.get_footprint(ref)
+            if existing is not None and ref in locked:
+                errors.append({"spec": spec, "code": "locked_footprint",
+                               "reason": f"{ref} is locked and was not moved; unlock it with lock_footprints (locked=false) first"})
+                continue
             try:
                 if existing is not None:
                     board.update_footprint_position(ref, x, y, rotation)
@@ -706,8 +753,8 @@ def build(mcp: MCPServer) -> list[str]:
             try:
                 write_layer.save_pcb(board, path)
             except Exception as exc:  # noqa: BLE001
-                if (locked := write_layer.as_lock_refusal(exc)) is not None:
-                    return locked
+                if (refusal := write_layer.as_lock_refusal(exc)) is not None:
+                    return refusal
                 return {"status": "incomplete", "reason": f"placed in-memory but failed to save: {exc}"}
 
         status = "ok" if not errors else ("partial" if (placed or moved) else "error")
@@ -751,6 +798,7 @@ def build(mcp: MCPServer) -> list[str]:
         return {"status": "ok", "requested": len(refs), "moved_count": moved_count, "layer": layer}
 
     @_with_frame
+    @_fail_closed
     def align_footprints(pcb_path: str, refs: list[str], axis: str, edge: str) -> dict:
         """Align a batch of footprints' edges or centers along a shared X/Y
         coordinate (like a design tool's align-left/right/top/bottom/center).
@@ -812,8 +860,12 @@ def build(mcp: MCPServer) -> list[str]:
         anchor_ref = refs[0]
         target = edge_value(boxes[anchor_ref][0])
 
+        locked = _locked_references(path)
+        locked_skipped = [r for r in refs if r in locked]
         moved: list[dict] = []
         for ref in refs:
+            if ref in locked:
+                continue
             bbox, used_courtyard = boxes[ref]
             fp = board.get_footprint(ref)
             cur_x, cur_y = fp.position
@@ -823,15 +875,18 @@ def build(mcp: MCPServer) -> list[str]:
             board.update_footprint_position(ref, new_x, new_y, None)
             moved.append({"reference": ref, "x": new_x, "y": new_y, "used_courtyard": used_courtyard})
 
-        try:
-            write_layer.save_pcb(board, path)
-        except Exception as exc:  # noqa: BLE001
-            if (locked := write_layer.as_lock_refusal(exc)) is not None:
-                return locked
-            return {"status": "incomplete", "reason": f"aligned in-memory but failed to save: {exc}"}
-        return {"status": "ok", "axis": axis, "edge": edge, "anchor": anchor_ref, "moved": moved}
+        if moved:
+            try:
+                write_layer.save_pcb(board, path)
+            except Exception as exc:  # noqa: BLE001
+                if (refusal := write_layer.as_lock_refusal(exc)) is not None:
+                    return refusal
+                return {"status": "incomplete", "reason": f"aligned in-memory but failed to save: {exc}"}
+        return {"status": "ok", "axis": axis, "edge": edge, "anchor": anchor_ref, "moved": moved,
+                "locked_skipped": locked_skipped}
 
     @_with_frame
+    @_fail_closed
     def distribute_footprints(pcb_path: str, refs: list[str], axis: str) -> dict:
         """Evenly space a batch of footprints (by center) along an axis
         between the first and last ref in the list (used as anchors).
@@ -875,8 +930,12 @@ def build(mcp: MCPServer) -> list[str]:
         end = positions[refs[-1]][idx]
         step = (end - start) / (len(refs) - 1)
 
+        locked = _locked_references(path)
+        locked_skipped = [r for r in refs if r in locked]
         moved: list[dict] = []
         for i, ref in enumerate(refs):
+            if ref in locked:
+                continue
             cur_x, cur_y = positions[ref]
             new_val = start + step * i
             new_x = new_val if axis == "x" else cur_x
@@ -884,15 +943,17 @@ def build(mcp: MCPServer) -> list[str]:
             board.update_footprint_position(ref, new_x, new_y, None)
             moved.append({"reference": ref, "x": new_x, "y": new_y})
 
-        try:
-            write_layer.save_pcb(board, path)
-        except Exception as exc:  # noqa: BLE001
-            if (locked := write_layer.as_lock_refusal(exc)) is not None:
-                return locked
-            return {"status": "incomplete", "reason": f"distributed in-memory but failed to save: {exc}"}
-        return {"status": "ok", "axis": axis, "moved": moved}
+        if moved:
+            try:
+                write_layer.save_pcb(board, path)
+            except Exception as exc:  # noqa: BLE001
+                if (refusal := write_layer.as_lock_refusal(exc)) is not None:
+                    return refusal
+                return {"status": "incomplete", "reason": f"distributed in-memory but failed to save: {exc}"}
+        return {"status": "ok", "axis": axis, "moved": moved, "locked_skipped": locked_skipped}
 
     @_with_frame
+    @_fail_closed
     def snap_footprints_to_grid(pcb_path: str, refs: list[str], grid_mm: float, anchor: str = "outline") -> dict:
         """Snap a batch of footprints' positions to the nearest multiple of
         grid_mm, in one call. The grid is anchored at the outline corner, so snapped
@@ -953,10 +1014,14 @@ def build(mcp: MCPServer) -> list[str]:
 
         missing: list[str] = []
         moved: list[dict] = []
+        locked = _locked_references(path)
+        locked_skipped = [r for r in refs if r in locked]
         for ref in refs:
             fp = board.get_footprint(ref)
             if fp is None:
                 missing.append(ref)
+                continue
+            if ref in locked:
                 continue
             x, y = fp.position
             if anchor == "absolute":
@@ -968,14 +1033,17 @@ def build(mcp: MCPServer) -> list[str]:
         if missing:
             return {"status": "error", "reason": f"unknown references: {missing}"}
 
-        try:
-            write_layer.save_pcb(board, path)
-        except Exception as exc:  # noqa: BLE001
-            if (locked := write_layer.as_lock_refusal(exc)) is not None:
-                return locked
-            return {"status": "incomplete", "reason": f"snapped in-memory but failed to save: {exc}"}
-        return {"status": "ok", "grid_mm": grid_mm, "anchor": anchor, "grid_anchor_mm": grid_anchor, "moved": moved}
+        if moved:
+            try:
+                write_layer.save_pcb(board, path)
+            except Exception as exc:  # noqa: BLE001
+                if (refusal := write_layer.as_lock_refusal(exc)) is not None:
+                    return refusal
+                return {"status": "incomplete", "reason": f"snapped in-memory but failed to save: {exc}"}
+        return {"status": "ok", "grid_mm": grid_mm, "anchor": anchor, "grid_anchor_mm": grid_anchor, "moved": moved,
+                "locked_skipped": locked_skipped}
 
+    @_fail_closed
     def pack_footprints_densely(pcb_path: str, refs: list[str], min_clearance_mm: float = 0.2) -> dict:
         """Tighten spacing between an already-aligned row/column of
         footprints toward min_clearance_mm, without violating clearance.
@@ -1003,6 +1071,12 @@ def build(mcp: MCPServer) -> list[str]:
             board = PCB.load(path)
         except Exception as exc:  # noqa: BLE001
             return {"status": "incomplete", "reason": f"failed to load board: {exc}"}
+
+        locked = [r for r in refs if r in _locked_references(path)]
+        if locked:
+            return {"status": "error", "code": "locked_footprint", "locked": locked,
+                    "reason": f"{locked} are locked and packing moves every footprint it is given; "
+                              "unlock them with lock_footprints (locked=false) or leave them out: nothing was moved"}
 
         boxes: dict[str, tuple[tuple[float, float, float, float], bool]] = {}
         missing: list[str] = []
@@ -1070,7 +1144,150 @@ def build(mcp: MCPServer) -> list[str]:
         }
 
     @_with_frame
-    def propose_autoplacement(pcb_path: str, refs: list[str] | None = None) -> dict:
+    def lock_footprints(pcb_path: str, refs: list[str], locked: bool = True) -> dict:
+        """Lock (locked=true, the default) or unlock (locked=false) a batch of footprints in one
+        call. A locked footprint carries the raw token (locked yes), the one KiCad's editor shows
+        as a lock and refuses to drag; place_footprints, align_footprints, distribute_footprints,
+        snap_footprints_to_grid, pack_footprints_densely, place_footprints_at_edge,
+        propose_autoplacement and propose_placement_optimization never move it, and the two confirm
+        tools refuse a proposal for a footprint locked since. Nothing else on the board changes. A reference that is not on the
+        board, or carried by two footprints, refuses the whole call and nothing is written.
+        Locking an already locked footprint is not an error (it is listed in unchanged).
+
+        The reloaded file must hold exactly the requested lock state on those footprints and
+        every other node unchanged; otherwise write_not_verified and the board file is untouched.
+
+        Refuses with file_open_in_kicad, naming the lock file, while KiCad holds a lock file for a file
+        it would write; close the file in KiCad, then retry.
+        """
+        if not isinstance(locked, bool):
+            return {"status": "error", "code": "invalid_argument", "reason": f"locked must be true or false, got {locked!r}"}
+        if not isinstance(refs, list) or not refs or not all(isinstance(r, str) and r for r in refs):
+            return {"status": "error", "code": "invalid_argument", "reason": "refs must be a non-empty list of reference strings"}
+        path = Path(pcb_path)
+        if not path.exists():
+            return {"status": "incomplete", "reason": f"file not found: {pcb_path}"}
+        try:
+            root = write_layer.load(path)
+            nodes = [c for c in root.children if not c.is_atom and c.name == "footprint"]
+        except Exception as exc:  # noqa: BLE001
+            return {"status": "incomplete", "reason": f"failed to load board: {exc}"}
+        from boardproof import raw_geometry
+
+        by_ref: dict[str, list[Any]] = {}
+        for node in nodes:
+            by_ref.setdefault(raw_geometry._reference(node), []).append(node)
+        wanted = list(dict.fromkeys(refs))
+        missing = [r for r in wanted if r not in by_ref]
+        doubled = [r for r in wanted if len(by_ref.get(r, [])) > 1]
+        if missing or doubled:
+            return {"status": "error", "code": "unknown_reference" if missing else "ambiguous_reference",
+                    "reason": (f"no footprint with the reference(s) {missing}" if missing else
+                               f"several footprints carry the reference(s) {doubled}") + ": nothing was written"}
+        changing = [r for r in wanted if placement_anchor.is_locked(by_ref[r][0]) != locked]
+        unchanged = [r for r in wanted if r not in changing]
+        if changing:
+            try:
+                placement_anchor.write_lock_state(path, {r: locked for r in changing})
+            except placement_anchor.NotVerified as exc:
+                return _not_verified(exc)
+            except Exception as exc:  # noqa: BLE001
+                if (refusal := write_layer.as_lock_refusal(exc)) is not None:
+                    return refusal
+                return {"status": "incomplete", "reason": f"failed to write the lock state: {exc}"}
+        return {"status": "ok", "locked": locked, "changed": changing, "unchanged": unchanged}
+
+    @_with_frame
+    def place_footprints_at_edge(pcb_path: str, specs: list[dict]) -> dict:
+        """Place a batch of existing footprints at an edge of the board outline, a given distance
+        in from it (banana sockets, connectors, mounting parts). Never call this once per
+        footprint -- pass the whole batch.
+
+        Each spec: {"reference": str, "edge": "left"|"right"|"top"|"bottom", "offset_mm": float
+        (default 0: the gap between the outline edge and the footprint's courtyard on that side),
+        "along_mm": float (optional: where the courtyard centre sits along the edge, measured
+        from the outline's top-left corner, so from the top on left and right, from the left
+        on top and bottom; default the middle of the edge)}. The footprint keeps its rotation
+        and layer; rotate it first with place_footprints. The box measured is the courtyard
+        read from the raw footprint tokens, or its pads' box when it has no courtyard (reported
+        as box_source).
+
+        Needs an outline that is one axis-aligned rectangle (one gr_rect or four closing
+        gr_line), else outline_not_rectangular or no_outline. All or nothing: a spec that is
+        invalid, names an unknown, ambiguous or locked footprint, would leave the outline, or
+        would overlap another courtyard (collision) refuses the whole call and nothing is
+        written; every problem is listed under problems. Coordinates are BOARD-LOCAL
+        millimetres: local (0,0) is the top-left corner of the Edge.Cuts bounding box.
+
+        The result reports each footprint's position and gap read back from the reloaded file;
+        the reload must hold exactly the intended positions and nothing else changed, else
+        write_not_verified and the board file is untouched.
+
+        Refuses with file_open_in_kicad, naming the lock file, while KiCad holds a lock file for a file
+        it would write; close the file in KiCad, then retry.
+        """
+        if not isinstance(specs, list) or not specs:
+            return {"status": "error", "code": "invalid_argument", "reason": "specs must be a non-empty list"}
+        path = Path(pcb_path)
+        if not path.exists():
+            return {"status": "incomplete", "reason": f"file not found: {pcb_path}"}
+        try:
+            root = write_layer.load(path)
+            parts = placement_anchor.read_parts(root)
+            outline, problem = placement_anchor.outline_rect(root)
+        except Exception as exc:  # noqa: BLE001
+            return {"status": "error", "code": "unreadable_geometry", "reason": f"{exc}: nothing was moved"}
+        if problem is not None:
+            return {"status": "error", "code": "outline_not_rectangular", "reason": f"{problem}: nothing was moved"}
+        if outline is None:
+            return {"status": "error", "code": "no_outline",
+                    "reason": "the board has no Edge.Cuts outline to anchor to (propose_board_outline makes one): nothing was moved"}
+        new_at, info, problems = placement_anchor.plan_edge_placement(parts, outline.box, specs)
+        if problems:
+            return {"status": "error", "code": problems[0]["code"], "problems": problems,
+                    "reason": f"{len(problems)} problem(s), nothing was moved"}
+
+        def gaps(reloaded: Any, before: list[placement_anchor.Part]) -> list[str]:
+            after = {p.reference: p for p in placement_anchor.read_parts(reloaded)}
+            out = []
+            for ref, facts in info.items():
+                gap = placement_anchor.gap_to_edge(after[ref].box, outline.box, facts["edge"])
+                if abs(gap - facts["offset_mm"]) > 1e-5:
+                    out.append(f"{ref} is {gap:.6f} mm from the {facts['edge']} edge, intended {facts['offset_mm']}")
+                if not placement_anchor.inside(after[ref].box, outline.box):
+                    out.append(f"{ref} lies outside the outline")
+            return out
+
+        try:
+            placement_anchor.write_positions(path, new_at, extra=gaps)
+        except placement_anchor.NotVerified as exc:
+            return _not_verified(exc)
+        except Exception as exc:  # noqa: BLE001
+            if (refusal := write_layer.as_lock_refusal(exc)) is not None:
+                return refusal
+            return {"status": "incomplete", "reason": f"failed to write the positions: {exc}"}
+        try:
+            reloaded = {p.reference: p for p in placement_anchor.read_parts(write_layer.load(path))}
+        except Exception as exc:  # noqa: BLE001
+            return {"status": "incomplete", "reason": f"written, but the file could not be read back: {exc}"}
+        ox, oy = outline.origin
+        moved = []
+        for ref, facts in info.items():
+            part = reloaded[ref]
+            moved.append({
+                "reference": ref, "x": round(part.at[0] - ox, 6), "y": round(part.at[1] - oy, 6),
+                "edge": facts["edge"], "offset_mm": facts["offset_mm"],
+                "gap_mm": round(placement_anchor.gap_to_edge(part.box, outline.box, facts["edge"]), 6),
+                "courtyard_mm": [round(part.box[0] - ox, 6), round(part.box[1] - oy, 6),
+                                 round(part.box[2] - ox, 6), round(part.box[3] - oy, 6)],
+                "box_source": part.box_source,
+            })
+        return {"status": "ok", "moved": moved}
+
+    @_with_frame
+    def propose_autoplacement(
+        pcb_path: str, refs: list[str] | None = None, edge_clearance_mm: float = 0.5, spacing_mm: float = 2.0
+    ) -> dict:
         """Propose an automated placement for a set of footprints (or all
         footprints on the board if refs is omitted). Returns a proposal +
         revision_token -- does NOT write to the board. Call
@@ -1080,18 +1297,27 @@ def build(mcp: MCPServer) -> list[str]:
         tool refuses an outline it cannot read exactly (a curve, an arc inside a
         polygon, a legacy arc without a mid point, Edge.Cuts graphics inside a footprint,
         a malformed or unsupported Edge.Cuts item); without any outline coordinates are
-        page coordinates. The proposal packs rows starting at (0, 0) and
-        ignores the outline's size.
+        page coordinates and the proposal packs rows starting at (0, 0), 50 mm wide.
 
-        Placement quality is a best-effort heuristic (simple row-packing by
-        courtyard size, not a real simulated-annealing solver -- kicad_tools
-        has no built-in autoplacer and adding pyplacer as a dependency for
-        one heuristic pass wasn't judged worth it tonight). Always requires
+        With an outline, the outline must be one axis-aligned rectangle (one gr_rect or four
+        closing gr_line; anything else is refused as outline_not_rectangular, nothing proposed):
+        every proposed courtyard lies inside it, at least edge_clearance_mm (default 0.5) from
+        its edge, and at least spacing_mm (default 2) from every other courtyard. Footprints
+        that are not in refs stay where they are and are obstacles; a locked footprint is
+        never proposed to move (it is listed in locked_skipped) and is an obstacle too. Parts
+        that fit nowhere refuse the whole proposal as does_not_fit, naming them. A proposal
+        keeps each footprint's rotation.
+
+        Placement quality is a best-effort heuristic (first-fit row packing by courtyard
+        size, lowest then leftmost free position, not a real simulated-annealing solver). Always requires
         the checkpoint per docs/ARCHITECTURE.md's human-in-the-loop policy for
         autoplacement output -- never trust this without review.
         """
         from kicad_tools.schema import PCB
 
+        for name, value in (("edge_clearance_mm", edge_clearance_mm), ("spacing_mm", spacing_mm)):
+            if not placement_anchor._finite(value) or value < 0:
+                return {"status": "error", "code": "invalid_argument", "reason": f"{name} must be a finite number >= 0, got {value!r}"}
         path = Path(pcb_path)
         if not path.exists():
             return {"status": "incomplete", "reason": f"file not found: {pcb_path}"}
@@ -1102,38 +1328,73 @@ def build(mcp: MCPServer) -> list[str]:
         refusal = _frame_gate(path, board, strict=True)
         if refusal is not None:
             return refusal
+        try:
+            root = write_layer.load(path)
+            parts = placement_anchor.read_parts(root)
+            outline, problem = placement_anchor.outline_rect(root)
+        except Exception as exc:  # noqa: BLE001
+            return {"status": "error", "code": "unreadable_geometry", "reason": f"{exc}: nothing was proposed"}
+        if problem is not None:
+            return {"status": "error", "code": "outline_not_rectangular", "reason": f"{problem}: nothing was proposed"}
 
-        target_refs = refs if refs is not None else [fp.reference for fp in board.footprints]
+        by_ref: dict[str, list[placement_anchor.Part]] = {}
+        for part in parts:
+            by_ref.setdefault(part.reference, []).append(part)
+        target_refs = list(dict.fromkeys(refs)) if refs is not None else [p.reference for p in parts if p.reference]
         if not target_refs:
             return {"status": "error", "reason": "no footprints to place"}
-
-        boxes = []
-        missing = []
-        for ref in target_refs:
-            fp = board.get_footprint(ref)
-            if fp is None:
-                missing.append(ref)
-                continue
-            bbox, _ = _footprint_courtyard_or_pad_bbox(fp)
-            boxes.append((ref, bbox[2] - bbox[0], bbox[3] - bbox[1]))
+        missing = [r for r in target_refs if r not in by_ref]
         if missing:
             return {"status": "error", "reason": f"unknown references: {missing}"}
+        doubled = [r for r in target_refs if len(by_ref[r]) > 1]
+        if doubled:
+            return {"status": "error", "code": "ambiguous_reference",
+                    "reason": f"several footprints carry the reference(s) {doubled}: nothing was proposed"}
+        locked_skipped = [r for r in target_refs if by_ref[r][0].locked]
+        movable = [r for r in target_refs if not by_ref[r][0].locked]
+        if not movable:
+            return {"status": "error", "code": "all_locked", "locked_skipped": locked_skipped,
+                    "reason": "every requested footprint is locked: nothing to place"}
 
-        # Naive left-to-right row-packing heuristic, wrapping to a new row
-        # every ~50mm -- a starting point for human review, not a claim of
-        # quality.
-        margin = 2.0
-        row_height = max((h for _, _, h in boxes), default=5.0) + margin
-        cursor_x = 0.0
-        cursor_y = 0.0
-        row_limit_mm = 50.0
+        origin = outline.origin if outline is not None else (0.0, 0.0)
+
+        def local(box: placement_anchor.Box) -> placement_anchor.Box:
+            return placement_anchor.shift(box, -origin[0], -origin[1])
+
+        sizes = [(r, by_ref[r][0].box[2] - by_ref[r][0].box[0], by_ref[r][0].box[3] - by_ref[r][0].box[1]) for r in movable]
+        if outline is not None:
+            x0, y0, x1, y1 = local(outline.box)
+            region = (x0 + edge_clearance_mm, y0 + edge_clearance_mm, x1 - edge_clearance_mm, y1 - edge_clearance_mm)
+            if region[2] <= region[0] or region[3] <= region[1]:
+                return {"status": "error", "code": "does_not_fit", "reason": "edge_clearance_mm leaves no room inside the outline"}
+        else:
+            region = (0.0, 0.0, max(50.0, *(w for _, w, _ in sizes)), float("inf"))
+        moving = set(movable)
+        blocked = [(local(p.box), p.sides()) for p in parts if p.reference not in moving]
+        centres, unplaced = placement_anchor.pack(
+            sizes, region, blocked, {r: by_ref[r][0].sides() for r in movable}, spacing_mm
+        )
+        if unplaced:
+            return {
+                "status": "error", "code": "does_not_fit", "unplaced": unplaced, "locked_skipped": locked_skipped,
+                "reason": (f"{unplaced} fit nowhere inside {[round(v, 3) for v in region]} (local mm) with "
+                           f"spacing_mm={spacing_mm} around the footprints that stay: nothing was proposed"),
+            }
+
         proposed: dict[str, tuple[float, float, float]] = {}
-        for ref, w, h in boxes:
-            if cursor_x + w > row_limit_mm and cursor_x > 0:
-                cursor_x = 0.0
-                cursor_y += row_height
-            proposed[ref] = (cursor_x + w / 2, cursor_y + h / 2, 0.0)
-            cursor_x += w + margin
+        new_boxes: dict[str, placement_anchor.Box] = {}
+        for ref in movable:
+            part = by_ref[ref][0]
+            bx, by = (part.box[0] + part.box[2]) / 2 - origin[0], (part.box[1] + part.box[3]) / 2 - origin[1]
+            dx, dy = centres[ref][0] - bx, centres[ref][1] - by
+            ax, ay = part.at[0] - origin[0] + dx, part.at[1] - origin[1] + dy
+            proposed[ref] = (round(ax, 6), round(ay, 6), part.angle)
+            new_boxes[ref] = placement_anchor.shift(part.box, round(dx, 6), round(dy, 6))
+        # the proposal is measured again on its own boxes before it is offered
+        if outline is not None and any(not placement_anchor.inside(local(b), region) for b in new_boxes.values()):
+            return {"status": "error", "code": "internal_check_failed", "reason": "a proposed courtyard lies outside the region: nothing was proposed"}
+        if placement_anchor.collisions(new_boxes, parts):
+            return {"status": "error", "code": "internal_check_failed", "reason": "proposed courtyards overlap: nothing was proposed"}
 
         _evict_stale_pending_placements()
         token = uuid.uuid4().hex
@@ -1142,7 +1403,10 @@ def build(mcp: MCPServer) -> list[str]:
             "status": "pending_confirmation",
             "revision_token": token,
             "proposed_positions": {ref: {"x": x, "y": y, "rotation": r} for ref, (x, y, r) in proposed.items()},
-            "note": "heuristic row-packing, not a real autoplacer -- review before confirming, per docs/ARCHITECTURE.md's human-in-the-loop policy for autoplacement output",
+            "locked_skipped": locked_skipped,
+            "inside_outline": outline is not None,
+            "region_mm": [round(v, 6) for v in region] if outline is not None else None,
+            "note": "heuristic first-fit packing, not a real autoplacer -- review before confirming, per docs/ARCHITECTURE.md's human-in-the-loop policy for autoplacement output",
         }
 
     def confirm_autoplacement(revision_token: str) -> dict:
@@ -1150,6 +1414,13 @@ def build(mcp: MCPServer) -> list[str]:
         Consumes the token -- a second confirm with the same token fails.
         Takes references and works on relative offsets (no coordinates are passed in); it
         reports local positions, relative to origin_mm (see frame in the result).
+
+        Before writing it measures the proposal again against the board as it is now: a
+        footprint that is locked since, has another rotation, no longer fits inside the
+        outline or would overlap another courtyard refuses the call (proposal_stale or
+        locked_footprint) and the token stays valid. Only each footprint's (at x y) is
+        written; the reloaded file must hold exactly those positions and nothing else changed,
+        else write_not_verified and the board is untouched.
 
         Refuses with file_open_in_kicad, naming the lock file, while KiCad holds a lock file for a file
         it would write; close the file in KiCad, then retry.
@@ -1169,11 +1440,49 @@ def build(mcp: MCPServer) -> list[str]:
             refusal = _frame_gate(path, board, strict=True)
             if refusal is not None:
                 return refusal
+            root = write_layer.load(path)
+            parts = placement_anchor.read_parts(root)
+            outline, problem = placement_anchor.outline_rect(root)
+            if problem is not None:
+                return {"status": "error", "code": "outline_not_rectangular", "reason": f"{problem}: nothing was moved", **fields}
+            origin = outline.origin if outline is not None else (0.0, 0.0)
+            by_ref = {p.reference: p for p in parts}
+            problems: list[str] = []
+            targets: dict[str, tuple[float, float]] = {}
+            boxes: dict[str, placement_anchor.Box] = {}
+            locked_now = False
+            for ref, (x, y, rotation) in proposed.items():
+                part = by_ref.get(ref)
+                if part is None:
+                    problems.append(f"{ref} is no longer on the board")
+                    continue
+                if part.locked:
+                    locked_now = True
+                    problems.append(f"{ref} is locked now")
+                    continue
+                if abs(part.angle - rotation) > 1e-9:
+                    problems.append(f"{ref} has another rotation than at the proposal")
+                    continue
+                target = (x + origin[0], y + origin[1])
+                targets[ref] = target
+                boxes[ref] = placement_anchor.shift(part.box, target[0] - part.at[0], target[1] - part.at[1])
+                if outline is not None and not placement_anchor.inside(boxes[ref], outline.box):
+                    problems.append(f"{ref} would lie outside the outline")
+            if not problems:
+                overlaps = placement_anchor.collisions(boxes, parts)
+                if overlaps:
+                    problems.append("courtyards would overlap: " + str(overlaps[:5]))
+            if problems:
+                return {"status": "error", "code": "locked_footprint" if locked_now else "proposal_stale",
+                        "reason": "the board changed since the proposal: " + "; ".join(problems) + "; nothing was moved, the token stays valid",
+                        **fields}
             write_layer.check_writable(path)  # before the token is spent: closing KiCad makes it usable again
             _PENDING_PLACEMENTS.pop(revision_token, None)
-            for ref, (x, y, rotation) in proposed.items():
-                board.update_footprint_position(ref, x, y, rotation)
-            write_layer.save_pcb(board, path)
+            try:
+                placement_anchor.write_positions(path, targets)
+            except placement_anchor.NotVerified as exc:
+                _PENDING_PLACEMENTS[revision_token] = entry
+                return {**_not_verified(exc), **fields}
         except Exception as exc:  # noqa: BLE001
             if (locked := write_layer.as_lock_refusal(exc)) is not None:
                 _PENDING_PLACEMENTS[revision_token] = entry  # nothing was written: the token stays valid
@@ -1181,6 +1490,7 @@ def build(mcp: MCPServer) -> list[str]:
             return {"status": "incomplete", "reason": f"failed to apply proposal: {exc}", **fields}
         return {"status": "confirmed", "applied": list(proposed.keys()), **fields}
 
+    @_fail_closed
     def propose_placement_optimization(
         pcb_path: str,
         rounds: int = 2,
@@ -1231,6 +1541,7 @@ def build(mcp: MCPServer) -> list[str]:
         path = Path(pcb_path)
         if not path.is_file():
             return {"status": "incomplete", "reason": f"file not found: {pcb_path}"}
+        _locked_references(path)  # fail closed before the long run if the lock state cannot be read
 
         def _drc(target: Path) -> dict:
             try:
@@ -1283,11 +1594,16 @@ def build(mcp: MCPServer) -> list[str]:
                 }
 
             delta = placement_delta(placer_input, placer_output)
+            locked_now = _locked_references(path)
+            locked_skipped = sorted(r for r in delta if r in locked_now)
+            delta = {r: v for r, v in delta.items() if r not in locked_now}  # a locked part stays an obstacle
             if not delta:
                 return {
                     "status": "complete",
                     "changed": False,
-                    "reason": "placer ran but found no beneficial repositioning",
+                    "reason": "placer ran but found no beneficial repositioning"
+                              + (" (locked footprints were left out)" if locked_skipped else ""),
+                    "locked_skipped": locked_skipped,
                     "run": repair_run,
                     "before_drc": before_drc,
                 }
@@ -1326,6 +1642,7 @@ def build(mcp: MCPServer) -> list[str]:
             "changed": True,
             "proposed_positions": {ref: {"x": x, "y": y, "rotation": r} for ref, (x, y, r) in delta.items()},
             "footprints_moved": len(delta),
+            "locked_skipped": locked_skipped,
             "before_drc": before_drc,
             "after_drc": after_drc,
             "repair_run": repair_run,
@@ -1339,6 +1656,7 @@ def build(mcp: MCPServer) -> list[str]:
             ),
         }
 
+    @_fail_closed
     def confirm_placement_optimization(revision_token: str) -> dict:
         """Apply a previously-proposed placement-optimization result by its
         revision_token. Consumes the token -- a second confirm with the same
@@ -1353,12 +1671,17 @@ def build(mcp: MCPServer) -> list[str]:
         from kicad_tools.schema import PCB
 
         _evict_stale_pending_placements()
-        entry = _PENDING_PLACEMENTS.pop(revision_token, None)
+        entry = _PENDING_PLACEMENTS.get(revision_token)
         if entry is None:
             return {"status": "error", "reason": "unknown or expired revision_token"}
         pcb_path, proposed, _ = entry
 
         path = Path(pcb_path)
+        locked_now = sorted(r for r in proposed if r in _locked_references(path))
+        if locked_now:
+            return {"status": "error", "code": "locked_footprint", "locked": locked_now,
+                    "reason": f"{locked_now} are locked since the proposal: nothing was moved, the token stays valid"}
+        _PENDING_PLACEMENTS.pop(revision_token, None)
         try:
             board = PCB.load(path)
             for ref, (x, y, rotation) in proposed.items():
@@ -1599,7 +1922,19 @@ def build(mcp: MCPServer) -> list[str]:
     mcp.add_tool(
         place_footprints,
         name="place_footprints",
-        description=("Place or move a batch of footprints on a board in one call (add new ones with a library_id, move existing ones by reference)." + " " + _FRAME_RULE + " " + write_layer.LOCK_SENTENCE),
+        description=("Place or move a batch of footprints on a board in one call (add new ones with a library_id, move existing ones by reference; a locked footprint is refused per spec)." + " " + _FRAME_RULE + " " + write_layer.LOCK_SENTENCE),
+        annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
+    )
+    mcp.add_tool(
+        place_footprints_at_edge,
+        name="place_footprints_at_edge",
+        description=("Place a batch of existing footprints at an edge of the board outline, offset_mm in from it (connectors, banana sockets), optionally along_mm along the edge; the courtyard is measured from the raw footprint tokens and the file is read back after the write. Needs an outline that is one axis-aligned rectangle. All or nothing: an unknown or locked footprint, a courtyard that would leave the outline or overlap another one refuses the whole call and writes nothing. Rotation and layer are kept." + " " + _FRAME_RULE + " " + write_layer.LOCK_SENTENCE),
+        annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
+    )
+    mcp.add_tool(
+        lock_footprints,
+        name="lock_footprints",
+        description=("Lock or unlock a batch of footprints (the raw (locked yes) token KiCad shows as a lock). The placement tools never move a locked footprint: place_footprints, place_footprints_at_edge, align, distribute, snap, pack, propose_autoplacement and propose_placement_optimization skip or refuse it, and confirm_autoplacement and confirm_placement_optimization refuse a proposal for one locked since. Nothing else on the board changes." + " " + write_layer.LOCK_SENTENCE),
         annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
     )
     mcp.add_tool(
@@ -1611,49 +1946,49 @@ def build(mcp: MCPServer) -> list[str]:
     mcp.add_tool(
         align_footprints,
         name="align_footprints",
-        description=("Align a batch of footprints' courtyard edges or centers along a shared X/Y coordinate." + " " + _RELATIVE_RULE + " " + write_layer.LOCK_SENTENCE),
+        description=("Align a batch of footprints' courtyard edges or centers along a shared X/Y coordinate; locked footprints stay (locked_skipped)." + " " + _RELATIVE_RULE + " " + write_layer.LOCK_SENTENCE),
         annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
     )
     mcp.add_tool(
         distribute_footprints,
         name="distribute_footprints",
-        description=("Evenly space a batch of footprints along an axis between the first and last given ref." + " " + _RELATIVE_RULE + " " + write_layer.LOCK_SENTENCE),
+        description=("Evenly space a batch of footprints along an axis between the first and last given ref; locked footprints stay (locked_skipped)." + " " + _RELATIVE_RULE + " " + write_layer.LOCK_SENTENCE),
         annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
     )
     mcp.add_tool(
         snap_footprints_to_grid,
         name="snap_footprints_to_grid",
-        description=("Snap a batch of footprints' positions to the nearest grid point in one call." + " " + _FRAME_RULE + " The grid is anchored at the outline corner, so snapped parts are not on the editor's absolute grid unless the corner is." + ' Optional anchor (default "outline", unchanged): anchor="absolute" snaps the page coordinate to a grid whose origin is the grid origin KiCad stores in the board (setup grid_origin, honoured; page (0, 0) when none); a malformed grid_origin or any other anchor value refuses and writes nothing. The result carries anchor and grid_anchor_mm.' + " " + write_layer.LOCK_SENTENCE),
+        description=("Snap a batch of footprints' positions to the nearest grid point in one call; locked footprints stay (locked_skipped)." + " " + _FRAME_RULE + " The grid is anchored at the outline corner, so snapped parts are not on the editor's absolute grid unless the corner is." + ' Optional anchor (default "outline", unchanged): anchor="absolute" snaps the page coordinate to a grid whose origin is the grid origin KiCad stores in the board (setup grid_origin, honoured; page (0, 0) when none); a malformed grid_origin or any other anchor value refuses and writes nothing. The result carries anchor and grid_anchor_mm.' + " " + write_layer.LOCK_SENTENCE),
         annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
     )
     mcp.add_tool(
         pack_footprints_densely,
         name="pack_footprints_densely",
-        description=("Tighten spacing between an aligned row/column of footprints toward a minimum clearance, then re-checked with the placement collision checker, which is not a verdict: only verify_board gives one." + " " + write_layer.LOCK_SENTENCE),
+        description=("Tighten spacing between an aligned row/column of footprints toward a minimum clearance (refuses locked footprints), then re-checked with the placement collision checker, which is not a verdict: only verify_board gives one." + " " + write_layer.LOCK_SENTENCE),
         annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": False, "openWorldHint": False},
     )
     mcp.add_tool(
         propose_autoplacement,
         name="propose_autoplacement",
-        description="Propose an automated placement for a set of footprints. Returns a proposal + revision_token; does not modify the board. Call confirm_autoplacement to apply." + " " + _FRAME_RULE + " Rows start at local (0,0) and ignore the outline size.",
+        description="Propose an automated placement for a set of footprints. Returns a proposal + revision_token; does not modify the board. Call confirm_autoplacement to apply." + " " + _FRAME_RULE + " With an outline (one axis-aligned rectangle, else outline_not_rectangular) every proposed courtyard lies inside it, edge_clearance_mm (default 0.5) from its edge and spacing_mm (default 2) from other courtyards; footprints not in refs and locked ones stay and are obstacles (locked_skipped); parts that fit nowhere refuse the proposal as does_not_fit. Without an outline rows start at local (0,0), 50 mm wide. Rotations are kept.",
         annotations={"readOnlyHint": True, "destructiveHint": False, "idempotentHint": False, "openWorldHint": False},
     )
     mcp.add_tool(
         confirm_autoplacement,
         name="confirm_autoplacement",
-        description=("Apply a previously proposed autoplacement by its revision_token. Consumes the token." + " " + _RELATIVE_RULE + " " + write_layer.LOCK_SENTENCE),
+        description=("Apply a previously proposed autoplacement by its revision_token. Consumes the token. Measures the proposal again against the board as it is now (a footprint locked since, rotated, outside the outline or overlapping refuses with the token kept) and writes only each footprint's (at x y), which the reloaded file must hold exactly (else the write is refused and the board file is untouched)." + " " + _RELATIVE_RULE + " " + write_layer.LOCK_SENTENCE),
         annotations={"readOnlyHint": False, "destructiveHint": True, "idempotentHint": False, "openWorldHint": False},
     )
     mcp.add_tool(
         propose_placement_optimization,
         name="propose_placement_optimization",
-        description="Propose a real router-in-the-loop placement repair (KiCadRoutingTools' place_route_loop.py) -- routes the board, relocates only footprints on nets that actually failed, re-routes, iterating. Compared with independent before/after kicad-cli DRC on trial copies after routing, not the tool's own self-report; those counts only compare the two placements and are not the acceptance gate. Returns a proposal + revision_token; does not modify the board. Call confirm_placement_optimization to apply (it applies footprint positions only, not the trial routing). Only a verify_board PASS may be reported as routed or done.",
+        description="Propose a real router-in-the-loop placement repair (KiCadRoutingTools' place_route_loop.py) -- routes the board, relocates only footprints on nets that actually failed (never a locked footprint: those are left out and listed in locked_skipped), re-routes, iterating. Compared with independent before/after kicad-cli DRC on trial copies after routing, not the tool's own self-report; those counts only compare the two placements and are not the acceptance gate. Returns a proposal + revision_token; does not modify the board. Call confirm_placement_optimization to apply (it applies footprint positions only, not the trial routing). Only a verify_board PASS may be reported as routed or done.",
         annotations={"readOnlyHint": True, "destructiveHint": False, "idempotentHint": False, "openWorldHint": False},
     )
     mcp.add_tool(
         confirm_placement_optimization,
         name="confirm_placement_optimization",
-        description=("Apply a previously proposed placement-optimization result by its revision_token. Consumes the token. Applies footprint positions only, then runs one kicad-cli DRC on the result and reports its counts (drc_after); that single run is not the acceptance gate. Only a verify_board PASS may be reported as routed or done." + " " + write_layer.LOCK_SENTENCE),
+        description=("Apply a previously proposed placement-optimization result by its revision_token. Consumes the token. Refuses a proposal that contains a footprint locked since (locked_footprint, token kept). Applies footprint positions only, then runs one kicad-cli DRC on the result and reports its counts (drc_after); that single run is not the acceptance gate. Only a verify_board PASS may be reported as routed or done." + " " + write_layer.LOCK_SENTENCE),
         annotations={"readOnlyHint": False, "destructiveHint": True, "idempotentHint": False, "openWorldHint": False},
     )
     mcp.add_tool(
@@ -1670,6 +2005,8 @@ def build(mcp: MCPServer) -> list[str]:
     )
     return [
         "place_footprints",
+        "place_footprints_at_edge",
+        "lock_footprints",
         "move_reference_designators_to_layer",
         "align_footprints",
         "distribute_footprints",
