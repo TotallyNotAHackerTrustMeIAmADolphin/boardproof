@@ -477,13 +477,6 @@ code = '''page.to_image(resolution=dpi).save(png)'''
 note = "Pillow image save of a diagnostic PNG raster into the worker's own temp directory, in a child process (issue 104; moved from toolsets/diagnostics.py _png_pages, build ticket 83); not a KiCad file."
 
 [[high_level_save]]
-file = "toolsets/project.py"
-function = "_project_create"
-kind = "write"
-code = '''schematic.write(schematic_path)'''
-note = "Schematic.write of the new empty schematic."
-
-[[high_level_save]]
 file = "toolsets/schematic.py"
 function = "build.fix_annotation"
 kind = "run_fix_annotation"

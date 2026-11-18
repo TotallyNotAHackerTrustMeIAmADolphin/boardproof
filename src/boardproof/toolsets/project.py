@@ -17,6 +17,24 @@ from mcp.server.mcpserver import MCPServer
 from boardproof import write_layer
 
 
+def _set_root_sheet_instance_path(root: Any) -> None:
+    """kicad_tools writes the root (sheet_instances (path "/<sheet uuid>")); KiCad writes "/" and
+    the KiCad 11 nightly rejects the uuid form (issue 211). Replace that one atom, quoted."""
+    paths = [
+        p
+        for si in root.children
+        if not si.is_atom and si.name == "sheet_instances"
+        for p in si.children
+        if not p.is_atom and p.name == "path"
+    ]
+    if len(paths) != 1:
+        raise write_layer.WriteLayerError(
+            "root_sheet_instance_missing",
+            f"expected one root (sheet_instances (path ...)) in the new schematic, found {len(paths)}; nothing was written",
+        )
+    write_layer.set_string(paths[0], 0, "/")
+
+
 def _project_create(
     directory: str,
     name: str,
@@ -69,11 +87,14 @@ def _project_create(
             ),
         }
 
+    # build and check the schematic tree first: a refusal here must leave no file behind
+    schematic = Schematic(title=name, project_name=name)
+    root = write_layer.parse_string(schematic.to_sexp())
+    _set_root_sheet_instance_path(root)
+
     project_data = create_minimal_project(name)
     write_layer.save_project(project_data, project_path)
-
-    schematic = Schematic(title=name, project_name=name)
-    schematic.write(schematic_path)
+    write_layer.save(root, schematic_path)
 
     pcb = PCB.create(width=width_mm, height=height_mm, layers=layers, title=name)
     write_layer.save_pcb(pcb, pcb_path)
