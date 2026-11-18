@@ -85,7 +85,9 @@ def test_the_pin_is_restored_after_the_call(sch_tools, kicad_demo) -> None:
 
     from boardproof.toolsets import schematic
 
-    sentinel = lambda sym: False  # noqa: E731 - a stand-in that is neither the stock rule nor the pin
+    def sentinel(sym):
+        return False
+
     original = sch_fix_annotation._is_power_symbol
     sch_fix_annotation._is_power_symbol = sentinel
     try:
@@ -102,7 +104,9 @@ def test_the_pin_is_restored_when_the_pinned_block_raises() -> None:
 
     from boardproof.toolsets import schematic
 
-    sentinel = lambda sym: False  # noqa: E731
+    def sentinel(sym):
+        return False
+
     module = types.SimpleNamespace(_is_power_symbol=sentinel)
     with pytest.raises(RuntimeError):
         with schematic._stock_power_rule(module) as pinned:
