@@ -107,6 +107,8 @@ _CLAIM_WORD_ALLOWED = {
         "says DRC-clean is not enough",
     ("list_manufacturer_profiles", "the date it was verified"): "a fab profile's source date",
     ("select_component", "a datasheet-verified leader"): "part selection, not the board",
+    ("check_decoupling_placement", "coverage_complete"):
+        "an output field name of the placement check; the text says it is false whenever anything is unchecked",
     ("panelize_board", "it never passes an un-panelized board off as a panel"): "negation",
     ("add_sheet_symbols", "is refused (write_not_verified, naming the instance data)"):
         "the name of an error code on a refusal, not a claim",

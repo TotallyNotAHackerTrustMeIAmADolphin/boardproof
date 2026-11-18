@@ -47,6 +47,7 @@ def test_build_registers_expected_tools(mcp: MCPServer) -> None:
         "pcb_get_design_rules",
         "pcb_check_manufacturability",
         "report_clearance_coverage",
+        "check_decoupling_placement",
         "compare_spice_netlist",
     ]
 

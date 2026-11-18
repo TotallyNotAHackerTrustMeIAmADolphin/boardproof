@@ -744,6 +744,65 @@ def build(mcp: MCPServer) -> list[str]:
 
         return clearance_coverage.report_clearance_coverage(pcb_path, check_loading=check_loading, offset=offset, limit=limit)
 
+    def check_decoupling_placement(
+        pcb_path: str,
+        max_pad_gap_mm: float = 1.5,
+        power_nets: list[str] | None = None,
+        use_name_patterns: bool = True,
+        capacitors: list[str] | None = None,
+        ics: list[str] | None = None,
+        offset: int = 0,
+        limit: int = 200,
+    ) -> dict:
+        """Read-only batch check: does every capacitor on a supply net sit next to an IC supply pin on that net?
+
+        One call covers the whole board. For each capacitor (a footprint C<digits>) with a pad on a supply net and each IC
+        (U<digits>) pad on the same net it reports: gap_mm, the distance from the capacitor's supply pad edge to the IC pad
+        edge (the measure of the rung-1 placement rule of build ticket 114, read from raw pad (at)/(size)/angle tokens, never
+        convenience properties), path_estimate_mm (a 45-degree-bend route over that offset, an estimate that ignores obstacles),
+        manhattan_mm, centre_distance_mm and same_side (same board side; a through-hole pad counts for both). A capacitor is
+        flagged too_far when its NEAREST same-side supply pin is more than max_pad_gap_mm (default 1.5, the rung-1 bound) away,
+        and different_side when no supply pin of its net is on its side. Rows come worst first (offset, limit up to 2000;
+        summary counts cover all pages). Each supply pad of a capacitor is judged on its own net (a capacitor between +5V and +3V3
+        gives two rows). skipped names, never drops: capacitors with no supply pin on their net, with both pads on one net, a
+        duplicate_reference (every footprint sharing it), an empty_reference footprint or an unnumbered pad on a supply net.
+        summary has NO pass word: all_checked_within_bound is true only when something was checked and every checked supply pad met
+        the bound; coverage_complete is false whenever nothing was checked, anything was skipped, a shared net was left
+        unclassified or any footprint on a supply net was left out by the reference rule
+        (excluded_footprints_on_supply_nets; test points, connectors and diodes make this common on real boards, by intent:
+        true means nothing on a supply net was left unjudged). coverage_gaps says which. Read both, and never report all_checked_within_bound alone.
+
+        How nets are classified (explicit in the result, never guessed): classification.power_nets with a basis per net: a
+        net you list in power_nets (basis caller), or, unless use_name_patterns is false, a net whose last path segment looks
+        like a voltage (+3V3, +5V, 12V, 1V8) or VCC, VDD, VBUS, VBAT, VIN (basis name_pattern, the regexes are listed).
+        GND, AGND, VSS ... are ground and never supply. A net a capacitor pad and an IC pad share that is neither is listed in
+        unclassified_shared_nets and NOT checked: name it in power_nets. A supply pin is ANY pad of an IC footprint on a supply net
+        (the board file has no pin type, so a GND-like or output pin on a supply net counts too). capacitors and ics replace the
+        C<digits> and U<digits> reference rules; unknown_references names a reference that is not on the board, and
+        classification.excluded_by_reference_rule_on_supply_nets lists every other footprint with a pad on a supply net (a Q, a
+        J, a REF**, or one you left out), so an exclusion is never silent. Limit of the name rule: a voltage name with a
+        suffix (3V3_EN, 5V_DETECT) is classified as a supply net although it may be a control signal; name nets in
+        power_nets and set use_name_patterns false when that matters.
+
+        What this is NOT: not a verdict on layout quality (verdict_is_layout_quality is always false), not verify_board, not a
+        route, inductance, via or return-path check, not a datasheet rule, and it does not know how many capacitors a pin needs.
+        Only a rect pad is measured exactly (pad_boxes: exact); roundrect, oval, circle and custom pads are measured by their
+        bounding rectangle (pad_boxes: bounding), which can read a smaller gap than the copper has.
+        Refusals: status error with a reason (file not found, bad parameter, unreadable board).
+        """
+        from boardproof import decoupling_check
+
+        return decoupling_check.check_decoupling_placement(
+            pcb_path,
+            max_pad_gap_mm=max_pad_gap_mm,
+            power_nets=power_nets,
+            use_name_patterns=use_name_patterns,
+            capacitors=capacitors,
+            ics=ics,
+            offset=offset,
+            limit=limit,
+        )
+
     _READ_ONLY_LOCAL = {
         "readOnlyHint": True,
         "destructiveHint": False,
@@ -765,6 +824,7 @@ def build(mcp: MCPServer) -> list[str]:
         pcb_get_design_rules,
         pcb_check_manufacturability,
         report_clearance_coverage,
+        check_decoupling_placement,
         compare_spice_netlist,
     ]
     for tool_fn in tools:
