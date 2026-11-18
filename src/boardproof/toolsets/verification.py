@@ -739,6 +739,10 @@ def build(mcp: MCPServer) -> list[str]:
         it is listed as may_be_overridden_by on every pair it could touch and the status is partial. checked false means a matching
         rule has severity ignore: KiCad does not report that pair at all. Only copper-to-copper clearance of two different nets is
         covered; this is not a verdict on the board (verify_board is).
+
+        No router reads these rules: Freerouting does not see the .kicad_dru (measured with Freerouting 2.5.0: routing is byte-identical
+        with and without a pair rule), so a pair rule listed here is only checked afterwards by kicad-cli DRC / verify_board, and
+        copper a router laid closer than the rule demands shows up there as a clearance violation. Net class track clearances do reach it (measured on one board; pad-to-pad spacing within a part is not covered).
         """
         from boardproof import clearance_coverage
 

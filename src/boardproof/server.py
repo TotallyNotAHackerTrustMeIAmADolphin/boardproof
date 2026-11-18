@@ -388,7 +388,9 @@ def _register_layout_tools(mcp: MCPServer) -> None:
             "loosening. remove_pair_clearances: [{a, b}] drops managed pairs. KiCad silently ignores a whole rules file "
             "that has one defect: the confirm runs kicad-cli on the written file and refuses (the source stays untouched) "
             "when it is not loaded. report_clearance_coverage (verification toolset) lists the rule that applies to every "
-            "net pair. "
+            "net pair. A pair rule never reaches a router: Freerouting does not read the .kicad_dru (measured with "
+            "Freerouting 2.5.0: the routing result is byte-identical with and without the rule), so it can route copper "
+            "closer than the rule demands, and kicad-cli DRC flags that copper afterwards. Net class track clearances do reach it (measured on one board; pad-to-pad spacing within a part is not covered). "
             "allow_loosen: lowering a rule is refused unless this is true; " + _FLAG_RULE + ". "
             "allow_incoherent: a class value below a board minimum is refused unless this is "
             "true; " + _FLAG_RULE + ". " + _LAYOUT_ORDER
@@ -524,7 +526,10 @@ def _register_layout_tools(mcp: MCPServer) -> None:
             "refused the same way. A slot that lies over, around or on an item is a conflict at any "
             "margin (0 included), every margin also holds a 0.005 mm sampling tolerance for arcs and "
             "circles, and negative margins are refused. There is no override. Copper pours under a slot or a copperpour "
-            "keepout are listed as zone_overlaps and need a refill. With nothing asked it lists the "
+            "keepout are listed as zone_overlaps and need a refill. For the router, a slot and a keepout are obstacles "
+            "(Freerouting honours both per layer; DRC does not see copper inside a slot, so the router's keepout is the only "
+            "protection and verify_board would not catch a router that ignored it), and Freerouting routes around a "
+            "copperpour-only keepout as a full keepout (measured: the routing result is the same as for a full keepout), so tracks and vias stay out of it too. With nothing asked it lists the "
             "board's keepouts and slots (nothing_to_do). " + _LAYOUT_ORDER
         ),
     )

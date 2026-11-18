@@ -40,6 +40,8 @@ async def test_propose_board_rules_text_and_schema_name_the_pair_rules() -> None
         "silently ignores a whole rules file",
         "refuses (the source stays untouched)",
         "report_clearance_coverage",
+        "A pair rule never reaches a router: Freerouting does not read the .kicad_dru",
+        "kicad-cli DRC flags that copper afterwards",
     ):
         assert phrase in text, phrase
     assert ".kicad_dru included" in confirm.description
@@ -63,6 +65,7 @@ async def test_report_clearance_coverage_is_a_read_only_verification_tool() -> N
         "rules_file_loaded_by_kicad",
         "may_be_overridden_by",
         "is not a verdict on the board (verify_board is)",
+        "No router reads these rules: Freerouting does not see the .kicad_dru",
     ):
         assert phrase in text, phrase
 

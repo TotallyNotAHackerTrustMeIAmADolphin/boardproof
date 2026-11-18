@@ -694,6 +694,7 @@ def test_the_skill_and_the_tool_descriptions_say_what_the_pair_does_not_check():
     propose = " ".join(text["propose_keepouts_and_slots"].split())
     assert "kicad-cli DRC does not report items that lie wholly inside a slot" in propose
     assert "There is no override" in propose
+    assert "Freerouting routes around a copperpour-only keepout as a full keepout" in propose
     confirm = " ".join(text["confirm_keepouts_and_slots"].split())
     assert "Removing a keepout or a slot is a loosening" in confirm
     assert "NEW board revision" in confirm and "verify_board" in confirm
