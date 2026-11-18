@@ -17,11 +17,15 @@ is evidence-gated: a failure is reported as `{"status": "incomplete"/
 
 from __future__ import annotations
 
+import contextlib
 import dataclasses
 import math
 import enum
 import inspect
+import io
+import json
 import os
+import threading
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -84,6 +88,93 @@ def _to_jsonable(value: Any) -> Any:
     if isinstance(value, (str, int, float, bool)) or value is None:
         return value
     return str(value)
+
+
+# kicad_tools 0.25's run_fix_annotation counts every symbol whose library entry carries the
+# (power) flag as a power symbol and renumbers 33 references of the unmodified complex_hierarchy
+# demo; 0.24.0 counts only `power:` ids and changes none (issue 35). fix_annotation keeps the
+# 0.24.0 rule by pinning the library's predicate for the length of one call, and checks the
+# library's own dry-run plan against the stock rule before it writes.
+_STOCK_POWER_PREFIX = "power:"
+_pin_lock = threading.Lock()
+
+
+def _stock_power_predicate(sym: dict) -> bool:
+    return str(sym.get("lib_id", "")).startswith(_STOCK_POWER_PREFIX)
+
+
+@contextlib.contextmanager
+def _stock_power_rule(module: Any):
+    """Pin ``module._is_power_symbol`` to the stock-library rule; yields False (and pins nothing)
+    when the installed kicad_tools has no such attribute. Restored on exit."""
+    with _pin_lock:
+        original = getattr(module, "_is_power_symbol", None)
+        if original is None:
+            yield False
+            return
+        module._is_power_symbol = _stock_power_predicate
+        try:
+            yield True
+        finally:
+            module._is_power_symbol = original
+
+
+def _dry_run_plan(run: Any, path: Path, capture: io.StringIO) -> int:
+    """The library's dry run (JSON plan into ``capture``, kept out of the server's stdout)."""
+    with contextlib.redirect_stdout(capture):
+        return run(path, dry_run=True, backup=False, format="json")
+
+
+def _stock_power_uuids(tree: Any) -> set[str]:
+    """uuids of the placed symbols, on every sheet of ``tree``, whose lib_id is in the stock power: library."""
+    out: set[str] = set()
+    for sheet in tree.files:
+        for node in write_layer.load(sheet).children:
+            if node.is_atom or node.name != "symbol":
+                continue
+            lib_id, uuid = node.find("lib_id"), node.find("uuid")
+            if lib_id is not None and uuid is not None and str(lib_id.children[0].value).startswith(
+                _STOCK_POWER_PREFIX
+            ):
+                out.add(str(uuid.children[0].value))
+    return out
+
+
+def _fix_annotation_plan(run: Any, path: Path, tree: Any) -> dict | None:
+    """Dry-run the library under the pin and refuse when it plans a rename outside the stock rule.
+
+    Returns None when every planned rename names a stock ``power:`` symbol, else the refusal dict."""
+    from kicad_tools.cli import sch_fix_annotation as module
+
+    captured = io.StringIO()
+    with _stock_power_rule(module) as pinned:
+        if not pinned:
+            return {
+                "status": "incomplete",
+                "error": "fix_annotation_unpinnable",
+                "reason": "the installed kicad_tools has no _is_power_symbol predicate in cli.sch_fix_annotation "
+                "to restrict to the stock power: library; nothing was written",
+            }
+        exit_code = _dry_run_plan(run, path, captured)
+    if exit_code != 0:
+        return _incomplete(f"run_fix_annotation dry run exited with code {exit_code}")
+    try:
+        plan = json.loads(captured.getvalue())
+        renames = plan["renames"]
+    except (ValueError, KeyError, TypeError):
+        return _incomplete("could not read run_fix_annotation's dry-run plan; nothing was written")
+    stock = _stock_power_uuids(tree)
+    strays = [r for r in renames if str(r.get("uuid")) not in stock]
+    if not strays:
+        return None
+    return {
+        "status": "incomplete",
+        "error": "fix_annotation_out_of_scope",
+        "reason": "kicad_tools planned to renumber references of symbols outside the stock power: library "
+        f"({len(strays)}); fix_annotation changes only stock power symbols' references. Nothing was written.",
+        "out_of_scope": {"count": len(strays), "items": strays[:20]},
+    }
+
 
 
 def _incomplete(reason: str, **extra: Any) -> dict:
@@ -1916,8 +2007,13 @@ def build(mcp: MCPServer) -> list[str]:
         return result
 
     def fix_annotation(sch_path: str) -> dict:
-        """Automatically renumber duplicate/missing reference designators
-        across the whole schematic in one call.
+        """Repair the references of stock-library power symbols (`power:` ids: grounds, rails and
+        PWR_FLAG) across the whole schematic in one call: duplicates across the sheets, missing or
+        net-name styled ones (`#GNDD`, `#PWR?`), and their instance data.
+        The reference of any other symbol is never changed, and neither is that of a power symbol of a
+        project library (a library symbol flagged `(power)` under another id): a resistor with two
+        `R1` is not renumbered here. Before it writes, it checks the library's plan and refuses
+        (`fix_annotation_out_of_scope`, nothing written) when the plan names any other symbol.
         Before writing, it copies every sheet to the returned `backup_dir`, outside the project.
 
         Refuses with file_open_in_kicad, naming the lock file, while KiCad holds a lock file for a file
@@ -1928,6 +2024,7 @@ def build(mcp: MCPServer) -> list[str]:
             return _incomplete(f"file not found: {sch_path}")
         backup_dir: Path | None = None
         try:
+            from kicad_tools.cli import sch_fix_annotation as fix_annotation_module
             from kicad_tools.cli.sch_fix_annotation import run_fix_annotation
 
             from boardproof import sheet_tree
@@ -1943,8 +2040,15 @@ def build(mcp: MCPServer) -> list[str]:
             # every placed instance of every sheet, not the root file's symbols only
             before_refs = sorted(ref for ref, _ in sheet_tree.placed_references(tree))
             write_layer.check_writable(*tree.files)  # before the backup and before the in-place write
+            planned = _fix_annotation_plan(run_fix_annotation, path, tree)
+            if planned is not None:
+                return {**planned, **tree.report()}
             backup_dir = _backup_outside_project(tree)
-            exit_code = run_fix_annotation(path, dry_run=False, backup=False)
+            with _stock_power_rule(fix_annotation_module) as pinned:
+                if not pinned:  # unreachable after the plan check; kept so a pin is never skipped
+                    return _incomplete("the predicate pin was lost between the plan and the write", backup_dir=str(backup_dir))
+                with contextlib.redirect_stdout(io.StringIO()):  # the library prints its report; stdout is the server's
+                    exit_code = run_fix_annotation(path, dry_run=False, backup=False)
             if exit_code != 0:
                 return _incomplete(
                     f"run_fix_annotation exited with code {exit_code}", backup_dir=str(backup_dir), **tree.report()
