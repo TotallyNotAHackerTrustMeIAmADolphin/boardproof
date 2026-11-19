@@ -693,6 +693,8 @@ def _slot_conflicts(path: Path, specs: list[dict], locked: set[str]) -> list[dic
         raw_refs = [g.reference for g in placement_anchor.raw_geometry.read_footprints(root)]
     except placement_anchor.RoundedCornerUnreadable as exc:
         raise _SlotsUnreadable("outline_arcs_unreadable", str(exc)) from exc
+    except placement_anchor.OutlineNotRectangular as exc:
+        raise _SlotsUnreadable("outline_not_rectangular", str(exc)) from exc
     except Exception as exc:  # noqa: BLE001
         raise _SlotsUnreadable("slots_unreadable", f"the slots of {path.name} cannot be read ({exc})") from exc
     by_ref: dict[str, list[placement_anchor.Part]] = {}
@@ -748,7 +750,7 @@ def build(mcp: MCPServer) -> list[str]:
 
         A move of an existing, unlocked footprint whose courtyard (its rotated pad boxes where it
         has none) would overlap a slot or a rounded corner of the outline is refused as in_cutout
-        for the whole call and nothing is written; a footprint that already overlaps a cut-out is refused for any move whose new courtyard still overlaps one; a footprint added by library_id is not checked. An outline that looks like a rounded rectangle but has an arc that is not a quarter-circle corner is refused as outline_arcs_unreadable, a named footprint with no courtyard and no pad as footprint_unmeasurable, and unreadable cut-outs as slots_unreadable. Known limit: a corner built from two or more arcs is not recognised and is not refused, so a rounded corner of that kind is not protected.
+        for the whole call and nothing is written; a footprint that already overlaps a cut-out is refused for any move whose new courtyard still overlaps one; a footprint added by library_id is not checked. An outline whose arcs are not all quarter-circle corners of a rectangle is refused as outline_arcs_unreadable (that is: an outer loop of lines and arcs, or a gr_poly, that is neither a plain rectangle nor a rectangle with quarter-circle corner arcs is refused for the whole call, nothing written (outline_arcs_unreadable when it has any arc, such as a bite, a notch or a corner built from several arcs; outline_not_rectangular when it is lines only or a gr_poly, such as an L shape); circles, stadiums and well-formed slots are not refused; any other Edge.Cuts problem (a stray or open item, a slot that touches the outline or another slot, a duplicate outer loop, an item the tool cannot read) is refused as slots_unreadable; a board with no Edge.Cuts at all is not checked), a named footprint with no courtyard and no pad as footprint_unmeasurable, and unreadable cut-outs as slots_unreadable.
 
         Each spec: {"reference": str, "library_id": str (only for a NEW
         footprint), "x": float, "y": float, "rotation": float (default 0),
@@ -1996,7 +1998,7 @@ def build(mcp: MCPServer) -> list[str]:
     mcp.add_tool(
         place_footprints,
         name="place_footprints",
-        description=("Place or move a batch of footprints on a board in one call (add new ones with a library_id, move existing ones by reference; a locked footprint is refused per spec; a move of an existing footprint whose courtyard would overlap a slot or a rounded corner of the outline refuses the whole call as in_cutout, nothing written; a footprint that already overlaps a cut-out is refused for any move whose new courtyard still overlaps one; also refused: outline_arcs_unreadable, slots_unreadable, footprint_unmeasurable; a corner built from two or more arcs is not recognised and not refused, so it is not protected)." + " " + _FRAME_RULE + " " + write_layer.LOCK_SENTENCE),
+        description=("Place or move a batch of footprints on a board in one call (add new ones with a library_id, move existing ones by reference; a locked footprint is refused per spec; a move of an existing footprint whose courtyard would overlap a slot or a rounded corner of the outline refuses the whole call as in_cutout, nothing written; a footprint that already overlaps a cut-out is refused for any move whose new courtyard still overlaps one; also refused: outline_arcs_unreadable, slots_unreadable, footprint_unmeasurable; an outer loop of lines and arcs, or a gr_poly, that is neither a plain rectangle nor a rectangle with quarter-circle corner arcs is refused for the whole call, nothing written (outline_arcs_unreadable when it has any arc, such as a bite, a notch or a corner built from several arcs; outline_not_rectangular when it is lines only or a gr_poly, such as an L shape); circles, stadiums and well-formed slots are not refused; any other Edge.Cuts problem (a stray or open item, a slot that touches the outline or another slot, a duplicate outer loop, an item the tool cannot read) is refused as slots_unreadable; a board with no Edge.Cuts at all is not checked)." + " " + _FRAME_RULE + " " + write_layer.LOCK_SENTENCE),
         annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
     )
     mcp.add_tool(

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import math
 import shutil
+import types
 import uuid
 from pathlib import Path
 
@@ -542,20 +543,24 @@ def _notched_top(tmp_path: Path, name: str) -> Path:
     return _replace_outline(_golden(tmp_path, name), nodes)
 
 
-def test_an_arc_far_from_every_corner_is_not_taken_for_a_rounded_corner(tmp_path, tools):
+def test_an_arc_far_from_every_corner_is_refused_as_unreadable(tmp_path, tools):
+    """Issue 214: an arc in the middle of a side means the outline is not a rectangle and material may be
+    missing anywhere; fail closed (issue 206 had let this board through)."""
     pcb = _notched_top(tmp_path, "notch")
     root = write_layer.load(pcb)
-    parts = placement_anchor.edge_loops.classify(root)
-    assert parts.outer is not None and not placement_anchor._looks_rounded(root, parts.outer)
-    assert tools["place_footprints"](str(pcb), [{"reference": "R1", "x": 25.0, "y": 20.0}])["status"] == "ok"
+    with pytest.raises(placement_anchor.RoundedCornerUnreadable):
+        placement_anchor.cutout_boxes(root)
+    before = pcb.read_bytes()
+    result = tools["place_footprints"](str(pcb), [{"reference": "R1", "x": 25.0, "y": 20.0}])
+    assert result["status"] == "error" and result["code"] == "outline_arcs_unreadable", result
+    assert "several arcs" in result["reason"] and pcb.read_bytes() == before
 
 
-def test_the_looks_rounded_distance_is_half_a_millimetre(tmp_path):
-    """An arc whose own box corner lies 0.4 mm from the loop's box corner counts as a corner, 0.6 mm does not."""
+def test_the_unreadable_test_does_not_depend_on_where_the_arc_sits(tmp_path):
+    """Issue 214: a small arc 0.4 mm and one 0.6 mm from the loop's box corner are both unreadable."""
     x0, y0, x1, y1 = BOX
 
     def outline_with_corner_arc(gap: float) -> tuple:
-        # a shallow arc from (x0 + gap, y0 + 6) to (x0 + 6, y0 + gap): its own box starts at gap from the corner
         nodes = [_line((x0 + 6, y0), (x1, y0)), _line((x1, y0), (x1, y1)), _line((x1, y1), (x0, y1)),
                  _line((x0, y1), (x0, y0 + 6)), _line((x0, y0 + 6), (x0 + gap, y0 + 6)),
                  _arc((x0 + gap, y0 + 6), (x0 + gap + 1.0, y0 + gap + 1.0), (x0 + 6, y0 + gap)),
@@ -563,15 +568,15 @@ def test_the_looks_rounded_distance_is_half_a_millimetre(tmp_path):
         root = write_layer.load(_replace_outline(_golden(tmp_path, f"gap{int(gap * 10)}"), nodes))
         return root, placement_anchor.edge_loops.classify(root)
 
-    near_root, near = outline_with_corner_arc(0.4)
-    far_root, far = outline_with_corner_arc(0.6)
-    assert near.outer is not None and far.outer is not None and not near.problems and not far.problems
-    assert placement_anchor._looks_rounded(near_root, near.outer)
-    assert not placement_anchor._looks_rounded(far_root, far.outer)
+    for gap in (0.4, 0.6):
+        root, parts = outline_with_corner_arc(gap)
+        assert parts.outer is not None and not parts.problems
+        with pytest.raises(placement_anchor.RoundedCornerUnreadable):
+            placement_anchor.cutout_boxes(root)
 
 
-def test_a_corner_split_into_two_arcs_is_not_recognised_and_not_refused(tmp_path, tools):
-    """Documents the known limit: no corner protection for a split corner (follow-up ticket: fail closed)."""
+def test_a_corner_split_into_two_arcs_is_refused_by_every_placement_tool(tmp_path, tools):
+    """Issue 214: a split corner is not read, so the outline fails closed (it was a documented known limit)."""
     x0, y0, x1, y1 = BOX
     r = 6.0
     cx, cy = x0 + r, y0 + r
@@ -584,8 +589,15 @@ def test_a_corner_split_into_two_arcs_is_not_recognised_and_not_refused(tmp_path
     pcb = _replace_outline(_golden(tmp_path), nodes)
     root = write_layer.load(pcb)
     assert placement_anchor.outline_rect(root)[0] is None
+    before = pcb.read_bytes()
     result = tools["place_footprints"](str(pcb), [{"reference": "R1", "x": 1.0, "y": 1.0}])  # inside the cut-away corner
-    assert result["status"] == "ok", result
+    assert result["status"] == "error" and result["code"] == "outline_arcs_unreadable", result
+    assert "several arcs" in result["reason"] and pcb.read_bytes() == before
+    edge = tools["place_footprints_at_edge"](str(pcb), [{"reference": "R1", "edge": "left"}])
+    assert edge["status"] == "error", edge
+    auto = tools["propose_autoplacement"](str(pcb), ["R1"])
+    assert auto["status"] == "error", auto
+    assert pcb.read_bytes() == before
 
 
 def test_the_new_codes_are_named_in_the_description_and_the_skill():
@@ -596,13 +608,329 @@ def test_the_new_codes_are_named_in_the_description_and_the_skill():
     doc = " ".join(next(t.fn.__doc__ for t in mcp._tool_manager.list_tools() if t.name == "place_footprints").split())  # type: ignore[attr-defined]
     for code in ("outline_arcs_unreadable", "slots_unreadable", "footprint_unmeasurable"):
         assert code in text and code in skill and code in doc, code
-    limit = "a corner built from two or more arcs is not recognised and not refused, so it is not protected"
-    assert limit in text
-    assert "a corner built from two or more arcs is not recognised and is not refused, so a rounded corner of that kind is not protected" in doc
-    assert "a corner built from two or more arcs is not recognised and not refused" in skill
+    rule = "an outer loop of lines and arcs, or a gr_poly, that is neither a plain rectangle nor a rectangle with quarter-circle corner arcs is refused for the whole call, nothing written (outline_arcs_unreadable when it has any arc, such as a bite, a notch or a corner built from several arcs; outline_not_rectangular when it is lines only or a gr_poly, such as an L shape); circles, stadiums and well-formed slots are not refused; any other Edge.Cuts problem (a stray or open item, a slot that touches the outline or another slot, a duplicate outer loop, an item the tool cannot read) is refused as slots_unreadable; a board with no Edge.Cuts at all is not checked"
+    assert rule in text and rule in doc and rule in skill
+    assert "not recognised" not in text and "not recognised" not in skill
 
 
-def test_architecture_states_the_split_corner_limit_and_the_end_point_check():
+def test_architecture_states_the_arc_rule_and_no_longer_the_limit():
     arch = (Path(__file__).parents[1] / "docs" / ("ARCHITECTURE" + ".md")).read_text(encoding="utf-8")
-    assert "a corner built from two or more arcs (a split corner) is neither read as a corner" in arch
-    assert "The end point of an arc is checked against the fitted circle with the same 1e-4 mm tolerance as the mid point" in arch
+    assert "or a single `gr_poly` that is not an axis-aligned rectangle, is refused whatever its arcs measure, so no size limit can leave a gap (issue 214, fail closed): `outline_arcs_unreadable` when it has any arc" in arch
+    assert "`outline_not_rectangular` when it is lines only or a `gr_poly` (an L shape)" in arch
+    assert "a corner built from two or more arcs (a split corner) is neither read" not in arch
+    assert "kept as an explicit guard" not in arch
+    assert "an arc at a corner within 0.5 mm" not in arch
+    assert "whose box is at most half the shorter side across" not in arch
+    assert ". a footprint added by `library_id`" not in arch
+
+
+def _bite(tmp_path: Path, name: str, w: float, depth: float | None = None) -> Path:
+    """The golden board with a circular-segment bite in the top side: chord 2w, mid point at depth."""
+    x0, y0, x1, y1 = BOX
+    xm = (x0 + x1) / 2
+    d = w if depth is None else depth
+    nodes = [_line((x0, y0), (xm - w, y0)), _arc((xm - w, y0), (xm, y0 + d), (xm + w, y0)), _line((xm + w, y0), (x1, y0)),
+             _line((x1, y0), (x1, y1)), _line((x1, y1), (x0, y1)), _line((x0, y1), (x0, y0))]
+    return _replace_outline(_golden(tmp_path, name), nodes)
+
+
+@pytest.mark.parametrize("w,depth,at", [(9.0, None, (25.0, 2.0)), (10.04, None, (25.0, 2.0)), (12.0, None, (25.0, 3.0)),
+                                        (24.0, None, (25.0, 3.0)), (15.0, 3.0, (25.0, 1.0))])
+def test_a_bite_of_any_size_in_a_side_refuses_place_footprints(tmp_path, tools, w, depth, at):
+    """``at`` is board-local mm, inside the removed segment (on the centre line x = W / 2, above the bite's apex)."""
+    assert abs(at[0] - W / 2) < 1e-9 and at[1] < (w if depth is None else depth)
+    pcb = _bite(tmp_path, f"bite{int(w * 100)}", w, depth)
+    before = pcb.read_bytes()
+    result = tools["place_footprints"](str(pcb), [{"reference": "R1", "x": at[0], "y": at[1]}])
+    assert result["status"] == "error" and result["code"] == "outline_arcs_unreadable", result
+    assert pcb.read_bytes() == before
+
+
+def _l_nodes() -> list[SExp]:
+    x0, y0, x1, y1 = BOX
+    xm, ym = (x0 + x1) / 2, (y0 + y1) / 2
+    return [_line((x0, y0), (xm, y0)), _line((xm, y0), (xm, ym)), _line((xm, ym), (x1, ym)), _line((x1, ym), (x1, y1)),
+            _line((x1, y1), (x0, y1)), _line((x0, y1), (x0, y0))]
+
+
+def _poly(points: list[tuple[float, float]]) -> SExp:
+    return SExp.list("gr_poly", SExp.list("pts", *[SExp.list("xy", *p) for p in points]), _stroke(),
+                     SExp.list("fill", write_layer.symbol("no")), SExp.list("layer", "Edge.Cuts"), SExp.list("uuid", str(uuid.uuid4())))
+
+
+# board-local point in the missing top-right quarter of the L: x > W / 2, y < H / 2
+L_MISSING = (W / 2 + 5.0, 3.0)
+
+
+def test_a_lines_only_l_shape_refuses_place_footprints(tmp_path, tools):
+    assert L_MISSING[0] > W / 2 and L_MISSING[1] < H / 2
+    pcb = _replace_outline(_golden(tmp_path), _l_nodes())
+    before = pcb.read_bytes()
+    result = tools["place_footprints"](str(pcb), [{"reference": "R1", "x": L_MISSING[0], "y": L_MISSING[1]}])
+    assert result["status"] == "error" and result["code"] == "outline_not_rectangular", result
+    assert pcb.read_bytes() == before
+    assert tools["place_footprints_at_edge"](str(pcb), [{"reference": "R1", "edge": "left"}])["code"] == "outline_not_rectangular"
+
+
+def test_an_l_shaped_gr_poly_refuses_and_a_rectangular_one_is_accepted(tmp_path, tools):
+    x0, y0, x1, y1 = BOX
+    xm, ym = (x0 + x1) / 2, (y0 + y1) / 2
+    pcb = _replace_outline(_golden(tmp_path, "lpoly"), [_poly([(x0, y0), (xm, y0), (xm, ym), (x1, ym), (x1, y1), (x0, y1)])])
+    before = pcb.read_bytes()
+    result = tools["place_footprints"](str(pcb), [{"reference": "R1", "x": L_MISSING[0], "y": L_MISSING[1]}])
+    assert result["status"] == "error" and result["code"] == "outline_not_rectangular", result
+    assert pcb.read_bytes() == before
+    rect = _replace_outline(_golden(tmp_path, "rpoly"), [_poly([(x0, y0), (x1, y0), (x1, y1), (x0, y1)])])
+    assert tools["place_footprints"](str(rect), [{"reference": "R1", "x": 25.0, "y": 20.0}])["status"] == "ok"
+    skew = _replace_outline(_golden(tmp_path, "spoly"), [_poly([(x0, y0), (x1, y0), (x1 - 5, y1), (x0, y1)])])
+    assert tools["place_footprints"](str(skew), [{"reference": "R1", "x": 25.0, "y": 20.0}])["code"] == "outline_not_rectangular"
+
+
+def _lookalike(tmp_path: Path, name: str, left_convex: bool = False, ratio: float = 1.0) -> Path:
+    """A stadium-like outline: two semicircles with the shorter side as diameter, both concave (an hourglass)
+    unless ``left_convex``; with ``ratio`` the left arc has another radius."""
+    x0, y0, x1, y1 = BOX
+    cy, r = (y0 + y1) / 2, H / 2
+    right = _arc((x1, y0), (x1 - r, cy), (x1, y1))  # concave: bulges into the board
+    lx = x0 + r if left_convex else x0
+    left = _arc((lx, y1), (x0 + (0.0 if left_convex else r), cy), (lx, y0))
+    extra = []
+    if ratio != 1.0:  # a smaller left arc, joined to the corners by two short lines
+        rr = r * ratio
+        left = _arc((x0, cy + rr), (x0 + rr, cy), (x0, cy - rr))
+        extra = [_line((x0, y1), (x0, cy + rr)), _line((x0, cy - rr), (x0, y0))]
+    return _replace_outline(_golden(tmp_path, name), [_line((lx, y0), (x1, y0)), right, _line((x1, y1), (lx, y1)), left, *extra])
+
+
+@pytest.mark.parametrize("kwargs,local", [({}, (4.0, H / 2)), ({"left_convex": True}, (W - 4.0, H / 2)), ({"ratio": 0.8}, (4.0, H / 2))],
+                         ids=["hourglass", "one_concave", "unequal"])
+def test_a_stadium_lookalike_is_refused(tmp_path, tools, kwargs, local):
+    pcb = _lookalike(tmp_path, "hg" + "".join(kwargs), **kwargs)
+    items = list(placement_anchor.raw_geometry.read_board_outline(write_layer.load(pcb)).items)
+    assert not placement_anchor._is_stadium(items, BOX)
+    before = pcb.read_bytes()
+    # board-local point in a concave semicircle (radius H / 2 about the end's centre line point)
+    centre = (0.0, H / 2) if local[0] < W / 2 else (W, H / 2)
+    assert math.dist(local, centre) < H / 2
+    result = tools["place_footprints"](str(pcb), [{"reference": "R1", "x": local[0], "y": local[1]}])
+    assert result["status"] == "error" and result["code"] == "outline_arcs_unreadable", result
+    assert pcb.read_bytes() == before
+
+
+def test_a_stadium_whose_box_does_not_match_its_arcs_is_not_a_stadium(tmp_path):
+    """Two convex semicircles of the right size but the box is wider than the arcs put it (centres off)."""
+    x0, y0, x1, y1 = BOX
+    r = H / 2
+    stadium = [_line((x0 + r, y0), (x1 - r, y0)), _line((x1 - r, y1), (x0 + r, y1)),
+               _arc((x1 - r, y0), (x1, y0 + r), (x1 - r, y1)), _arc((x0 + r, y1), (x0, y0 + r), (x0 + r, y0))]
+    items = list(placement_anchor.raw_geometry.read_board_outline(write_layer.load(_replace_outline(_golden(tmp_path), stadium))).items)
+    assert placement_anchor._is_stadium(items, BOX)
+    assert not placement_anchor._is_stadium(items, (x0, y0, x1 + 5.0, y1))
+    assert not placement_anchor._is_stadium(items, (x0 - 5.0, y0, x1, y1))
+
+
+def test_a_valid_stadium_stays_accepted_with_and_without_a_slot(tmp_path, tools):
+    x0, y0, x1, y1 = BOX
+    r = H / 2
+    stadium = [_line((x0 + r, y0), (x1 - r, y0)), _line((x1 - r, y1), (x0 + r, y1)),
+               _arc((x1 - r, y0), (x1, y0 + r), (x1 - r, y1)), _arc((x0 + r, y1), (x0, y0 + r), (x0 + r, y0))]
+    pcb = _replace_outline(_golden(tmp_path), stadium)
+    assert placement_anchor._is_stadium(list(placement_anchor.raw_geometry.read_board_outline(write_layer.load(pcb)).items), BOX)
+    assert tools["place_footprints"](str(pcb), [{"reference": "R1", "x": 25.0, "y": 20.0}])["status"] == "ok"
+    slot = [_line((x0 + 20, y0 + 18), (x0 + 30, y0 + 18)), _line((x0 + 30, y0 + 18), (x0 + 30, y0 + 22)),
+            _line((x0 + 30, y0 + 22), (x0 + 20, y0 + 22)), _line((x0 + 20, y0 + 22), (x0 + 20, y0 + 18))]
+    both = _replace_outline(_golden(tmp_path, "stad-slot"), stadium + slot)
+    assert tools["place_footprints"](str(both), [{"reference": "R1", "x": 25.0, "y": 20.0}])["code"] == "in_cutout"
+    assert tools["place_footprints"](str(both), [{"reference": "R1", "x": 8.0, "y": 20.0}])["status"] == "ok"
+
+
+@pytest.mark.parametrize("radius", [0.3, 3.0, 20.0])
+def test_the_accepted_classes_stay_accepted(tmp_path, tools, radius):
+    pcb = _rounded(tmp_path, radius, f"r{int(radius * 10)}")
+    assert tools["place_footprints"](str(pcb), [{"reference": "R1", "x": 25.0, "y": 20.0}])["status"] == "ok"
+    plain = _golden(tmp_path, "plain")
+    assert tools["place_footprints"](str(plain), [{"reference": "R1", "x": 25.0, "y": 20.0}])["status"] == "ok"
+
+
+# --------------------------------------------------------------------------- review round 3: any Edge.Cuts problem fails closed
+
+
+def _rect_loop(x: float, y: float, w: float, h: float) -> list[SExp]:
+    return [_line((x, y), (x + w, y)), _line((x + w, y), (x + w, y + h)), _line((x + w, y + h), (x, y + h)), _line((x, y + h), (x, y))]
+
+
+def _no_uuid(nodes: list[SExp]) -> list[SExp]:
+    for node in nodes:
+        node.children.remove(node.find("uuid"))
+    return nodes
+
+
+def _bite_nodes(w: float = 9.0) -> list[SExp]:
+    x0, y0, x1, y1 = BOX
+    xm = (x0 + x1) / 2
+    return [_line((x0, y0), (xm - w, y0)), _arc((xm - w, y0), (xm, y0 + w), (xm + w, y0)), _line((xm + w, y0), (x1, y0)),
+            _line((x1, y0), (x1, y1)), _line((x1, y1), (x0, y1)), _line((x0, y1), (x0, y0))]
+
+
+def _stadium_nodes() -> list[SExp]:
+    x0, y0, x1, y1 = BOX
+    r = H / 2
+    return [_line((x0 + r, y0), (x1 - r, y0)), _line((x1 - r, y1), (x0 + r, y1)),
+            _arc((x1 - r, y0), (x1, y0 + r), (x1 - r, y1)), _arc((x0 + r, y1), (x0, y0 + r), (x0 + r, y0))]
+
+
+def _circle_node(cx: float, cy: float, r: float) -> SExp:
+    return SExp.list("gr_circle", SExp.list("center", cx, cy), SExp.list("end", cx + r, cy), _stroke(),
+                     SExp.list("fill", write_layer.symbol("no")), SExp.list("layer", "Edge.Cuts"), SExp.list("uuid", str(uuid.uuid4())))
+
+
+def _problem_cases() -> dict:
+    x0, y0, x1, y1 = BOX
+    xm, ym = (x0 + x1) / 2, (y0 + y1) / 2
+
+    def stray() -> SExp:
+        return _line((x0 + 3, y0 + 30), (x0 + 8, y0 + 31))
+
+    return {
+        # name: (nodes, board-local point of the removed material or, for an outline that removes none, a point on the board)
+        "l_stray_line": (lambda: _l_nodes() + [stray()], (40.0, 5.0)),
+        "l_slot_touching_outer": (lambda: _l_nodes() + _rect_loop(x0, y1 - 8, 5, 4), (40.0, 5.0)),
+        "l_two_touching_slots": (lambda: _l_nodes() + _rect_loop(x0 + 5, y1 - 10, 4, 4) + _rect_loop(x0 + 9, y1 - 10, 4, 4), (40.0, 5.0)),
+        "bite_slot_touching": (lambda: _bite_nodes() + _rect_loop(x0, y1 - 8, 5, 4), (25.0, 2.0)),
+        "stadium_slot_touching": (lambda: _stadium_nodes() + _rect_loop(xm - 3, y0, 6, 4), (25.0, 20.0)),
+        "bow_tie": (lambda: [_line((x0, y0), (x1, y1)), _line((x1, y1), (x1, y0)), _line((x1, y0), (x0, y1)), _line((x0, y1), (x0, y0))], (25.0, 2.0)),
+        "open_l": (lambda: _l_nodes()[:-1], (40.0, 5.0)),
+        "rect_stray_arc": (lambda: _rect_loop(x0, y0, W, H) + [_arc((x0 + 3, y0 + 30), (x0 + 5, y0 + 32), (x0 + 8, y0 + 30))], (25.0, 20.0)),
+        "l_no_uuid": (lambda: _no_uuid(_l_nodes()), (40.0, 5.0)),
+        "bite_no_uuid": (lambda: _no_uuid(_bite_nodes()), (25.0, 2.0)),
+        # siblings
+        "l_two_stray_lines": (lambda: _l_nodes() + [stray(), _line((x0 + 20, y0 + 30), (x0 + 25, y0 + 31))], (40.0, 5.0)),
+        "rect_two_stray_lines": (lambda: _rect_loop(x0, y0, W, H) + [_line((x1 + 3, y0), (x1 + 8, y0)), _line((x1 + 3, y0 + 4), (x1 + 8, y0 + 4))], (25.0, 20.0)),
+        "l_stray_circle_outside": (lambda: _l_nodes() + [_circle_node(x1 + 10, ym, 3)], (40.0, 5.0)),
+        "l_open_slot": (lambda: _l_nodes() + _rect_loop(x0 + 5, y1 - 10, 4, 4)[:-1], (40.0, 5.0)),
+        "rect_open_slot": (lambda: _rect_loop(x0, y0, W, H) + _rect_loop(x0 + 5, y0 + 5, 4, 4)[:-1], (25.0, 20.0)),
+        "l_duplicate_outer": (lambda: _l_nodes() + _l_nodes(), (40.0, 5.0)),
+        "rect_duplicate_outer": (lambda: _rect_loop(x0, y0, W, H) + _rect_loop(x0, y0, W, H), (25.0, 20.0)),
+    }
+
+
+@pytest.mark.parametrize("name", sorted(_problem_cases()))
+def test_any_edge_cuts_problem_makes_place_footprints_refuse(tmp_path, tools, name):
+    build, local = _problem_cases()[name]
+    pcb = _replace_outline(_golden(tmp_path, name), build())
+    before = pcb.read_bytes()
+    result = tools["place_footprints"](str(pcb), [{"reference": "R1", "x": local[0], "y": local[1]}])
+    assert result["status"] == "error", result
+    assert result["code"] in ("slots_unreadable", "outline_arcs_unreadable", "outline_not_rectangular"), result
+    assert result.get("reason"), result
+    assert pcb.read_bytes() == before
+
+
+def test_the_removed_material_of_the_problem_cases_is_really_removed():
+    """The L misses x > W / 2, y < H / 2; the bite misses the half disc of radius 9 about (W / 2, 0)."""
+    assert 40.0 > W / 2 and 5.0 < H / 2
+    assert math.dist((25.0, 2.0), (W / 2, 0.0)) < 9.0
+
+
+def test_a_board_without_any_edge_cuts_keeps_its_behaviour(tmp_path, tools):
+    pcb = _replace_outline(_golden(tmp_path, "none"), [])
+    assert placement_anchor.cutout_boxes(write_layer.load(pcb)) == ()
+    assert tools["place_footprints"](str(pcb), [{"reference": "R1", "x": 25.0, "y": 20.0}])["status"] == "ok"
+
+
+def test_clean_slots_stay_accepted_with_every_readable_outer_loop(tmp_path, tools):
+    x0, y0, x1, y1 = BOX
+    slot = _rect_loop(x0 + 20, y0 + 18, 10, 4)
+    for name, outer in (("rect", _rect_loop(x0, y0, W, H)), ("stadium", _stadium_nodes()), ("circle", [_circle_node((x0 + x1) / 2, (y0 + y1) / 2, 19.0)]),
+                        ("poly", [_poly([(x0, y0), (x1, y0), (x1, y1), (x0, y1)])])):
+        pcb = _replace_outline(_golden(tmp_path, "s" + name), outer + [n for n in slot])
+        bx0, by0, *_ = placement_anchor.raw_geometry.read_board_outline(write_layer.load(pcb)).bbox_mm  # board-local origin
+        assert tools["place_footprints"](str(pcb), [{"reference": "R1", "x": x0 + 12.0 - bx0, "y": y0 + 20.0 - by0}])["status"] == "ok", name
+        slot = _rect_loop(x0 + 20, y0 + 18, 10, 4)
+        assert tools["place_footprints"](str(pcb), [{"reference": "R1", "x": x0 + 25.0 - bx0, "y": y0 + 20.0 - by0}])["code"] == "in_cutout", name
+    nouuid = _replace_outline(_golden(tmp_path, "snouuid"), _no_uuid(_rect_loop(x0, y0, W, H) + _rect_loop(x0 + 20, y0 + 18, 10, 4)))
+    assert tools["place_footprints"](str(nouuid), [{"reference": "R1", "x": 25.0, "y": 20.0}])["code"] == "in_cutout"
+
+
+# --------------------------------------------------------------------------- _is_stadium: every guard pinned by its own case
+
+
+def _it(kind, *points):
+    return types.SimpleNamespace(kind=kind, points=points)
+
+
+def _stadium_items() -> list:
+    x0, y0, x1, y1 = BOX
+    r, cy = H / 2, (y0 + y1) / 2
+    return [_it("line", (x0 + r, y0), (x1 - r, y0)), _it("line", (x1 - r, y1), (x0 + r, y1)),
+            _it("arc", (x1 - r, y0), (x1, cy), (x1 - r, y1)), _it("arc", (x0 + r, y1), (x0, cy), (x0 + r, y0))]
+
+
+def _diagonal_pair() -> list:
+    """Two semicircles whose mid points point diagonally, opposite each other, at the right ends."""
+    x0, y0, x1, y1 = BOX
+    r, cy, q = H / 2, (y0 + y1) / 2, math.sqrt(0.5)
+    base = _stadium_items()
+    out = base[:2]
+    for centre, sign in (((x0 + r, cy), -1), (((x1 - r), cy), 1)):
+        a = (centre[0] + r * q, centre[1] - r * q)
+        b = (centre[0] - r * q, centre[1] + r * q)
+        m = (centre[0] + sign * r * q, centre[1] + sign * r * q)
+        out.append(_it("arc", a, m, b) if sign < 0 else _it("arc", b, m, a))
+    return out
+
+
+def _stadium_variants() -> dict:
+    x0, y0, x1, y1 = BOX
+    r, cy = H / 2, (y0 + y1) / 2
+    base = _stadium_items()
+    c = (x0 + r, cy)
+    k = math.cos(math.radians(135))
+    skew_a, skew_b = (c[0] + r * k, c[1] + r * math.sin(math.radians(135))), (c[0] - r * k, c[1] - r * math.sin(math.radians(135)))
+    return {
+        "extra_line": base + [_it("line", (x0 + r, y0), (x0 + r + 1, y0))],
+        "one_line": base[:1] + base[2:],
+        "three_arcs": base + [_it("arc", (x0 + 5, y0), (x0 + 6, y0 + 1), (x0 + 7, y0))],
+        "one_arc": base[:3],
+        "small_radius": base[:2] + [_it("arc", (x1 - r, y0 + 2), (x1 - 2, cy), (x1 - r, y1 - 2)),
+                                    _it("arc", (x0 + r, y1 - 2), (x0 + 2, cy), (x0 + r, y0 + 2))],
+        "centre_off_chord": base[:3] + [_it("arc", (x0 + r, y1), (x0, cy), (x0 + r, y0 + 1))],
+        "mid_off_axis": base[:3] + [_it("arc", (x0 + r, y1), (c[0] - r * 0.7071, c[1] - r * 0.7071), (x0 + r, y0))],
+        "chord_not_perpendicular": base[:3] + [_it("arc", skew_a, (x0, cy), skew_b)],
+        "both_at_one_end": base[:2] + [_it("arc", (x1 - 2 * r, cy), (x1 - r, y0), (x1, cy)), _it("arc", (x1, cy), (x1 - r, y1), (x1 - 2 * r, cy))],
+        "minor_arc": base[:3] + [_it("arc", (c[0] - 5, c[1] + math.sqrt(r * r - 25)), (x0, cy), (c[0] - 5, c[1] - math.sqrt(r * r - 25)))],
+        "diagonal_pair": _diagonal_pair(),
+        "same_direction": base[:2] + [base[2], _it("arc", (x1 - r, y1), (x1, cy), (x1 - r, y0))],
+        "concave_end": base[:3] + [_it("arc", (x0 + r, y1), (x0 + 2 * r, cy), (x0 + r, y0))],
+        "centre_off_box": base[:3] + [_it("arc", (x0 + r + 2, y1), (x0 + 2, cy), (x0 + r + 2, y0))],
+    }
+
+
+def test_the_valid_stadium_items_are_a_stadium_and_every_variant_is_not():
+    assert placement_anchor._is_stadium(_stadium_items(), BOX)
+    for name, items in _stadium_variants().items():
+        assert not placement_anchor._is_stadium(items, BOX), name
+
+
+def test_a_stadium_with_a_notch_or_a_split_side_is_refused_by_place_footprints(tmp_path, tools):
+    x0, y0, x1, y1 = BOX
+    r = H / 2
+    xm = (x0 + x1) / 2
+    notched = [_line((x0 + r, y0), (xm - 3, y0)), _arc((xm - 3, y0), (xm, y0 + 3), (xm + 3, y0)), _line((xm + 3, y0), (x1 - r, y0)),
+               *_stadium_nodes()[1:]]
+    split = [_line((x0 + r, y0), (xm, y0)), _line((xm, y0), (x1 - r, y0)), *_stadium_nodes()[1:]]
+    for name, nodes, local in (("notch", notched, (25.0 + 0.0, 2.0)), ("split", split, (25.0, 20.0))):
+        pcb = _replace_outline(_golden(tmp_path, "st" + name), nodes)
+        before = pcb.read_bytes()
+        result = tools["place_footprints"](str(pcb), [{"reference": "R1", "x": local[0], "y": local[1]}])
+        assert result["status"] == "error" and result["code"] == "outline_arcs_unreadable", (name, result)
+        assert pcb.read_bytes() == before
+
+
+def test_architecture_states_the_fail_closed_rule_and_the_circle_limit():
+    arch = (Path(__file__).parents[1] / "docs" / ("ARCHITECTURE" + ".md")).read_text(encoding="utf-8")
+    assert "is refused as `slots_unreadable` by `placement_anchor.cutout_boxes`, which never lets `edge_loops.classify` problems or missing uuids switch the check off" in arch
+    assert "a board with no Edge.Cuts item at all is not measured and `place_footprints` places as before" in arch
+    assert ("Known limit: for a circle or a stadium `place_footprints` does not check a part against the outline itself, "
+            "so a part in the bounding-box corner outside the circle is accepted, as is a part outside the board") in arch
+    assert "the check also runs on a board whose outer loop is not a rectangle when its slots are understood" not in arch

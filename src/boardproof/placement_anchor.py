@@ -232,9 +232,24 @@ def outline_rect(root: Any) -> tuple[Outline | None, str | None]:
                 items = outer_items
                 x0, y0, x1, y1 = parts.outer.box
                 cutouts = tuple(slot.box for slot in parts.slots)
+    found = _rect_cutouts(items, (x0, y0, x1, y1))
+    if found is not None:
+        return Outline((x0, y0, x1, y1), tuple(found) + cutouts), None
+    return None, (
+        "the outline is not one axis-aligned rectangle (one gr_rect, or four closing gr_line, "
+        "optionally with each corner replaced by a quarter-circle gr_arc); "
+        f"its items are {sorted({item.kind for item in items})}"
+    )
+
+
+def _rect_cutouts(items: list[Any], box: Box) -> list[Box] | None:
+    """The loop's own items (``gr_rect``, four closing ``gr_line``, or such a rectangle with quarter-arc
+    corners) read as an axis-aligned rectangle with box ``box``: the boxes of the material its corner
+    arcs cut away (none for a plain rectangle); None when it is not one."""
+    x0, y0, x1, y1 = box
     kinds = [item.kind for item in items]
     if kinds == ["rect"]:
-        return Outline((x0, y0, x1, y1), cutouts), None
+        return []
     if kinds == ["line"] * 4:
         sides = set()
         for item in items:
@@ -250,16 +265,10 @@ def outline_rect(root: Any) -> tuple[Outline | None, str | None]:
                 elif abs(ay - y1) < _EPS:
                     sides.add("bottom")
         if sides == set(EDGES):
-            return Outline((x0, y0, x1, y1), cutouts), None
+            return []
     if "arc" in kinds:
-        corners = _rounded_corner_cutouts(items, (x0, y0, x1, y1))
-        if corners is not None:
-            return Outline((x0, y0, x1, y1), tuple(corners) + cutouts), None
-    return None, (
-        "the outline is not one axis-aligned rectangle (one gr_rect, or four closing gr_line, "
-        "optionally with each corner replaced by a quarter-circle gr_arc); "
-        f"its items are {sorted(set(kinds))}"
-    )
+        return _rounded_corner_cutouts(items, box)
+    return None
 
 
 def _strips(radius: float) -> int:
@@ -324,8 +333,6 @@ def _rounded_corner_cutouts(items: list[Any], box: Box) -> list[Box] | None:
         corner = (cx + sx * radius, cy + sy * radius)
         if min(abs(corner[0] - x0), abs(corner[0] - x1)) > _ARC_TOL or min(abs(corner[1] - y0), abs(corner[1] - y1)) > _ARC_TOL:
             return None
-        if abs(math.dist(centre, b) - radius) > _ARC_TOL:  # the end point on the fitted circle, as the mid point
-            return None
         if (sx, sy) in seen:
             return None
         seen.add((sx, sy))
@@ -341,50 +348,129 @@ def _rounded_corner_cutouts(items: list[Any], box: Box) -> list[Box] | None:
 
 
 class RoundedCornerUnreadable(Exception):
-    """The outer loop looks like a rounded rectangle but an arc is not a quarter-circle corner."""
+    """The outer loop has an arc that is not a quarter-circle corner of a rectangle."""
 
 
-def _looks_rounded(root: Any, outer: Any) -> bool:
-    """The outer loop is only ``gr_line`` and ``gr_arc``, with an arc whose own box is at most half
-    the shorter side across and sits at a corner of the loop's box (within 0.5 mm): a rounded
-    rectangle that ``outline_rect`` could not read (an arc off a quarter circle)."""
-    if not outer.uuids or not all(outer.uuids):
+class OutlineNotRectangular(Exception):
+    """The outer loop is lines only and not one axis-aligned rectangle."""
+
+
+def _is_stadium(items: list[Any], box: Box) -> bool:
+    """Exactly two convex semicircle arcs, each with the box's shorter side as diameter, on opposite
+    ends of the box (a circle when the box is square), joined by two lines (none for a circle). Read
+    from the raw (start) (mid) (end): the centre is the chord's mid point and sits where the box puts
+    it, the arc's mid point lies outward from the box centre along the axis, perpendicular to the chord."""
+    arcs = [i for i in items if i.kind == "arc"]
+    lines = sum(i.kind == "line" for i in items)
+    x0, y0, x1, y1 = box
+    w, h = x1 - x0, y1 - y0
+    d = min(w, h)
+    square = abs(w - h) < 1e-3
+    if len(arcs) != 2 or lines != (0 if square else 2):
         return False
-    keep = set(outer.uuids)
-    items = [i for i in raw_geometry.read_board_outline(root).items if i.uuid in keep]
-    if not items or any(i.kind not in ("line", "arc") for i in items) or not any(i.kind == "arc" for i in items):
+    cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
+    outward = []
+    for arc in arcs:
+        a, m, b = arc.points
+        centre = _circle_centre(a, m, b)
+        if centre is None or abs(2 * math.dist(centre, a) - d) > 1e-3:
+            return False
+        if math.dist(centre, ((a[0] + b[0]) / 2, (a[1] + b[1]) / 2)) > 1e-3:
+            return False
+        u = ((m[0] - centre[0]) / (d / 2), (m[1] - centre[1]) / (d / 2))
+        if min(abs(u[0]), abs(u[1])) > 1e-3:  # |u| = 1 by the fitted circle, one component 0
+            return False  # the mid point is not straight out along an axis
+        if abs((b[0] - a[0]) * u[0] + (b[1] - a[1]) * u[1]) > 1e-3:
+            return False  # the chord is not perpendicular to it
+        if square:
+            want = (cx, cy)
+        elif w > h:
+            want = (x0 + d / 2, cy) if u[0] < 0 else (x1 - d / 2, cy)
+        else:
+            want = (cx, y0 + d / 2) if u[1] < 0 else (cx, y1 - d / 2)
+        if (not square and abs(u[0] if w > h else u[1]) < 0.5) or math.dist(centre, want) > 1e-3:
+            return False
+        outward.append(u)
+    return abs(outward[0][0] + outward[1][0]) < 1e-3 and abs(outward[0][1] + outward[1][1]) < 1e-3
+
+
+def _is_plain_rectangle_poly(item: Any) -> bool:
+    """A ``gr_poly`` of four axis-aligned corners (a closing repeat of the first point allowed)."""
+    pts = list(item.contour.items) if item.contour is not None else []
+    if len(pts) == 5 and pts[0] == pts[-1]:
+        pts = pts[:-1]
+    if len(pts) != 4 or not all(isinstance(p, tuple) for p in pts):
         return False
-    x0, y0, x1, y1 = outer.box
-    half = min(x1 - x0, y1 - y0) / 2
-    for item in items:
-        if item.kind != "arc":
-            continue
-        extent = raw_geometry.arc_extent(*item.points)
-        if extent is None:
-            continue
-        ax0, ay0, ax1, ay1 = _box(extent)
-        if max(ax1 - ax0, ay1 - ay0) > half + 0.01:
-            continue
-        if min(math.dist((ax, ay), (cx, cy)) for ax in (ax0, ax1) for ay in (ay0, ay1)
-               for cx in (x0, x1) for cy in (y0, y1)) < 0.5:
-            return True
-    return False
+    xs, ys = sorted({round(p[0], 6) for p in pts}), sorted({round(p[1], 6) for p in pts})
+    return len(xs) == 2 and len(ys) == 2 and len({(round(p[0], 6), round(p[1], 6)) for p in pts}) == 4 and all(
+        abs(pts[k][0] - pts[(k + 1) % 4][0]) < _EPS or abs(pts[k][1] - pts[(k + 1) % 4][1]) < _EPS for k in range(4))
+
+
+def _items_box(items: list[Any]) -> Box | None:
+    points = [p for i in items for p in (raw_geometry.extent(i) or ())]
+    return _box(points) if points else None
+
+
+def _outer_slot_boxes(items: list[Any]) -> tuple[Box, ...] | None:
+    """The cut-away boxes of an outer loop given by its own items when it is understood (a rectangle
+    with or without quarter-arc corners, a circle, a stadium, an axis-aligned rectangular ``gr_poly``);
+    None when it is not. Raises ``RoundedCornerUnreadable`` for lines and arcs and
+    ``OutlineNotRectangular`` for anything else that is not understood."""
+    box = _items_box(items)
+    if box is None:
+        raise OutlineNotRectangular("the outer loop cannot be measured")
+    found = _rect_cutouts(items, box)
+    if found is not None:
+        return tuple(found)
+    if len(items) == 1 and items[0].kind == "circle":
+        return ()
+    if len(items) == 1 and items[0].kind == "poly" and _is_plain_rectangle_poly(items[0]):
+        return ()
+    line_arc = all(i.kind in ("line", "arc") for i in items)
+    if line_arc and _is_stadium(items, box):
+        return ()
+    if line_arc and any(i.kind == "arc" for i in items):
+        raise RoundedCornerUnreadable(
+            "the outer loop has arcs the tool cannot read as quarter-arc corners of a rectangle "
+            "(an arc off a quarter circle, a corner built from several arcs, a bite or notch in a side)")
+    raise OutlineNotRectangular(
+        "the outer loop is not one axis-aligned rectangle (lines only, a polygon or another shape: an L shape, for instance)")
+
+
+class EdgeCutsUnreadable(Exception):
+    """Edge.Cuts has items the tool cannot read as one outer loop with clean slots."""
 
 
 def cutout_boxes(root: Any) -> tuple[Box, ...]:
-    """The boxes of the material the outline is missing: a rounded rectangle's corners and the
-    slots (``outline_rect``), or, where the outer loop is not a rectangle, just the slots when the
-    Edge.Cuts structure is understood (one outer loop, closed loops strictly inside it)."""
+    """The boxes of the material the outline is missing: a rectangle's rounded corners and the
+    slots. Fail closed: a board with Edge.Cuts whose outer loop is not understood (a rectangle, quarter-arc
+    rectangle, circle, stadium or axis-aligned rectangular ``gr_poly``), or whose Edge.Cuts has any other
+    problem (a stray or open item, a slot that touches, a missing uuid cannot hide it), raises; only a board
+    with no Edge.Cuts at all returns ``()``."""
     outline, _ = outline_rect(root)
     if outline is not None:
         return outline.cutouts
+    read = raw_geometry.read_board_outline(root)
+    if not read.items and not read.problems:
+        return ()  # no Edge.Cuts at all: nothing to measure against, as before
+    if read.problems:
+        raise EdgeCutsUnreadable("Edge.Cuts is not read exactly: " + "; ".join(read.problems))
+    if any(i.footprint_uuid is not None for i in read.items):
+        raise EdgeCutsUnreadable("a footprint carries Edge.Cuts items")
     parts = edge_loops.classify(root)
-    if parts.outer is not None and not parts.problems and _looks_rounded(root, parts.outer):
-        raise RoundedCornerUnreadable(
-            "the outer loop looks like a rounded rectangle but an arc is not a quarter circle at a corner")
-    if parts.outer is not None and parts.slots and not parts.problems:
-        return tuple(slot.box for slot in parts.slots)
-    return ()
+    # the gr_ items in file order are read.items one to one (no problems, no footprint items), so the
+    # outer loop's nodes pick their items by position, never by uuid
+    nodes = [n for n in root.children if not n.is_atom and n.name in edge_loops.EDGE_KINDS
+             and n.find("layer") is not None and n.find("layer").values[:1] == ["Edge.Cuts"]]
+    if parts.outer is None or len(nodes) != len(read.items):
+        raise EdgeCutsUnreadable("Edge.Cuts has no outer loop that can be read: " + "; ".join(parts.problems))
+    position = {id(n): k for k, n in enumerate(nodes)}
+    if any(id(n) not in position for n in parts.outer.nodes):
+        raise EdgeCutsUnreadable("the outer loop of Edge.Cuts cannot be matched to its items")
+    cuts = _outer_slot_boxes([read.items[position[id(n)]] for n in parts.outer.nodes])
+    if parts.problems:
+        raise EdgeCutsUnreadable("Edge.Cuts has problems besides the outer loop: " + "; ".join(parts.problems))
+    return tuple(cuts or ()) + tuple(slot.box for slot in parts.slots)
 
 
 def overlap(a: Box, b: Box) -> bool:
