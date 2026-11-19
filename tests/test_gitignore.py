@@ -103,7 +103,6 @@ TRACKED_CASES = [
     "evals/rung1/project/lib/Rung1_USBC/Rung1_USBC.kicad_sym",
     "evals/rung1/project/lib/Rung1_USBC/Rung1_USBC.pretty/USB_C_Receptacle_Shouhan_TYPE-C-6P.kicad_mod",
     "evals/rung1/assets/Rung1_USBC/Rung1_USBC.pretty/USB_C_Receptacle_Shouhan_TYPE-C-6P.kicad_mod",
-    ".claude/agents/builder.md",
     ".claude/settings.json",
     ".claude/skills/kicad-pcb/SKILL.md",
     ".claude/skills/kicad-simulation/SKILL.md",

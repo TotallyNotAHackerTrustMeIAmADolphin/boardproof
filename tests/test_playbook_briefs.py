@@ -1,8 +1,8 @@
 """The standing brief templates exist and carry the fail-open checklist and the hand-back rules.
 
-Drift guard for build ticket 148: the playbook fork section and both templates under
-docs/playbook/briefs must keep the required sentences. The reviewer-worktree and merge-order
-sentences must also match the agent definitions word for word (one source of truth).
+Drift guard for build ticket 148 (moved by issue 155): the fail-open checklist and both templates under
+docs/dispatch/briefs must keep the required sentences. The reviewer-worktree and merge-order
+sentences must also match the rule files in docs/dispatch word for word (one source of truth).
 """
 
 from __future__ import annotations
@@ -12,9 +12,9 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-BRIEFS = ROOT / "docs" / "playbook" / "briefs"
-AGENTS = ROOT / ".claude" / "agents"
-FORK = ROOT / "docs" / "playbook" / "PROJECT-KICAD-MCP-PLAYBOOK.md"
+BRIEFS = ROOT / "docs" / "dispatch" / "briefs"
+AGENTS = ROOT / "docs" / "dispatch"
+FORK = AGENTS / "fail-open-checklist.md"
 HEADING = "## Fail-open checklist for sheet writing tools"
 
 # Checklist items 1-14 and the closing rule, as phrases that appear in both templates.
@@ -95,13 +95,13 @@ def test_template_carries_sentence(name: str, sentence: str) -> None:
     assert sentence in _read(BRIEFS / name), f"{name} lacks: {sentence}"
 
 
-def test_reviewer_worktree_rule_is_word_for_word_in_the_agent_definition() -> None:
+def test_reviewer_worktree_rule_is_word_for_word_in_the_rule_file() -> None:
     definition = _read(AGENTS / "reviewer.md")
     for sentence in REVIEWER_ONLY:
         assert sentence in definition, sentence
 
 
-def test_builder_merge_order_is_word_for_word_in_the_agent_definition() -> None:
+def test_builder_merge_order_is_word_for_word_in_the_rule_file() -> None:
     definition = _read(AGENTS / "builder.md")
     assert BUILDER_ONLY[0].split(", (3)")[0] in definition
     assert BUILDER_ONLY[2] in definition
@@ -115,7 +115,7 @@ def test_templates_do_not_override_the_agent_definitions() -> None:
         assert "do not merge, do not push" not in text.lower()
 
 
-def test_playbook_fork_section_has_all_items() -> None:
+def test_fail_open_checklist_has_all_items() -> None:
     text = FORK.read_text(encoding="utf-8")
     assert HEADING in text
     section = _flat(text.split(HEADING, 1)[1].split("\n## ", 1)[0])
@@ -136,10 +136,20 @@ def test_playbook_fork_section_has_all_items() -> None:
         "**Delete has a self-check.**",
         "**Second fail-open of the same family:**",
         "refusing everything not proven",
-        "docs/playbook/briefs/builder.md",
-        "docs/playbook/briefs/reviewer.md",
+        "docs/dispatch/briefs/builder.md",
+        "docs/dispatch/briefs/reviewer.md",
         "a call never waits for a file above its own parent",
         'must not pin "lowest" across sheets',
     ]:
         assert marker in section, marker
     assert "Five of the six" not in section
+
+
+@pytest.mark.parametrize("name", ["builder.md", "reviewer.md"])
+def test_brief_points_to_its_rule_file_first_and_does_not_forbid_the_push(name: str) -> None:
+    text = (BRIEFS / name).read_text(encoding="utf-8")
+    first = [line for line in text.splitlines() if line.strip()][1]
+    assert first.startswith(f"Read `docs/dispatch/{name}` first"), first
+    assert "no push" not in _flat(text)
+    if name == "builder.md":
+        assert "push only `ticket-<TICKET>` (CLAUDE.md P12)" in _flat(text)

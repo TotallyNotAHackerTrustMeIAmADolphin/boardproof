@@ -485,8 +485,8 @@ def test_per_test_times_of_a_serial_run_keep_the_single_file(tmp_path):
 def test_the_docstring_testing_md_and_p11_state_the_option_and_its_figures():
     doc = " ".join((gate.__doc__ or "").split())
     testing = base._prose(ROOT / "docs/TESTING.md")
-    playbook = base._prose(ROOT / "docs" / "playbook" / "PROJECT-KICAD-MCP-PLAYBOOK.md")
-    p11 = playbook.split("**Project rule P11:", 1)[1].split("**Project rule P12", 1)[0]
+    playbook = base._prose(ROOT / "docs" / "HISTORY.md")
+    p11 = playbook.split("**Project rule P11:", 1)[1].split("## Fork rule P8", 1)[0]
     for name, text in (("docstring", doc), ("docs/TESTING.md", testing), ("P11", p11)):
         assert "--workers" in text and "-n N --dist load" in text.replace("`", ""), name
         assert "addopts" in text, name

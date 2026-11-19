@@ -167,7 +167,7 @@ PUBLISH_ALLOWED_ARCHIVES = (
 def worst_case_s(suite_timeout: float) -> float:
     """Longest a gate run can take: every step that can time out runs to its timeout and is then
     killed (import, two collections, suite, lint, the publishability step and the last rerun; the rerun budget covers the
-    earlier reruns' kills), and every git call runs to its timeout. ``.claude/agents/builder.md``
+    earlier reruns' kills), and every git call runs to its timeout. ``docs/dispatch/builder.md``
     wraps the gate in a ``timeout`` above this figure, so the gate's own RED fires first."""
     steps = (IMPORT_TIMEOUT_S + 2 * COLLECT_TIMEOUT_S + suite_timeout + RERUN_BUDGET_S + LINT_TIMEOUT_S
              + PUBLISH_BUDGET_S)

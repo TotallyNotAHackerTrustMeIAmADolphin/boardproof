@@ -1,13 +1,14 @@
 # Standing brief: builder (sheet writing tools and other build tickets)
 
-The coordinator pastes this page into the dispatch and fills the placeholders. CLAUDE.md and the
-agent definition `.claude/agents/builder.md` are the source of truth for every rule they state; this
-page repeats the ones named below word for word and adds the checklist. The checklist lives in the
-playbook fork, section "Fail-open checklist for sheet writing tools".
+Read `docs/dispatch/builder.md` first: it holds the project's rules for the builder.
+
+The coordinator pastes this page into the dispatch and fills the placeholders. CLAUDE.md and `docs/dispatch/builder.md` are the source of truth for every rule they state; this
+page repeats the ones named below word for word and adds the checklist. The checklist lives in
+`docs/dispatch/fail-open-checklist.md`.
 
 **Fill in:** ticket `<TICKET>`; branch `ticket-<TICKET>`; worktree `<WORKTREE>`; acceptance text:
 `python scripts/issues.py show <TICKET>`; merge instruction: `<MERGE INSTRUCTION>` (default: merge
-local `main` into the ticket branch as below, never into `main`, no push).
+local `main` into the ticket branch as below, never into `main`; push only `ticket-<TICKET>` (CLAUDE.md P12)).
 
 ## Work
 
@@ -24,7 +25,7 @@ local `main` into the ticket branch as below, never into `main`, no push).
 ## Fail-open checklist (probe each item with kicad-cli before hand-back)
 
 If your tool writes a sheet, answer each item with a test, not with a sentence. Details and the
-reasons are in the playbook fork section.
+reasons are in that file.
 
 1. multi-unit part (for example LM324 units 1 to 5): edit by reference and by each unit's uuid; across sheets KiCad's pick of a multi-unit part's properties is undetermined (only on one sheet it is the lowest placed unit), so do not pin "lowest" across sheets;
 2. same reference on another sheet of the tree, and a sheet used from a subfolder, with and
@@ -53,7 +54,7 @@ a special case.
   as the dispatch says. A result counts only if `boardproof.__file__` lies inside the worktree and pytest's `rootdir:` line names it; report both.
 - Test in the worktree itself: a `git archive` export has no `.git` and fails
   `test_docs_layout` and `test_skills_tracked`.
-- While a batch gate runs, start no more than 2 other runs (the gate's timing basis, fork P11, assumes few).
+- While a batch gate runs, start no more than 2 other runs (the gate's timing basis, CLAUDE.md P11, assumes few).
 - Run `scripts/lint_gate.py` on the whole tree with the shared interpreter.
 - The full suite and the batch gate keep their own rules (builder definition, Tests).
 
@@ -63,3 +64,17 @@ a special case.
 - The report names: head sha (after merging main), files changed, each run with its summary line,
   what was already on `main`, decisions taken, anything not done and which ticket should own it.
 - Commit with the trailer lines from the dispatch. Do not amend or rebase after a review started.
+
+## Every builder dispatch adds (coordinator)
+
+The ticket text and its acceptance items; the `Files:` it owns; "never hand-edit `.kicad_*`;
+cross-check any position or geometry against the raw S-expression"; "no routed or done claim
+without a `verify_board` PASS"; the checkpoint pattern (propose dry run, revision token, confirm,
+new revision, temp dir plus rename, source untouched, no seam on the MCP surface; reference
+implementation `input_prep.py`, later the shared helper of build ticket 22); the self-check (verify
+before replace, `write_not_verified`) and the drift guard (`drift_detected`, `file_open_in_kicad`)
+once built (docs/ARCHITECTURE.md decisions 4 and 12); every mutation through the write layer
+(decision 1; until build ticket 42 lands, its interim rule); the `ToolsetBuilder` and
+`SourcingProvider` contracts where relevant; targeted tests in small separate background runs and
+the batch gate in the background (`docs/dispatch/builder.md`, Tests, which with CLAUDE.md
+overrides the generic A1 and sub-agent template); one genuine line of encouragement.

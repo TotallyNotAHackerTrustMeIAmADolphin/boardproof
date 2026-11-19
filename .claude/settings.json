@@ -1,4 +1,8 @@
 {
+  "env": {
+    "CLAUDE_CODE_SUBAGENT_MODEL": "sonnet",
+    "PLAYBOOK_BUILDER_CHECK": "bash scripts/builder_check.sh"
+  },
   "hooks": {
     "PreToolUse": [
       {

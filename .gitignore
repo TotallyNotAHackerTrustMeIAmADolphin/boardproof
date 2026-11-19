@@ -32,11 +32,10 @@ fp-info-cache
 # Local Claude Code tooling state (globally-installed skills, etc.) --
 # not project source. Exception: skills this project authors itself
 # (kicad-*), which are meant to ship with the repo -- see the archived backlog's
-# "Companion skills" epic. Also tracked: the agent definitions and the
-# project settings with the git-guardrail hook (build ticket 45).
+# "Companion skills" epic. Also tracked: the project settings with the
+# git-guardrail hook (build ticket 45). The agents come from the playbook plugin.
 .claude/*
 !.claude/skills
-!.claude/agents
 !.claude/settings.json
 .claude/skills/*
 !.claude/skills/kicad-sourcing

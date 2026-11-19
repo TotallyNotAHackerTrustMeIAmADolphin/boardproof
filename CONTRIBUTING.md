@@ -23,6 +23,8 @@ python -m venv .venv
 python -m pytest -m "not network"
 ```
 
+`git submodule update --init` fetches `docs/playbook` (the playbook text; the tests and `scripts/builder_check.sh` do not need it).
+
 Tests that need an external tool (KiCad's demos, KiCadRoutingTools, ngspice, Freerouting) skip with a stated reason when it is absent. Before a change is merged, the maintainers run the whole gate on a clean committed tree: `python scripts/batch_gate.py`. It runs the full suite and the linter and ends with one `GREEN` or `RED` line (about 45 minutes; see [docs/TESTING.md](docs/TESTING.md)). Known failing tests are exactly those in `scripts/known-red.txt`; any other failure blocks a merge. The linter's findings are frozen in `scripts/ruff-baseline.json`: fix new findings, never add to the baseline.
 
 ## Git hooks (maintainers)

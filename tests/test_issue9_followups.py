@@ -101,11 +101,13 @@ def test_item5_the_committed_history_has_no_mangled_url():
     assert "http<path>" not in text
 
 
-def test_item5_the_playbook_fork_names_no_vanished_scratch_path_for_the_pic_programmer_attribution():
-    fork = (ROOT / "docs" / "playbook" / "PROJECT-KICAD-MCP-PLAYBOOK.md").read_text(encoding="utf-8")
-    assert ".scratch" + "/pivot-ladder" not in fork
-    assert "ATTRIBUTION-pic_programmer" not in fork
-    assert "THIRD_PARTY.md" in fork
+def test_item5_the_project_rules_name_no_vanished_scratch_path_for_the_pic_programmer_attribution():
+    # Issue 155: the fork's text moved into CLAUDE.md (P1) and docs/HISTORY.md (the verbatim copy).
+    for rel in ("CLAUDE.md", "docs/HISTORY.md"):
+        text = (ROOT / rel).read_text(encoding="utf-8")
+        assert ".scratch" + "/pivot-ladder" not in text, rel
+        assert "ATTRIBUTION-pic_programmer" not in text, rel
+    assert "THIRD_PARTY.md" in (ROOT / "CLAUDE.md").read_text(encoding="utf-8")
 
 
 # --- item 6: the JLCPCB library switch, the index header, the PCM branch -------------------------------

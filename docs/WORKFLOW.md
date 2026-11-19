@@ -39,8 +39,9 @@ The helper `scripts/issues.py` refuses a text that `scripts/check_publishable.py
 
 ## What does not change
 
-The rules of the playbook (`docs/playbook/AGENT-WORKFLOW-PLAYBOOK.md` and its fork
-`docs/playbook/PROJECT-KICAD-MCP-PLAYBOOK.md`) stay as they are: every build ticket gets an
+The rules of the playbook (`docs/playbook/AGENT-WORKFLOW-PLAYBOOK.md`, a submodule, with this
+project's answers P1-P17 in `CLAUDE.md` and the agent and review rules in `docs/dispatch/`) stay as
+they are: every build ticket gets an
 adversarial review; every finding is classed BLOCKS or FOLLOW-UP; a BLOCKS finding becomes a failing
 test before its fix; the delta is re-reviewed until CLEAN; after the third delta review the
 coordinator stops and escalates; the stop rule never permits a merge without CLEAN; the batch gate

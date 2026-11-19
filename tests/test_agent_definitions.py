@@ -1,7 +1,10 @@
-"""Build ticket 45: the agent definitions in `.claude/agents/` carry this project's contracts.
+"""Build ticket 45, moved by issue 155: the project's agent rules in `docs/dispatch/` carry its contracts.
 
-The definitions are text an LLM reads at runtime (critical class, fork P7). This guard keeps the
-contracts in them: losing one of these anchors needs a deliberate edit of this test.
+Until issue 155 these were the agent definitions in `.claude/agents/`; the plugin now ships the
+definitions (`playbook:builder`, `playbook:reviewer`, `playbook:researcher`) and the project's rules
+for them live in `docs/dispatch/`, named by CLAUDE.md. The rules are text an LLM reads at runtime
+(critical class, CLAUDE.md P7). This guard keeps the contracts in them: losing one of these anchors
+needs a deliberate edit of this test.
 """
 
 from __future__ import annotations
@@ -13,7 +16,8 @@ from pathlib import Path
 import pytest
 
 OLD_PLANNING_DIR = "." + "scratch"  # built, so this file names no quoted path
-AGENTS = Path(__file__).resolve().parents[1] / ".claude" / "agents"
+ROOT = Path(__file__).resolve().parents[1]
+AGENTS = ROOT / "docs" / "dispatch"
 
 REQUIRED = {
     "builder": [
@@ -49,8 +53,8 @@ REQUIRED = {
         "never edit the worktree while it runs (no file edit, commit, checkout or merge)",
         "a run with edits during it is void; run it again on the new head",
         # review round 1, finding 1: precedence over the generic playbook (A1, resources, template)
-        "this file and the project fork override the generic playbook's rules on background commands",  # noqa: E501
-        "(A1, the resources table's background-jobs row, the sub-agent template)",
+        "this file and CLAUDE.md override the generic playbook's and the plugin builder's rules on background commands",  # noqa: E501
+        "(A1, the resources table's background-jobs row, the sub-agent template,",
         # fix round 2, N10: the other half of the precedence sentence
         "every other command runs in the foreground",
         # finding 2: all work is committed first, so the handed-back sha is the gated sha (the
@@ -109,15 +113,10 @@ REQUIRED = {
 
 
 def _parse(path: Path) -> tuple[dict[str, str], str]:
+    # The files are plain Markdown since issue 155 (no agent frontmatter: the plugin owns that).
     text = path.read_text(encoding="utf-8")
-    assert text.startswith("---\n") or text.startswith("---\r\n"), f"{path.name}: no frontmatter"
-    _, head, body = text.split("---", 2)
-    meta: dict[str, str] = {}
-    for line in head.strip().splitlines():
-        key, sep, value = line.partition(":")
-        assert sep, f"{path.name}: frontmatter line without a colon: {line!r}"
-        meta[key.strip()] = value.strip()
-    return meta, body
+    assert not text.startswith("---"), f"{path.name}: frontmatter belongs to the plugin's definition"
+    return {}, text
 
 
 def _norm(text: str) -> str:
@@ -148,21 +147,11 @@ def _gate_bullet() -> str:
 
 
 @pytest.mark.parametrize("name", sorted(REQUIRED))
-def test_definition_exists_and_carries_its_contracts(name):
-    meta, body = _parse(AGENTS / f"{name}.md")
-    assert meta["name"] == name
-    assert meta["description"]
-    assert int(meta["maxTurns"]) > 0
+def test_rules_exist_and_carry_their_contracts(name):
+    _, body = _parse(AGENTS / f"{name}.md")
     flat = _norm(body)
     missing = [anchor for anchor in REQUIRED[name] if _norm(anchor) not in flat]
     assert not missing, f"{name}.md lost its contracts: {missing}"
-
-
-@pytest.mark.parametrize("name", sorted(REQUIRED))
-def test_no_builtin_worktree_isolation(name):
-    # Worktrees are made by hand from local main (fork P5); isolation: worktree bases on origin/main.
-    meta, _ = _parse(AGENTS / f"{name}.md")
-    assert "isolation" not in meta
 
 
 def test_builder_does_not_tell_agents_to_skip_required_reads():
@@ -250,30 +239,40 @@ def test_anchors_survive_a_harmless_reflow():
     assert not BACK_TO_FOREGROUND.search(flat)
 
 
-# Review round 1, finding 1: the project fork agrees with builder.md on background runs.
-FORK = Path(__file__).resolve().parents[1] / "docs" / "playbook" / "PROJECT-KICAD-MCP-PLAYBOOK.md"
+# Review round 1, finding 1: CLAUDE.md, the rule files and the briefs agree on background runs.
+CLAUDE = ROOT / "CLAUDE.md"
+HISTORY = ROOT / "docs" / "HISTORY.md"
+RULES = AGENTS / "review-rules.md"
+BRIEFS = AGENTS / "briefs"
 
 
-def _fork() -> str:
-    # The fork's rules are Markdown block quotes; drop the `> ` markers before normalising.
-    lines = FORK.read_text(encoding="utf-8").splitlines()
+def _read(path: Path) -> str:
+    # Markdown block quotes lose their `> ` markers before normalising.
+    lines = path.read_text(encoding="utf-8").splitlines()
     return _norm("\n".join(line[1:] if line.startswith(">") else line for line in lines))
 
 
+def _section(path: Path, heading: str) -> str:
+    text = _read(path)
+    assert heading in text, f"{path.name}: no section {heading!r}"
+    return text.split(heading, 1)[1].split(" ## ", 1)[0]
+
+
 @pytest.mark.parametrize(
-    "anchor",
+    ("path", "anchor"),
     [
-        # P6
-        "Targeted test runs in small separate background runs (each aimed at under about 20 minutes, own log, own summary line, wait for the notification); the batch gate (P11) runs in the background",  # noqa: E501
-        # P11
-        "run by the builder at the end of its ticket and by the coordinator before a merge",
-        "so it runs in the background (`.claude/agents/builder.md`, Tests)",
+        # P6 (CLAUDE.md since issue 155)
+        (CLAUDE, "Targeted runs: small separate background runs (each aimed at under about 20 minutes, own log outside the worktree, own summary line, wait for the notification;"),  # noqa: E501
+        # P11 (docs/HISTORY.md keeps the pinned text)
+        (HISTORY, "run by the builder at the end of its ticket and by the coordinator before a merge"),
+        (HISTORY, "so it runs in the background (`docs/dispatch/builder.md`, Tests)"),
+        (CLAUDE, "run by the builder at the end of its ticket on a committed, clean tree in the background (`docs/dispatch/builder.md`, Tests)"),  # noqa: E501
         # the builder dispatch template
-        "targeted tests in small separate background runs and the batch gate in the background",
+        (BRIEFS / "builder.md", "targeted tests in small separate background runs and the batch gate in the background"),
     ],
 )
-def test_fork_playbook_agrees_on_background_gate(anchor):
-    assert _norm(anchor) in _fork()
+def test_the_rules_agree_on_background_gate(path, anchor):
+    assert _norm(anchor) in _read(path)
 
 
 @pytest.mark.parametrize(
@@ -313,10 +312,12 @@ def test_fork_playbook_agrees_on_background_gate(anchor):
         "30 lines or fewer without new logic",
         "A new ticket is opened only for new knowledge",
         "by scope decision (an exception to the FOLLOW-UP rule above",
+        # issue 155: the contract list the rule names lives in the reviewer's rule file now
+        "the STANDARDS list of `docs/dispatch/reviewer.md`",
     ],
 )
-def test_fork_playbook_carries_the_finding_rule(anchor):
-    assert _norm(anchor) in _fork()
+def test_the_review_rules_carry_the_finding_rule(anchor):
+    assert _norm(anchor) in _read(RULES)
 
 
 @pytest.mark.parametrize(
@@ -327,12 +328,12 @@ def test_fork_playbook_carries_the_finding_rule(anchor):
         "a finding from an earlier round that is not closed",
     ],
 )
-def test_fork_playbook_drops_the_unclassed_finding_rule(stale):
-    assert _norm(stale) not in _fork()
+def test_the_review_rules_drop_the_unclassed_finding_rule(stale):
+    assert _norm(stale) not in _read(RULES)
 
 
 def test_claude_md_points_to_the_finding_rule():
-    text = _norm((FORK.parents[2] / "CLAUDE.md").read_text(encoding="utf-8"))
+    text = _norm(CLAUDE.read_text(encoding="utf-8"))
     assert _norm("CLEAN means no BLOCKS finding") in text
     assert _norm("A BLOCKS finding becomes a failing test before its fix") in text
     assert _norm("FOLLOW-UPs go into build tickets at the merge") not in text
@@ -340,52 +341,44 @@ def test_claude_md_points_to_the_finding_rule():
     assert _norm("stop after the third delta review and escalate") in text
     assert _norm("The stop rule never permits a merge without CLEAN") in text
     assert _norm("Each finding becomes a failing test before its fix") not in text
+    assert "`docs/dispatch/review-rules.md`" in text
 
 
-def test_fork_header_names_targeted_runs_and_the_reviewer_worktree():
-    header = _fork().split("## Section 0", 1)[0]
+def test_claude_md_overrides_name_targeted_runs_and_the_reviewer_worktree():
+    header = _section(CLAUDE, "## Overrides of the playbook")
     assert _norm("and for targeted test runs, which go in small separate background runs") in header
     assert _norm("coordinator decision of 2026-11-05, pending owner confirmation in issue 148") in header
-    assert _norm("The fork also overrides A2 and every generic rule that has the reviewer work in a `git archive` export") in header  # noqa: E501
+    assert _norm("This file also overrides A2 and every generic rule that has the reviewer work in a `git archive` export") in header  # noqa: E501
     assert _norm("a reviewer works in its own detached git worktree of the reviewed sha") in header
 
 
-def test_fork_reviewer_prompt_rule_names_the_review_worktree():
-    fork = _fork()
-    assert "scratch-copy-only" not in fork
-    bullet = fork.split("**Every reviewer prompt adds:**", 1)[1].split("- **", 1)[0]
-    assert _norm("mutation testing in the reviewer's own review worktree") in bullet
+def test_reviewer_dispatch_rule_names_the_review_worktree():
+    text = _read(BRIEFS / "reviewer.md")
+    assert "scratch-copy-only" not in text
+    bullet = text.split("## Every reviewer dispatch adds (coordinator)", 1)[1]
+    assert _norm("Mutation testing in the reviewer's own review worktree") in bullet
     assert "`git checkout -- .`" in bullet
     # P6's example uses the background form, not the foreground pipe
-    assert "pytest -q <paths> 2>&1 | tail -15" not in fork
+    for path in (CLAUDE, HISTORY, *AGENTS.glob("**/*.md")):
+        assert "pytest -q <paths> 2>&1 | tail -15" not in _read(path), path
 
 
 def test_no_unrecorded_owner_decision_claim():
     # The targeted-run rule is a coordinator decision pending owner confirmation (issue 148).
-    for path in [*AGENTS.glob("*.md"), FORK, *(FORK.parent / "briefs").glob("*.md")]:
+    # CLAUDE.md legitimately quotes recorded owner decisions (2026-10-19 and others), as before issue 155.
+    for path in AGENTS.glob("**/*.md"):
         assert "owner decision" not in _norm(path.read_text(encoding="utf-8")).lower(), path
 
 
-def test_fork_header_names_the_background_gate_exception():
-    # Fix round 2, finding 1: both headers let the general file win on general rules, so A1
-    # (and its "rerun in the foreground" nudge) would still win without this exception.
-    header = _fork().split("## Section 0", 1)[0]
+def test_claude_md_names_the_background_gate_exception():
+    # Fix round 2, finding 1: the general file would win on A1 (and its "rerun in the foreground"
+    # nudge) without this exception.
+    header = _section(CLAUDE, "## Overrides of the playbook")
     assert _norm(
-        "Except: P6 and P11 override A1, the resources table's background-jobs row and the "
-        "sub-agent template for the batch gate, which runs in the background (build ticket 66)"
+        "Except: P6 and P11 override A1, the resources table's background-jobs row, the sub-agent "
+        "template and the plugin builder's \"foreground under `timeout`, never a background command\" "
+        "for the batch gate, which runs in the background (build ticket 66)"
     ) in header
-
-
-GENERIC = FORK.with_name("AGENT-WORKFLOW-PLAYBOOK.md")
-
-
-def test_generic_header_points_to_the_fork_exception():
-    lines = GENERIC.read_text(encoding="utf-8").splitlines()
-    header = _norm("\n".join(line.lstrip("> ") for line in lines[:8]))
-    assert (
-        "This file wins on general rules, the fork on project values, except where the fork's "
-        "header names an exception." in header
-    )
 
 
 @pytest.mark.parametrize(
@@ -396,17 +389,24 @@ def test_generic_header_points_to_the_fork_exception():
         "foreground tests; one genuine line",  # the dispatch template before ticket 66
     ],
 )
-def test_fork_playbook_drops_the_foreground_only_gate(stale):
-    assert _norm(stale) not in _fork()
+def test_the_rules_drop_the_foreground_only_gate(stale):
+    for path in (CLAUDE, RULES, *AGENTS.glob("*.md"), *BRIEFS.glob("*.md")):
+        assert _norm(stale) not in _read(path), path
 
 
 def test_builder_cannot_start_agents():
-    meta, _ = _parse(AGENTS / "builder.md")
-    assert "Agent" in meta["disallowedTools"]
+    # The plugin owns the definition (issue 155); pin its frontmatter when the submodule is checked out.
+    plugin = ROOT / "docs" / "playbook" / "plugin" / "agents" / "builder.md"
+    if not plugin.is_file():
+        pytest.skip("docs/playbook submodule is not initialised (git submodule update --init): "
+                    "the plugin's builder definition is not on disk")
+    head = plugin.read_text(encoding="utf-8").split("---", 2)[1]
+    disallowed = next(line for line in head.splitlines() if line.startswith("disallowedTools:"))
+    assert "Agent" in disallowed
 
 
 def test_agents_read_and_record_tickets_as_issues():
-    """Publish-prep ticket 03a: a ticket is a GitHub issue; no agent definition points at .scratch."""
+    """Publish-prep ticket 03a: a ticket is a GitHub issue; no rule file points at .scratch."""
     builder = _norm((AGENTS / "builder.md").read_text(encoding="utf-8"))
     for phrase in (
         "with `python scripts/issues.py show <n>`",
@@ -418,5 +418,33 @@ def test_agents_read_and_record_tickets_as_issues():
     assert _norm("as a comment on the ticket's issue") in reviewer
     researcher = _norm((AGENTS / "researcher.md").read_text(encoding="utf-8"))
     assert _norm("python scripts/issues.py show <n>") in researcher
-    for path in sorted(AGENTS.glob("*.md")):
+    for path in sorted(AGENTS.glob("**/*.md")):
         assert OLD_PLANNING_DIR not in path.read_text(encoding="utf-8"), path.name
+
+
+def test_hand_made_worktrees_are_history_only():
+    # Issue 155: the plugin builder makes the worktree from a fresh origin/main (CLAUDE.md P5).
+    for line in __import__("subprocess").run(["git", "ls-files"], cwd=ROOT, capture_output=True, text=True,
+                                             check=True).stdout.splitlines():
+        if line in {"docs/HISTORY.md", "tests/test_agent_definitions.py"} or line.startswith("docs/playbook"):
+            continue
+        path = ROOT / line
+        if path.suffix in {".md", ".py", ".toml", ".json"} and path.is_file():
+            text = _norm(path.read_text(encoding="utf-8", errors="ignore"))
+            assert "hand-made worktree" not in text, line
+
+
+def test_claude_md_overrides_name_no_prs_and_the_dispatch_files():
+    text = _read(CLAUDE)
+    section = _section(CLAUDE, "## Overrides of the playbook")
+    assert _norm("`gh pr create` and the \"report: PR number\" of the plugin's builder text are replaced by P12") in section
+    assert "push your own `ticket-<n>`" in section and "head sha" in section
+    assert _norm("`git merge origin/main`") in section and "quiet" in section
+    assert "opus" not in text.split("- P5:", 1)[1].split("- P6:", 1)[0]
+    assert "verifies the model of the first plugin dispatch" in text
+
+
+def test_history_points_to_the_open_owner_decision_and_marks_the_settled_list_as_history():
+    text = _read(HISTORY)
+    assert "issue #7" in text and "`needs-owner`" in text
+    assert "history only" in text

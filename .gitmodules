@@ -2,3 +2,6 @@
 	path = third_party/JLCPCB-Kicad-Library
 	url = https://github.com/CDFER/JLCPCB-Kicad-Library
 	shallow = true
+[submodule "docs/playbook"]
+	path = docs/playbook
+	url = https://github.com/TotallyNotAHackerTrustMeIAmADolphin/agent-playbook.git

@@ -794,8 +794,8 @@ def test_the_timeout_basis_names_the_excluded_5331_s_run_everywhere():
     # is excluded from it, so every text that gives the basis must name the exclusion.
     script_text = (ROOT / "scripts" / "batch_gate.py").read_text(encoding="utf-8")
     script = " ".join(re.sub(r"(?m)^\s*#", "", script_text).split())
-    playbook = _prose(ROOT / "docs" / "playbook" / "PROJECT-KICAD-MCP-PLAYBOOK.md")
-    p11 = playbook.split("**Project rule P11:", 1)[1].split("**Project rule P12", 1)[0]
+    playbook = _prose(ROOT / "docs" / "HISTORY.md")
+    p11 = playbook.split("**Project rule P11:", 1)[1].split("## Fork rule P8", 1)[0]
     for name, text in (("batch_gate.py", script), ("docs/TESTING.md", _prose(ROOT / "docs/TESTING.md")),
                        ("P11", p11)):
         assert "5331 s" in text and "c1c8f1b" in text, name
@@ -887,7 +887,7 @@ def test_worst_case_counts_every_git_call_of_main(repo, capsys, monkeypatch):
 def test_builder_wraps_the_gate_in_a_timeout_above_its_own_worst_case():
     # The gate's own timeouts must fire first, so its RED-on-timeout always reaches the builder
     # (ticket 70 review round 1, medium 2): the outer `timeout N` is the worst case plus 10 minutes.
-    text = (ROOT / ".claude" / "agents" / "builder.md").read_text(encoding="utf-8")
+    text = (ROOT / "docs" / "dispatch" / "builder.md").read_text(encoding="utf-8")
     found = re.findall(r"`timeout (\d+) python <worktree>/scripts/batch_gate\.py`", text)
     assert found, "builder.md starts the gate under timeout N"
     for n in found:
@@ -916,10 +916,10 @@ def test_the_gate_stop_point_is_the_printed_worst_case_everywhere(repo, capsys):
     # own timeouts bound every step, so a waiting agent stops it only after the worst case it
     # prints; CLAUDE.md, fork P11, docs/TESTING.md and the printed line must all say so, and P10 must
     # not claim the gate.
-    playbook = _prose(ROOT / "docs" / "playbook" / "PROJECT-KICAD-MCP-PLAYBOOK.md")
+    playbook = _prose(ROOT / "docs" / "HISTORY.md")
     p10 = playbook.split("**Project rule P10:", 1)[1].split("**Project rule P11:", 1)[0]
     assert "batch gate" not in p10.lower() and "batch_gate" not in p10.lower()
-    p11 = playbook.split("**Project rule P11:", 1)[1].split("**Project rule P12", 1)[0]
+    p11 = playbook.split("**Project rule P11:", 1)[1].split("## Fork rule P8", 1)[0]
     assert BOUNDS in p11.lower()
 
     claude = _prose(ROOT / "CLAUDE.md")
@@ -1375,7 +1375,7 @@ def test_figures_quoted_in_builder_and_testing_follow_the_gate():
     # a timeout raised without them left "about 111 minutes" against a printed 131 (build ticket 88).
     worst_min = round(gate.worst_case_s(gate.SUITE_TIMEOUT_S) / 60)
     expected_min = round((gate.SUITE_MEASURED_S + gate.OVERHEAD_S) / 60)
-    builder = _prose(ROOT / ".claude" / "agents" / "builder.md")
+    builder = _prose(ROOT / "docs" / "dispatch" / "builder.md")
     (outer,) = set(re.findall(r"`timeout (\d+) python <worktree>/scripts/batch_gate\.py`", builder))
     assert f"`timeout {outer}` ({round(int(outer) / 60)} minutes) makes sure it exits" in builder
     assert f"the worst case the gate prints at its start (about {worst_min} minutes)" in builder
@@ -1386,8 +1386,8 @@ def test_figures_quoted_in_builder_and_testing_follow_the_gate():
     assert f"times the suite out at {gate.SUITE_TIMEOUT_S} s (`SUITE_TIMEOUT_S`" in testing
     assert f"Builders wrap it in `timeout {outer}`" in testing
     # fork P11 carries the same figures (ticket 88 review round 1)
-    playbook = _prose(ROOT / "docs" / "playbook" / "PROJECT-KICAD-MCP-PLAYBOOK.md")
-    p11 = playbook.split("**Project rule P11:", 1)[1].split("**Project rule P12", 1)[0]
+    playbook = _prose(ROOT / "docs" / "HISTORY.md")
+    p11 = playbook.split("**Project rule P11:", 1)[1].split("## Fork rule P8", 1)[0]
     assert f"under a {gate.SUITE_TIMEOUT_S} s timeout" in p11
     assert f"up to {gate.SUITE_MEASURED_S} s" in p11
     assert f"about {worst_min} min, at its start" in p11

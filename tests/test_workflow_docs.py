@@ -77,14 +77,26 @@ def test_workflow_doc_states_the_convention():
     assert OLD_PLANNING_DIR not in text
 
 
-def test_agents_and_playbook_do_not_send_readers_to_scratch():
-    for rel in (".claude/agents/builder.md", ".claude/agents/reviewer.md",
-                ".claude/agents/researcher.md"):
+def test_agent_rules_and_claude_md_do_not_send_readers_to_scratch():
+    # Issue 155: the agent rules moved to docs/dispatch, the project's answers into CLAUDE.md.
+    rules = ("docs/dispatch/builder.md", "docs/dispatch/reviewer.md", "docs/dispatch/researcher.md",
+             "docs/dispatch/review-rules.md", "docs/dispatch/briefs/builder.md",
+             "docs/dispatch/briefs/reviewer.md")
+    for rel in rules:
         assert OLD_PLANNING_DIR not in _text(rel), rel
-    fork = _text("docs/playbook/PROJECT-KICAD-MCP-PLAYBOOK.md")
-    assert "scripts/issues.py show <n>" in fork
-    assert "Worktrees need no special handling for planning records any more" in fork
-    assert "Files, not GitHub" not in fork
-    assert "tickets in `.scratch/" not in fork
-    generic = _text("docs/playbook/AGENT-WORKFLOW-PLAYBOOK.md")
-    assert "Record the\n  Answer as an issue comment" in generic
+    claude = _text("CLAUDE.md")
+    assert "scripts/issues.py show <n>" in _text("docs/dispatch/builder.md")
+    assert "Planning and research tickets need no worktree" in claude
+    for text in (claude, *(_text(rel) for rel in rules)):
+        assert "Files, not GitHub" not in text
+        assert "tickets in `.scratch/" not in text
+    # The Answer is an issue comment, not a file (the plugin's builder says it too; the project's
+    # own rule is pinned here so a submodule bump cannot change it).
+    builder = " ".join(_text("docs/dispatch/builder.md").split())
+    assert "post it as a comment on the issue" in builder
+    assert "Answer is an issue comment, not a file" in builder
+
+
+def test_contributing_names_the_submodule_fetch():
+    text = " ".join(_text("CONTRIBUTING.md").split())
+    assert "`git submodule update --init` fetches `docs/playbook`" in text

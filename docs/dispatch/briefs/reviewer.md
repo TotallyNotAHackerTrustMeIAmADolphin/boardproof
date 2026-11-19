@@ -1,9 +1,10 @@
 # Standing brief: reviewer (adversarial review of one branch head)
 
-The coordinator pastes this page into the dispatch and fills the placeholders. CLAUDE.md and the
-agent definition `.claude/agents/reviewer.md` are the source of truth for every rule they state;
+Read `docs/dispatch/reviewer.md` first: it holds the project's rules for the reviewer.
+
+The coordinator pastes this page into the dispatch and fills the placeholders. CLAUDE.md and `docs/dispatch/reviewer.md` are the source of truth for every rule they state;
 this page repeats the ones named below word for word and adds the checklist. The checklist lives in
-the playbook fork, section "Fail-open checklist for sheet writing tools".
+`docs/dispatch/fail-open-checklist.md`.
 
 **Fill in:** ticket `<TICKET>`; branch `ticket-<TICKET>`; builder worktree `<WORKTREE>` (read-only
 for you); head sha to review `<SHA>`; acceptance text: `python scripts/issues.py show <TICKET>`;
@@ -20,7 +21,7 @@ builder's worktree or the main checkout).
   Never mutate while ANY run on that worktree is in progress; restore only after its completion notification.
 - Judge the sha you were given. If `main` moved since, that is not a finding unless it conflicts.
 - A delta review: the builder merged `main` before hand-back, so limit the delta to the ticket's own paths (`git diff <reviewed> <head> -- <ticket paths>`, or the commits since the reviewed sha authored for the ticket). Report a merge conflict; never resolve it.
-- While a batch gate runs, start no more than 2 other runs (the gate's timing basis, fork P11, assumes few).
+- While a batch gate runs, start no more than 2 other runs (the gate's timing basis, CLAUDE.md P11, assumes few).
 - Use private log and scratch file names that contain your ticket number and `rev` (for example
   `rev-<TICKET>-a.log`), and keep log paths and undo patches OUTSIDE every worktree (the scratchpad directory the session names, or a `*.log` file in the directory that holds the ticket worktrees), never in the tree: a dirty tree voids the gate's clean-tree check.
   Two reviewers once collided on one log name.
@@ -28,7 +29,7 @@ builder's worktree or the main checkout).
 
 ## Fail-open checklist (probe each item with kicad-cli; a missing probe is a finding)
 
-The reasons are in the playbook fork section.
+The reasons are in that file.
 
 1. multi-unit part (for example LM324 units 1 to 5): edit by reference and by each unit's uuid; across sheets KiCad's pick of a multi-unit part's properties is undetermined (only on one sheet it is the lowest placed unit), so a test must not pin "lowest" across sheets;
 2. same reference on another sheet of the tree, and a sheet used from a subfolder, with and
@@ -57,8 +58,19 @@ family means refuse everything not proven. The design is then the finding.
 
 ## Hand-back
 
-- Class every finding BLOCKS or FOLLOW-UP (playbook fork, "What a finding blocks"). The verdict is
+- Class every finding BLOCKS or FOLLOW-UP (`docs/dispatch/review-rules.md`, "What a finding blocks"). The verdict is
   CLEAN only with no BLOCKS finding.
 - Report ONCE, then stop. If the hand-back tool fails, retry the same tool once, then state the report as the final message; do not invent another channel.
 - The report names: the reviewed sha, the verdict, each finding with its class and evidence, each
   mutation you ran and its result, each run with its summary line. Then remove your review worktree.
+
+## Every reviewer dispatch adds (coordinator)
+
+Mutation testing in the reviewer's own review worktree (a detached git worktree of the reviewed
+sha, never the builder's worktree and never a `git archive` export; `PYTHONPATH=<review
+worktree>/src`, verify `boardproof.__file__` points into the review worktree before trusting a
+result; restore with `git checkout -- .` after each mutation, only after the run's completion
+notification), real `kicad-cli` where the claim is about KiCad behaviour, and the findings the
+reference module needed. The verdict, the reviewed commit and the review text go into the ticket.
+Each BLOCKS finding becomes a failing test before its fix; a FOLLOW-UP's test is written in the
+same fix round.
