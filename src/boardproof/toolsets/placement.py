@@ -10,6 +10,7 @@ follows.
 
 from __future__ import annotations
 
+import math
 import os
 import time
 import uuid
@@ -661,6 +662,65 @@ def _fail_closed(fn):
     return wrapper
 
 
+class _SlotsUnreadable(Exception):
+    """The outline's cut-outs could not be read, so no courtyard can be said to be clear of them."""
+
+    def __init__(self, code: str, reason: str) -> None:
+        super().__init__(reason)
+        self.code = code
+
+
+def _slot_conflicts(path: Path, specs: list[dict], locked: set[str]) -> list[dict]:
+    """One problem per spec that moves an existing, unlocked footprint so that its courtyard (its
+    rotated pad boxes where it has none) overlaps a slot or a rounded corner of the outline, and
+    one (``footprint_unmeasurable``) per such footprint that has neither courtyard nor pad. Only
+    the footprints the specs name are measured. Read from the raw tokens; a board without
+    cut-outs is not read further. Coordinates are board-local, as in the spec. A footprint added
+    by ``library_id`` has no box before it is added and is not checked."""
+    try:
+        root = write_layer.load(path)
+        cutouts = placement_anchor.cutout_boxes(root)
+        if not cutouts:
+            return []
+        origin = _outline_frame(path)[0]["origin_mm"]
+        named = {s.get("reference") for s in specs if isinstance(s, dict) and isinstance(s.get("reference"), str)}
+        raw_refs = [g.reference for g in placement_anchor.raw_geometry.read_footprints(root)]
+    except placement_anchor.RoundedCornerUnreadable as exc:
+        raise _SlotsUnreadable("outline_arcs_unreadable", str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        raise _SlotsUnreadable("slots_unreadable", f"the slots of {path.name} cannot be read ({exc})") from exc
+    by_ref: dict[str, list[placement_anchor.Part]] = {}
+    problems = []
+    for ref in sorted(named):
+        if ref in locked or raw_refs.count(ref) != 1:
+            continue
+        try:
+            for part in placement_anchor.read_parts(root, {ref}):
+                by_ref.setdefault(part.reference, []).append(part)
+        except placement_anchor.RawGeometryError as exc:
+            problems.append({"reference": ref, "code": "footprint_unmeasurable",
+                             "reason": f"{ref} has no courtyard and no pad to measure against the slots ({exc})"})
+    for spec in specs:
+        ref = spec.get("reference")
+        found = by_ref.get(ref, []) if isinstance(ref, str) else []
+        x, y, rotation = spec.get("x"), spec.get("y"), spec.get("rotation")
+        if len(found) != 1 or ref in locked or not all(_is_number(v) for v in (x, y)):
+            continue
+        if rotation is not None and not _is_number(rotation):
+            continue
+        part = found[0]
+        at = (float(x) + origin[0], float(y) + origin[1])
+        box = placement_anchor.box_at(part, at, part.angle if rotation is None else float(rotation))
+        if any(placement_anchor.overlap(box, cut) for cut in cutouts):
+            problems.append({"spec": spec, "reference": ref, "code": "in_cutout",
+                             "reason": f"its courtyard {[round(v, 6) for v in box]} would overlap a slot or a rounded corner of the outline"})
+    return problems
+
+
+def _is_number(value: Any) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+
+
 def _not_verified(exc: placement_anchor.NotVerified) -> dict:
     return {
         "status": "error", "ok": False, "code": "write_not_verified", "reason": exc.reason,
@@ -679,6 +739,10 @@ def build(mcp: MCPServer) -> list[str]:
         polygon, a legacy arc without a mid point, Edge.Cuts graphics inside a footprint,
         a malformed or unsupported Edge.Cuts item); without any outline coordinates are
         page coordinates.
+
+        A move of an existing, unlocked footprint whose courtyard (its rotated pad boxes where it
+        has none) would overlap a slot or a rounded corner of the outline is refused as in_cutout
+        for the whole call and nothing is written; a footprint that already overlaps a cut-out is refused for any move whose new courtyard still overlaps one; a footprint added by library_id is not checked. An outline that looks like a rounded rectangle but has an arc that is not a quarter-circle corner is refused as outline_arcs_unreadable, a named footprint with no courtyard and no pad as footprint_unmeasurable, and unreadable cut-outs as slots_unreadable. Known limit: a corner built from two or more arcs is not recognised and is not refused, so a rounded corner of that kind is not protected.
 
         Each spec: {"reference": str, "library_id": str (only for a NEW
         footprint), "x": float, "y": float, "rotation": float (default 0),
@@ -710,6 +774,14 @@ def build(mcp: MCPServer) -> list[str]:
         rotation_kept: list[str] = []
         errors: list[dict] = []
         locked = _locked_references(path)
+        try:
+            in_slot = _slot_conflicts(path, specs, locked)
+        except _SlotsUnreadable as exc:
+            return {"status": "error", "code": exc.code, "reason": f"{exc}: nothing was moved"}
+        if in_slot:
+            code = "in_cutout" if any(p["code"] == "in_cutout" for p in in_slot) else in_slot[0]["code"]
+            return {"status": "error", "code": code, "errors": in_slot,
+                    "reason": "a courtyard would overlap a slot or a rounded corner of the outline, or cannot be measured: nothing was moved"}
         for spec in specs:
             ref = spec.get("reference")
             if not ref:
@@ -1213,7 +1285,9 @@ def build(mcp: MCPServer) -> list[str]:
         as box_source).
 
         Needs an outline that is one axis-aligned rectangle (one gr_rect or four closing
-        gr_line), else outline_not_rectangular or no_outline. All or nothing: a spec that is
+        gr_line, each corner optionally replaced by a quarter-circle gr_arc), else
+        outline_not_rectangular or no_outline. The rounded corners and the slots are missing
+        material: a courtyard that would overlap one is refused as in_cutout. All or nothing: a spec that is
         invalid, names an unknown, ambiguous or locked footprint, would leave the outline, or
         would overlap another courtyard (collision) refuses the whole call and nothing is
         written; every problem is listed under problems. Coordinates are BOARD-LOCAL
@@ -1300,7 +1374,9 @@ def build(mcp: MCPServer) -> list[str]:
         page coordinates and the proposal packs rows starting at (0, 0), 50 mm wide.
 
         With an outline, the outline must be one axis-aligned rectangle (one gr_rect or four
-        closing gr_line; anything else is refused as outline_not_rectangular, nothing proposed):
+        closing gr_line, each corner optionally replaced by a quarter-circle gr_arc; anything
+        else is refused as outline_not_rectangular, nothing proposed; rounded corners and slots
+        are obstacles):
         every proposed courtyard lies inside it, at least edge_clearance_mm (default 0.5) from
         its edge, and at least spacing_mm (default 2) from every other courtyard. Footprints
         that are not in refs stay where they are and are obstacles; a locked footprint is
@@ -1926,13 +2002,13 @@ def build(mcp: MCPServer) -> list[str]:
     mcp.add_tool(
         place_footprints,
         name="place_footprints",
-        description=("Place or move a batch of footprints on a board in one call (add new ones with a library_id, move existing ones by reference; a locked footprint is refused per spec)." + " " + _FRAME_RULE + " " + write_layer.LOCK_SENTENCE),
+        description=("Place or move a batch of footprints on a board in one call (add new ones with a library_id, move existing ones by reference; a locked footprint is refused per spec; a move of an existing footprint whose courtyard would overlap a slot or a rounded corner of the outline refuses the whole call as in_cutout, nothing written; a footprint that already overlaps a cut-out is refused for any move whose new courtyard still overlaps one; also refused: outline_arcs_unreadable, slots_unreadable, footprint_unmeasurable; a corner built from two or more arcs is not recognised and not refused, so it is not protected)." + " " + _FRAME_RULE + " " + write_layer.LOCK_SENTENCE),
         annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
     )
     mcp.add_tool(
         place_footprints_at_edge,
         name="place_footprints_at_edge",
-        description=("Place a batch of existing footprints at an edge of the board outline, offset_mm in from it (connectors, banana sockets), optionally along_mm along the edge; the courtyard is measured from the raw footprint tokens and the file is read back after the write. Needs an outline that is one axis-aligned rectangle. All or nothing: an unknown or locked footprint, a courtyard that would leave the outline or overlap another one refuses the whole call and writes nothing. Rotation and layer are kept." + " " + _FRAME_RULE + " " + write_layer.LOCK_SENTENCE),
+        description=("Place a batch of existing footprints at an edge of the board outline, offset_mm in from it (connectors, banana sockets), optionally along_mm along the edge; the courtyard is measured from the raw footprint tokens and the file is read back after the write. Needs an outline that is one axis-aligned rectangle, its corners optionally rounded by quarter arcs. All or nothing: an unknown or locked footprint, a courtyard that would leave the outline, overlap a slot or a rounded corner (in_cutout) or overlap another one refuses the whole call and writes nothing. Rotation and layer are kept." + " " + _FRAME_RULE + " " + write_layer.LOCK_SENTENCE),
         annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
     )
     mcp.add_tool(
@@ -1974,7 +2050,7 @@ def build(mcp: MCPServer) -> list[str]:
     mcp.add_tool(
         propose_autoplacement,
         name="propose_autoplacement",
-        description="Propose an automated placement for a set of footprints. Returns a proposal + revision_token; does not modify the board. Call confirm_autoplacement to apply." + " " + _FRAME_RULE + " With an outline (one axis-aligned rectangle, else outline_not_rectangular) every proposed courtyard lies inside it, edge_clearance_mm (default 0.5) from its edge and spacing_mm (default 2) from other courtyards; footprints not in refs and locked ones stay and are obstacles (locked_skipped); parts that fit nowhere refuse the proposal as does_not_fit. Without an outline rows start at local (0,0), 50 mm wide. Rotations are kept.",
+        description="Propose an automated placement for a set of footprints. Returns a proposal + revision_token; does not modify the board. Call confirm_autoplacement to apply." + " " + _FRAME_RULE + " With an outline (one axis-aligned rectangle, its corners optionally rounded by quarter arcs, else outline_not_rectangular; slots and rounded corners are obstacles) every proposed courtyard lies inside it, edge_clearance_mm (default 0.5) from its edge and spacing_mm (default 2) from other courtyards; footprints not in refs and locked ones stay and are obstacles (locked_skipped); parts that fit nowhere refuse the proposal as does_not_fit. Without an outline rows start at local (0,0), 50 mm wide. Rotations are kept.",
         annotations={"readOnlyHint": True, "destructiveHint": False, "idempotentHint": False, "openWorldHint": False},
     )
     mcp.add_tool(

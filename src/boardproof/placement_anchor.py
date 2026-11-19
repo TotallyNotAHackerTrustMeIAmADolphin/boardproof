@@ -68,6 +68,7 @@ class Part:
     through_hole: bool
     box: Box  # courtyard (or pad) box, page frame
     box_source: str  # "courtyard" or "pads"
+    pads: tuple[raw_geometry.PadGeometry, ...] = ()  # raw pads, page frame (the box source where no courtyard exists)
 
     def sides(self) -> set[str]:
         return {"front", "back"} if self.through_hole else {self.side}
@@ -163,13 +164,16 @@ def _box(points: list[Point]) -> Box:
     return (min(p[0] for p in points), min(p[1] for p in points), max(p[0] for p in points), max(p[1] for p in points))
 
 
-def read_parts(root: Any) -> list[Part]:
-    """Every footprint, in file order, with its raw box. Raises ``RawGeometryError`` naming a
-    footprint with no courtyard and no pad, or a token that is not a number."""
+def read_parts(root: Any, only: set[str] | None = None) -> list[Part]:
+    """Every footprint (or only those whose reference is in ``only``), in file order, with its raw
+    box. Raises ``RawGeometryError`` naming a measured footprint with no courtyard and no pad, or a
+    token that is not a number; a footprint left out by ``only`` is not measured."""
     geometry = raw_geometry.read_footprints(root)
     nodes = [c for c in root.children if not c.is_atom and c.name == "footprint"]
     parts = []
     for node, geo in zip(nodes, geometry, strict=True):
+        if only is not None and geo.reference not in only:
+            continue
         points = _courtyard_points(node, geo.at_mm, geo.angle_deg)
         source = "courtyard"
         if not points:
@@ -178,9 +182,27 @@ def read_parts(root: Any) -> list[Part]:
             raise RawGeometryError(f"footprint {geo.reference or geo.lib_id or '?'} has no courtyard and no pad to measure")
         parts.append(Part(
             geo.reference, node, geo.at_mm, geo.angle_deg, is_locked(node), geo.side,
-            any(p.kind == "thru_hole" for p in geo.pads), _box(points), source,
+            any(p.kind == "thru_hole" for p in geo.pads), _box(points), source, geo.pads,
         ))
     return parts
+
+
+def box_at(part: Part, at: Point, angle: float) -> Box:
+    """The part's box if its footprint stood at page ``at`` with ``angle``, from the same raw
+    courtyard items (or pads, where it has no courtyard) as ``read_parts``. Pad angles are stored
+    board-absolute, so a pad turns with the footprint by the difference of the angles."""
+    if part.box_source == "courtyard":
+        return _box(_courtyard_points(part.node, at, angle))
+    out: list[Point] = []
+    cos_sin = raw_geometry._cos_sin(part.angle)  # inverse of place(): page offset -> footprint-local
+    for pad in part.pads:
+        dx, dy = pad.at_mm[0] - part.at[0], pad.at_mm[1] - part.at[1]
+        local = (dx * cos_sin[0] - dy * cos_sin[1], dx * cos_sin[1] + dy * cos_sin[0])
+        centre = raw_geometry.place(at, angle, local)
+        w, h = pad.size_mm
+        for sx, sy in ((-1, -1), (1, -1), (1, 1), (-1, 1)):
+            out.append(raw_geometry.place(centre, pad.angle_deg + (angle - part.angle), (sx * w / 2, sy * h / 2)))
+    return _box(out)
 
 
 def outline_rect(root: Any) -> tuple[Outline | None, str | None]:
@@ -229,10 +251,140 @@ def outline_rect(root: Any) -> tuple[Outline | None, str | None]:
                     sides.add("bottom")
         if sides == set(EDGES):
             return Outline((x0, y0, x1, y1), cutouts), None
+    if "arc" in kinds:
+        corners = _rounded_corner_cutouts(items, (x0, y0, x1, y1))
+        if corners is not None:
+            return Outline((x0, y0, x1, y1), tuple(corners) + cutouts), None
     return None, (
-        "the outline is not one axis-aligned rectangle (one gr_rect, or four closing gr_line); "
+        "the outline is not one axis-aligned rectangle (one gr_rect, or four closing gr_line, "
+        "optionally with each corner replaced by a quarter-circle gr_arc); "
         f"its items are {sorted(set(kinds))}"
     )
+
+
+def _strips(radius: float) -> int:
+    """Strips per corner: the cut-out is covered from outside, never under-covered, and a strip
+    reaches at most about 0.4 mm past the arc (for a radius up to 32 mm)."""
+    return min(64, max(8, math.ceil(2 * radius)))
+
+
+_ARC_TOL = 1e-4  # mm; board_outline rounds the arc points to 6 decimals
+
+
+def _circle_centre(a: Point, m: Point, b: Point) -> Point | None:
+    (x1, y1), (x2, y2), (x3, y3) = a, m, b
+    d = 2 * (x1 * (y2 - y3) + x2 * (y3 - y1) + x3 * (y1 - y2))
+    if abs(d) < 1e-12:
+        return None
+    s1, s2, s3 = x1 * x1 + y1 * y1, x2 * x2 + y2 * y2, x3 * x3 + y3 * y3
+    return ((s1 * (y2 - y3) + s2 * (y3 - y1) + s3 * (y1 - y2)) / d,
+            (s1 * (x3 - x2) + s2 * (x1 - x3) + s3 * (x2 - x1)) / d)
+
+
+def _rounded_corner_cutouts(items: list[Any], box: Box) -> list[Box] | None:
+    """The outer loop is an axis-aligned rectangle whose corners are replaced by quarter arcs:
+    ``gr_line`` items on the box sides and at most one ``gr_arc`` per corner, each read from its raw
+    ``(start)``, ``(mid)``, ``(end)``. The loop is already known to be one closed chain, so lines on
+    the sides plus one corner arc each make exactly the rounded rectangle. Returns the material the
+    arcs cut away, as boxes that cover it (strips of the square between the arc and the corner), or
+    None when anything else is in the loop: a circle, a half or three-quarter arc, an arc not at a
+    corner, an arc turned inward, a radius over half the shorter side, a line off the sides."""
+    x0, y0, x1, y1 = box
+    half = min(x1 - x0, y1 - y0) / 2
+    seen: set[tuple[int, int]] = set()
+    cutouts: list[Box] = []
+    for item in items:
+        if item.kind == "line":
+            (ax, ay), (bx, by) = item.points
+            on_x = abs(ax - bx) < _EPS and min(abs(ax - x0), abs(ax - x1)) < _EPS
+            on_y = abs(ay - by) < _EPS and min(abs(ay - y0), abs(ay - y1)) < _EPS
+            if not (on_x or on_y):
+                return None
+            continue
+        if item.kind != "arc":
+            return None
+        a, m, b = item.points
+        centre = _circle_centre(a, m, b)
+        if centre is None:
+            return None
+        cx, cy = centre
+        radius = math.dist(centre, a)
+        if radius <= _ARC_TOL or radius > half + _ARC_TOL:
+            return None
+        # a quarter arc: its end points lie on the horizontal and the vertical through the centre,
+        # its mid point in the quadrant they span, the corner they span is a corner of the box
+        horizontal = [p for p in (a, b) if abs(p[1] - cy) < _ARC_TOL and abs(abs(p[0] - cx) - radius) < _ARC_TOL]
+        vertical = [p for p in (a, b) if abs(p[0] - cx) < _ARC_TOL and abs(abs(p[1] - cy) - radius) < _ARC_TOL]
+        if len(horizontal) != 1 or len(vertical) != 1 or abs(math.dist(centre, m) - radius) > _ARC_TOL:
+            return None
+        sx = 1 if horizontal[0][0] > cx else -1
+        sy = 1 if vertical[0][1] > cy else -1
+        if (m[0] - cx) * sx <= _ARC_TOL or (m[1] - cy) * sy <= _ARC_TOL:
+            return None
+        corner = (cx + sx * radius, cy + sy * radius)
+        if min(abs(corner[0] - x0), abs(corner[0] - x1)) > _ARC_TOL or min(abs(corner[1] - y0), abs(corner[1] - y1)) > _ARC_TOL:
+            return None
+        if abs(math.dist(centre, b) - radius) > _ARC_TOL:  # the end point on the fitted circle, as the mid point
+            return None
+        if (sx, sy) in seen:
+            return None
+        seen.add((sx, sy))
+        n = _strips(radius)
+        for k in range(n):
+            # strip edges at equal steps of the angle, dense where the arc is steep
+            u0, u1 = radius * math.sin(math.pi / 2 * k / n), radius * math.sin(math.pi / 2 * (k + 1) / n)
+            v0 = radius * math.cos(math.pi / 2 * (k + 1) / n)  # the arc's lowest point over the strip
+            xa, xb = cx + sx * u0, cx + sx * u1
+            ya, yb = cy + sy * v0, cy + sy * radius
+            cutouts.append((min(xa, xb), min(ya, yb), max(xa, xb), max(ya, yb)))
+    return cutouts
+
+
+class RoundedCornerUnreadable(Exception):
+    """The outer loop looks like a rounded rectangle but an arc is not a quarter-circle corner."""
+
+
+def _looks_rounded(root: Any, outer: Any) -> bool:
+    """The outer loop is only ``gr_line`` and ``gr_arc``, with an arc whose own box is at most half
+    the shorter side across and sits at a corner of the loop's box (within 0.5 mm): a rounded
+    rectangle that ``outline_rect`` could not read (an arc off a quarter circle)."""
+    if not outer.uuids or not all(outer.uuids):
+        return False
+    keep = set(outer.uuids)
+    items = [i for i in raw_geometry.read_board_outline(root).items if i.uuid in keep]
+    if not items or any(i.kind not in ("line", "arc") for i in items) or not any(i.kind == "arc" for i in items):
+        return False
+    x0, y0, x1, y1 = outer.box
+    half = min(x1 - x0, y1 - y0) / 2
+    for item in items:
+        if item.kind != "arc":
+            continue
+        extent = raw_geometry.arc_extent(*item.points)
+        if extent is None:
+            continue
+        ax0, ay0, ax1, ay1 = _box(extent)
+        if max(ax1 - ax0, ay1 - ay0) > half + 0.01:
+            continue
+        if min(math.dist((ax, ay), (cx, cy)) for ax in (ax0, ax1) for ay in (ay0, ay1)
+               for cx in (x0, x1) for cy in (y0, y1)) < 0.5:
+            return True
+    return False
+
+
+def cutout_boxes(root: Any) -> tuple[Box, ...]:
+    """The boxes of the material the outline is missing: a rounded rectangle's corners and the
+    slots (``outline_rect``), or, where the outer loop is not a rectangle, just the slots when the
+    Edge.Cuts structure is understood (one outer loop, closed loops strictly inside it)."""
+    outline, _ = outline_rect(root)
+    if outline is not None:
+        return outline.cutouts
+    parts = edge_loops.classify(root)
+    if parts.outer is not None and not parts.problems and _looks_rounded(root, parts.outer):
+        raise RoundedCornerUnreadable(
+            "the outer loop looks like a rounded rectangle but an arc is not a quarter circle at a corner")
+    if parts.outer is not None and parts.slots and not parts.problems:
+        return tuple(slot.box for slot in parts.slots)
+    return ()
 
 
 def overlap(a: Box, b: Box) -> bool:
