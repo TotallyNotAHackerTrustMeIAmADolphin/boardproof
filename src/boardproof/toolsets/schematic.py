@@ -3755,7 +3755,8 @@ def build(mcp: MCPServer) -> list[str]:
         about ERC, the netlist or the board (only verify_board gives a verdict on a board).
 
         kinds: which findings to look for, a non-empty list drawn from symbol_symbol, text_text,
-        text_symbol, text_wire, wire_through_pin and outside_page; omitted, all of them. sch_path: any sheet of the
+        text_symbol, text_wire, wire_through_pin, outside_page, label_over_own_symbol and
+        text_hidden_behind_symbol; omitted, all of them. sch_path: any sheet of the
         project; every sheet file of the tree is read once, starting at the root sheet (root_sch, optional
         when sch_path is the root or the only .kicad_pro of its folder names it). max_findings (1 to 5000,
         default 500) limits the listed findings, not the counts.
@@ -3792,9 +3793,26 @@ def build(mcp: MCPServer) -> list[str]:
         and skipped lists reason frame_unknown. Wires, junctions and graphic shapes are not checked, the
         title block is not treated as an obstacle, and a text box is an estimate as above.
 
+        label_over_own_symbol: a label whose anchor is on a pin of the symbol (or sheet symbol) and whose
+        estimated text box overlaps that part's box by more than 0.5 mm in both axes: the text runs into
+        the part it names. The box follows the label's stored justification and angle as KiCad draws them
+        (measured with kicad-cli): 180 is drawn as 0 and 270 as 90, with no half-turn flip, so left runs
+        right or up and right runs left or down; a label on a pin whose text runs away from the part is
+        not reported. Items: the label, the part; overlap in mm.
+        It replaces text_symbol for that pair (a label on a pin of a part is not a text_symbol finding).
+        text_hidden_behind_symbol: the visible Reference, Value or other property text of another symbol, or
+        a free text (not a label), partly or wholly inside the box of a symbol, also a DNP one: dnp true
+        when the raw (dnp yes) is set, covered_fraction the share of the text box inside the part's box.
+        The part's own texts are not read (a Value drawn on its own body is a design choice); power
+        symbols are not compared. Each such pair is also reported as text_symbol, so found, counts and
+        max_findings count such a pair under both kinds; this kind is the one to read for the share and the
+        DNP flag. Known limit: on a symbol turned 90 or 270 degrees KiCad adds the symbol's turn to the
+        angle of its Reference and Value, which this check does not, so the box of those texts has the wrong
+        shape there and covered_fraction is not reliable for them.
+
         Returns found, counts (per kind, the full numbers), findings (each: kind, sheet, at, items with
         their uuid and box or points or text, estimated, fix, and the numbers behind it: overlap in mm,
-        length_inside, pin, page_mm, frame_margin_mm, over_frame_mm, over_paper_mm), truncated, skipped
+        length_inside, pin, page_mm, frame_margin_mm, over_frame_mm, over_paper_mm, covered_fraction, dnp), truncated, skipped
         (symbols whose library geometry is not in the sheet file, and outside_page gaps with a reason)
         and sheets_read. Refuses with invalid_spec, file_not_found, parent_not_in_tree, root_not_found or a
         missing, unparseable or cyclic sheet (sheet_tree_incomplete).

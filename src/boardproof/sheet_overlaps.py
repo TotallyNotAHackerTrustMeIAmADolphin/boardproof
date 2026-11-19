@@ -29,6 +29,18 @@ numbers behind it:
     on that point. KiCad joins a pin only to a wire END or a junction, so such a pin joins nothing: the
     pin looks wired and is not (measured with kicad-cli's netlist in tests/test_find_overlaps.py).
 
+``label_over_own_symbol``
+    A label whose anchor is on a visible pin of a symbol or sheet symbol S (the pin-attachment test of
+    ``text_symbol``, which skips exactly these pairs) and whose estimated text box overlaps S's box by more
+    than ``TEXT_MM`` in both axes: the text runs into its own part. The label box uses the label's raw
+    stored justification and angle, and 180 is drawn as 0 and 270 as 90 (left runs right or up, right runs left or down); a label
+    on a pin whose text runs away from the part is not reported.
+``text_hidden_behind_symbol``
+    A property text of another symbol (Reference, Value) or a free text whose box is partly or wholly
+    behind the box of a symbol, DNP or not (``dnp`` in the finding, from the raw ``(dnp yes)``), with
+    ``covered_fraction``: the part of the text box inside the symbol box. Own texts and labels are not
+    read here (labels are ``label_over_own_symbol`` or ``text_symbol``). Every such pair is ALSO reported
+    as ``text_symbol``; this kind adds the share and the DNP flag.
 ``outside_page``
     A symbol, sheet symbol, label, free text or visible property text whose box reaches beyond the drawing
     frame (``FRAME_MARGIN_MM`` inside the page edge) of the sheet's own page, with how many mm over the
@@ -52,11 +64,12 @@ import math
 from pathlib import Path
 from typing import Any
 
-from boardproof import field_check, sheet_align, sheet_authoring, sheet_editing as se, sheet_extents, sheet_tree
+from boardproof import connectivity_check, field_check, sheet_align, sheet_authoring, sheet_editing as se, sheet_extents, sheet_tree
 from boardproof import schematic_readability as readability
 from boardproof.sheet_authoring import SheetAuthoringError
 
-KINDS = ("symbol_symbol", "text_text", "text_symbol", "text_wire", "wire_through_pin", "outside_page")
+KINDS = ("symbol_symbol", "text_text", "text_symbol", "text_wire", "wire_through_pin", "outside_page",
+         "label_over_own_symbol", "text_hidden_behind_symbol")
 # The default drawing sheet's frame lies 10 mm inside the page on every side. Measured: the SVG that kicad-cli 10.0.7
 # exports draws the outer frame line 10 mm from each edge of A4 landscape and A3 portrait
 # (tests/test_find_overlaps_outside_page.py reads it back).
@@ -158,7 +171,9 @@ def _read(root: Any) -> tuple[list[_Body], list[_Text], list[tuple[Any, tuple, t
         at = se._at(node)
         effects = node.find("effects")
         h, _v = readability._justify(effects)
-        box = readability._text_box(text, at, readability._font_size(effects), "left" if h == "center" else h, "center", above=True)
+        # KiCad draws a label with the stored justify at the stored angle taken modulo 180 (180 as 0, 270 as 90), no half-turn flip
+        # (measured with kicad-cli 10.0.7, tests/test_find_overlaps_label_hidden.py); _text_box flips from 180 on, so hand it angle % 180.
+        box = readability._text_box(text, (at[0], at[1], at[2] % 180.0), readability._font_size(effects), "left" if h == "center" else h, "center", above=True)
         texts.append(_Text("label", node, None, node.name, text, (at[0], at[1]), box))
     for node in se._kids(root, "text"):
         text = node.get_string(0) or ""
@@ -275,9 +290,19 @@ def _findings(sheet: str, root: Any, margin: float | None, page_check: bool) -> 
         for body in bodies:
             if body.power or text.owner is body.node or not readability._overlaps(text.box, body.box, TEXT_MM):
                 continue
+            items = [text.item(), body.item()]
             if text.kind == "label" and any(se._same(text.at, pin) for pin in body.pins):
+                px, py = readability._penetration(text.box, body.box)
+                add("label_over_own_symbol", text.at, items, "turn the label (move_labels) or move it to the far side of the pin so its text runs away from the part",
+                    True, overlap=[se._r(px), se._r(py)])
                 continue
-            add("text_symbol", text.at, [text.item(), body.item()], "move the text clear of the symbol", True)
+            add("text_symbol", text.at, items, "move the text clear of the symbol", True)
+            if text.kind != "label":
+                area = (text.box[2] - text.box[0]) * (text.box[3] - text.box[1])
+                px, py = readability._penetration(text.box, body.box)
+                dnp = body.kind == "symbol" and connectivity_check._dnp(body.node)
+                add("text_hidden_behind_symbol", text.at, items, "move the text clear of the symbol (set_property_positions for a symbol text, move_text for a free text)", True,
+                    covered_fraction=se._r(min(px, text.box[2] - text.box[0]) * min(py, text.box[3] - text.box[1]) / area), dnp=dnp)
         inner = _shrink(text.box, TEXT_INSET_MM)
         if inner is None:
             continue
