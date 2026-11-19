@@ -649,10 +649,9 @@ def _probe_unconnected(
     cand_pcb: Path, scratch: Path, targets: list[dict], grade_args: dict
 ) -> list[dict]:
     """Unconnected entries of the candidate with every waiting pad detached from its net."""
-    from kicad_tools.schema import PCB
 
     probe_pcb = gate._copy_project(cand_pcb, scratch / "probe")
-    board = PCB.load(probe_pcb)
+    board = write_layer.load_pcb(probe_pcb)
     if _detach_pads(board._sexp, targets) != len(targets):
         raise ValueError("a waiting pad could not be found in the probe copy")
     write_layer.save_pcb(board, probe_pcb)
@@ -999,12 +998,9 @@ def _variant(
     copper on the other layer under it), placed inside the fill, so the zone forms a
     cluster of its own and a pad outside it is listed by kicad-cli. Never a board of
     record."""
-    from kicad_tools.schema import PCB
-    from kicad_tools.sexp import parse_string
-
     plane_nets = set(plane_layers)
     copy = gate._copy_project(refilled_pcb, scratch / name)
-    board = PCB.load(copy)
+    board = write_layer.load_pcb(copy)
     root = board._sexp
     table = _net_table(root)
     # kicad-cli re-saved the board, so footprints and pads are matched by reference,
@@ -1046,7 +1042,7 @@ def _variant(
     for net, (x, y) in anchors.items():
         layer = plane_layers[net]
         root.append(
-            parse_string(
+            write_layer.parse_string(
                 f'(footprint "boardproof:ANCHOR" (layer "{layer}") (uuid "{_anchor_uuid(net)}") (at {x:.4f} {y:.4f} 0) '
                 f'(fp_text reference "ANCHOR" (at 0 0) (layer "F.SilkS") (uuid "{_anchor_uuid(net + "-t")}") '
                 "(effects (font (size 1 1) (thickness 0.15)))) "
@@ -1506,7 +1502,6 @@ def _carry_over(
         write_layer.check_project_writable(src)
     except write_layer.WriteLayerError as exc:
         return {**write_layer.lock_refusal_result(exc), "note": "nothing was written"}
-    from kicad_tools.schema import PCB
 
     missing: list[Path] = []
     probe = out_dir.parent
@@ -1519,7 +1514,7 @@ def _carry_over(
         try:
             out_dir.parent.mkdir(parents=True, exist_ok=True)
             tmp_pcb = input_prep._copy_project(src, tmp)
-            board = PCB.load(tmp_pcb)
+            board = write_layer.load_pcb(tmp_pcb)
             original_counts = Counter(c.name for c in board._sexp.children if c.name)
             for node in added:
                 board._sexp.append(node)

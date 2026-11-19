@@ -424,13 +424,12 @@ def _unhandled_signature(root: Any, min_h: float, min_t: float) -> list[tuple]:
 def _write(src: Path, tmp: Path, min_h: float, min_t: float) -> dict:
     """Copy the project into ``tmp``, raise every planned text and save through the write
     layer. Returns what ``_verify`` compares against."""
-    from kicad_tools.schema import PCB
     from kicad_tools.sexp import SExp
 
     tmp_pcb = checkpoint.copy_project(
         src, tmp, outputs=(f"{src.parent.name}_prepared",), max_bytes=gate._MAX_COPY_BYTES
     )
-    board = PCB.load(tmp_pcb)
+    board = write_layer.load_pcb(tmp_pcb)
     before_counts = ip._tag_counts(board._sexp)
     unhandled_before = _unhandled_signature(board._sexp, min_h, min_t)
     items = _collect(board._sexp)

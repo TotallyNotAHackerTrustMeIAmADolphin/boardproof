@@ -603,11 +603,55 @@ def serialise(node: SExp, *, compact: bool = False) -> str:
 def load(path: str | Path) -> SExp:
     """Parse a KiCad S-expression file as UTF-8 without newline translation (a raw carriage
     return inside a string survives; ``kicad_tools.sexp.parse_file`` turns it into ``\n``)."""
+    return load_file(path)
+
+
+def load_file(path: str | Path) -> SExp:
+    """What ``load`` does (read, parse, version check); the readers that are not the lock-state read
+    call it by this name, so that a test that makes ``load`` fail to simulate an unreadable lock state
+    does not also break the outline read (``toolsets/placement.py``)."""
     with open(path, encoding="utf-8", newline="") as fh:
         text = fh.read()
     root = parse_string(text)
     check_file_version(root, path)
     return root
+
+
+def check_text_version(text: str, path: str | Path | None = None) -> None:
+    """``check_file_version`` on the text of a file without parsing all of it: only the top-level
+    ``(version ...)`` blocks are parsed (``board_view.split_top_level`` finds them in one
+    regex pass), under a root of the same name, so the rules are the ones of
+    ``check_file_version`` (newer, missing, not a number, given twice). A text the split does not
+    understand is parsed whole."""
+    from boardproof import board_view
+
+    split = board_view.split_top_level(text)
+    if split is None:
+        root = parse_string(text)
+    else:
+        name, blocks = split
+        root = parse_string(f"({name} " + chr(10).join(text[s:e] for n, s, e, _ in blocks if n == "version") + ")")
+    check_file_version(root, path)
+
+
+def load_model(model: Any, path: str | Path) -> Any:
+    """``model.load(path)`` (a ``kicad_tools`` high-level class such as ``PCB`` or ``Schematic``)
+    after the version check of ``load``: a ``.kicad_pcb`` or ``.kicad_sch`` newer than
+    ``NEWEST_MEASURED_VERSION`` raises ``UnsupportedFileVersionError`` before the model reads a
+    position (GitHub issue 213). The one place that opens a board or schematic through the model;
+    ``tests/test_direct_readers_version_guard.py`` fails on any other call. The file is parsed once, by the
+    model: the version comes from the top-level blocks of the text (``check_text_version``)."""
+    with open(path, encoding="utf-8", newline="") as fh:
+        text = fh.read()
+    check_text_version(text, path)
+    return model.load(path)
+
+
+def load_pcb(path: str | Path) -> Any:
+    """``kicad_tools``' ``PCB.load(path)`` behind the version check (see ``load_model``)."""
+    from kicad_tools.schema import PCB
+
+    return load_model(PCB, path)
 
 
 # --------------------------------------------------------------------------- the parse check

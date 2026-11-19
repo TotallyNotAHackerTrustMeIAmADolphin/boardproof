@@ -1692,10 +1692,11 @@ def route_delta(original_pcb: str | Path, routed_pcb: str | Path) -> dict:
     existing nets, so anything here would be a real finding, not an
     expected effect.
     """
-    from kicad_tools.schema import PCB
 
-    original = PCB.load(original_pcb)
-    routed = PCB.load(routed_pcb)
+    from boardproof import write_layer
+
+    original = write_layer.load_pcb(original_pcb)
+    routed = write_layer.load_pcb(routed_pcb)
     orig_origin = tuple(original.board_origin)
     routed_origin = tuple(routed.board_origin)
 

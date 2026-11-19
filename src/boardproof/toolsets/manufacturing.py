@@ -123,7 +123,6 @@ def export_manufacturing_package(
     generation partially failed.
     """
     from kicad_tools.export import AssemblyConfig, AssemblyPackage
-    from kicad_tools.schema import PCB
 
     pcb_path = Path(pcb_path)
     output_dir = Path(output_dir)
@@ -138,7 +137,7 @@ def export_manufacturing_package(
         kicad_cli_reason = None
 
     try:
-        PCB.load(pcb_path)  # validate the board loads before attempting export
+        write_layer.load_pcb(pcb_path)  # validate the board loads before attempting export
     except Exception as exc:  # noqa: BLE001
         return {"status": "incomplete", "reason": f"failed to load PCB: {exc}"}
 
@@ -683,9 +682,8 @@ def _footprint_refs(pcb_path: Path) -> list[str]:
     Deliberately goes through `kicad_tools` rather than reading the
     `.kicad_pcb` as text -- same rule as every other board access here.
     """
-    from kicad_tools.schema import PCB
 
-    return [fp.reference for fp in PCB.load(pcb_path).footprints]
+    return [fp.reference for fp in write_layer.load_pcb(pcb_path).footprints]
 
 
 def _drc_pair(source: Path, panel: Path) -> dict[str, Any]:

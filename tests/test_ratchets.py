@@ -19,7 +19,11 @@ the frozen list in ``ratchets.toml`` (next to this file):
 4. **High-level saves.** ``<x>.save(...)``, ``<x>.write(...)`` (not a file or buffer handle),
    ``save_project``, ``run_set_footprint``, ``run_fix_annotation``, each keyed on its call
    text. Calls into the reserved module ``boardproof.write_layer`` (build ticket 42) are exempt.
-5. **Writing tools.** Every registered tool that is not annotated read-only is classified, and
+5. **Direct reads.** ``PCB.load``, ``Schematic.load`` and ``parse_file`` / ``parse_string`` of
+   ``kicad_tools`` called outside ``boardproof.write_layer``: they open a board or schematic without
+   the file-version check (issue 213). The list starts empty; the readers are ``write_layer.load``,
+   ``load_pcb`` and ``load_model``.
+6. **Writing tools.** Every registered tool that is not annotated read-only is classified, and
    a classified tool may not be annotated read-only. A writing tool without a proven
    reload-and-compare self-check is listed, and only the tools frozen on 2026-10-19 may be.
    Read-only tools and tools listed as writing no KiCad file have their reached write and
@@ -195,6 +199,14 @@ FIX_SAVE_BYTES = (
     "its own: a new caller needs its own reload-and-compare verify, a self-check proof test with a "
     "corrupted write, and a reviewed entry in SAVE_BYTES_CALLERS in tests/test_ratchets.py. A "
     "KiCad design file goes through write_layer.save (decision 1)."
+)
+FIX_DIRECT_READ = (
+    "open the file through the write layer instead: write_layer.load(path) for a raw tree, "
+    "write_layer.load_pcb(path) or write_layer.load_model(Schematic, path) for the kicad_tools model. "
+    "They refuse a .kicad_pcb or .kicad_sch newer than write_layer.NEWEST_MEASURED_VERSION (issue 213: "
+    "a newer file reads as wrong positions without an error). write_layer.parse_string parses text "
+    "that is not a board or schematic file. An entry in tests/ratchets.toml [[direct_kicad_read]] is "
+    "for a reader of a library file only, and needs a note saying why no version applies."
 )
 FIX_SHRINK = (
     "The site is gone or fewer than listed: shrink the entry in " + DATA_NAME + " (lower its "
@@ -1179,6 +1191,147 @@ class ConvenienceReadScanner(_Scanner):
             self.visit(kw.value)
 
 
+DIRECT_READ_CLASSES = frozenset({"PCB", "Schematic", "Document", "SExp"})  # kicad_tools classes that open a file
+DIRECT_READ_CLASS_OPENERS = frozenset({"load", "from_file"})
+DIRECT_READ_FUNCTIONS = frozenset({"parse_file", "parse_string", "parse_sexp", "load_pcb"})
+TEXT_READERS = frozenset({"read_text", "read_bytes", "read"})
+ROOT_PACKAGES = ("kicad_tools", "boardproof")
+
+
+class DirectReadScanner(_Scanner):
+    """Every way to open a KiCad file through ``kicad_tools`` without the write layer's version
+    check (issue 213). Names are resolved to their dotted origin: every ``import`` and ``from ...
+    import`` of ``kicad_tools`` and ``boardproof`` (submodules too, ``from kicad_tools import sexp``,
+    ``from kicad_tools.sexp import parser``), aliases, assignments (``x = PCB``, ``pf =
+    sexp.parse_file``), ``getattr(X, "name")`` and ``importlib.import_module("kicad_tools...")``
+    with a literal name. A reference (a call, or the name passed on) to ``<kicad_tools>.PCB.load``,
+    ``.from_file``, ``Schematic.load``, ``parse_file`` or ``parse_string`` is a site, and so is
+    ``getattr`` of a ``kicad_tools`` name with a computed attribute. ``write_layer.parse_string``
+    of a ``read_text`` / ``read_bytes`` / ``read`` result (directly or through a name bound to one)
+    is a site as well: it parses a file's text without the check. ``boardproof.write_layer``
+    itself is exempt: it is the wrapper. Blind spots, so the scan catches accidents and not
+    adversaries: a computed module name for ``importlib``; a ``kicad_tools`` name passed through a
+    function argument, an attribute or a dict (``self.model = PCB``); text laundered through a
+    helper, ``.replace``, ``.decode`` or a slice before ``write_layer.parse_string``; a reader that
+    is not named in the lists above."""
+
+    def __init__(self, file: str, modules: dict[str, ast.Module] | None = None) -> None:
+        super().__init__(file, modules)
+        self.origin: dict[str, str] = {}
+        self.read_names: dict[ast.AST, set[str]] = {}  # per function (or module): names bound to a read
+        self.stack: list[ast.AST] = []
+
+    def enter(self, node: ast.AST) -> None:
+        self.stack.append(node)
+
+    def leave(self) -> None:
+        self.stack.pop()
+
+    def visit_Module(self, node: ast.Module) -> None:
+        self._collect(node)
+        super().visit_Module(node)
+
+    def _collect(self, tree: ast.Module) -> None:
+        for sub in ast.walk(tree):
+            if isinstance(sub, ast.ImportFrom):
+                base = _from_base(self.file, sub)
+                if base.split(".")[0] in ROOT_PACKAGES:
+                    for alias in sub.names:
+                        self.origin[alias.asname or alias.name] = f"{base}.{alias.name}"
+            elif isinstance(sub, ast.Import):
+                for alias in sub.names:
+                    if alias.name.split(".")[0] in ROOT_PACKAGES:
+                        if alias.asname:
+                            self.origin[alias.asname] = alias.name
+                        else:
+                            self.origin[alias.name.split(".")[0]] = alias.name.split(".")[0]
+        for scope in ast.walk(tree):
+            if isinstance(scope, (ast.Module, ast.FunctionDef, ast.AsyncFunctionDef)):
+                names = self.read_names.setdefault(scope, set())
+                for sub in ast.walk(scope):
+                    if isinstance(sub, ast.Assign) and self._reads_text(sub.value):
+                        names.update(t.id for t in sub.targets if isinstance(t, ast.Name))
+        for _ in range(4):  # assignments between names, to a fixpoint (short chains)
+            for sub in ast.walk(tree):
+                if isinstance(sub, ast.Assign):
+                    found = self._resolve(sub.value)
+                    for target in sub.targets:
+                        if isinstance(target, ast.Name):
+                            if found:
+                                self.origin.setdefault(target.id, found)
+
+    def _resolve(self, node: ast.AST) -> str | None:
+        if isinstance(node, ast.Name):
+            return self.origin.get(node.id)
+        if isinstance(node, ast.Attribute):
+            base = self._resolve(node.value)
+            return f"{base}.{node.attr}" if base else None
+        if isinstance(node, ast.Call):
+            name = _call_name(node.func)
+            lit = _literal_str(node.args[1]) if len(node.args) >= 2 else None
+            if name == "getattr" and lit is not None:
+                base = self._resolve(node.args[0])
+                return f"{base}.{lit}" if base else None
+            if name in ("import_module", "__import__") and node.args:
+                module = _literal_str(node.args[0])
+                if module and module.split(".")[0] in ROOT_PACKAGES:
+                    return module
+        return None
+
+    @staticmethod
+    def _reads_text(node: ast.AST) -> bool:
+        if not isinstance(node, ast.Call):
+            return False
+        if isinstance(node.func, ast.Attribute) and node.func.attr in TEXT_READERS:
+            return True
+        return _call_name(node.func) == "open"
+
+    @staticmethod
+    def _banned(origin: str | None) -> str | None:
+        if not origin or not origin.startswith("kicad_tools"):
+            return None
+        parts = origin.split(".")
+        if parts[-1] in DIRECT_READ_FUNCTIONS:
+            return parts[-1]
+        if len(parts) >= 2 and parts[-2] in DIRECT_READ_CLASSES and parts[-1] in DIRECT_READ_CLASS_OPENERS:
+            return f"{parts[-2]}.{parts[-1]}"
+        return None
+
+    def _exempt(self) -> bool:
+        return self.file == "write_layer.py"
+
+    def _check(self, node: ast.AST) -> bool:
+        kind = None if self._exempt() else self._banned(self._resolve(node))
+        if kind:
+            self.hit(node, kind)
+        return kind is not None
+
+    def visit_Attribute(self, node: ast.Attribute) -> None:
+        if isinstance(node.ctx, ast.Load) and self._check(node):
+            return
+        self.generic_visit(node)
+
+    def visit_Name(self, node: ast.Name) -> None:
+        if isinstance(node.ctx, ast.Load):
+            self._check(node)
+
+    def visit_Call(self, node: ast.Call) -> None:
+        if not self._exempt():
+            if self._check(node):  # getattr(PCB, "load") resolves to the banned name
+                return
+            if _call_name(node.func) == "getattr" and len(node.args) >= 2 and _literal_str(node.args[1]) is None:
+                base = self._resolve(node.args[0])
+                if base and base.startswith("kicad_tools"):
+                    self.hit(node, "getattr with a computed name")
+            func = self._resolve(node.func)
+            if func == "boardproof.write_layer.parse_string" and node.args and (
+                self._reads_text(node.args[0])
+                or (isinstance(node.args[0], ast.Name) and self.stack and node.args[0].id in self.read_names.get(self.stack[-1], ()))
+            ):
+                self.hit(node, "parse_string of a file's text")
+        self.generic_visit(node)
+
+
 class SaveScanner(_Scanner):
     """Saves through kicad_tools' high-level models and CLI writers."""
 
@@ -1434,6 +1587,64 @@ def test_convenience_property_reads_are_the_frozen_list() -> None:
 
 def test_high_level_saves_are_the_frozen_list() -> None:
     _assert_ratchet("High-level save", scan(SaveScanner), "high_level_save", FIX_SAVE, by_code=True)
+
+
+def test_no_board_or_schematic_is_opened_without_the_version_check() -> None:
+    _assert_ratchet("Direct read", scan(DirectReadScanner), "direct_kicad_read", FIX_DIRECT_READ, by_code=True)
+
+
+DIRECT_READ_RED = {
+    "plain class": "from kicad_tools.schema import PCB\ndef f(p):\n    PCB.load(p)\n",
+    "aliased class": "from kicad_tools.schema import PCB as Board\ndef f(p):\n    Board.load(p)\n",
+    "schematic": "from kicad_tools.schematic.models.schematic import Schematic\ndef f(p):\n    Schematic.load(p)\n",
+    "bare function": "from kicad_tools.sexp import parse_file\ndef f(p):\n    parse_file(p)\n",
+    "aliased function": "from kicad_tools.sexp import parse_string as ps\ndef f(p):\n    ps(p)\n",
+    "module alias": "import kicad_tools.sexp as ks\ndef f(p):\n    ks.parse_file(p)\n",
+    "dotted chain": "import kicad_tools\ndef f(p):\n    kicad_tools.schema.PCB.load(p)\n",
+    "dotted chain, function": "import kicad_tools\ndef f(p):\n    kicad_tools.sexp.parse_string(p)\n",
+    "submodule from-import": "from kicad_tools import sexp\ndef f(p):\n    sexp.parse_file(p)\n",
+    "submodule of submodule": "from kicad_tools.sexp import parser\ndef f(p):\n    parser.parse_file(p)\n",
+    "class bound to a name": "from kicad_tools.schema import PCB\ndef f(p):\n    x = PCB\n    x.load(p)\n",
+    "function bound to a name": "from kicad_tools import sexp\ndef f(p):\n    pf = sexp.parse_file\n    pf(p)\n",
+    "from_file": "from kicad_tools.schema import PCB\ndef f(p):\n    PCB.from_file(p)\n",
+    "Document.load": "from kicad_tools.sexp import Document\ndef f(p):\n    Document.load(p)\n",
+    "SExp.from_file": "from kicad_tools.sexp import SExp\ndef f(p):\n    SExp.from_file(p)\n",
+    "schema.pcb.load_pcb": "from kicad_tools.schema.pcb import load_pcb\ndef f(p):\n    load_pcb(p)\n",
+    "load_pcb by module": "import kicad_tools.schema.pcb as m\ndef f(p):\n    m.load_pcb(p)\n",
+    "parse_sexp": "from kicad_tools.sexp.parser import parse_sexp\ndef f(p):\n    parse_sexp(p)\n",
+    "getattr literal": "from kicad_tools.schema import PCB\ndef f(p):\n    getattr(PCB, 'load')(p)\n",
+    "getattr computed": "from kicad_tools.schema import PCB\ndef f(p, n):\n    getattr(PCB, n)(p)\n",
+    "importlib": "import importlib\ndef f(p):\n    m = importlib.import_module('kicad_tools.sexp')\n    m.parse_file(p)\n",
+    "passed on": "from kicad_tools.sexp import parse_file\ndef f(p):\n    return map(parse_file, [p])\n",
+    "read_text into the layer": "from boardproof import write_layer\ndef f(p):\n    return write_layer.parse_string(p.read_text())\n",
+    "read_text through a name": "from boardproof import write_layer\ndef f(p):\n    text = p.read_text()\n    return write_layer.parse_string(text)\n",
+    "open().read into the layer": "from boardproof import write_layer\ndef f(p):\n    return write_layer.parse_string(open(p).read())\n",
+}
+DIRECT_READ_GREEN = {
+    "the layer's readers": "from boardproof import write_layer\ndef f(p):\n    write_layer.load(p)\n    write_layer.load_pcb(p)\n    write_layer.load_model(1, p)\n",
+    "a fragment": "from boardproof import write_layer\ndef f():\n    return write_layer.parse_string('(x)')\n",
+    "other class": "from other import PCB\ndef f(p):\n    PCB.load(p)\n",
+    "netlist": "from kicad_tools.operations.netlist import Netlist\ndef f(p):\n    Netlist.load(p)\n",
+    "creation": "from kicad_tools.schema import PCB\ndef f():\n    PCB.create(width=1, height=1)\n",
+    "import only": "import kicad_tools.sexp\nfrom kicad_tools.sexp import parse_file\n",
+    "getattr of another object": "def f(board, n):\n    return getattr(board, n)\n",
+    "text not parsed": "from boardproof import write_layer\ndef f(p):\n    text = p.read_text()\n    return len(text)\n",
+}
+
+
+@pytest.mark.parametrize("name", list(DIRECT_READ_RED))
+def test_direct_read_scanner_turns_red_on_every_evasion(name: str) -> None:
+    assert scan(DirectReadScanner, {"x.py": ast.parse(DIRECT_READ_RED[name])}), name
+
+
+@pytest.mark.parametrize("name", list(DIRECT_READ_GREEN))
+def test_direct_read_scanner_stays_green_on_laid_out_forms(name: str) -> None:
+    assert scan(DirectReadScanner, {"x.py": ast.parse(DIRECT_READ_GREEN[name])}) == [], name
+
+
+def test_direct_read_scanner_exempts_the_wrapper_itself() -> None:
+    wrapper = "from kicad_tools.schema import PCB\nPCB.load(1)\nfrom kicad_tools.sexp import parse_string\nparse_string('(x)')\n"
+    assert scan(DirectReadScanner, {"write_layer.py": ast.parse(wrapper)}) == []
 
 
 def test_commits_are_the_frozen_list() -> None:

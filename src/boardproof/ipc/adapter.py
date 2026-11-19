@@ -51,6 +51,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, Protocol, Sequence, runtime_checkable
 
+from boardproof import write_layer
 from boardproof.ipc import connection as ipc_connection
 from boardproof.ipc.connection import IpcConnection, IpcUnavailableError
 
@@ -611,9 +612,8 @@ class FileBackend:
         if not self.pcb_path.is_file():
             return {"status": "error", "reason": f"file not found: {self.pcb_path}"}
         try:
-            from kicad_tools.schema import PCB
 
-            board = PCB.load(self.pcb_path)
+            board = write_layer.load_pcb(self.pcb_path)
         except Exception as exc:  # noqa: BLE001 - evidence-gated return
             return {"status": "error", "reason": f"could not read {self.pcb_path}: {exc}"}
 
@@ -680,7 +680,7 @@ class FileBackend:
         try:
             from kicad_tools.schema import Schematic
 
-            schematic = Schematic.load(self.sch_path)
+            schematic = write_layer.load_model(Schematic, self.sch_path)
         except Exception as exc:  # noqa: BLE001 - evidence-gated return
             return {"status": "error", "reason": f"could not read {self.sch_path}: {exc}"}
 

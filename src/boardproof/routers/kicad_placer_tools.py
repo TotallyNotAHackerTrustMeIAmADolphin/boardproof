@@ -56,6 +56,7 @@ import time
 from pathlib import Path
 from typing import Any
 
+from boardproof import write_layer
 from boardproof.routers.kicad_routing_tools import (
     KicadRoutingToolsError,
     find_kicad_routing_tools,
@@ -265,9 +266,8 @@ def _raw_reference(footprint: Any) -> str | None:
 def _raw_poses(path: str | Path) -> tuple[dict[str, tuple[float, float, float]], tuple[float, float]]:
     """``{ref: (x, y, rotation)}`` straight from each footprint's raw ``(at X Y rot)``
     node (rotation is omitted by KiCad when it is 0), plus the raw board origin."""
-    from kicad_tools.sexp import parse_file
 
-    root = parse_file(str(path))
+    root = write_layer.load(path)
     poses: dict[str, tuple[float, float, float]] = {}
     for footprint in [*root.find_all("footprint"), *root.find_all("module")]:
         ref = _raw_reference(footprint)

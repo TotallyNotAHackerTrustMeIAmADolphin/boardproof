@@ -484,7 +484,6 @@ def _old_format_refusal(path: Path) -> dict | None:
     in-memory regeneration has fewer of than the file; nothing is written here."""
     from kicad_tools.core.version import KICAD_SCH_FORMAT_VERSION
     from kicad_tools.schematic.models.schematic import Schematic
-    from kicad_tools.sexp import parse_string
 
     from boardproof import write_layer
 
@@ -500,7 +499,7 @@ def _old_format_refusal(path: Path) -> dict | None:
     if version >= KICAD_SCH_FORMAT_VERSION:
         return None
     try:
-        regenerated = parse_string(Schematic.load(path).to_sexp())
+        regenerated = write_layer.parse_string(write_layer.load_model(Schematic, path).to_sexp())
         after, before = _node_names(regenerated), _node_names(root)
         would_drop = {name: n - after.get(name, 0) for name, n in before.items() if n > after.get(name, 0)}
         would_drop = dict(sorted(would_drop.items(), key=lambda item: (-item[1], item[0])))
@@ -611,7 +610,6 @@ def _netlist_census(sheet: Path, replacement: Path | None = None) -> dict[str, A
     import shutil
     import tempfile
 
-    from kicad_tools.sexp.parser import parse_file
 
     from boardproof import kicad_cli, sheet_tree
 
@@ -624,7 +622,7 @@ def _netlist_census(sheet: Path, replacement: Path | None = None) -> dict[str, A
             copy.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(replacement if replacement is not None and source == sheet else source, copy)
         root = Path(tmp) / "p" / sheet.relative_to(base)
-        parsed = parse_file(str(kicad_cli.export_netlist(root, Path(tmp) / "check.net")))
+        parsed = write_layer.load(kicad_cli.export_netlist(root, Path(tmp) / "check.net"))
     refs = [
         str(comp.find("ref").children[0].value)
         for block in parsed.find_children("components")
@@ -1538,7 +1536,7 @@ def build(mcp: MCPServer) -> list[str]:
         try:
             from kicad_tools.schematic.models.schematic import Schematic
 
-            sch = Schematic.load(path)
+            sch = write_layer.load_model(Schematic, path)
             symbol_libs.seed_symbol_defs(sch, libs, lib_ids)
             placed = []
             before_uuids = pin_wiring.symbol_uuids(write_layer.load(path))
@@ -1682,7 +1680,7 @@ def build(mcp: MCPServer) -> list[str]:
         try:
             from kicad_tools.schematic.models.schematic import Schematic
 
-            sch = Schematic.load(path)
+            sch = write_layer.load_model(Schematic, path)
             pin_axes = _pin_axis_index(sch)
             pins = pin_wiring.connector_points(write_layer.load(path))
         except Exception as exc:  # noqa: BLE001 - evidence-gated verdict
@@ -1783,7 +1781,7 @@ def build(mcp: MCPServer) -> list[str]:
         try:
             from kicad_tools.schematic.models.schematic import Schematic
 
-            sch = Schematic.load(path)
+            sch = write_layer.load_model(Schematic, path)
             for x, y in points:
                 sch.add_junction(x, y)
             notice = _layout_notice(path)
@@ -1866,7 +1864,7 @@ def build(mcp: MCPServer) -> list[str]:
         try:
             from kicad_tools.schematic.models.schematic import Schematic
 
-            sch = Schematic.load(path)
+            sch = write_layer.load_model(Schematic, path)
             symbol_libs.seed_symbol_defs(sch, libs, power_ids)
             pins = pin_wiring.connector_points(write_layer.load(path))
             grid = float(getattr(sch, "grid", 1.27) or 1.27)
@@ -3806,7 +3804,7 @@ def build(mcp: MCPServer) -> list[str]:
             tree = sheet_tree.walk(path)
             if (refused := _sheet_tree_refusal(tree, kicad_tools_writes=False)) is not None:
                 return refused
-            schematic = Schematic.load(path)
+            schematic = write_layer.load_model(Schematic, path)
             unconnected, issues, missing_from_netlist = analyze_schematic(schematic, root_path=path)
             # kicad_tools walks the tree itself but follows only "Sheetfile": a sheet reached
             # through KiCad 6's "Sheet file" is analysed here, sheet by sheet (build ticket 26).
@@ -3822,7 +3820,7 @@ def build(mcp: MCPServer) -> list[str]:
                 if sheet in walked:
                     continue
                 analysed.append(tree.rel(sheet))
-                sub_unconnected, sub_issues, _ = analyze_schematic(Schematic.load(sheet), root_path=None)
+                sub_unconnected, sub_issues, _ = analyze_schematic(write_layer.load_model(Schematic, sheet), root_path=None)
                 unconnected += [dataclasses.replace(u, sheet=sheet.name) for u in sub_unconnected]
                 issues += [
                     dataclasses.replace(i, sheet=sheet.name) if hasattr(i, "sheet") else i for i in sub_issues

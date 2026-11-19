@@ -63,7 +63,6 @@ from mcp.server.mcpserver import MCPServer
 
 from kicad_tools.footprints.fp_lib_table import expand_kicad_vars
 from kicad_tools.schema import Footprint
-from kicad_tools.sexp import parse_string
 from kicad_tools.sexp.parser import SExp
 
 from boardproof import kicad_lock, write_layer
@@ -886,7 +885,7 @@ def build(mcp: MCPServer) -> list[str]:
             return {"status": "incomplete", "reason": f"file not found: {footprint_path}"}
 
         try:
-            node = parse_string(path.read_text(encoding="utf-8"))
+            node = write_layer.load(path)
             fp = Footprint.from_sexp(node)
         except Exception as exc:  # noqa: BLE001 -- evidence-gated
             return {"status": "incomplete", "reason": f"failed to parse footprint: {exc}"}

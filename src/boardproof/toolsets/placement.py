@@ -445,9 +445,8 @@ def _read_outline(pcb_path: str | Path) -> tuple[dict, str | None, str | None, l
 
     Also returns, for the refusal's hint, the problem without the footprint entries (None
     if there is none) and one ``"<reference> (<tags>)"`` per footprint carrying Edge.Cuts."""
-    from kicad_tools.sexp import parse_file
 
-    root = parse_file(Path(pcb_path))
+    root = write_layer.load_file(Path(pcb_path))
     points: list[tuple[float, float]] = []
     unreadable: list[str] = []  # the library falls back to the page origin
     inexact: list[str] = []  # read, but the box here is not KiCad's exact one
@@ -554,9 +553,8 @@ def _read_grid_origin(pcb_path: str | Path) -> tuple[float, float]:
     raises ValueError (the caller refuses; nothing is guessed)."""
     import math
 
-    from kicad_tools.sexp import parse_file
 
-    setup = parse_file(Path(pcb_path)).find("setup")
+    setup = write_layer.load_file(Path(pcb_path)).find("setup")
     node = setup.find("grid_origin") if setup is not None else None
     if node is None:
         return (0.0, 0.0)
@@ -635,7 +633,13 @@ _LOCKED_NOTE = (
 
 
 class _LockUnreadable(Exception):
-    """The raw tokens could not be read, so no footprint can be said to be unlocked."""
+    """The raw tokens could not be read, so no footprint can be said to be unlocked. ``code`` is
+    ``lock_state_unreadable``, or the write layer's own code when it refused the file (for
+    example ``unsupported_file_version``, GitHub issue 213)."""
+
+    def __init__(self, message: str, code: str = "lock_state_unreadable") -> None:
+        super().__init__(message)
+        self.code = code
 
 
 def _locked_references(path: Path) -> set[str]:
@@ -643,6 +647,8 @@ def _locked_references(path: Path) -> set[str]:
     file cannot be read the lock state is unknown and the tool refuses (``_fail_closed``)."""
     try:
         return placement_anchor.locked_references(write_layer.load(path))
+    except write_layer.WriteLayerError as exc:
+        raise _LockUnreadable(f"the lock state of {path.name} cannot be read ({exc})", exc.code) from exc
     except Exception as exc:  # noqa: BLE001
         raise _LockUnreadable(f"the lock state of {path.name} cannot be read ({exc})") from exc
 
@@ -656,7 +662,7 @@ def _fail_closed(fn):
         try:
             return fn(*args, **kwargs)
         except _LockUnreadable as exc:
-            return {"status": "error", "code": "lock_state_unreadable",
+            return {"status": "error", "code": exc.code,
                     "reason": f"{exc}: nothing was moved"}
 
     return wrapper
@@ -755,14 +761,13 @@ def build(mcp: MCPServer) -> list[str]:
         Refuses with file_open_in_kicad, naming the lock file, while KiCad holds a lock file for a file
         it would write; close the file in KiCad, then retry.
         """
-        from kicad_tools.schema import PCB
 
         _ensure_kicad_footprint_dir_set()
         path = Path(pcb_path)
         if not path.exists():
             return {"status": "incomplete", "reason": f"file not found: {pcb_path}"}
         try:
-            board = PCB.load(path)
+            board = write_layer.load_pcb(path)
         except Exception as exc:  # noqa: BLE001
             return {"status": "incomplete", "reason": f"failed to load board: {exc}"}
         refusal = _frame_gate(path, board, strict=True)
@@ -848,13 +853,12 @@ def build(mcp: MCPServer) -> list[str]:
         Refuses with file_open_in_kicad, naming the lock file, while KiCad holds a lock file for a file
         it would write; close the file in KiCad, then retry.
         """
-        from kicad_tools.schema import PCB
 
         path = Path(pcb_path)
         if not path.exists():
             return {"status": "incomplete", "reason": f"file not found: {pcb_path}"}
         try:
-            board = PCB.load(path)
+            board = write_layer.load_pcb(path)
         except Exception as exc:  # noqa: BLE001
             return {"status": "incomplete", "reason": f"failed to load board: {exc}"}
 
@@ -885,7 +889,6 @@ def build(mcp: MCPServer) -> list[str]:
         Refuses with file_open_in_kicad, naming the lock file, while KiCad holds a lock file for a file
         it would write; close the file in KiCad, then retry.
         """
-        from kicad_tools.schema import PCB
 
         if axis not in ("x", "y"):
             return {"status": "error", "reason": "axis must be 'x' or 'y'"}
@@ -898,7 +901,7 @@ def build(mcp: MCPServer) -> list[str]:
         if not path.exists():
             return {"status": "incomplete", "reason": f"file not found: {pcb_path}"}
         try:
-            board = PCB.load(path)
+            board = write_layer.load_pcb(path)
         except Exception as exc:  # noqa: BLE001
             return {"status": "incomplete", "reason": f"failed to load board: {exc}"}
         refusal = _frame_gate(path, board, strict=False)
@@ -968,7 +971,6 @@ def build(mcp: MCPServer) -> list[str]:
         Refuses with file_open_in_kicad, naming the lock file, while KiCad holds a lock file for a file
         it would write; close the file in KiCad, then retry.
         """
-        from kicad_tools.schema import PCB
 
         if axis not in ("x", "y"):
             return {"status": "error", "reason": "axis must be 'x' or 'y'"}
@@ -979,7 +981,7 @@ def build(mcp: MCPServer) -> list[str]:
         if not path.exists():
             return {"status": "incomplete", "reason": f"file not found: {pcb_path}"}
         try:
-            board = PCB.load(path)
+            board = write_layer.load_pcb(path)
         except Exception as exc:  # noqa: BLE001
             return {"status": "incomplete", "reason": f"failed to load board: {exc}"}
         refusal = _frame_gate(path, board, strict=False)
@@ -1045,7 +1047,6 @@ def build(mcp: MCPServer) -> list[str]:
         Refuses with file_open_in_kicad, naming the lock file, while KiCad holds a lock file for a file
         it would write; close the file in KiCad, then retry.
         """
-        from kicad_tools.schema import PCB
 
         if grid_mm <= 0:
             return {"status": "error", "reason": "grid_mm must be > 0"}
@@ -1059,7 +1060,7 @@ def build(mcp: MCPServer) -> list[str]:
         if not path.exists():
             return {"status": "incomplete", "reason": f"file not found: {pcb_path}"}
         try:
-            board = PCB.load(path)
+            board = write_layer.load_pcb(path)
         except Exception as exc:  # noqa: BLE001
             return {"status": "incomplete", "reason": f"failed to load board: {exc}"}
         refusal = _frame_gate(path, board, strict=True)
@@ -1131,7 +1132,6 @@ def build(mcp: MCPServer) -> list[str]:
         Refuses with file_open_in_kicad, naming the lock file, while KiCad holds a lock file for a file
         it would write; close the file in KiCad, then retry.
         """
-        from kicad_tools.schema import PCB
 
         if len(refs) < 2:
             return {"status": "error", "reason": "need at least 2 refs to pack"}
@@ -1140,7 +1140,7 @@ def build(mcp: MCPServer) -> list[str]:
         if not path.exists():
             return {"status": "incomplete", "reason": f"file not found: {pcb_path}"}
         try:
-            board = PCB.load(path)
+            board = write_layer.load_pcb(path)
         except Exception as exc:  # noqa: BLE001
             return {"status": "incomplete", "reason": f"failed to load board: {exc}"}
 
@@ -1194,7 +1194,7 @@ def build(mcp: MCPServer) -> list[str]:
         # Verify via the existing, already-tested collision checker rather
         # than trusting our own arithmetic.
         try:
-            board2 = PCB.load(path)
+            board2 = write_layer.load_pcb(path)
             collision_result = board2.run_drc(clearance=min_clearance_mm)
         except Exception as exc:  # noqa: BLE001
             return {
@@ -1389,7 +1389,6 @@ def build(mcp: MCPServer) -> list[str]:
         the checkpoint per docs/ARCHITECTURE.md's human-in-the-loop policy for
         autoplacement output -- never trust this without review.
         """
-        from kicad_tools.schema import PCB
 
         for name, value in (("edge_clearance_mm", edge_clearance_mm), ("spacing_mm", spacing_mm)):
             if not placement_anchor._finite(value) or value < 0:
@@ -1398,7 +1397,7 @@ def build(mcp: MCPServer) -> list[str]:
         if not path.exists():
             return {"status": "incomplete", "reason": f"file not found: {pcb_path}"}
         try:
-            board = PCB.load(path)
+            board = write_layer.load_pcb(path)
         except Exception as exc:  # noqa: BLE001
             return {"status": "incomplete", "reason": f"failed to load board: {exc}"}
         refusal = _frame_gate(path, board, strict=True)
@@ -1503,7 +1502,6 @@ def build(mcp: MCPServer) -> list[str]:
         Refuses with file_open_in_kicad, naming the lock file, while KiCad holds a lock file for a file
         it would write; close the file in KiCad, then retry.
         """
-        from kicad_tools.schema import PCB
 
         _evict_stale_pending_placements()
         entry = _PENDING_PLACEMENTS.get(revision_token)  # consumed only once the board is safe
@@ -1514,7 +1512,7 @@ def build(mcp: MCPServer) -> list[str]:
         path = Path(pcb_path)
         fields = _frame_fields(path)
         try:
-            board = PCB.load(path)
+            board = write_layer.load_pcb(path)
             refusal = _frame_gate(path, board, strict=True)
             if refusal is not None:
                 return refusal
@@ -1696,10 +1694,9 @@ def build(mcp: MCPServer) -> list[str]:
             # a real attempt, and is exactly the kind of self-report this
             # project's standing rule says never to trust as the signal.
             try:
-                from kicad_tools.schema import PCB
 
                 verify_input = _trial_copy(path, tmp / "verify")
-                verify_board = PCB.load(verify_input)
+                verify_board = write_layer.load_pcb(verify_input)
                 for ref, (x, y, rotation) in delta.items():
                     verify_board.update_footprint_position(ref, x, y, rotation)
                 write_layer.save_pcb(verify_board, verify_input)
@@ -1748,7 +1745,6 @@ def build(mcp: MCPServer) -> list[str]:
         Refuses with file_open_in_kicad, naming the lock file, while KiCad holds a lock file for a file
         it would write; close the file in KiCad, then retry.
         """
-        from kicad_tools.schema import PCB
 
         _evict_stale_pending_placements()
         entry = _PENDING_PLACEMENTS.get(revision_token)
@@ -1763,7 +1759,7 @@ def build(mcp: MCPServer) -> list[str]:
                     "reason": f"{locked_now} are locked since the proposal: nothing was moved, the token stays valid"}
         _PENDING_PLACEMENTS.pop(revision_token, None)
         try:
-            board = PCB.load(path)
+            board = write_layer.load_pcb(path)
             for ref, (x, y, rotation) in proposed.items():
                 board.update_footprint_position(ref, x, y, rotation)
             write_layer.save_pcb(board, path)
@@ -1826,7 +1822,6 @@ def build(mcp: MCPServer) -> list[str]:
         legitimate outcome -- returns status "complete", removed_count 0 --
         not an error.
         """
-        from kicad_tools.schema import PCB
 
         err = _validate_graphic_filters(filters)
         if err:
@@ -1836,7 +1831,7 @@ def build(mcp: MCPServer) -> list[str]:
         if not path.exists():
             return {"status": "incomplete", "reason": f"file not found: {pcb_path}"}
         try:
-            board = PCB.load(path)
+            board = write_layer.load_pcb(path)
         except Exception as exc:  # noqa: BLE001
             return {"status": "incomplete", "reason": f"failed to load board: {exc}"}
 
@@ -1896,7 +1891,6 @@ def build(mcp: MCPServer) -> list[str]:
         Refuses with file_open_in_kicad, naming the lock file, while KiCad holds a lock file for a file
         it would write; close the file in KiCad, then retry.
         """
-        from kicad_tools.schema import PCB
 
         _evict_stale_pending_graphic_removals()
         entry = _PENDING_GRAPHIC_REMOVALS.pop(revision_token, None)
@@ -1912,7 +1906,7 @@ def build(mcp: MCPServer) -> list[str]:
         if not path.exists():
             return {"status": "incomplete", "reason": f"file not found: {pcb_path}"}
         try:
-            board = PCB.load(path)
+            board = write_layer.load_pcb(path)
         except Exception as exc:  # noqa: BLE001
             return {"status": "incomplete", "reason": f"failed to load board before removal: {exc}"}
 
@@ -1947,7 +1941,7 @@ def build(mcp: MCPServer) -> list[str]:
 
         # Non-negotiable verification: reload FRESH from disk.
         try:
-            reloaded = PCB.load(path)
+            reloaded = write_layer.load_pcb(path)
         except Exception as exc:  # noqa: BLE001
             return {
                 "status": "error",

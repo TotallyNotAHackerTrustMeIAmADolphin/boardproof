@@ -12,9 +12,6 @@
     "src/boardproof/board_rules.py": {
       "B905": 1
     },
-    "src/boardproof/input_prep.py": {
-      "F401": 1
-    },
     "src/boardproof/pour_step.py": {
       "B905": 4
     },

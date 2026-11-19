@@ -65,9 +65,16 @@ Block = tuple[str, int, int, "list[tuple[int, int]] | None"]
 
 
 def _parse_text(text: str) -> Any:
-    from kicad_tools.sexp import parse_string
+    from boardproof import write_layer
 
-    return parse_string(text)
+    return write_layer.parse_string(text)
+
+
+def _check_version(text: str, path: str | Path) -> None:
+    """Refuse a board newer than the measured versions (GitHub issue 213), without a full parse."""
+    from boardproof import write_layer
+
+    write_layer.check_text_version(text, path)
 
 
 def _children_fast(text: str, pos: int) -> tuple[list[tuple[int, int]], int] | None:
@@ -244,4 +251,6 @@ def view_of_text(text: str) -> BoardView:
 
 def read_board_view(path: str | Path) -> BoardView:
     """Read ``path`` once (the same decoding as ``parse_file``) and return its view."""
-    return view_of_text(Path(path).read_text(encoding="utf-8"))
+    text = Path(path).read_text(encoding="utf-8")
+    _check_version(text, path)
+    return view_of_text(text)

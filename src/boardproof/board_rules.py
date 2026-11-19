@@ -139,9 +139,8 @@ def _leaf_diff(a: Any, b: Any, path: str = "") -> list[str]:
 
 
 def _board_net_names(pcb_path: Path) -> set[str]:
-    from kicad_tools.sexp import parse_file
 
-    root = parse_file(str(pcb_path))
+    root = write_layer.load(pcb_path)
     names: set[str] = set()
     for node in root.children:
         if node.name == "net" and len(node.values) >= 2 and str(node.values[1]):

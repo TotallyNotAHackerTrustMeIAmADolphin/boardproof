@@ -20,13 +20,22 @@ from kicad_tools.sexp import Document
 from boardproof import schematic_import as si
 from boardproof import sheet_tree
 from boardproof import verify_board as gate
+from boardproof import write_layer
 
 
 @contextmanager
 def counted_sheet_parses(monkeypatch) -> Iterator[list[str]]:
-    """The ``.kicad_sch`` paths handed to ``parse_file``, whichever import spelling is used."""
+    """The ``.kicad_sch`` paths parsed, through ``kicad_tools``' ``parse_file`` (whichever import
+    spelling) or through ``write_layer.load_file``, which ``write_layer.load`` calls and which the
+    sheet readers use since issue 213."""
     seen: list[str] = []
     real = parser_mod.parse_file
+    real_load_file = write_layer.load_file
+
+    def counting_load_file(path, *args, **kwargs):
+        if str(path).endswith(".kicad_sch"):
+            seen.append(str(Path(path).resolve()))
+        return real_load_file(path, *args, **kwargs)
 
     def counting(path, *args, **kwargs):
         if str(path).endswith(".kicad_sch"):
@@ -35,6 +44,7 @@ def counted_sheet_parses(monkeypatch) -> Iterator[list[str]]:
 
     monkeypatch.setattr(parser_mod, "parse_file", counting)
     monkeypatch.setattr(sexp_pkg, "parse_file", counting)
+    monkeypatch.setattr(write_layer, "load_file", counting_load_file)
     yield seen
 
 
@@ -151,3 +161,14 @@ def test_no_module_level_parse_cache() -> None:
             if isinstance(value, dict) and not name.startswith("__") and "pars" in name.lower()
         ]
         assert holders == [], (module.__name__, holders)
+
+
+def test_the_parse_once_spy_sees_a_second_parse_of_a_sheet(kicad_demo, monkeypatch) -> None:
+    """Mutant check of the pin above: a reader that parsed a sheet of the tree again through the
+    write layer would make ``seen`` longer than the walk, so the pin turns red."""
+    root = kicad_demo("vme-wren") / "vme-wren.kicad_sch"
+    with counted_sheet_parses(monkeypatch) as seen:
+        tree = sheet_tree.walk(root)
+        walked = len(seen)
+        write_layer.load(root)  # the mutant: one more parse of a sheet
+    assert walked == len(tree.files) and len(seen) == walked + 1

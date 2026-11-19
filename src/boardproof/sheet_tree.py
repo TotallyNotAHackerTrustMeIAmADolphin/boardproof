@@ -28,6 +28,7 @@ from dataclasses import dataclass
 from dataclasses import field as dataclass_field
 from pathlib import Path
 from typing import Any
+from boardproof import write_layer
 
 SHEET_FILE_KEYS = ("Sheetfile", "Sheet file")  # KiCad 7+ / KiCad 6 spelling
 SHEET_NAME_KEYS = ("Sheetname", "Sheet name")
@@ -101,9 +102,8 @@ def _inside(path: Path, directory: Path) -> bool:
 
 
 def _parse(path: Path) -> Any:
-    from kicad_tools.sexp.parser import parse_file
 
-    root = parse_file(str(path))
+    root = write_layer.load(path)
     if getattr(root, "tag", None) != "kicad_sch":
         raise ValueError("root node is not kicad_sch")
     return root
@@ -228,13 +228,12 @@ def netlist_components(root: str | Path) -> list[dict[str, Any]]:
     tree itself, from the root, one component per placed instance."""
     import tempfile
 
-    from kicad_tools.sexp.parser import parse_file
 
     from boardproof import kicad_cli
 
     with tempfile.TemporaryDirectory(prefix="boardproof-netlist-") as tmp:
         out = kicad_cli.export_netlist(root, Path(tmp) / "netlist.net")
-        parsed = parse_file(str(out))
+        parsed = write_layer.load(out)
 
     def text(node: Any, tag: str) -> str:
         found = node.find_children(tag)

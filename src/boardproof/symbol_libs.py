@@ -22,6 +22,7 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterable
+from boardproof import write_layer
 
 _VAR = re.compile(r"\$\{([^}]+)\}")
 _SYM_ENV = re.compile(r"^KICAD\d*_SYMBOL_DIR$")
@@ -87,9 +88,8 @@ def _expand(uri: str, project: Path, kicad_dirs: list[Path]) -> Path | None:
 def _rows(table: Path) -> dict[str, str] | None:
     """``nickname -> uri`` of a table (first row of a nickname wins), None when unreadable."""
     try:
-        from kicad_tools.sexp import parse_file
 
-        root = parse_file(str(table))
+        root = write_layer.load(table)
     except Exception:  # noqa: BLE001
         return None
     rows: dict[str, str] = {}

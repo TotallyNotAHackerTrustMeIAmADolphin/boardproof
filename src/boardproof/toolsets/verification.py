@@ -54,6 +54,7 @@ from typing import Any
 
 from mcp.server.mcpserver import MCPServer
 
+from boardproof import write_layer
 from boardproof import erc_groups, kicad_cli
 from boardproof.kicad_cli import ensure_kicad_cli_on_path
 from boardproof.manufacturing_profiles import (
@@ -354,9 +355,8 @@ def build(mcp: MCPServer) -> list[str]:
             return _incomplete(resolved["error"])
         rules = resolved["rules"]
         try:
-            from kicad_tools.schema import PCB
 
-            board = PCB.load(path)
+            board = write_layer.load_pcb(path)
             result = board.run_drc(
                 clearance=rules["clearance_mm"],
                 courtyard_margin=rules["courtyard_margin_mm"],
@@ -411,7 +411,7 @@ def build(mcp: MCPServer) -> list[str]:
 
             with tempfile.TemporaryDirectory(prefix="boardproof-erc-") as scratch:
                 raw_path = Path(scratch) / "erc.json"
-                report = Schematic.load(path).run_erc(output_path=raw_path)
+                report = write_layer.load_model(Schematic, path).run_erc(output_path=raw_path)
                 raw = _read_raw_erc(raw_path)
         except Exception as exc:  # noqa: BLE001 - evidence-gated verdict
             return _incomplete(f"ERC could not complete: {exc}")
@@ -461,9 +461,8 @@ def build(mcp: MCPServer) -> list[str]:
             return _incomplete(resolved["error"])
         rules = resolved["rules"]
         try:
-            from kicad_tools.schema import PCB
 
-            board = PCB.load(path)
+            board = write_layer.load_pcb(path)
             result = board.run_drc(
                 clearance=rules["clearance_mm"], courtyard_margin=rules["courtyard_margin_mm"]
             )
@@ -520,9 +519,8 @@ def build(mcp: MCPServer) -> list[str]:
             return _incomplete(resolved["error"])
         rules = resolved["rules"]
         try:
-            from kicad_tools.schema import PCB
 
-            board = PCB.load(path)
+            board = write_layer.load_pcb(path)
             typed_placements = {ref: (xyr[0], xyr[1], xyr[2]) for ref, xyr in placements.items()}
             result = board.validate_placements(
                 typed_placements,

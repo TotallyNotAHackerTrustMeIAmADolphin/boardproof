@@ -524,12 +524,11 @@ def erc_census(root: Path) -> Counter:
 
 def netlist_sheet_names(root: Path) -> list[str]:
     """The sheet names kicad-cli's netlist export lists, from ``(design (sheet (name ...)))``."""
-    from kicad_tools.sexp.parser import parse_file
 
     from boardproof import kicad_cli
 
     with tempfile.TemporaryDirectory(prefix="boardproof-sheet-net-") as tmp:
-        parsed = parse_file(str(kicad_cli.export_netlist(root, Path(tmp) / "check.net")))
+        parsed = write_layer.load(kicad_cli.export_netlist(root, Path(tmp) / "check.net"))
     return [_text(sheet.find_children("name")[0]) for design in parsed.find_children("design")
             for sheet in design.find_children("sheet") if sheet.find_children("name")]
 

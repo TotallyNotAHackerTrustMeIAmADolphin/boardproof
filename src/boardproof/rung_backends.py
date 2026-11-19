@@ -42,6 +42,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from boardproof import write_layer
 from boardproof import rung_runner
 from boardproof.routers import kicad_routing_tools as krt_tools
 from boardproof.toolsets import routing as routing_toolset
@@ -74,9 +75,8 @@ def board_invariants(board_path: str | Path) -> dict[str, Any]:
     allowance when that path is wired into attempts), the title block, and properties
     and uuids of anything not listed above.
     """
-    from kicad_tools.sexp import parse_file
 
-    root = parse_file(str(board_path))
+    root = write_layer.load(board_path)
 
     def digest(texts: list[str]) -> str:
         h = hashlib.sha256()
@@ -332,9 +332,8 @@ def pour_zones(board: str | Path) -> list[dict]:
     fill: such a zone is listed as filled. Never ``Zone.is_filled`` (True for any
     ``(fill yes ...)``, which is how an outline-only pour was once misread as filled)."""
     from boardproof import pour_step
-    from kicad_tools.sexp import parse_file
 
-    root = parse_file(str(board))
+    root = write_layer.load(board)
     table = pour_step._net_table(root)  # both file formats: net table or inline name
     out: list[dict] = []
 
@@ -609,9 +608,8 @@ class UnderWidthCheckError(Exception):
 
 def _copper_texts(board: Path) -> Counter:
     """Every segment, arc and via of the board as raw S-expression text (a multiset)."""
-    from kicad_tools.sexp import parse_file
 
-    root = parse_file(str(board))
+    root = write_layer.load(board)
     return Counter(c.to_string() for c in root.children if c.name in _COPPER_ITEMS)
 
 
@@ -704,10 +702,9 @@ def under_width_items(board: str | Path, before: Counter, project: dict) -> tupl
     ``min_via_diameter``, ``min_through_hole_diameter``, ``min_microvia_*``; an absent key
     is KiCad's measured default where one was measured). Custom ``.kicad_dru`` constraints are DRC constraints the gate grades."""
     from boardproof import board_rules, pour_step
-    from kicad_tools.sexp import parse_file
 
     _resolvable(project)
-    root = parse_file(str(board))
+    root = write_layer.load(board)
     table = pour_step._net_table(root)
     remaining = Counter(before)
     items: list[dict] = []
@@ -1019,11 +1016,10 @@ def classify_necks(board: str | Path, items: list[dict], project: dict, *,
     ``neck_bound_mm`` and ``length_mm``. ``max_length_mm`` defaults to the protocol's bound. A pad the
     check cannot read next to a contact pad raises ``UnderWidthCheckError`` (the attempt is not judged)."""
     from boardproof import board_rules, pour_step
-    from kicad_tools.sexp import parse_file
 
     bound = float(max_length_mm if max_length_mm is not None
                   else necked_pad_entry_policy()["max_length_beyond_pad_mm"])
-    root = parse_file(str(board))
+    root = write_layer.load(board)
     table = pour_step._net_table(root)
     floor, _source = board_rules._constraint_before(project, "min_track_width")
     out = [dict(item) for item in items]

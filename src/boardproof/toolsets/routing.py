@@ -1455,13 +1455,12 @@ def _apply_specs(
 
     On a mismatch the board is untouched and ``WriteLayerError(WRITE_NOT_VERIFIED, ...)``
     names the differences. Returns the bounded check and the skipped duplicates."""
-    from kicad_tools.schema import PCB
 
     from boardproof import _self_check
 
     board_path = Path(board_path)
     source = write_layer.load(board_path)
-    board = PCB.load(board_path)
+    board = write_layer.load_pcb(board_path)
     before = {id(c) for c in board._sexp.children}
     applied = _apply_specs_to_board(board, trace_specs, via_specs)
     written = [c for c in board._sexp.children if id(c) not in before]
@@ -1840,7 +1839,6 @@ def suggest_placement_fixes_for_congestion(
     only: never moves anything itself, so it carries no dry-run/
     revision-token state (nothing to confirm).
     """
-    from kicad_tools.schema import PCB
 
     blocking_by_net = parse_krt_blocking_lines(krt_log_text)
     if not blocking_by_net:
@@ -1855,7 +1853,7 @@ def suggest_placement_fixes_for_congestion(
     if not path.is_file():
         return _incomplete(f"file not found: {pcb_path}")
     try:
-        board = PCB.load(path)
+        board = write_layer.load_pcb(path)
     except Exception as exc:  # noqa: BLE001 - evidence-gated verdict
         return _incomplete(f"could not load board: {exc}")
 
@@ -1968,7 +1966,6 @@ def _propose_with_kicad_routing_tools(
     throwaway copy, its added copper is diffed out through `kicad_tools`,
     re-applied to a second throwaway copy and scored by real DRC there --
     so the scored board is byte-for-byte what `confirm_route` will build."""
-    from kicad_tools.schema import PCB
 
     availability = krt_backend.check_availability()
     if availability.get("status") != "complete":
@@ -2058,7 +2055,7 @@ def _propose_with_kicad_routing_tools(
                 trial_pcb = _trial_copy(path, attempt_dir / "trial")
                 _apply_specs(trial_pcb, trace_specs, via_specs)
                 drc_summary = _drc_summary(trial_pcb)
-                trial_status = PCB.load(trial_pcb).routing_status()
+                trial_status = write_layer.load_pcb(trial_pcb).routing_status()
             except Exception as exc:  # noqa: BLE001 - evidence-gated verdict
                 attempts.append({**base_record, "error": f"could not diff/apply/verify trial route: {exc}",
                                  "router_log": run["log"]})
@@ -2306,9 +2303,8 @@ def build(mcp: MCPServer) -> list[str]:
         if not path.is_file():
             return _incomplete(f"file not found: {pcb_path}")
         try:
-            from kicad_tools.schema import PCB
 
-            board = PCB.load(path)
+            board = write_layer.load_pcb(path)
         except Exception as exc:  # noqa: BLE001 - evidence-gated verdict
             return _incomplete(f"could not load board: {exc}")
 
@@ -2347,9 +2343,8 @@ def build(mcp: MCPServer) -> list[str]:
         if not path.is_file():
             return _incomplete(f"file not found: {pcb_path}")
         try:
-            from kicad_tools.schema import PCB
 
-            board = PCB.load(path)
+            board = write_layer.load_pcb(path)
             ratsnest = board.get_ratsnest()
             status = board.routing_status()
         except Exception as exc:  # noqa: BLE001 - evidence-gated verdict
@@ -2390,9 +2385,8 @@ def build(mcp: MCPServer) -> list[str]:
         if not path.is_file():
             return _incomplete(f"file not found: {pcb_path}")
         try:
-            from kicad_tools.schema import PCB
 
-            board = PCB.load(path)
+            board = write_layer.load_pcb(path)
         except Exception as exc:  # noqa: BLE001 - evidence-gated verdict
             return _incomplete(f"could not load board: {exc}")
 
@@ -2527,9 +2521,8 @@ def build(mcp: MCPServer) -> list[str]:
         if escalation not in krt_backend.VALID_ESCALATIONS:
             return _incomplete(f"unknown escalation {escalation!r}; choose one of {list(krt_backend.VALID_ESCALATIONS)}")
         try:
-            from kicad_tools.schema import PCB
 
-            board = PCB.load(path)
+            board = write_layer.load_pcb(path)
             unrouted_before = len(board.get_ratsnest())
         except Exception as exc:  # noqa: BLE001 - evidence-gated verdict
             return _incomplete(f"could not load board: {exc}")
@@ -2636,7 +2629,7 @@ def build(mcp: MCPServer) -> list[str]:
                     _apply_specs(trial_pcb, attempt["trace_specs"], attempt["via_specs"],
                                  expected_copper=attempt["expected_copper"])
                     drc_summary = _drc_summary(trial_pcb)
-                    trial_status = PCB.load(trial_pcb).routing_status()
+                    trial_status = write_layer.load_pcb(trial_pcb).routing_status()
                 except Exception as exc:  # noqa: BLE001 - evidence-gated verdict
                     attempts.append({**head, "error": f"could not apply/verify trial route: {exc}",
                                      "code": getattr(exc, "code", None)})

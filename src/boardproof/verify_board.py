@@ -348,7 +348,6 @@ def _annotation_problems_in(root_sheet: Path, parsed: dict[Path, Any] | None) ->
     check, and one dict passed to several checks of one call shares the parses. Omitted, the
     check owns a fresh dict. Nothing is kept after the call (issue 71).
     """
-    from kicad_tools.sexp.parser import parse_file
 
     memo: dict[Path, Any] = {} if parsed is None else parsed
     project = root_sheet.stem
@@ -380,7 +379,7 @@ def _annotation_problems_in(root_sheet: Path, parsed: dict[Path, Any] | None) ->
         try:
             root = memo.get(key)
             if root is None:
-                root = parse_file(str(sheet))
+                root = write_layer.load(sheet)
                 if getattr(root, "tag", None) != "kicad_sch":
                     raise ValueError("root node is not kicad_sch")
                 memo[key] = root

@@ -22,6 +22,7 @@ import re
 import tempfile
 from pathlib import Path
 from typing import Any
+from boardproof import write_layer
 
 # Element letter -> number of nodes after the name (X: variable, K and others: not read).
 _NODE_COUNT = {
@@ -173,9 +174,8 @@ def parse_spice(text: str) -> dict[str, Any]:
 
 def read_kicad_netlist(netlist_file: Path) -> dict[str, Any]:
     """Parts ``{ref: {value, lib_id}}`` and ``pin_net`` ``{(ref, pin): net name}`` of a kicadsexpr netlist, read raw."""
-    from kicad_tools.sexp.parser import parse_file
 
-    root = parse_file(str(netlist_file))
+    root = write_layer.load(netlist_file)
 
     def text(node: Any, tag: str) -> str:
         found = node.find_children(tag)

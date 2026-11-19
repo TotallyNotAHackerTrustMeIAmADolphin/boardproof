@@ -719,7 +719,33 @@ def test_the_project_is_looked_for_once_per_call_not_once_per_item(tmp_path, too
     assert result["ok"] is True and result["count"] == 6, result
     # six items cost what one item costs (the check once per call; the shared pipeline looks for the root once itself)
     assert 1 <= discovered <= 2 and len(calls) == discovered, (discovered, calls)
-    assert loads.count("deep.kicad_sch") == read <= 1, (read, loads)  # the other sheet is read once, not once per item
+    # The equality is the pin: the other sheet is read as often for 6 items as for 1, not once per item.
+    # The absolute bound is what the 1-item call reads since issue 213: the sheet tree walk, the lock
+    # and the project check read through write_layer.load, which this test counts (before issue 213 the
+    # sheet walk read through kicad_tools' parse_file, which it does not); measured: 3.
+    assert loads.count("deep.kicad_sch") == read <= 3, (read, loads)
+
+
+def test_calibration_the_read_counter_tells_one_call_from_six_calls(tmp_path, tools, monkeypatch):
+    """A calibration of the counter used by the test above, not a guard of production code: six
+    one-item calls read the other sheet six times as often as one call, so the counter can tell a
+    per-item read from a per-call read. It does not exercise a mutated ``set_properties``."""
+    root, child = _sub_project(tmp_path, tools)
+    assert tools["add_symbols"](str(child), [{"lib_id": "Device:R", "x": 101.6 + 12.7 * k, "y": 90.17, "ref": f"R{k + 1}", "value": "1k"} for k in range(6)])["status"] == "ok"
+    loads: list[str] = []
+    real_load = write_layer.load
+
+    def load(path):
+        loads.append(Path(path).name)
+        return real_load(path)
+
+    monkeypatch.setattr(write_layer, "load", load)
+    assert tools["set_properties"](str(child), [{"reference": "R1", "set": {"LCSC": "C0"}}])["ok"] is True
+    one = loads.count("deep.kicad_sch")
+    loads.clear()
+    for k in range(6):
+        assert tools["set_properties"](str(child), [{"reference": f"R{k + 1}", "set": {"LCSC": f"E{k}"}}])["ok"] is True
+    assert loads.count("deep.kicad_sch") == 6 * one != one
 
 
 def test_the_part_spans_sheets_reason_names_the_duplicate_reference_case(tmp_path, tools):

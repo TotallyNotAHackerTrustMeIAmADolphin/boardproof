@@ -962,11 +962,10 @@ def _copy_project(src_pcb: Path, dest: Path) -> Path:
 def _write(src: Path, tmp: Path, plan: dict) -> dict:
     """Copy the project into ``tmp``, add the holes and keepouts, replace the Edge.Cuts outline
     and save through the write layer. Returns what ``_verify`` compares against."""
-    from kicad_tools.schema import PCB
     from kicad_tools.sexp import SExp
 
     tmp_pcb = _copy_project(src, tmp)
-    board = PCB.load(tmp_pcb)
+    board = write_layer.load_pcb(tmp_pcb)
     root = board._sexp
     before_counts = Counter(c.name for c in root.children if c.name)
     copper = _copper_layers(root)

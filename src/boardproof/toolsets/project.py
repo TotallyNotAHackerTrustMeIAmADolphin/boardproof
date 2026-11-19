@@ -115,7 +115,6 @@ def _project_open(path: str) -> dict[str, Any]:
         path: Path to a directory containing a .kicad_pro, or the .kicad_pro
             file itself.
     """
-    from kicad_tools.schema import PCB
     from kicad_tools.schema import Schematic as SchematicFile
 
     input_path = Path(path)
@@ -150,7 +149,7 @@ def _project_open(path: str) -> dict[str, Any]:
 
         # The whole sheet tree from the root, never the root file alone and never a glob
         # (build ticket 26): symbol_count counts every placed instance, power symbols included.
-        SchematicFile.load(schematic_path)  # the root must load
+        write_layer.load_model(SchematicFile, schematic_path)  # the root must load
         tree = sheet_tree.walk(schematic_path)
         placed = sheet_tree.placed_references(tree)
         result["schematic_path"] = str(schematic_path)
@@ -161,7 +160,7 @@ def _project_open(path: str) -> dict[str, Any]:
             result["status"] = "incomplete"
             result["reason"] = "the sheet tree is incomplete: " + "; ".join(tree.problems)
     if pcb_path.exists():
-        pcb = PCB.load(pcb_path)
+        pcb = write_layer.load_pcb(pcb_path)
         result["pcb_path"] = str(pcb_path)
         result["footprint_count"] = pcb.footprint_count
         result["net_count"] = pcb.net_count

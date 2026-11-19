@@ -17,6 +17,29 @@
 pad_write_exempt = []
 
 # --------------------------------------------------------------------------------------------
+# Direct reads (issue 213): kicad_tools' PCB.load, Schematic.load, parse_file and parse_string
+# called outside boardproof.write_layer. Every one of them opens a KiCad file without the file
+# version check (write_layer.check_file_version), so a file newer than the measured versions
+# reads as wrong positions without an error. Empty: the readers are write_layer.load,
+# write_layer.load_pcb and write_layer.load_model, apart from the two library-file readers listed
+# below. An entry (file, function, kind, code, note)
+# is for a reader of a library file only, and its note says why no version applies.
+
+[[direct_kicad_read]]
+file = "sourcing/jlcpcb_basic.py"
+function = "_model_path_from_footprint"
+kind = "parse_file"
+code = '''parse_file'''
+note = "Issue 213: reads a footprint library file (.kicad_mod) of the JLCPCB library, which carries its own (version) and is not a board or schematic; library files are not version-checked. Not moved to write_layer.load because the refresh tests patch kicad_tools.sexp.parser.parse_file to simulate a file that fails to parse."
+
+[[direct_kicad_read]]
+file = "sourcing/jlcpcb_basic.py"
+function = "build_index"
+kind = "parse_file"
+code = '''parse_file'''
+note = "Issue 213: reads a symbol library file (.kicad_sym), not a board or schematic; library files are not version-checked. Not moved to write_layer.load because tests/test_refresh_jlcpcb_index.py and test_refresh_jlcpcb_update.py patch kicad_tools.sexp.parser.parse_file to simulate a symbol file that fails to parse."
+
+# --------------------------------------------------------------------------------------------
 # Raw writes: open(..., "w"/"a"/"x"/"+"), write_text, write_bytes, os.write, os.open with write
 # flags, os.fdopen, tempfile files. Copies and renames (shutil.copy*, os.replace, rename) move
 # existing bytes and are not listed. kicad_file = true marks a write of a file KiCad parses.
@@ -2293,3 +2316,10 @@ function = "test_load_refuses_a_version_that_is_not_a_number"
 kind = "write_unchecked"
 code = '''faults.write_unchecked(root, tmp_path / 'x.kicad_pcb')'''
 note = "Issue 208: the rung-1 board with its (version) value turned into the string soon; no tool writes that, the guard must refuse it."
+
+[[test_kicad_fault_call]]
+file = "test_direct_readers_version_guard.py"
+function = "_two_versions"
+kind = "write_unchecked"
+code = '''faults.write_unchecked(root, dest)'''
+note = "Issue 213: the committed rung-1 board or schematic with an older first (version) and a second, newer one; no tool writes two version tokens, and the text-path check must refuse it like check_file_version does."

@@ -96,9 +96,8 @@ def _norm(path: str | Path) -> str:
 
 
 def _parse(path: str | Path) -> Any:
-    from kicad_tools.sexp import parse_file
 
-    return parse_file(str(path))
+    return write_layer.load(path)
 
 
 def _natural_key(ref: str) -> list:
@@ -1280,7 +1279,6 @@ def _build_inner(
 ) -> dict:
     """The write step: copy the project into ``tmp``, re-plan against the copy, add the
     footprints and nets, save through the write layer. Returns what the verify step needs."""
-    from kicad_tools.schema import PCB
 
     tmp_pcb = checkpoint.copy_project(
         src, tmp, outputs=(f"{src.parent.name}_imported", f"{src.parent.name}_prepared"),
@@ -1302,7 +1300,7 @@ def _build_inner(
             note="nothing was written; the proposal is stale and its revision_token is spent",
             stale=True,
         )
-    board = PCB.load(tmp_pcb)
+    board = write_layer.load_pcb(tmp_pcb)
     before = _tag_counts(board._sexp)
     before_facts = _footprint_facts(board._sexp)
     present = _board_refs(board._sexp)

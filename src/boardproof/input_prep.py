@@ -138,9 +138,8 @@ def _scan(root: Any) -> tuple[list[dict], list[dict]]:
 
 
 def _parse(pcb_path: str | Path) -> Any:
-    from kicad_tools.sexp import parse_file
 
-    return parse_file(str(pcb_path))
+    return write_layer.load(pcb_path)
 
 
 def copper_texts(pcb_path: str | Path) -> list[dict]:
@@ -234,10 +233,9 @@ def _copy_project(src_pcb: Path, dest: Path) -> Path:
 def _write(src: Path, tmp: Path) -> dict:
     """Copy the project into ``tmp``, move every copper-layer text to its silkscreen layer and
     save through the write layer. Returns what ``_verify`` compares against."""
-    from kicad_tools.schema import PCB
 
     tmp_pcb = _copy_project(src, tmp)
-    board = PCB.load(tmp_pcb)
+    board = write_layer.load_pcb(tmp_pcb)
     nodes = _top_level(board._sexp, "gr_text")
     before_counts = _tag_counts(board._sexp)
     _, unhandled_before = _scan(board._sexp)
@@ -352,7 +350,6 @@ def confirm_input_preparation(
     (tests only). The token is consumed only by a successful preparation or by
     detected source drift; every other failure leaves it usable.
     """
-    from kicad_tools.schema import PCB
 
     src = Path(pcb_path)
     entry, refused = _PENDING.claim(revision_token, src, drift_reason=_DRIFT)

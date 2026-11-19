@@ -234,12 +234,11 @@ def _resolve_sheet(tree: sheet_tree.SheetTree, path: Path, sheet: str | None, wh
 def _read_netlist(root: Path) -> tuple[dict[str, frozenset], list[tuple[str, Fields]]]:
     """kicad-cli's netlist of the project at ``root`` (a scratch copy): nets as ``sheet_editing.nets_from``
     reads them, and the title block of every sheet instance as (source file name, fields)."""
-    from kicad_tools.sexp.parser import parse_file
 
     from boardproof import kicad_cli
 
     with tempfile.TemporaryDirectory(prefix="boardproof-title-net-") as tmp:
-        parsed = parse_file(str(kicad_cli.export_netlist(root, Path(tmp) / "check.net")))
+        parsed = write_layer.load(kicad_cli.export_netlist(root, Path(tmp) / "check.net"))
     nets: dict[str, frozenset] = {}
     for block in parsed.find_children("nets"):
         for net in block.find_children("net"):

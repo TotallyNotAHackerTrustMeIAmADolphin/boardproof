@@ -595,12 +595,11 @@ def _components_of(parsed: SExp) -> list[dict[str, Any]]:
 def nets_from(root: Path, capture: dict | None = None) -> dict[str, frozenset]:
     """kicad-cli's netlist of the project whose root sheet is ``root`` (a scratch copy: the CLI
     writes beside it): net name -> the ``(reference, pin)`` nodes on it, unannotated references left out."""
-    from kicad_tools.sexp.parser import parse_file
 
     from boardproof import kicad_cli
 
     with tempfile.TemporaryDirectory(prefix="boardproof-sheet-net-") as tmp:
-        parsed = parse_file(str(kicad_cli.export_netlist(root, Path(tmp) / "check.net")))
+        parsed = write_layer.load(kicad_cli.export_netlist(root, Path(tmp) / "check.net"))
     if capture is not None:
         capture["components"] = _components_of(parsed)
     nets: dict[str, frozenset] = {}
