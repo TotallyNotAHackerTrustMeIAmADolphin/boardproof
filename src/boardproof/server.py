@@ -392,7 +392,7 @@ def _register_layout_tools(mcp: MCPServer) -> None:
             "result is byte-identical with and without the rule), but the freerouting backend of propose_route and "
             "propose_route_with_retry adds a copy to the exported DSN: the plain two-class pair rules of the managed block "
             "are passed to Freerouting as class_class rules (applied_pair_rules and pairs_not_applied in the route result; "
-            "measured on one 5-net board with Freerouting 2.5.0: the routed copper then kept the pair clearance, except "
+            "measured on one 5-net board with Freerouting 2.5.0: the copper the router laid then kept the pair clearance, except "
             "pad-to-pad at fixed input geometry, at the price of more unrouted nets, so unrouted nets may follow); the kicad_routing_tools backend and hand-written "
             "rules never reach a router, so copper can still lie closer than the rule demands, and kicad-cli DRC flags "
             "that copper afterwards; DRC and verify_board are the measure, never the router's own report. Net class track clearances do reach it (measured on one board; pad-to-pad spacing within a part is not covered). "
