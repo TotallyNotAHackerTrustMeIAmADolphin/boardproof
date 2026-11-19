@@ -510,6 +510,7 @@ NON_KICAD_RAW = {
     ("routers/kicad_routing_tools.py", "request_graceful_stop"): "a stop-request marker file for a router run",
     ("rung_runner.py", "_write_json"): "run records (JSON) in the ladder's own run directory",
     ("sourcing/jlcpcb_basic.py", "write_index"): "the JLCPCB parts index (JSON), not a KiCad file",
+    ("toolsets/routing.py", "_patch_dsn_with_pair_rules"): "the router's scratch DSN (Specctra text) in the trial copy directory, never a KiCad file (issue 212)",
     ("_png_worker.py", "main"): "diagnostic PNG raster written into the child process's own temp dir (issue 104)",
     ("_png_crop_worker.py", "main"): "datasheet page-image PNG written into the child process's own temp dir (issue 105)",
     ("png_render.py", "render_pdf_pages"): "moves finished diagnostic PNGs from scratch into the caller's output dir (issue 104)",
