@@ -3730,7 +3730,7 @@ def build(mcp: MCPServer) -> list[str]:
         about ERC, the netlist or the board (only verify_board gives a verdict on a board).
 
         kinds: which findings to look for, a non-empty list drawn from symbol_symbol, text_text,
-        text_symbol, text_wire and wire_through_pin; omitted, all of them. sch_path: any sheet of the
+        text_symbol, text_wire, wire_through_pin and outside_page; omitted, all of them. sch_path: any sheet of the
         project; every sheet file of the tree is read once, starting at the root sheet (root_sch, optional
         when sch_path is the root or the only .kicad_pro of its folder names it). max_findings (1 to 5000,
         default 500) limits the listed findings, not the counts.
@@ -3751,10 +3751,26 @@ def build(mcp: MCPServer) -> list[str]:
         wire_through_pin: a wire whose middle (not an end) runs over a pin with no junction on that point.
         KiCad joins a pin only to a wire end or a junction, so that pin joins nothing although it looks
         wired; split the wire at the pin or add a junction.
+        outside_page: a symbol, sheet symbol, label, free text or visible property text whose box reaches
+        beyond the drawing frame of its sheet's page, which overlaps nothing and so is found by no other
+        kind (a long note run off the sheet). The page is the raw (paper ...) token of that sheet
+        (portrait and User sizes included), origin at its top left corner; the frame is the default drawing
+        sheet's, 10 mm inside the page edge on every side (measured: kicad-cli draws it there). The
+        finding has one item, page_mm, frame_margin_mm, over_frame_mm and over_paper_mm: each a map from
+        the sides left, right, top or bottom to the mm the box is over the frame or over the paper edge
+        (a side is listed when it is over by more than 0.1 mm for a symbol, 0.5 mm for an estimated
+        text); an item between the frame and the paper edge has over_paper_mm empty. A sheet symbol is
+        a box on its parent's page, the child sheet is checked on its own page. A sheet whose paper token
+        cannot be read is listed in skipped with reason paper_unreadable, never as clear. A project
+        that names a custom drawing sheet (page_layout_descr_file) or whose .kicad_pro cannot be read has
+        an unknown frame: frame_margin_mm is null, over_frame_mm is empty, only the paper edge is checked
+        and skipped lists reason frame_unknown. Wires, junctions and graphic shapes are not checked, the
+        title block is not treated as an obstacle, and a text box is an estimate as above.
 
         Returns found, counts (per kind, the full numbers), findings (each: kind, sheet, at, items with
         their uuid and box or points or text, estimated, fix, and the numbers behind it: overlap in mm,
-        length_inside, pin), truncated, skipped (symbols whose library geometry is not in the sheet file)
+        length_inside, pin, page_mm, frame_margin_mm, over_frame_mm, over_paper_mm), truncated, skipped
+        (symbols whose library geometry is not in the sheet file, and outside_page gaps with a reason)
         and sheets_read. Refuses with invalid_spec, file_not_found, parent_not_in_tree, root_not_found or a
         missing, unparseable or cyclic sheet (sheet_tree_incomplete).
         """

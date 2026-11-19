@@ -29,6 +29,16 @@ numbers behind it:
     on that point. KiCad joins a pin only to a wire END or a junction, so such a pin joins nothing: the
     pin looks wired and is not (measured with kicad-cli's netlist in tests/test_find_overlaps.py).
 
+``outside_page``
+    A symbol, sheet symbol, label, free text or visible property text whose box reaches beyond the drawing
+    frame (``FRAME_MARGIN_MM`` inside the page edge) of the sheet's own page, with how many mm over the
+    frame and over the paper edge in each direction. The page is the raw ``(paper ...)`` token read by
+    ``sheet_extents.page_size_mm``, origin at the page's top left corner. Wires, junctions and graphic
+    shapes are not checked. A custom drawing sheet (``page_layout_descr_file`` of the project) or an
+    unreadable ``.kicad_pro`` makes the frame unknown: only the paper edge is checked and a
+    ``frame_unknown`` entry is listed in ``skipped``. A paper token that cannot be read gives a
+    ``paper_unreadable`` entry, never a clean sheet. A sheet symbol is a box on its PARENT sheet.
+
 Text boxes are ESTIMATES, because the stroke font's extent is not in the file: the same estimate as
 ``schematic_readability`` (characters times font size times 0.6, a label above its anchor) and
 every finding that involves a text says ``estimated: true``. A near miss is not reported.
@@ -37,14 +47,20 @@ This is a layout aid: no finding is a verdict on the schematic, and an empty lis
 
 from __future__ import annotations
 
+import json
 import math
+from pathlib import Path
 from typing import Any
 
-from boardproof import field_check, sheet_align, sheet_authoring, sheet_editing as se, sheet_tree
+from boardproof import field_check, sheet_align, sheet_authoring, sheet_editing as se, sheet_extents, sheet_tree
 from boardproof import schematic_readability as readability
 from boardproof.sheet_authoring import SheetAuthoringError
 
-KINDS = ("symbol_symbol", "text_text", "text_symbol", "text_wire", "wire_through_pin")
+KINDS = ("symbol_symbol", "text_text", "text_symbol", "text_wire", "wire_through_pin", "outside_page")
+# The default drawing sheet's frame lies 10 mm inside the page on every side. Measured: the SVG that kicad-cli 10.0.7
+# exports draws the outer frame line 10 mm from each edge of A4 landscape and A3 portrait
+# (tests/test_find_overlaps_outside_page.py reads it back).
+FRAME_MARGIN_MM = 10.0
 BODY_MM = readability.OVERLAP_MM  # boxes must overlap by more than this in both axes
 TEXT_MM = readability.TEXT_OVERLAP_MM  # the same for the (estimated) text boxes
 TEXT_INSET_MM = 0.25
@@ -197,7 +213,45 @@ def _strictly_inside(a: tuple[float, float], b: tuple[float, float], p: tuple[fl
 # --------------------------------------------------------------------------- the finder
 
 
-def _findings(sheet: str, root: Any) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+def _frame_margin(root_file: Path) -> float | None:
+    """The frame margin of the default drawing sheet unless the project names its own one; None
+    (unknown) when it does, or when the project file cannot be read as that."""
+    pro = root_file.with_suffix(".kicad_pro")
+    if not pro.exists():
+        return FRAME_MARGIN_MM
+    try:
+        named = json.loads(pro.read_text(encoding="utf-8"))["schematic"].get("page_layout_descr_file", "")
+    except (OSError, ValueError, KeyError, AttributeError, TypeError):
+        return None
+    return FRAME_MARGIN_MM if named == "" else None
+
+
+def _sides(box: Box, w: float, h: float, inset: float, tol: float) -> dict[str, float]:
+    """How far ``box`` reaches past the rectangle ``inset`` inside the page, per side, for the sides over by more than ``tol``."""
+    over = {"left": inset - box[0], "right": box[2] - (w - inset), "top": inset - box[1], "bottom": box[3] - (h - inset)}
+    return {k: se._r(v) for k, v in over.items() if v > tol}
+
+
+def _outside_page(root: Any, margin: float | None, bodies: list[_Body], texts: list[_Text]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """(findings without the sheet name, skipped entries) of the outside_page kind for one sheet."""
+    page = sheet_extents.page_size_mm(root)
+    if page is None:
+        return [], [{"kind": "outside_page", "reason": "paper_unreadable"}]
+    skipped = [{"kind": "outside_page", "reason": "frame_unknown"}] if margin is None else []
+    w, h = page
+    out = []
+    boxes = [(b.item(), b.box, (b.box[0], b.box[1]), BODY_MM, False) for b in bodies] + [(t.item(), t.box, t.at, TEXT_MM, True) for t in texts]
+    for item, box, at, tol, estimated in boxes:
+        over_paper = _sides(box, w, h, 0.0, tol)
+        over_frame = _sides(box, w, h, margin, tol) if margin is not None else {}
+        if over_paper or over_frame:
+            out.append({"kind": "outside_page", "at": se._round_pt(*at), "items": [item], "estimated": estimated,
+                        "fix": "move the item inside the frame (move_symbols, move_labels, move_text or set_property_positions), or set a larger paper with set_paper",
+                        "page_mm": [w, h], "frame_margin_mm": margin, "over_frame_mm": over_frame, "over_paper_mm": over_paper})
+    return out, skipped
+
+
+def _findings(sheet: str, root: Any, margin: float | None, page_check: bool) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     bodies, texts, wires, skipped, junctions = _read(root)
     found: list[dict[str, Any]] = []
 
@@ -243,6 +297,10 @@ def _findings(sheet: str, root: Any) -> tuple[list[dict[str, Any]], list[dict[st
                     add("wire_through_pin", pin, [body.item(), {"kind": "wire", "uuid": se._uuid(node), "points": [se._round_pt(*a), se._round_pt(*b)]}],
                         "split the wire at the pin (delete_wires and add_wires with an end on the pin) or move it clear: "
                         "KiCad joins a pin only to a wire end or a junction", False, pin=se._round_pt(*pin))
+    if page_check:
+        page_found, page_skipped = _outside_page(root, margin, bodies, texts)
+        found += [{"sheet": sheet, **f} for f in page_found]
+        skipped += page_skipped
     return found, skipped
 
 
@@ -253,11 +311,13 @@ def find_overlaps(sch_path: str, kinds: Any = None, root_sch: str | None = None,
         if not isinstance(max_findings, int) or isinstance(max_findings, bool) or not 1 <= max_findings <= MAX_MAX:
             raise SheetAuthoringError("invalid_spec", f"max_findings must be a whole number from 1 to {MAX_MAX}, got {max_findings!r}")
         root_file, tree = field_check._resolve(sch_path, root_sch)
+        page_check = "outside_page" in chosen
+        margin = _frame_margin(root_file) if page_check else None
         everything: list[dict[str, Any]] = []
         skipped: list[dict[str, Any]] = []
         for path in tree.files:
             rel = tree.rel(path)
-            found, skip = _findings(rel, sheet_tree.parsed_sheet(tree, path))
+            found, skip = _findings(rel, sheet_tree.parsed_sheet(tree, path), margin, page_check)
             everything += [f for f in found if f["kind"] in chosen]
             skipped += [{**s, "sheet": rel} for s in skip]
         order = {k: i for i, k in enumerate(KINDS)}
