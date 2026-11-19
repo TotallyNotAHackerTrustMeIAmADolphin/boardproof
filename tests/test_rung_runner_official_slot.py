@@ -92,9 +92,20 @@ def write_index(runs: Path, rows: list[dict]) -> None:
     (runs / "index.jsonl").write_text("".join(json.dumps(r, sort_keys=True) + "\n" for r in rows), encoding="utf-8")
 
 
+# A drive letter starts a path only when no word character precedes it: "https://" ends in "s:/" and is not one.
+_DRIVE_PATH = re.compile(r"(?<![A-Za-z0-9_])[A-Za-z]:[/\x5c]")
+
+
+def test_the_machine_path_pattern_finds_drive_paths_and_not_urls():
+    for path in ("C:/Users/x", "d:" + chr(92) + "work", '"E:/a"', "see (F:" + chr(92) + "a)", "a=G:/b"):
+        assert _DRIVE_PATH.search(path), path
+    for text in ("https://github.com/x", "(https://a.b/c) and http://d", "ids:/x", "key:/value"):
+        assert _DRIVE_PATH.search(text) is None, text
+
+
 def test_the_history_file_is_committed_and_carries_no_machine_path():
     text = Path(rung_runner.HISTORY_FILE).read_text(encoding="utf-8")
-    assert re.search(r"[A-Za-z]:[/\x5c]", text) is None and "/Users/" not in text and "/home/" not in text
+    assert _DRIVE_PATH.search(text) is None and "/Users/" not in text and "/home/" not in text
     assert ".scratch" not in text
     assert all(r["run_dir"].startswith("history/") for r in history_rows() if "run_dir" in r)
 

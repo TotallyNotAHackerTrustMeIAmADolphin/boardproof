@@ -366,12 +366,17 @@ async def flow() -> dict:
                            {}, {"built"})
         if o:
             # placement toolset is lazy-loaded; autoplacement is proposed (never confirmed:
-            # its row-packing ignores the outline) and recorded, then place_footprints places.
+            # the layout below is the owner's, not the packer's) and recorded, then place_footprints
+            # places. Since issue 133 the packer works inside the outline and refuses a proposal that
+            # leaves a part unplaced (does_not_fit), so the mounting holes (fixed by the outline step)
+            # are left out of refs and stay where they are as obstacles; only the parts are proposed, with 1 mm spacing
+            # (the default 2 mm fits nowhere on this 34 x 23 mm board).
             await _call(c, "load_toolset", name="placement")
-            ap = await _call(c, "propose_autoplacement", pcb_path=str(board))
+            ap = await _call(c, "propose_autoplacement", pcb_path=str(board),
+                             refs=[*LAYOUT, DECOUPLING["cap"]], spacing_mm=1.0)
             ch.add("autoplacement_proposal_only", "propose_autoplacement", ap.get("status") == "pending_confirmation",
                    {"status": ap.get("status"), "proposed_positions": ap.get("proposed_positions"),
-                    "note": "not confirmed: heuristic rows start at (0,0) and ignore the outline"})
+                    "note": "not confirmed: the layout below is placed by place_footprints from the owner's table"})
             # copy the revision first: place_footprints edits in place
             placed_dir = RUN / "03_placed"
             shutil.copytree(board.parent, placed_dir)

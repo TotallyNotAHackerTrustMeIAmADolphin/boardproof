@@ -93,7 +93,7 @@ def test_a_change_of_the_kicad_environment_or_executable_misses(kicad_demo, monk
     seen = _count_upgrades(monkeypatch)
     wl.save(wl.load(root), root)
     quiet = len(seen)
-    monkeypatch.setenv("BOARDPROOF_TEST_MARKER", "other")
+    monkeypatch.setenv("KICAD_TEST_MARKER", "other")  # the key covers names starting KICAD or KIPRJMOD (write_layer)
     seen.clear()
     wl.save(wl.load(root), root)
     assert len(seen) > quiet

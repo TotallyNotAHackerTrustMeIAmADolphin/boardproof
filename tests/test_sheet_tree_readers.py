@@ -727,6 +727,7 @@ def test_project_open_is_incomplete_when_a_sheet_is_missing(plain) -> None:
 _DIRECTORY_SCAN_ALLOWED = {
     ("sheet_tree.py", "walk"): "lists unreferenced sheets, never reads them",
     ("gate_state.py", "_scan"): "stats project inputs to stale a verdict; never parses a sheet",
+    ("parts_index_refresh.py", "_check_target"): "only tests whether a folder holds a project file name, to refuse it as a download target; never opens or parses a sheet",
 }
 _LISTING_CALLS = {"iterdir", "scandir", "listdir"}
 _GLOB_CALLS = {"glob", "rglob", "iglob"}
