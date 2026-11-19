@@ -67,6 +67,7 @@ import tempfile
 import threading
 import time
 import uuid
+from collections import Counter
 from collections.abc import Callable, Iterable, Iterator
 from contextlib import contextmanager, ExitStack
 from decimal import Decimal
@@ -828,6 +829,28 @@ def save(root: SExp, path: str | Path, *, verify: Callable[[Path], None] | None 
         )
     temp = _write_temp(serialise(root) + "\n", path)
     return _commit(temp, path, lambda: parse_check(temp, kind, target=path), verify)
+
+
+def layout_normalisation(path: str | Path) -> int:
+    """How many lines the first write of the schematic sheet at ``path`` re-lays out (GitHub issue 216).
+
+    The sheet is read as it is on disk, parsed and serialised the way ``save`` writes it; the number is
+    the lines of the two texts that have no counterpart in the other (lines added plus lines removed,
+    a multiset comparison, linear in the size of the sheet), 0 for a sheet already in KiCad's layout.
+    A file that cannot be read or parsed gives 0: this is a notice, not a check, and the write that
+    follows reports its own error.
+    """
+    nl = chr(10)
+    try:
+        with open(path, encoding="utf-8", newline="") as fh:
+            text = fh.read().replace(chr(13) + nl, nl)
+        expected = serialise(parse_string(text)) + nl
+    except Exception:  # noqa: BLE001 - a notice, not a check: the write reports its own error
+        return 0
+    if text == expected:
+        return 0
+    have, want = Counter(text.split(nl)), Counter(expected.split(nl))
+    return sum(((have - want) + (want - have)).values())
 
 
 def _sheet_pins_with_line_breaks(root: SExp) -> list[str]:

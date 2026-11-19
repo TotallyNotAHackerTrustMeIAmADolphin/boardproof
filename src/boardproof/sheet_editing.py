@@ -858,6 +858,7 @@ def _run(path: Path, root_sch: str | None, mutate, allow: bool, dry_run: bool) -
     tree, standalone = _tree_for(path, root_sch)
     original = write_layer.load(path)
     new = write_layer.load(path)
+    normalised = {} if dry_run else write_layer.layout_normalisation(path)  # issue 216: the first write lays the sheet out
     if original.name != "kicad_sch":
         raise SheetAuthoringError("invalid_spec", f"{path.name} is not a schematic sheet")
     memo: dict[str, dict[str, frozenset]] = {}
@@ -926,6 +927,8 @@ def _run(path: Path, root_sch: str | None, mutate, allow: bool, dry_run: bool) -
             + (_self_check.describe_tree_difference(new, reloaded) or "the node order or the header differs"),
             check="reload_equals_serialised")
     result["written"] = True
+    if normalised:
+        result["layout_normalised"], result["normalised_lines"] = True, normalised
     return result
 
 

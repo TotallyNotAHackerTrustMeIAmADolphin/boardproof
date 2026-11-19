@@ -184,10 +184,12 @@ def _incomplete(reason: str, **extra: Any) -> dict:
 def _carriage_returns(value: Any, where: str) -> list[str]:
     """Paths (``specs[0].text``) of every input string that holds a carriage return.
 
-    kicad_tools up to 0.24.0 writes a ``\\r`` inside a string raw (docs/ARCHITECTURE.md decision 1:
-    escaping is build ticket 42's write layer) and its parser reads it back as a line feed, so
-    the text would not survive (0.25.0 escapes it; the refusal stays, with its backstop in
-    ``_write_schematic_utf8``). The tools refuse such input before loading anything.
+    kicad_tools up to 0.24.0 writes a CR inside a string raw and its parser reads it back as a line feed, so
+    the text would not survive. Since issue 216 ``_schematic_text`` lays the text out through the write layer,
+    which writes the CR as the escape backslash-r (KiCad loads and keeps it, measured on 10.0.7), so a CR no
+    longer reaches the file raw. The up-front refusal stays as the guard for user text (a CR in a label or
+    value is not wanted); the check in ``_write_schematic_utf8`` is a backstop against a regression of the
+    serialiser.
     """
     if isinstance(value, str):
         return [where] if "\r" in value else []
@@ -203,8 +205,8 @@ def _refuse_carriage_returns(value: Any, where: str) -> dict | None:
     if not hits:
         return None
     return _incomplete(
-        f"carriage return in {', '.join(hits)}: kicad_tools writes it unescaped and drops it on "
-        "reload, so the text would not survive; nothing was written"
+        f"carriage return in {', '.join(hits)}: a raw carriage return is refused in schematic text (use a plain "
+        "line break or a space instead); nothing was written"
     )
 
 
@@ -533,8 +535,21 @@ def _old_format_refusal(path: Path) -> dict | None:
 
 
 def _schematic_text(sch: Any) -> str:
-    """kicad_tools' serialisation of ``sch``: the text ``_write_schematic_utf8`` writes."""
-    return sch.to_sexp()
+    """The text ``_write_schematic_utf8`` writes: kicad_tools' tokens in the write layer's KiCad layout.
+
+    GitHub issue 216: kicad_tools' own ``to_sexp()`` line breaking differs from KiCad's (issue 194), and a
+    tool that wrote it as it was flipped a KiCad-saved sheet by about 3000 lines. Every write path starts
+    from this text, so one serialiser lays out every sheet we write.
+    """
+    return write_layer.serialise(write_layer.parse_string(sch.to_sexp())) + chr(10)
+
+
+def _layout_notice(path: Path) -> dict:
+    """``{"layout_normalised": True, "normalised_lines": N}`` when the sheet on disk is not in KiCad's layout (the
+    first write of such a sheet lays all of it out; GitHub issue 216), else ``{}`` (the keys are absent). Call it
+    before the write: afterwards the sheet is in the layout."""
+    lines = write_layer.layout_normalisation(path)
+    return {"layout_normalised": True, "normalised_lines": lines} if lines else {}
 
 
 class SchematicWriteNotVerified(RuntimeError):
@@ -1501,6 +1516,10 @@ def build(mcp: MCPServer) -> list[str]:
         also sits on the parent, a hierarchical pin) and a join may show as a rename. Net names are kicad-cli's choice
         (a second label with another name on a net that already has one leaves the old name: no change is shown).
         Repeat the call without dry_run to write.
+
+        A sheet that was in another layout than KiCad's is laid out in KiCad's layout as a whole by its first write; the
+        result of that write then carries layout_normalised: true and normalised_lines: N (the lines that changed, a
+        count, not an error), and both keys are absent when the sheet already had KiCad's layout and for a dry run.
         """
         path = Path(sch_path)
         if not path.is_file():
@@ -1546,6 +1565,7 @@ def build(mcp: MCPServer) -> list[str]:
                 )
                 placed.append(instance.reference)
             stage: dict = {}
+            notice = {} if dry_run else _layout_notice(path)
             instance_data = _write_schematic_utf8(sch, path, added_refs=set(placed), reattach=True,
                                   mirrors=[spec.get("mirror", "") for spec in specs], old_uuids=before_uuids,
                                   field_overrides=_library_field_overrides(specs), hide_power_references=True, dry_run=dry_run, report=stage)
@@ -1573,7 +1593,7 @@ def build(mcp: MCPServer) -> list[str]:
                   "grid_note": "Positions are NOT snapped to the grid unless a spec says \"snap\": true; "
                                "off_grid_pins lists the pin numbers whose point is off the grid. "
                                "Wire by pin with connect_pins.",
-                  "nets": stage["nets"], "written": not dry_run}
+                  "nets": stage["nets"], "written": not dry_run, **notice}
         return _as_dry_run(result, {"placed": "would_place"}) if dry_run else result
 
     def add_wires(sch_path: str, specs: list[dict], dry_run: bool = False) -> dict:
@@ -1647,6 +1667,10 @@ def build(mcp: MCPServer) -> list[str]:
         also sits on the parent, a hierarchical pin) and a join may show as a rename. Net names are kicad-cli's choice
         (a second label with another name on a net that already has one leaves the old name: no change is shown).
         Repeat the call without dry_run to write.
+
+        A sheet that was in another layout than KiCad's is laid out in KiCad's layout as a whole by its first write; the
+        result of that write then carries layout_normalised: true and normalised_lines: N (the lines that changed, a
+        count, not an error), and both keys are absent when the sheet already had KiCad's layout and for a dry run.
         """
         path = Path(sch_path)
         if not path.is_file():
@@ -1707,8 +1731,10 @@ def build(mcp: MCPServer) -> list[str]:
                 errors.append({"index": i, "reason": str(exc)})
 
         stage: dict = {}
+        notice: dict = {}
         if added:
             try:
+                notice = {} if dry_run else _layout_notice(path)
                 _write_schematic_utf8(sch, path, dry_run=dry_run, report=stage)
             except SchematicWriteNotVerified as exc:
                 return {**_not_verified_result(exc), "errors": errors}
@@ -1722,7 +1748,7 @@ def build(mcp: MCPServer) -> list[str]:
                 return _as_dry_run({**empty, "would_add": {"wires": 0, "segments": 0}}, {}) if dry_run else empty
             return _incomplete("no wires could be added", errors=errors, count=0, segments=0)
         result = {"status": "partial" if errors else "ok", "count": added, "segments": segments,
-                  "grid": grid, "snapped": snapped, "landed_on_pin": landed, "nets": stage["nets"], "written": not dry_run}
+                  "grid": grid, "snapped": snapped, "landed_on_pin": landed, "nets": stage["nets"], "written": not dry_run, **notice}
         if errors:
             result["errors"] = errors
         if dry_run:
@@ -1744,6 +1770,10 @@ def build(mcp: MCPServer) -> list[str]:
 
         Refuses with file_open_in_kicad, naming the lock file, while KiCad holds a lock file for a file
         it would write; close the file in KiCad, then retry.
+
+        A sheet that was in another layout than KiCad's is laid out in KiCad's layout as a whole by its first write; the
+        result of that write then carries layout_normalised: true and normalised_lines: N (the lines that changed, a
+        count, not an error), and both keys are absent when the sheet already had KiCad's layout and for a dry run.
         """
         path = Path(sch_path)
         if not path.is_file():
@@ -1756,6 +1786,7 @@ def build(mcp: MCPServer) -> list[str]:
             sch = Schematic.load(path)
             for x, y in points:
                 sch.add_junction(x, y)
+            notice = _layout_notice(path)
             _write_schematic_utf8(sch, path)
         except SchematicWriteNotVerified as exc:
             return _not_verified_result(exc)
@@ -1763,7 +1794,7 @@ def build(mcp: MCPServer) -> list[str]:
             if (locked := write_layer.as_lock_refusal(exc)) is not None:
                 return locked
             return _incomplete(f"could not add junctions: {exc}")
-        return {"status": "ok", "count": len(points)}
+        return {"status": "ok", "count": len(points), **notice}
 
     def add_labels(sch_path: str, specs: list[dict], dry_run: bool = False) -> dict:
         """Add one or more labels/power symbols/no-connects to an existing
@@ -1815,6 +1846,10 @@ def build(mcp: MCPServer) -> list[str]:
         also sits on the parent, a hierarchical pin) and a join may show as a rename. Net names are kicad-cli's choice
         (a second label with another name on a net that already has one leaves the old name: no change is shown).
         Repeat the call without dry_run to write.
+
+        A sheet that was in another layout than KiCad's is laid out in KiCad's layout as a whole by its first write; the
+        result of that write then carries layout_normalised: true and normalised_lines: N (the lines that changed, a
+        count, not an error), and both keys are absent when the sheet already had KiCad's layout and for a dry run.
         """
         path = Path(sch_path)
         if not path.is_file():
@@ -1870,6 +1905,7 @@ def build(mcp: MCPServer) -> list[str]:
             # only a power symbol carries instance data; labels, markers and wires do not, so a call without one
             # does not depend on the project's sheet tree
             stage: dict = {}
+            notice = {} if dry_run else _layout_notice(path)
             instance_data = _write_schematic_utf8(sch, path, reattach=bool(power_ids), old_uuids=before_uuids,
                                                   hide_power_references=bool(power_ids), dry_run=dry_run, report=stage)
         except SchematicWriteNotVerified as exc:
@@ -1881,7 +1917,7 @@ def build(mcp: MCPServer) -> list[str]:
                 return locked
             return _incomplete(f"could not add labels: {exc}")
         result = {"status": "ok", "placed": placed, "count": len(placed), "grid": grid, "snapped": snapped, "landed_on_pin": landed,
-                  "instance_data": instance_data, "nets": stage["nets"], "written": not dry_run}
+                  "instance_data": instance_data, "nets": stage["nets"], "written": not dry_run, **notice}
         return _as_dry_run(result, {"placed": "would_place"}) if dry_run else result
 
     def assign_footprints(sch_path: str, mapping: dict[str, str]) -> dict:
@@ -2318,6 +2354,10 @@ def build(mcp: MCPServer) -> list[str]:
 
         Returns deleted (reference, uuid, lib_id, at), count, dangling_after, dangling_removed, connectivity (nets_before,
         nets_after, changed, changes) and written.
+
+        A sheet that was in another layout than KiCad's is laid out in KiCad's layout as a whole by its first write; the
+        result of that write then carries layout_normalised: true and normalised_lines: N (the lines that changed, a
+        count, not an error), and both keys are absent when the sheet already had KiCad's layout and for a dry run.
         """
         from boardproof import sheet_editing
 
@@ -2359,6 +2399,10 @@ def build(mcp: MCPServer) -> list[str]:
 
         Returns deleted (uuid, points), count, dangling_after, dangling_removed, connectivity (nets_before,
         nets_after, changed, changes) and written.
+
+        A sheet that was in another layout than KiCad's is laid out in KiCad's layout as a whole by its first write; the
+        result of that write then carries layout_normalised: true and normalised_lines: N (the lines that changed, a
+        count, not an error), and both keys are absent when the sheet already had KiCad's layout and for a dry run.
         """
         from boardproof import sheet_editing
 
@@ -2400,6 +2444,10 @@ def build(mcp: MCPServer) -> list[str]:
 
         Returns deleted (text, kind, uuid, at), count, dangling_after, dangling_removed, connectivity (nets_before,
         nets_after, changed, changes) and written.
+
+        A sheet that was in another layout than KiCad's is laid out in KiCad's layout as a whole by its first write; the
+        result of that write then carries layout_normalised: true and normalised_lines: N (the lines that changed, a
+        count, not an error), and both keys are absent when the sheet already had KiCad's layout and for a dry run.
         """
         from boardproof import sheet_editing
 
@@ -2441,6 +2489,10 @@ def build(mcp: MCPServer) -> list[str]:
 
         Returns deleted (uuid, at), count, dangling_after, dangling_removed, connectivity (nets_before,
         nets_after, changed, changes) and written.
+
+        A sheet that was in another layout than KiCad's is laid out in KiCad's layout as a whole by its first write; the
+        result of that write then carries layout_normalised: true and normalised_lines: N (the lines that changed, a
+        count, not an error), and both keys are absent when the sheet already had KiCad's layout and for a dry run.
         """
         from boardproof import sheet_editing
 
@@ -2490,6 +2542,10 @@ def build(mcp: MCPServer) -> list[str]:
         silenced_other_erc (count and pins of the types input and power_in: a marker also silences
         pin_not_driven or power_pin_not_driven for that pin), connected_pins_left_alone,
         connectivity (nets_before, nets_after, changed, changes) and written.
+
+        A sheet that was in another layout than KiCad's is laid out in KiCad's layout as a whole by its first write; the
+        result of that write then carries layout_normalised: true and normalised_lines: N (the lines that changed, a
+        count, not an error), and both keys are absent when the sheet already had KiCad's layout and for a dry run.
         """
         from boardproof import no_connects
 
@@ -2522,6 +2578,10 @@ def build(mcp: MCPServer) -> list[str]:
 
         Returns deleted (uuid, at), count, dangling_after, connectivity (nets_before, nets_after, changed,
         changes) and written.
+
+        A sheet that was in another layout than KiCad's is laid out in KiCad's layout as a whole by its first write; the
+        result of that write then carries layout_normalised: true and normalised_lines: N (the lines that changed, a
+        count, not an error), and both keys are absent when the sheet already had KiCad's layout and for a dry run.
         """
         from boardproof import sheet_editing
 
@@ -2573,6 +2633,10 @@ def build(mcp: MCPServer) -> list[str]:
 
         Refuses with file_open_in_kicad, naming the lock file, while KiCad holds a lock file for a file
         it would write; close the file in KiCad, then retry.
+
+        A sheet that was in another layout than KiCad's is laid out in KiCad's layout as a whole by its first write; the
+        result of that write then carries layout_normalised: true and normalised_lines: N (the lines that changed, a
+        count, not an error), and both keys are absent when the sheet already had KiCad's layout and for a dry run.
         """
         from boardproof import sheet_editing
 
@@ -2606,6 +2670,10 @@ def build(mcp: MCPServer) -> list[str]:
 
         Refuses with file_open_in_kicad, naming the lock file, while KiCad holds a lock file for a file
         it would write; close the file in KiCad, then retry.
+
+        A sheet that was in another layout than KiCad's is laid out in KiCad's layout as a whole by its first write; the
+        result of that write then carries layout_normalised: true and normalised_lines: N (the lines that changed, a
+        count, not an error), and both keys are absent when the sheet already had KiCad's layout and for a dry run.
         """
         from boardproof import sheet_editing
 
@@ -2650,6 +2718,10 @@ def build(mcp: MCPServer) -> list[str]:
 
         Refuses with file_open_in_kicad, naming the lock file, while KiCad holds a lock file for a file
         it would write; close the file in KiCad, then retry.
+
+        A sheet that was in another layout than KiCad's is laid out in KiCad's layout as a whole by its first write; the
+        result of that write then carries layout_normalised: true and normalised_lines: N (the lines that changed, a
+        count, not an error), and both keys are absent when the sheet already had KiCad's layout and for a dry run.
         """
         from boardproof import sheet_editing
 
@@ -2777,6 +2849,10 @@ def build(mcp: MCPServer) -> list[str]:
 
         Returns added (uuid, text, at, rotation, size, justify, asked, snapped), count, grid, warnings,
         connectivity (nets_before, nets_after, changed, changes) and written.
+
+        A sheet that was in another layout than KiCad's is laid out in KiCad's layout as a whole by its first write; the
+        result of that write then carries layout_normalised: true and normalised_lines: N (the lines that changed, a
+        count, not an error), and both keys are absent when the sheet already had KiCad's layout and for a dry run.
         """
         from boardproof import add_text as add_text_module
 
@@ -2823,6 +2899,10 @@ def build(mcp: MCPServer) -> list[str]:
 
         Returns moved (uuid, kind, text, from, to, rotation_from, rotation, asked, snapped), count, grid,
         snapped, page_mm, outside_page_after, connectivity (nets_before, nets_after, changed, changes) and written.
+
+        A sheet that was in another layout than KiCad's is laid out in KiCad's layout as a whole by its first write; the
+        result of that write then carries layout_normalised: true and normalised_lines: N (the lines that changed, a
+        count, not an error), and both keys are absent when the sheet already had KiCad's layout and for a dry run.
         """
         from boardproof import text_edit
 
@@ -2854,6 +2934,10 @@ def build(mcp: MCPServer) -> list[str]:
 
         Returns deleted (uuid, kind, text, at, rotation), count, connectivity (nets_before, nets_after, changed,
         changes) and written.
+
+        A sheet that was in another layout than KiCad's is laid out in KiCad's layout as a whole by its first write; the
+        result of that write then carries layout_normalised: true and normalised_lines: N (the lines that changed, a
+        count, not an error), and both keys are absent when the sheet already had KiCad's layout and for a dry run.
         """
         from boardproof import text_edit
 
@@ -2915,6 +2999,10 @@ def build(mcp: MCPServer) -> list[str]:
         Returns created (copies [{copy, offset, references {old: new}, labels {old: new}}], objects, count),
         group, pitch, grid, numbered_labels, sheet_uses, netlist (checked, nets_before, nets_after, new_nets,
         joined_existing_nets, new_components), connectivity and written.
+
+        A sheet that was in another layout than KiCad's is laid out in KiCad's layout as a whole by its first write; the
+        result of that write then carries layout_normalised: true and normalised_lines: N (the lines that changed, a
+        count, not an error), and both keys are absent when the sheet already had KiCad's layout and for a dry run.
         """
         from boardproof import sheet_replicate
 
@@ -2948,6 +3036,10 @@ def build(mcp: MCPServer) -> list[str]:
 
         Refuses with file_open_in_kicad, naming the lock file, while KiCad holds a lock file for a file
         it would write; close the file in KiCad, then retry.
+
+        A sheet that was in another layout than KiCad's is laid out in KiCad's layout as a whole by its first write; the
+        result of that write then carries layout_normalised: true and normalised_lines: N (the lines that changed, a
+        count, not an error), and both keys are absent when the sheet already had KiCad's layout and for a dry run.
         """
         from boardproof import sheet_editing
 
@@ -3000,6 +3092,10 @@ def build(mcp: MCPServer) -> list[str]:
         Returns groups (per group: edge, reference, target, items with edge_before, edge_after, residual,
         moved, snapped; max_residual; aligned), moved, followed, slanted, connectivity and written. Wires and
         junctions as items to align are not supported.
+
+        A sheet that was in another layout than KiCad's is laid out in KiCad's layout as a whole by its first write; the
+        result of that write then carries layout_normalised: true and normalised_lines: N (the lines that changed, a
+        count, not an error), and both keys are absent when the sheet already had KiCad's layout and for a dry run.
         """
         from boardproof import sheet_align
 
@@ -3052,6 +3148,10 @@ def build(mcp: MCPServer) -> list[str]:
         Returns grid, kinds, count, moved (symbol: reference, from, to, shift, pins; wire: was, now; other
         points: from, to), found_off_grid and already_on_grid (counts per kind), unsnappable, slanted,
         connectivity (nets_before, nets_after, changed, changes) and written.
+
+        A sheet that was in another layout than KiCad's is laid out in KiCad's layout as a whole by its first write; the
+        result of that write then carries layout_normalised: true and normalised_lines: N (the lines that changed, a
+        count, not an error), and both keys are absent when the sheet already had KiCad's layout and for a dry run.
         """
         from boardproof import sheet_grid
 
@@ -3082,6 +3182,10 @@ def build(mcp: MCPServer) -> list[str]:
 
         Returns groups (order, items with centre_before, centre_after, moved, snapped), moved, followed,
         slanted, connectivity and written. Wires and junctions as items are not supported.
+
+        A sheet that was in another layout than KiCad's is laid out in KiCad's layout as a whole by its first write; the
+        result of that write then carries layout_normalised: true and normalised_lines: N (the lines that changed, a
+        count, not an error), and both keys are absent when the sheet already had KiCad's layout and for a dry run.
         """
         from boardproof import sheet_align
 
@@ -3135,6 +3239,10 @@ def build(mcp: MCPServer) -> list[str]:
         Returns rotated (per symbol: reference, uuid, unit, at, before and after {rotation, mirror}, changed,
         pins with was and now, property_texts with was and now, off_grid_pins), unchanged, followed, slanted,
         dangling_created, grid, connectivity and written.
+
+        A sheet that was in another layout than KiCad's is laid out in KiCad's layout as a whole by its first write; the
+        result of that write then carries layout_normalised: true and normalised_lines: N (the lines that changed, a
+        count, not an error), and both keys are absent when the sheet already had KiCad's layout and for a dry run.
         """
         from boardproof import sheet_orient
 
@@ -3168,6 +3276,10 @@ def build(mcp: MCPServer) -> list[str]:
 
         Returns mirrored (per symbol: reference, uuid, unit, at, before and after {rotation, mirror}, axis,
         pins, property_texts, off_grid_pins), followed, slanted, dangling_created, grid, connectivity and written.
+
+        A sheet that was in another layout than KiCad's is laid out in KiCad's layout as a whole by its first write; the
+        result of that write then carries layout_normalised: true and normalised_lines: N (the lines that changed, a
+        count, not an error), and both keys are absent when the sheet already had KiCad's layout and for a dry run.
         """
         from boardproof import sheet_orient
 
@@ -3220,6 +3332,10 @@ def build(mcp: MCPServer) -> list[str]:
 
         Refuses with file_open_in_kicad, naming the lock file, while KiCad holds a lock file for a file
         it would write; close the file in KiCad, then retry.
+
+        A sheet that was in another layout than KiCad's is laid out in KiCad's layout as a whole by its first write; the
+        result of that write then carries layout_normalised: true and normalised_lines: N (the lines that changed, a
+        count, not an error), and both keys are absent when the sheet already had KiCad's layout and for a dry run.
         """
         from boardproof import sheet_editing
 
@@ -3273,6 +3389,10 @@ def build(mcp: MCPServer) -> list[str]:
 
         Returns refreshed (per library symbol: placed_symbols and per placed symbol the pins moved, changed and
         added), unchanged, skipped, lib_name_symbols_left, count, erc, connectivity and written.
+
+        A sheet that was in another layout than KiCad's is laid out in KiCad's layout as a whole by its first write; the
+        result of that write then carries layout_normalised: true and normalised_lines: N (the lines that changed, a
+        count, not an error), and both keys are absent when the sheet already had KiCad's layout and for a dry run.
         """
         from boardproof import lib_refresh
 
@@ -3343,6 +3463,10 @@ def build(mcp: MCPServer) -> list[str]:
 
         Refuses with file_open_in_kicad, naming the lock file, while KiCad holds a lock file for a file
         it would write; close the file in KiCad, then retry.
+
+        A sheet that was in another layout than KiCad's is laid out in KiCad's layout as a whole by its first write; the
+        result of that write then carries layout_normalised: true and normalised_lines: N (the lines that changed, a
+        count, not an error), and both keys are absent when the sheet already had KiCad's layout and for a dry run.
         """
         from boardproof import sheet_editing
 
@@ -3522,6 +3646,10 @@ def build(mcp: MCPServer) -> list[str]:
 
         Refuses with file_open_in_kicad, naming the lock file, while KiCad holds a lock file for a file
         it would write; close the file in KiCad, then retry.
+
+        A sheet that was in another layout than KiCad's is laid out in KiCad's layout as a whole by its first write; the
+        result of that write then carries layout_normalised: true and normalised_lines: N (the lines that changed, a
+        count, not an error), and both keys are absent when the sheet already had KiCad's layout and for a dry run.
         """
         return pin_wiring.connect_pins(sch_path, connections, root_sch, snap=snap, grid=grid,
                                        allow_connectivity_change=allow_connectivity_change, dry_run=dry_run)

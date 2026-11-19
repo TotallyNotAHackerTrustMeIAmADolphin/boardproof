@@ -14,7 +14,6 @@ import ast
 import shutil
 from pathlib import Path
 
-import kicad_tools
 import pytest
 from mcp.server.mcpserver import MCPServer
 
@@ -600,38 +599,28 @@ def test_a_synthesized_power_symbol_is_refused_and_nothing_is_written(tmp_path):
     assert sorted(p.name for p in tmp_path.iterdir()) == ["sch.kicad_sch"], "no sidecar or temporary file"
 
 
-def test_the_writer_refuses_a_carriage_return_in_the_serialised_text_before_writing(tmp_path, monkeypatch):
-    # Build ticket 60: the backstop behind the tools' up-front input check. A \r that reached
-    # the in-memory schematic another way (here kicad_tools' own add_label) must be refused
-    # before any file is written; the read-back alone would catch it only after a write.
+def test_a_carriage_return_that_reaches_the_in_memory_schematic_is_written_escaped_and_kicad_keeps_it(tmp_path):
+    # Build ticket 60, reworded by issue 216. A CR that reached the in-memory schematic another way (here
+    # kicad_tools' own add_label; the tools refuse it up front, see below) used to make kicad_tools'
+    # to_sexp() hold a raw CR (0.24), which the writer refused. _schematic_text now re-serialises through
+    # the write layer, which writes the CR as the escape backslash-r, as KiCad does: the sheet is written,
+    # holds no raw CR inside the string, and kicad-cli loads it and saves the same escape back (measured, 10.0.7).
     from kicad_tools.schematic.models.schematic import Schematic
 
+    from tests.test_write_layer import _upgrade
+
+    escaped = '(label "A' + chr(92) + 'rB"'
     dest = tmp_path / "sch.kicad_sch"
     shutil.copy(FIXTURE, dest)
-    before = dest.read_bytes()
     sch = Schematic.load(dest)
     sch.add_label("A\rB", 220, 100)
-    if tuple(int(p) for p in kicad_tools.__version__.split(".")[:2]) >= (0, 25):
-        # 0.25.0 escapes the CR itself, so this path cannot reach the backstop any more; the
-        # backstop stays for a library that writes it raw (up to 0.24).
-        assert "\r" not in sch.to_sexp() and "A\\rB" in sch.to_sexp()
-        return
-    assert "\r" in sch.to_sexp(), "the precondition: kicad_tools serialises the \\r raw"
-    writes: list[Path] = []
-    real_write_text = Path.write_text
-
-    def spy_write_text(self, *args, **kwargs):
-        writes.append(Path(self))
-        return real_write_text(self, *args, **kwargs)
-
-    monkeypatch.setattr(Path, "write_text", spy_write_text)
-    with pytest.raises(ValueError, match="carriage return"):
-        schematic_toolset._write_schematic_utf8(sch, dest)
-    monkeypatch.undo()
-
-    assert writes == [], "refused before any temporary file was written"
-    assert dest.read_bytes() == before
-    assert sorted(p.name for p in tmp_path.iterdir()) == ["sch.kicad_sch"]
+    assert escaped in schematic_toolset._schematic_text(sch), "the CR is the two-character escape in the text to write"
+    assert '(label "A\rB"' not in schematic_toolset._schematic_text(sch)
+    schematic_toolset._write_schematic_utf8(sch, dest)
+    assert escaped in dest.read_bytes().decode("utf-8")
+    proc = _upgrade(dest, "sch")
+    assert proc.returncode == 0, (proc.stdout, proc.stderr)
+    assert escaped in dest.read_bytes().decode("utf-8"), "kicad-cli keeps the escape"
 
 
 def test_the_paper_is_still_auto_sized_like_schematic_write(tmp_path, sch_tools):
@@ -672,8 +661,8 @@ def test_a_carriage_return_in_input_text_is_refused_up_front(tmp_path, sch_tools
 
 
 def test_the_carriage_return_backstop_fires_on_any_kicad_tools_version(tmp_path, monkeypatch):
-    # Issue 48: the test above returns early on kicad-tools 0.25+, where the CR is escaped and
-    # the backstop is unreachable. Here the serialised text is made to hold a raw CR directly
+    # Issue 48, issue 216: the text is laid out by the write layer, so the backstop is unreachable with
+    # any kicad_tools version and stays against a regression of the serialiser. Here the serialised text is made to hold a raw CR directly
     # (what a library that writes it raw would produce), so the backstop is exercised on every version.
     from kicad_tools.schematic.models.schematic import Schematic
 
