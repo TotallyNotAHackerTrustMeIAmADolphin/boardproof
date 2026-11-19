@@ -40,8 +40,14 @@ async def test_propose_board_rules_text_and_schema_name_the_pair_rules() -> None
         "silently ignores a whole rules file",
         "refuses (the source stays untouched)",
         "report_clearance_coverage",
-        "A pair rule never reaches a router: Freerouting does not read the .kicad_dru",
+        "Freerouting does not read the .kicad_dru itself",
+        "the plain two-class pair rules of the managed block are passed to Freerouting as class_class rules",
+        "applied_pair_rules and pairs_not_applied",
+        "unrouted nets may follow",
+        "the kicad_routing_tools backend and hand-written rules never reach a router",
         "kicad-cli DRC flags that copper afterwards",
+        "never the router's own report",
+        "measured on one 5-net board with Freerouting 2.5.0: the routed copper then kept the pair clearance, except pad-to-pad at fixed input geometry, at the price of more unrouted nets",
     ):
         assert phrase in text, phrase
     assert ".kicad_dru included" in confirm.description
@@ -65,7 +71,11 @@ async def test_report_clearance_coverage_is_a_read_only_verification_tool() -> N
         "rules_file_loaded_by_kicad",
         "may_be_overridden_by",
         "is not a verdict on the board (verify_board is)",
-        "No router reads these rules: Freerouting does not see the .kicad_dru",
+        "Freerouting does not see the .kicad_dru itself",
+        "the plain two-class pair rules of the managed block are passed to Freerouting as class_class rules",
+        "the kicad_routing_tools backend and hand-written rules never reach a router",
+        "never the router's own report",
+        "measured on one 5-net board: the routed copper then kept the pair clearance, except pad-to-pad at fixed input geometry, at the price of more unrouted nets",
     ):
         assert phrase in text, phrase
 

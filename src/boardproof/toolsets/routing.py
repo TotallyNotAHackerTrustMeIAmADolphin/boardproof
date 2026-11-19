@@ -594,6 +594,186 @@ def snapshot_board(pcb_path: str | Path, work_dir: str | Path) -> dict:
     return {"source_pcb": str(pcb_path), "snapshot_pcb": str(snapshot), "source_sha256": _board_digest(snapshot)}
 
 
+# --- pair clearances as DSN class_class rules (issue 212, measured in issue 207) ---------------------
+
+# Millimetres to the DSN's own ``(unit ...)``. A rule value is in the same unit as the DSN's other lengths
+# as KiCad writes them (measured: KiCad writes ``(unit um)`` and ``(clearance 200)`` for 0.2 mm, and
+# ``(clearance 600)`` held 0.6 mm); Freerouting scales it with the resolution like its coordinates and widths.
+_DSN_UNIT_PER_MM = {"um": 1000.0, "mm": 1.0, "cm": 0.1, "mil": 1.0 / 0.0254, "inch": 1.0 / 25.4}
+_PLAIN_CLASS_NAME = re.compile(r"[^\s()\"']+")
+_DSN_UNIT = re.compile(r"\(unit\s+([A-Za-z]+)\s*\)")
+_DSN_CLASS = re.compile(r"\(class\s+(\"[^\"]*\"|[^\s()\"]+)")
+_DSN_CLASS_CLASS = re.compile(r"\(class_class\s+\(classes\s+(\"[^\"]*\"|[^\s()\"]+)\s+(\"[^\"]*\"|[^\s()\"]+)\s*\)")
+_DEFAULT_DSN_CLASS = "kicad_default"
+
+
+def _mask_strings(text: str) -> str:
+    """``text`` with the inside of every double-quoted string replaced by ``x`` (same length, so offsets
+    carry over): parentheses and ``(class`` inside a net name are not structure."""
+    # ``(string_quote ")`` names the quote character: its lone quote opens no string
+    return re.sub(r'\(string_quote\s*\S\)|"[^"]*"',
+                  lambda m: m.group(0) if m.group(0).startswith("(") else '"' + "x" * (len(m.group(0)) - 2) + '"', text)
+
+
+def _dsn_number(value: float) -> str:
+    return f"{round(value, 6):.6f}".rstrip("0").rstrip(".")
+
+
+def _network_span(masked: str) -> tuple[int, int] | None:
+    """``(start, end)`` of the ``(network ...)`` section, ``end`` the offset of its closing parenthesis."""
+    found = re.search(r"\(network\b", masked)
+    if not found:
+        return None
+    depth = 0
+    for i in range(found.start(), len(masked)):
+        if masked[i] == "(":
+            depth += 1
+        elif masked[i] == ")":
+            depth -= 1
+            if depth == 0:
+                return found.start(), i
+    return None
+
+
+def add_class_class_rules(dsn_text: str, pairs: dict[tuple[str, str], float]) -> tuple[str, dict]:
+    """``dsn_text`` with one ``(class_class (classes A B) (rule (clearance N)))`` per pair of ``pairs``
+    (``{(class a, class b): mm}``, the managed ``.kicad_dru`` block's plain two-class form) inside
+    ``(network`` after its last item, before ``(wiring``. Returns ``(text, report)``; report is
+    ``{"applied_pair_rules": [...], "pairs_not_applied": [...]}``.
+
+    ``Default`` is KiCad's name for the default class and ``kicad_default`` the exporter's. A pair is
+    applied only when both classes are ``(class NAME`` of the export (an unknown name changes nothing in
+    Freerouting, measured, so it is reported instead) and are plain words (quoted names, and a class
+    paired with itself, were not measured); N is the clearance in the DSN's ``(unit ...)``. Freerouting
+    2.5.0 reads only the first class against each later one of a ``(classes ...)`` list, hence one rule
+    per pair. A pair the DSN already has a rule for is left alone. A pair not applied is
+    ``{"a", "b", "clearance_mm", "code": "pair_not_applied", "reason"}``. A router's own report of the
+    result stays no evidence; DRC is the measure."""
+    report: dict = {"applied_pair_rules": [], "pairs_not_applied": []}
+    if not pairs:
+        return dsn_text, report
+    masked = _mask_strings(dsn_text)
+    span = _network_span(masked)
+
+    def refuse(a: str, b: str, mm: float, reason: str) -> None:
+        report["pairs_not_applied"].append(
+            {"a": a, "b": b, "clearance_mm": mm, "code": "pair_not_applied", "reason": reason})
+
+    unit_match = _DSN_UNIT.search(masked[: span[0]] if span else masked)
+    unit = unit_match.group(1).lower() if unit_match else None
+    problem = None
+    if span is None:
+        problem = "the DSN has no (network section"
+    elif unit not in _DSN_UNIT_PER_MM:
+        problem = (f"the DSN's (unit ...) is {unit!r}, not one of {sorted(_DSN_UNIT_PER_MM)}" if unit
+                   else "the DSN has no (unit ...) line")
+    if problem:
+        for (a, b), mm in pairs.items():
+            refuse(a, b, mm, problem)
+        return dsn_text, report
+    assert span is not None and unit is not None
+    network = masked[span[0]: span[1]]
+
+    def raw(m: re.Match, group: int) -> str:
+        return dsn_text[span[0] + m.start(group): span[0] + m.end(group)]
+
+    classes = {raw(m, 1) for m in _DSN_CLASS.finditer(network)}
+    existing = {frozenset((raw(m, 1), raw(m, 2))) for m in _DSN_CLASS_CLASS.finditer(network)}
+
+    nl = "\r\n" if "\r\n" in dsn_text else "\n"
+    lines: list[str] = []
+    for (a, b), mm in pairs.items():
+        names = [_DEFAULT_DSN_CLASS if n == "Default" else n for n in (a, b)]
+        odd = [n for n in (a, b) if not _PLAIN_CLASS_NAME.fullmatch(n)]
+        missing = [n for n, d in zip((a, b), names, strict=True) if d not in classes]
+        if odd:
+            refuse(a, b, mm, f"class name {odd[0]!r} is not a plain word; quoted class names were not measured")
+        elif names[0] == names[1]:
+            refuse(a, b, mm, "a pair of a class with itself was not measured")
+        elif missing:
+            refuse(a, b, mm, f"class {missing[0]!r} is not a (class ...) of the exported DSN")
+        elif frozenset(names) in existing:
+            refuse(a, b, mm, "the DSN already holds a class_class rule for this pair")
+        else:
+            value = mm * _DSN_UNIT_PER_MM[unit]
+            existing.add(frozenset(names))
+            lines += [
+                "    (class_class", f"      (classes {names[0]} {names[1]})", "      (rule",
+                f"        (clearance {_dsn_number(value)})", "      )", "    )",
+            ]
+            report["applied_pair_rules"].append(
+                {"a": a, "b": b, "clearance_mm": mm, "dsn_classes": names,
+                 "dsn_clearance": float(_dsn_number(value)), "dsn_unit": unit})
+    if not lines:
+        return dsn_text, report
+    close = span[1]
+    line_start = dsn_text.rfind("\n", 0, close) + 1
+    block = nl.join(lines) + nl
+    if dsn_text[line_start:close].strip():  # the closing parenthesis shares its line with something
+        return dsn_text[:close] + nl + block + dsn_text[close:], report
+    return dsn_text[:line_start] + block + dsn_text[line_start:], report
+
+
+def managed_pair_clearances(pcb_path: str | Path) -> tuple[dict[tuple[str, str], float], list[str]]:
+    """``(pairs, problems)`` of the managed block in the board's ``.kicad_dru``, read and never written;
+    no file or no block is ``({}, [])``, a hand-edited block or a file that is not UTF-8 is no pairs
+    and the problems (the router then gets nothing from it)."""
+    from boardproof import dru
+
+    path = Path(pcb_path).with_suffix(dru.DRU_SUFFIX)
+    if not path.is_file():
+        return {}, []
+    try:
+        text = path.read_bytes().decode("utf-8")
+    except UnicodeDecodeError as exc:
+        return {}, [f"{path.name} is not UTF-8 text ({exc})"]
+    if dru.BLOCK_BEGIN not in text and dru.BLOCK_END not in text:
+        return {}, []
+    block = dru.split_block(text)
+    if block is None:
+        return {}, []
+    return ({}, list(block[3])) if block[3] else (dict(block[2]), [])
+
+
+def pair_rules_note(pair_rules: dict | None) -> str | None:
+    """The sentence a route result carries about ``export_dsn_with_kicad``'s ``pair_rules`` (None when
+    there were none)."""
+    if not pair_rules:
+        return None
+    applied, refused, problems = (pair_rules.get(k) or [] for k in ("applied_pair_rules", "pairs_not_applied", "problems"))
+    parts = []
+    if applied:
+        parts.append(f"{len(applied)} pair clearance(s) of the board's .kicad_dru were handed to Freerouting as class_class "
+                     "rules (applied_pair_rules); the router may keep them by leaving nets unrouted, so unrouted nets "
+                     "can follow from them")
+    if refused or problems:
+        parts.append(f"{len(refused)} pair(s) not applied and {len(problems)} rules-file problem(s) (pairs_not_applied, "
+                     "problems): the router does not see those, and DRC flags copper closer than the rule")
+    if not parts:
+        return None
+    return "; ".join(parts) + ". Freerouting's own report is no evidence either way: kicad-cli DRC and verify_board are the measure."
+
+
+def _patch_dsn_with_pair_rules(dsn: Path, pcb_path: Path) -> dict:
+    """Add the managed pair clearances of ``pcb_path``'s ``.kicad_dru`` to the exported ``dsn`` (see
+    ``add_class_class_rules``). The DSN is rewritten only when a rule was added; the rules file is
+    only read. ``{"applied_pair_rules", "pairs_not_applied", "problems"}``."""
+    pairs, problems = managed_pair_clearances(pcb_path)
+    report: dict = {"applied_pair_rules": [], "pairs_not_applied": [], "problems": problems}
+    if not pairs:
+        return report
+    try:
+        text = dsn.read_bytes().decode("utf-8")
+    except UnicodeDecodeError as exc:
+        report["problems"] = [*problems, f"the exported DSN is not UTF-8 text ({exc})"]
+        return report
+    patched, added = add_class_class_rules(text, pairs)
+    report.update(added)
+    if report["applied_pair_rules"]:
+        dsn.write_bytes(patched.encode("utf-8"))
+    return report
+
+
 def export_dsn_with_kicad(pcb_path: str | Path, work_dir: str | Path) -> dict:
     """Specctra DSN of ``pcb_path`` by KiCad's own exporter: the board is snapshot into
     ``work_dir/snapshot`` (``snapshot_board``; the result carries its keys for
@@ -608,8 +788,11 @@ def export_dsn_with_kicad(pcb_path: str | Path, work_dir: str | Path) -> dict:
     report = run_kicad_specctra("export", scratch, dsn)
     if not report.get("ok") or not dsn.is_file():
         raise KicadSpecctraError(f"KiCad's Specctra export failed: {report.get('error') or report}")
+    # Issue 212: the managed pair clearances reach Freerouting as class_class rules (issue 207).
+    pair_rules = _patch_dsn_with_pair_rules(dsn, Path(snapshot["snapshot_pcb"]))
     return {
         **snapshot,
+        "pair_rules": pair_rules,
         "dsn_path": str(dsn),
         "exporter": f"pcbnew {report.get('pcbnew_version')} ExportSpecctraDSN",
         "existing_copper_kept_fixed": report.get("existing_copper"),
@@ -2237,6 +2420,8 @@ def build(mcp: MCPServer) -> list[str]:
             "via_count": len(attempt["via_specs"]),
             "unrouted_nets_before": unrouted_before,
             "dsn_exporter": export["exporter"],
+            "pair_rules": export.get("pair_rules"),
+            "pair_rules_note": pair_rules_note(export.get("pair_rules")),
             "ses_import": attempt["import"],
             "router_flags": flags,
             "requires_acknowledgement": bool(flags),
@@ -2503,6 +2688,8 @@ def build(mcp: MCPServer) -> list[str]:
             "router_flags": best["router_flags"],
             "requires_acknowledgement": bool(best["router_flags"]),
             "attempts": attempts,
+            "pair_rules": export.get("pair_rules"),
+            "pair_rules_note": pair_rules_note(export.get("pair_rules")),
             "warning": (
                 "Autorouted output -- review before trusting, even the best-scoring attempt. "
                 "Call confirm_route with this revision_token to actually apply it, then run "

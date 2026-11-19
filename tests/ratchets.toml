@@ -43,6 +43,14 @@ note = "Issues 98 and 125: writes the sheet files of a git revision, read from t
 read_only_reach = "diff_schematic rebuilds the old state of a project in its own TemporaryDirectory from git objects; the destination is created by the tool and is never a path the caller gave."
 
 [[raw_write]]
+file = "toolsets/routing.py"
+function = "_patch_dsn_with_pair_rules"
+kind = "write_bytes"
+code = '''dsn.write_bytes(patched.encode('utf-8'))'''
+kicad_file = false
+note = "Issue 212: rewrites the Specctra DSN that KiCad's exporter just wrote into the caller-created scratch directory of a route run, with the managed pair clearances added as class_class rules (add_class_class_rules); only when a rule was added. A router input, not a KiCad file; the board and its .kicad_dru are only read."
+
+[[raw_write]]
 file = "render_region.py"
 function = "render_region"
 kind = "write_bytes"
@@ -1127,6 +1135,7 @@ reaches = [
 [read_only_tool_writes.propose_route_with_freerouting]
 reason = "Scratch copies of the board and its project files inside a TemporaryDirectory (_trial_copy), which KiCad's bundled Python exports to DSN and imports the SES into (build ticket 46); the caller's board is only read."
 reaches = [
+    "toolsets/routing.py | _patch_dsn_with_pair_rules | write_bytes",
     "toolsets/routing.py | _trial_copy | shutil.copy",
 ]
 
@@ -1136,6 +1145,7 @@ reaches = [
     "routers/kicad_routing_tools.py | _restore_original_project | write_bytes",
     "routers/kicad_routing_tools.py | run_router_script | open",
     "routers/kicad_routing_tools.py | write_fab_overrides | write_text",
+    "toolsets/routing.py | _patch_dsn_with_pair_rules | write_bytes",
     "toolsets/routing.py | _trial_copy | shutil.copy",
     "write_layer.py | _check_sub_sheets | shutil.copyfile",
     "write_layer.py | _write_temp | open",

@@ -566,6 +566,10 @@ def _freerouting_round_trip(board: Path, params: dict, timeout_s: float, scratch
         # recorded for the audit trail, never read by the runner.
         "freerouting_self_report": self_report,
     }
+    # Issue 212: the managed pair clearances went to the router as class_class rules, or were not applied.
+    if export.get("pair_rules"):
+        facts["pair_rules"] = export["pair_rules"]
+        facts["pair_rules_note"] = routing_toolset.pair_rules_note(export["pair_rules"])
     if audit:
         facts["dsn_audit_copy_error"] = audit
     try:

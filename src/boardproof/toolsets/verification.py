@@ -740,9 +740,12 @@ def build(mcp: MCPServer) -> list[str]:
         rule has severity ignore: KiCad does not report that pair at all. Only copper-to-copper clearance of two different nets is
         covered; this is not a verdict on the board (verify_board is).
 
-        No router reads these rules: Freerouting does not see the .kicad_dru (measured with Freerouting 2.5.0: routing is byte-identical
-        with and without a pair rule), so a pair rule listed here is only checked afterwards by kicad-cli DRC / verify_board, and
-        copper a router laid closer than the rule demands shows up there as a clearance violation. Net class track clearances do reach it (measured on one board; pad-to-pad spacing within a part is not covered).
+        Freerouting does not see the .kicad_dru itself (measured with Freerouting 2.5.0: routing is byte-identical with and without a
+        pair rule), but the freerouting backend of the route tools adds a copy to the exported DSN: the plain two-class pair rules of the
+        managed block are passed to Freerouting as class_class rules (measured on one 5-net board: the routed copper then kept the pair
+        clearance, except pad-to-pad at fixed input geometry, at the price of more unrouted nets); the kicad_routing_tools backend and hand-written rules never reach a router, so
+        a rule listed here is checked afterwards by kicad-cli DRC / verify_board, and copper a router laid closer than the rule demands
+        shows up there as a clearance violation; DRC is the measure, never the router's own report. Net class track clearances do reach it (measured on one board; pad-to-pad spacing within a part is not covered).
         """
         from boardproof import clearance_coverage
 
