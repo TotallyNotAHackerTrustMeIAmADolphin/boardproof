@@ -1175,12 +1175,33 @@ def _justify_words(value: Any, where: str) -> list[str]:
     return sorted(words, key=lambda w: order[w])
 
 
+def _set_justify(prop: SExp, words: list[str]) -> None:
+    """Replace the ``(justify ..)`` of a property's effects with ``words`` (already ordered; none removes it)."""
+    effects = prop.find_children("effects")[0]
+    _remove(effects, _kids(effects, "justify"))
+    if words:
+        font = [k for k, c in enumerate(effects.children) if not c.is_atom and c.name == "font"]
+        effects.children.insert((font[0] + 1) if font else 0, SExp.list("justify", *(write_layer.symbol(w) for w in words)))
+
+
 # The default result of set_property_positions lists at most this many property entries (issue 193).
 PROPERTY_SAMPLE = 20
 
 
+def _property_outcome(outcome: Outcome, listed: list[dict], detail: bool, extra: dict[str, Any]) -> Outcome:
+    refs = sorted({e["reference"] for e in listed})
+    shown = listed if detail else [{k: v for k, v in e.items() if k not in ("symbol_at", "pins")} for e in listed[:PROPERTY_SAMPLE]]
+    outcome.report = {"updated": shown, "count": len(listed), "symbols": len({e["uuid"] for e in listed}), "changed_references": refs,
+                      "truncated": len(shown) < len(listed), "detail": detail,
+                      "note": ("fields_autoplaced is removed from each edited symbol; "
+                               + ("each entry carries the symbol's at and its pins" if detail else
+                                  f"the list holds the first {PROPERTY_SAMPLE} entries without the symbol's at and pins; "
+                                  "detail=true lists every entry with them")), **extra}
+    return outcome
+
+
 def set_property_positions(
-    path: str, items: list[dict], root_sch: str | None, *, dry_run: bool, detail: bool = False,
+    path: str, items: list[dict] | None, root_sch: str | None, *, dry_run: bool, detail: bool = False, arrange: dict | None = None,
 ) -> dict[str, Any]:
     """Set position, angle and justification of symbol property texts.
 
@@ -1191,8 +1212,18 @@ def set_property_positions(
     def mutate(sheet: Sheet, root: SExp) -> Outcome:
         if not isinstance(detail, bool):
             raise SheetAuthoringError("invalid_spec", f"detail must be true or false, got {detail!r}")
+        if arrange is not None:
+            if items is not None:
+                raise SheetAuthoringError("invalid_spec", "give items or arrange, not both")
+            from boardproof import sheet_property_arrange
+
+            selector, gap = sheet_property_arrange.check_spec(arrange)
+            outcome = Outcome(check_nets=False)
+            listed, extra = sheet_property_arrange.arrange(sheet, root, selector, gap, outcome, detail)
+            outcome.no_change = not listed
+            return _property_outcome(outcome, listed, detail, extra)
         if not isinstance(items, list) or not items:
-            raise SheetAuthoringError("invalid_spec", "items must be a non-empty list of {selector keys..., properties: {...}}")
+            raise SheetAuthoringError("invalid_spec", "items must be a non-empty list of {selector keys..., properties: {...}} (or give arrange)")
         outcome = Outcome(check_nets=False)
         listed, seen = [], set()
         for i, item in enumerate(items):
@@ -1232,11 +1263,7 @@ def set_property_positions(
                     if "angle" in change:
                         write_layer.set_number(prop.find_children("at")[0], 2, change["angle"])
                     if words is not None:
-                        effects = prop.find_children("effects")[0]
-                        _remove(effects, _kids(effects, "justify"))
-                        if words:
-                            font = [k for k, c in enumerate(effects.children) if not c.is_atom and c.name == "font"]
-                            effects.children.insert((font[0] + 1) if font else 0, SExp.list("justify", *(write_layer.symbol(w) for w in words)))
+                        _set_justify(prop, words)
                     outcome.changed.add(_uuid(node))
                     for auto in _kids(node, "fields_autoplaced"):
                         _remove(node, [auto])  # the texts are no longer where KiCad's auto-placement put them
@@ -1244,15 +1271,7 @@ def set_property_positions(
                     justify = [w for j in _kids(prop.find_children("effects")[0], "justify") for w in (a.value for a in j.children)]
                     listed.append({"reference": _ref(node), "uuid": _uuid(node), "property": name, "at": _round_pt(px, py), "angle": pa,
                                    "justify": " ".join(justify), "symbol_at": _round_pt(ox, oy), "pins": pin_positions(root, node)})
-        refs = sorted({e["reference"] for e in listed})
-        shown = listed if detail else [{k: v for k, v in e.items() if k not in ("symbol_at", "pins")} for e in listed[:PROPERTY_SAMPLE]]
-        outcome.report = {"updated": shown, "count": len(listed), "symbols": len({e["uuid"] for e in listed}), "changed_references": refs,
-                          "truncated": len(shown) < len(listed), "detail": detail,
-                          "note": ("fields_autoplaced is removed from each edited symbol; "
-                                   + ("each entry carries the symbol's at and its pins" if detail else
-                                      f"the list holds the first {PROPERTY_SAMPLE} entries without the symbol's at and pins; "
-                                      "detail=true lists every entry with them"))}
-        return outcome
+        return _property_outcome(outcome, listed, detail, {})
 
     result = run(path, root_sch, mutate, allow_connectivity_change=False, dry_run=dry_run)
     if result.get("ok") and dry_run:

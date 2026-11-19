@@ -3008,7 +3008,8 @@ def build(mcp: MCPServer) -> list[str]:
             sch_path, region, copies, pitch, numbered_labels, root_sch, grid=grid, dry_run=dry_run)
 
     def set_property_positions(
-        sch_path: str, items: list[dict], dry_run: bool = False, root_sch: str | None = None, detail: bool = False,
+        sch_path: str, items: list[dict] | None = None, dry_run: bool = False, root_sch: str | None = None, detail: bool = False,
+        arrange: dict | None = None,
     ) -> dict:
         """Set the position, angle and justification of the property texts (Reference, Value, Footprint,
         Datasheet, any other field) of placed symbols in one call, for example to move texts off bodies
@@ -3021,6 +3022,30 @@ def build(mcp: MCPServer) -> list[str]:
         optionally `angle` (0, 90, 180 or 270, as KiCad stores it for the text) and `justify` (words from
         left, right, top, bottom, mirror, for example "left bottom"; "" removes it). A property the symbol
         does not have is refused (property_not_found).
+
+        arrange (instead of items; giving both is refused): arranges the Reference and Value of many symbols by a
+        rule in one call, so their texts no longer overlap. {selector: {references | uuids | pattern | region |
+        lib_id}, gap: mm}; leave selector out for every placed symbol of the sheet; gap (default 1.27) is the
+        distance from the symbol's box (its raw library geometry placed by the symbol's own position, rotation and
+        mirror, so a rotated or mirrored symbol is judged as drawn). A symbol taller than wide is vertical: the
+        Reference goes to the left of it, right-justified, the Value to the right, left-justified, both at its
+        vertical centre. Any other symbol is horizontal: the Reference above it, bottom-justified, the Value below
+        it, top-justified, both at its horizontal centre. "Left", "above" and the like are as drawn on the sheet: KiCad
+        takes a field's stored angle relative to a symbol turned 90 or 270 degrees and draws the text of a symbol turned 90 or 180
+        degrees or mirrored with the justify words swapped (measured with kicad-cli svg over every turn and mirror), so the stored angle
+        is 90 on a symbol turned 90 or 270 degrees (0 otherwise) and the stored justify words may be the opposite ones; the texts are
+        drawn upright. Power symbols are left
+        alone. A hidden text and a locked text are never moved (KiCad 10.0.7 has no lock on a symbol; the lock of a
+        text is its `(do_not_autoplace)` flag): each is listed in `skipped` with its reason (hidden, locked,
+        no_property, no_geometry). A text already in place is not touched; a call that
+        changes nothing writes nothing. The result has the usual count, symbols, changed_references and updated
+        entries (each with `was` and `orientation`), plus text_text_overlaps {before, after, involving_selection,
+        listed}: the text_text overlaps of the whole sheet before and after, by the estimated text boxes of
+        find_overlaps (characters times font size times 0.6, an estimate: the stroke font is wider) placed where KiCad draws a
+        symbol's texts, and which of them still involve a selected symbol's text (for example a neighbouring part closer than
+        the text is wide; move that part or use items). find_overlaps itself may count differently for symbols turned 90 or
+        270 degrees, because it places the box by the stored angle alone. A multi-unit symbol is arranged per unit node
+        (which copy KiCad draws is not measured).
 
         Returns a short result by default: count (property texts changed), symbols, changed_references (every
         reference, sorted), and updated, the first 20 entries of {reference, uuid, property, at, angle,
@@ -3041,7 +3066,7 @@ def build(mcp: MCPServer) -> list[str]:
         """
         from boardproof import sheet_editing
 
-        return sheet_editing.set_property_positions(sch_path, items, root_sch, dry_run=dry_run, detail=detail)
+        return sheet_editing.set_property_positions(sch_path, items, root_sch, dry_run=dry_run, detail=detail, arrange=arrange)
 
     def align_items(
         sch_path: str, groups: list[dict], box: str = "pins", move_wires: bool = True, snap: bool = True, grid: float = 1.27,
