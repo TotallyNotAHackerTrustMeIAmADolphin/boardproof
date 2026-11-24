@@ -238,7 +238,7 @@ def test_the_tool_text_pins_the_rule():
         "text_text_overlaps {before, after, involving_selection, listed}",
         "so the stored angle is 90 on a symbol turned 90 or 270 degrees (0 otherwise)",
         "the stored justify words may be the opposite ones; the texts are drawn upright",
-        "find_overlaps itself may count differently for symbols turned 90 or 270 degrees",
+        "find_overlaps places its text boxes the same way (issue 223), so its text_text count for the sheet agrees with these figures",
         "(which copy KiCad draws is not measured)",
     ):
         assert sentence in text, sentence
@@ -298,7 +298,7 @@ def test_the_moved_texts_are_drawn_upright_on_every_turn_and_mirror(tmp_path, to
 
     for t in sheet_overlaps._read(write_layer.load(sch))[1]:
         if t.kind == "property" and t.text in drawn:
-            box = spa._drawn_box(t)
+            box = t.box  # find_overlaps' own box, the drawn one (issue 223)
             _rot, dx, dy, w = drawn[t.text]
             slack = 0.3 + abs(w - (box[2] - box[0])) / 2  # the estimate is shorter than the stroke font: only the side is checked
             assert abs((box[0] + box[2]) / 2 - dx) < slack and abs((box[1] + box[3]) / 2 - dy) < slack, (lib_id, t.text, box, drawn[t.text])

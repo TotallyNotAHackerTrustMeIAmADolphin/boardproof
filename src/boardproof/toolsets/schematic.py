@@ -3043,8 +3043,8 @@ def build(mcp: MCPServer) -> list[str]:
         listed}: the text_text overlaps of the whole sheet before and after, by the estimated text boxes of
         find_overlaps (characters times font size times 0.6, an estimate: the stroke font is wider) placed where KiCad draws a
         symbol's texts, and which of them still involve a selected symbol's text (for example a neighbouring part closer than
-        the text is wide; move that part or use items). find_overlaps itself may count differently for symbols turned 90 or
-        270 degrees, because it places the box by the stored angle alone. A multi-unit symbol is arranged per unit node
+        the text is wide; move that part or use items). find_overlaps places its text boxes the same way (issue 223), so
+        its text_text count for the sheet agrees with these figures. A multi-unit symbol is arranged per unit node
         (which copy KiCad draws is not measured).
 
         Returns a short result by default: count (property texts changed), symbols, changed_references (every
@@ -3772,8 +3772,12 @@ def build(mcp: MCPServer) -> list[str]:
         crossed by a wire. The Description, Footprint and Datasheet properties and the ki_* library fields are
         not read as texts, so an overlap they cause is NOT found (a gap in this check, not a clear sheet). The box of a text is an ESTIMATE (the font's extent is not in the file; the width
         is the character count times the font size times 0.6), so each of these findings says
-        estimated true and a near miss is not reported. A label is not reported against the wire it sits
-        on or a symbol it sits on a pin of.
+        estimated true and a near miss is not reported. The box of a placed symbol's Reference, Value or other
+        property is placed as KiCad draws it: the symbol's turn and mirror applied to the field's stored angle and
+        justify words (measured with kicad-cli svg over turns 0, 90, 180, 270 and mirrors none, x, y), the same rule
+        set_property_positions arrange uses, so the two texts of a part turned 90 or 270 degrees that stand side
+        by side are not a finding; the box of a hierarchical sheet symbol's text is not turned. A label is not
+        reported against the wire it sits on or a symbol it sits on a pin of.
         wire_through_pin: a wire whose middle (not an end) runs over a pin with no junction on that point.
         KiCad joins a pin only to a wire end or a junction, so that pin joins nothing although it looks
         wired; split the wire at the pin or add a junction.
@@ -3806,9 +3810,10 @@ def build(mcp: MCPServer) -> list[str]:
         The part's own texts are not read (a Value drawn on its own body is a design choice); power
         symbols are not compared. Each such pair is also reported as text_symbol, so found, counts and
         max_findings count such a pair under both kinds; this kind is the one to read for the share and the
-        DNP flag. Known limit: on a symbol turned 90 or 270 degrees KiCad adds the symbol's turn to the
-        angle of its Reference and Value, which this check does not, so the box of those texts has the wrong
-        shape there and covered_fraction is not reliable for them.
+        DNP flag. The box of a Reference or Value is the drawn one also on a symbol turned 90, 180 or 270
+        degrees or mirrored (see text_text), so covered_fraction has the right shape there; its width stays
+        the estimate (0.6 of the font size per character, shorter than the drawn text). Not measured: which
+        unit copy of a multi-unit symbol KiCad draws (each unit node is read as stored).
 
         Returns found, counts (per kind, the full numbers), findings (each: kind, sheet, at, items with
         their uuid and box or points or text, estimated, fix, and the numbers behind it: overlap in mm,

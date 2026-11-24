@@ -53,7 +53,9 @@ numbers behind it:
 
 Text boxes are ESTIMATES, because the stroke font's extent is not in the file: the same estimate as
 ``schematic_readability`` (characters times font size times 0.6, a label above its anchor) and
-every finding that involves a text says ``estimated: true``. A near miss is not reported.
+every finding that involves a text says ``estimated: true``. The box of a placed symbol's property text is put where
+KiCad draws it (issue 223, ``sheet_property_arrange.drawn_box``, the rule measured in issue 221): the stored angle is
+relative to the symbol, a turn of 90 or 180 degrees and a mirror swap the justify words as drawn. A near miss is not reported.
 This is a layout aid: no finding is a verdict on the schematic, and an empty list says nothing about ERC.
 """
 
@@ -67,6 +69,7 @@ from typing import Any
 from boardproof import connectivity_check, field_check, sheet_align, sheet_authoring, sheet_editing as se, sheet_extents, sheet_tree
 from boardproof import schematic_readability as readability
 from boardproof.sheet_authoring import SheetAuthoringError
+from boardproof.sheet_property_arrange import drawn_box
 
 KINDS = ("symbol_symbol", "text_text", "text_symbol", "text_wire", "wire_through_pin", "outside_page",
          "label_over_own_symbol", "text_hidden_behind_symbol")
@@ -134,7 +137,8 @@ def _property_texts(owner: Any, skip: tuple[str, ...]) -> list[_Text]:
         at = se._at(prop)
         effects = prop.find("effects")
         h, v = readability._justify(effects)
-        box = readability._text_box(text, at, readability._font_size(effects), h, v)
+        # a placed symbol's text is drawn with the symbol's turn and mirror applied (issue 223); a sheet symbol's is not turned
+        box = drawn_box(owner, prop, text) if owner.name == "symbol" else readability._text_box(text, at, readability._font_size(effects), h, v)
         out.append(_Text("property", prop, owner, name, text, (at[0], at[1]), box))
     return out
 

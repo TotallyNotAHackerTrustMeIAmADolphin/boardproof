@@ -19,7 +19,7 @@ The rule, per placed symbol (power symbols and ``#`` references are skipped):
   symbol cannot be locked), is never moved (listed in ``skipped`` with the reason ``hidden`` or ``locked``).
 
 Text boxes are the estimate of ``sheet_overlaps`` (no font metrics in the file) placed as KiCad draws a symbol's texts
-(``_drawn_box``); a multi-unit symbol is arranged per unit node (which copy KiCad draws is not measured). The result reports the
+(``drawn_box``, the same placement ``find_overlaps`` uses); a multi-unit symbol is arranged per unit node (which copy KiCad draws is not measured). The result reports the
 ``text_text`` overlaps of the sheet before and after, and which remain that involve an arranged text.
 """
 
@@ -80,34 +80,32 @@ def _upright_flips(rotation: float, mirror: str) -> tuple[bool, bool]:
     return base != (mirror == "y"), base != (mirror == "x")
 
 
-def _drawn_box(text: Any) -> Any:
+def drawn_box(owner: Any, prop: Any, text: str) -> Any:
     """The box of a symbol's property text as KiCad draws it: the stored angle is relative to the symbol (stored plus
     the symbol's turn is the drawn angle), a text drawn at 180 or 270 degrees has its words swapped, and a mirror
     swaps the vertical (about x) or horizontal (about y) word, along the text for a text drawn vertical (measured with
-    kicad-cli svg, see ``_upright_flips``). The size is the estimate of ``sheet_overlaps``."""
-    sx, sy, rot = se._at(text.owner)
-    mirror = se._mirror(text.owner)
-    px, py, angle = se._at(text.node)
+    kicad-cli svg, see ``_upright_flips``). The size is the estimate of ``sheet_overlaps``. Shared: ``find_overlaps`` places
+    every property text of a placed symbol with it (issue 223), so the two never disagree."""
+    _sx, _sy, rot = se._at(owner)
+    mirror = se._mirror(owner)
+    px, py, angle = se._at(prop)
     total = round(angle + rot) % 360
-    effects = text.node.find("effects")
+    effects = prop.find("effects")
     size = readability._font_size(effects)
-    words = [w for w in _justify_words(text.node) if w in ("left", "right", "top", "bottom")]
+    words = [w for w in _justify_words(prop) if w in ("left", "right", "top", "bottom")]
     both = total in (180, 270)
     vertical_text = total in (90, 270)
     along, across = (mirror == ("x" if vertical_text else "y")), (mirror == ("y" if vertical_text else "x"))
     words = _flip(words, both != along, both != across)
     h = next((w for w in words if w in ("left", "right")), "center")
     v = next((w for w in words if w in ("top", "bottom")), "center")
-    return readability._text_box(text.text, (px, py, 90.0 if vertical_text else 0.0), size, h, v)
+    return readability._text_box(text, (px, py, 90.0 if vertical_text else 0.0), size, h, v)
 
 
 def _text_overlaps(root: Any) -> list[tuple[Any, Any]]:
     from boardproof import sheet_overlaps as so
 
-    texts = so._read(root)[1]
-    for t in texts:
-        if t.kind == "property" and t.owner.name == "symbol":
-            t.box = _drawn_box(t)
+    texts = so._read(root)[1]  # its property boxes are already the drawn ones
     return [(a, b) for i, a in enumerate(texts) for b in texts[i + 1:] if readability._overlaps(a.box, b.box, so.TEXT_MM)]
 
 
