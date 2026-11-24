@@ -51,8 +51,16 @@ numbers behind it:
     ``frame_unknown`` entry is listed in ``skipped``. A paper token that cannot be read gives a
     ``paper_unreadable`` entry, never a clean sheet. A sheet symbol is a box on its PARENT sheet.
 
+``text_over_pin_text``
+    A label, free text or visible property text whose box overlaps by more than ``TEXT_MM`` in both axes a
+    visible pin number or pin name of a placed symbol (issue 225; boxes from ``_pin_text_boxes``: hidden
+    pins, hidden numbers and names, empty and ``~`` names, names of a symbol whose offset is 0 and power
+    symbols give none). A label on a pin whose text runs along the pin line over its number is one.
+
+Global and hierarchical label boxes are their shape and text (``_shape_label_box``, issue 225).
+
 Text boxes are ESTIMATES, because the stroke font's extent is not in the file: the same estimate as
-``schematic_readability`` (characters times font size times 0.6, a label above its anchor) and
+``schematic_readability`` (the sum of a measured per-character advance after KiCad markup is resolved, a local label above its anchor) and
 every finding that involves a text says ``estimated: true``. The box of a placed symbol's property text is put where
 KiCad draws it (issue 223, ``sheet_property_arrange.drawn_box``, the rule measured in issue 221): the stored angle is
 relative to the symbol, a turn of 90 or 180 degrees and a mirror swap the justify words as drawn. A near miss is not reported.
@@ -72,7 +80,7 @@ from boardproof.sheet_authoring import SheetAuthoringError
 from boardproof.sheet_property_arrange import drawn_box
 
 KINDS = ("symbol_symbol", "text_text", "text_symbol", "text_wire", "wire_through_pin", "outside_page",
-         "label_over_own_symbol", "text_hidden_behind_symbol")
+         "label_over_own_symbol", "text_hidden_behind_symbol", "text_over_pin_text")
 # The default drawing sheet's frame lies 10 mm inside the page on every side. Measured: the SVG that kicad-cli 10.0.7
 # exports draws the outer frame line 10 mm from each edge of A4 landscape and A3 portrait
 # (tests/test_find_overlaps_outside_page.py reads it back).
@@ -85,6 +93,120 @@ DEFAULT_MAX = 500
 MAX_MAX = 5000
 
 Box = tuple[float, float, float, float]
+
+
+# --------------------------------------------------------------------------- label shapes and pin texts (issue 225)
+
+# Global and hierarchical labels, measured with kicad-cli 10.0.7 sch export svg (font size s = 1.27; every figure scales with s).
+# Direction of the label from its anchor: the stored justify decides, the angle only by its axis (measured: left at 0, 90 and 270 and
+# right at 180 as add_labels writes them, and right at all four: at 0 and 180 left runs right and right runs left; at 90 and 270
+# left runs up and right runs down; left at 180 was not measured and follows the same rule). Global label: a frame 2 s high
+# from the anchor to the text length plus a tail per shape; hierarchical label: a marker 1 s long and s high at the anchor, the text
+# starts 1.15 s from the anchor and is s high.
+_GLOBAL_TAIL = {"input": 2.242, "output": 2.242, "bidirectional": 3.354, "tri_state": 3.354, "passive": 1.131}  # mm at s = 1.27
+_HIER_INSET = 1.15
+
+
+def _label_direction(angle: float, justify: str) -> tuple[int, int]:
+    a = round(angle) % 360
+    if a in (0, 180):
+        return (-1, 0) if justify == "right" else (1, 0)
+    return (0, 1) if justify == "right" else (0, -1)
+
+
+def _shape_label_box(node: Any, text: str, at: tuple[float, float, float], effects: Any) -> Box:
+    """The box of a global or hierarchical label: its shape (frame or arrow marker) and its text, as KiCad draws them."""
+    size = readability._font_size(effects)
+    s = size[1]
+    h, _v = readability._justify(effects)
+    length = readability._text_width(text, size)
+    if node.name == "global_label":
+        shape = next((str(c.values[0]) for c in node.children if not c.is_atom and c.name == "shape" and c.values), "bidirectional")
+        reach, half = length + _GLOBAL_TAIL.get(shape, _GLOBAL_TAIL["bidirectional"]) * s / 1.27, s
+    else:
+        reach, half = _HIER_INSET * s + length, s / 2
+    dx, dy = _label_direction(at[2], h)
+    x, y = at[0], at[1]
+    corners = [(x, y - half), (x + dx * reach, y + half)] if dx else [(x - half, y), (x + half, y + dy * reach)]
+    return (min(c[0] for c in corners), min(c[1] for c in corners), max(c[0] for c in corners), max(c[1] for c in corners))
+
+
+_NUMBER_GAP_MM = 0.36  # measured: a pin number sits this far from its pin line (above a horizontal pin, left of a vertical one)
+_DEFAULT_NAME_OFFSET = 0.508
+
+
+def _flag(node: Any, name: str) -> bool:
+    """The library symbol carries ``(name (hide yes))`` or ``(name hide)`` (also inside ``pin_names`` beside an offset)."""
+    for c in se._kids(node, name):
+        if any(a.is_atom and a.value == "hide" for a in c.children):
+            return True
+        if any(not a.is_atom and a.name == "hide" and (not a.values or str(a.values[0]) != "no") for a in c.children):
+            return True
+    return False
+
+
+def _pin_text_boxes(root: Any, node: Any) -> list[tuple[str, str, str, Box]]:
+    """``(what, pin number, text, box)`` of the visible pin numbers and pin names of one placed symbol, as KiCad draws them
+    (issue 225, kicad-cli svg over turns and mirrors). A pin number is centred on the middle of its pin line, 0.36 mm above a
+    horizontal pin and left of a vertical one; a pin name starts ``offset`` (the library's pin_names offset, 0.508 mm when it names
+    none) past the inner end of the line and runs into the body. Hidden pins, hidden numbers and names, and the names of a symbol
+    whose offset is 0 (drawn outside the body: not measured) give nothing."""
+    lib = se._lib_symbol(root, node)
+    if lib is None:
+        return []
+    sx, sy, rot = se._at(node)
+    mirror = se._mirror(node)
+    unit = (node.find_children("unit")[0].get_int(0) if node.find_children("unit") else 1) or 1
+    style = (node.find_children("body_style")[0].get_int(0) if node.find_children("body_style") else 1) or 1
+    show_numbers = not _flag(lib, "pin_numbers")
+    names_node = se._kids(lib, "pin_names")
+    offset = _DEFAULT_NAME_OFFSET
+    if names_node and names_node[0].find_children("offset"):
+        offset = names_node[0].find_children("offset")[0].get_float(0)
+    show_names = not _flag(lib, "pin_names") and offset > 0
+    out: list[tuple[str, str, str, Box]] = []
+    for sub in [lib, *se._kids(lib, "symbol")]:
+        if sub is not lib:
+            parts = (sub.get_string(0) or "").rsplit("_", 2)
+            if len(parts) < 3 or not (parts[1].isdigit() and parts[2].isdigit()):
+                continue
+            if int(parts[1]) not in (0, unit) or int(parts[2]) not in (0, style):
+                continue
+        for pin in se._kids(sub, "pin"):
+            at = pin.find_children("at")
+            length = pin.find_children("length")
+            if not at or not length or se._pin_hidden(pin):
+                continue
+            px, py = at[0].get_float(0), at[0].get_float(1)
+            angle = math.radians(at[0].get_float(2) if len(at[0].children) > 2 else 0.0)
+            ln = length[0].get_float(0)
+            ox, oy = se.place(px, py, rot, mirror)
+            ix, iy = se.place(px + ln * math.cos(angle), py + ln * math.sin(angle), rot, mirror)
+            ox, oy, ix, iy = sx + ox, sy + oy, sx + ix, sy + iy
+            horizontal = abs(ix - ox) >= abs(iy - oy)
+            sign = (1 if ix > ox else -1) if horizontal else (1 if iy > oy else -1)
+            number = pin.find_children("number")
+            for what, shown in (("number", show_numbers), ("name", show_names)):
+                child = pin.find_children(what)
+                text = (child[0].get_string(0) or "") if child else ""
+                if not shown or text in ("", "~"):
+                    continue
+                size = readability._font_size(child[0].find("effects"))
+                width, height = readability._text_width(text, size), size[1]
+                if what == "number":
+                    mx, my = (ox + ix) / 2, (oy + iy) / 2
+                    if horizontal:
+                        box = (mx - width / 2, oy - _NUMBER_GAP_MM - height, mx + width / 2, oy - _NUMBER_GAP_MM)
+                    else:
+                        box = (ox - _NUMBER_GAP_MM - height, my - width / 2, ox - _NUMBER_GAP_MM, my + width / 2)
+                elif horizontal:
+                    x0 = ix + offset if sign > 0 else ix - offset - width
+                    box = (x0, iy - height / 2, x0 + width, iy + height / 2)
+                else:
+                    y0 = iy + offset if sign > 0 else iy - offset - width
+                    box = (ix - height / 2, y0, ix + height / 2, y0 + width)
+                out.append((what, (number[0].get_string(0) or "") if number else "", text, box))
+    return out
 
 
 # --------------------------------------------------------------------------- reading one sheet
@@ -177,7 +299,10 @@ def _read(root: Any) -> tuple[list[_Body], list[_Text], list[tuple[Any, tuple, t
         h, _v = readability._justify(effects)
         # KiCad draws a label with the stored justify at the stored angle taken modulo 180 (180 as 0, 270 as 90), no half-turn flip
         # (measured with kicad-cli 10.0.7, tests/test_find_overlaps_label_hidden.py); _text_box flips from 180 on, so hand it angle % 180.
-        box = readability._text_box(text, (at[0], at[1], at[2] % 180.0), readability._font_size(effects), "left" if h == "center" else h, "center", above=True)
+        if node.name == "label":
+            box = readability._text_box(text, (at[0], at[1], at[2] % 180.0), readability._font_size(effects), "left" if h == "center" else h, "center", above=True)
+        else:  # issue 225: a global or hierarchical label is its shape and its text, which KiCad places by other rules
+            box = _shape_label_box(node, text, at, effects)
         texts.append(_Text("label", node, None, node.name, text, (at[0], at[1]), box))
     for node in se._kids(root, "text"):
         text = node.get_string(0) or ""
@@ -186,7 +311,8 @@ def _read(root: Any) -> tuple[list[_Body], list[_Text], list[tuple[Any, tuple, t
         at = se._at(node)
         effects = node.find("effects")
         h, v = readability._justify(effects)
-        box = readability._text_box(text, at, readability._font_size(effects), "left" if h == "center" else h, "bottom" if v == "center" else v)
+        # a free text with no (justify) is drawn centred on its anchor (measured: kicad-cli svg draws it text-anchor middle), so centre stays centre
+        box = readability._text_box(text, at, readability._font_size(effects), h, v)
         texts.append(_Text("text", node, None, "text", text, (at[0], at[1]), box))
     wires = []
     for node in se._kids(root, "wire"):
@@ -317,6 +443,17 @@ def _findings(sheet: str, root: Any, margin: float | None, page_check: bool) -> 
             if inside > TEXT_WIRE_MM:
                 add("text_wire", text.at, [text.item(), {"kind": "wire", "uuid": se._uuid(node), "points": [se._round_pt(*a), se._round_pt(*b)]}],
                     "move the text off the wire", True, length_inside=se._r(inside))
+    for body in solid:
+        if body.kind != "symbol":
+            continue
+        for what, number, pin_text, pbox in _pin_text_boxes(root, body.node):
+            for text in texts:
+                if readability._overlaps(text.box, pbox, TEXT_MM):
+                    px, py = readability._penetration(text.box, pbox)
+                    add("text_over_pin_text", text.at,
+                        [text.item(), {"kind": "pin_text", "what": what, "pin": number, "text": pin_text, "reference": body.name, "uuid": body.uuid, "box": _box_dict(pbox)}],
+                        "move the text clear of the pin " + what + " (move_labels, move_text or set_property_positions), or turn the label so it runs away from the part",
+                        True, overlap=[se._r(px), se._r(py)])
     for body in bodies:
         for pin in body.pins:
             if any(se._same(pin, j) for j in junctions):

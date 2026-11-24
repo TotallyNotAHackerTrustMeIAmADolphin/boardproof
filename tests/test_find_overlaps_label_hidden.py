@@ -150,10 +150,11 @@ def test_a_free_text_partly_behind_a_part_is_reported_with_the_covered_share(tmp
     assert tools["add_text"](str(sch), [{"x": 100.0, "y": 100.0, "text": "AB"}], snap=False)["status"] == "ok"
     f = _find(tools, sch, HIDDEN)["findings"][0]
     assert [i["kind"] for i in f["items"]] == ["text", "symbol"] and f["estimated"] is True and f["dnp"] is False
-    # raw: R1 at (100 100), library rectangle x +-1.016; the text "AB" runs from its raw (at 100 100) to +1.524
+    # raw: R1 at (100 100), library rectangle x +-1.016; the text "AB" has no (justify), so KiCad draws it centred on its raw (at 100 100)
+    # (measured, issue 225), 2.358 mm wide (0.857 + 1.0 of the size per character)
     tb = f["items"][0]["box"]
-    assert tb[0] == pytest.approx(100.0) and tb[2] == pytest.approx(101.524)
-    assert f["covered_fraction"] == pytest.approx((101.016 - 100.0) / 1.524, abs=0.01)
+    assert tb[0] == pytest.approx(100.0 - 1.179, abs=0.01) and tb[2] == pytest.approx(100.0 + 1.179, abs=0.01)
+    assert f["covered_fraction"] == pytest.approx((101.016 - 98.984) / 2.358, abs=0.01)
     assert "move" in f["fix"]
 
 
@@ -161,7 +162,7 @@ def test_a_text_wholly_inside_the_body_is_covered_in_full(tmp_path):
     tools = _tools()
     sch = _project(tmp_path)
     _part(tools, sch)
-    assert tools["add_text"](str(sch), [{"x": 99.5, "y": 100.0, "text": "A"}], snap=False)["status"] == "ok"
+    assert tools["add_text"](str(sch), [{"x": 100.0, "y": 100.0, "text": "A"}], snap=False)["status"] == "ok"
     f = _find(tools, sch, HIDDEN)["findings"][0]
     assert f["covered_fraction"] == pytest.approx(1.0)
 

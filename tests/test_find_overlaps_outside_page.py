@@ -43,7 +43,7 @@ def _project(tmp_path: Path) -> Path:
 
 
 def _text(tools: dict, sch: Path, x: float, y: float, text: str) -> None:
-    assert tools["add_text"](str(sch), [{"x": x, "y": y, "text": text}], snap=False)["status"] == "ok"
+    assert tools["add_text"](str(sch), [{"x": x, "y": y, "text": text, "justify": "left bottom"}], snap=False)["status"] == "ok"
 
 
 def _find(sch: Path, **kw) -> dict:

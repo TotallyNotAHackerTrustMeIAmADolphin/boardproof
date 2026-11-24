@@ -19,11 +19,13 @@ The rules (``RULES``), each reported per offender with its sheet, a position and
 ``text_overlap``
     Two visible texts (symbol properties, net labels, free text) overlap, or a visible property
     text lies inside the body of another symbol. Text boxes are *estimates*: width is
-    ``characters * size * TEXT_ADVANCE`` (punctuation counts half; KiCad's stroke font has no
-    fixed advance, and 0.6 keeps the hand-laid demo sheets' own Reference and Value pairs from
-    reporting), height is ``size`` per line, and the Footprint, Datasheet and Description properties are not graded; a pair is
+    the sum of a per-character advance measured from the drawn text (``_ADVANCE``, issue 225, kicad-cli
+    10.0.7 svg ``textLength``; markup such as ``{slash}`` and ``~{x}`` is resolved first, see
+    ``_text_width``), height is ``size`` per line, and the Footprint, Datasheet and Description properties are not graded; a pair is
     reported only when the boxes overlap by more than ``TEXT_OVERLAP_MM`` in both axes, so a
-    near miss is not reported.
+    near miss is not reported. Since issue 225 the width is the drawn width instead of the earlier flat 0.6 of the size per
+    character, which was shorter than the drawn text and kept this check quiet: it now reports the pairs that really
+    collide in the render and more of them (see the demo counts in docs/ARCHITECTURE.md).
 ``wire_not_orthogonal``
     A wire is neither horizontal nor vertical.
 ``wire_off_grid``
@@ -73,11 +75,37 @@ DEFAULT_GRID_MM = 1.27
 DEFAULT_LONG_NET_MM = 50.8
 OVERLAP_MM = 0.1  # body boxes must overlap by more than this in both axes
 TEXT_OVERLAP_MM = 0.5  # the same for text boxes (estimated, so more slack)
-TEXT_ADVANCE = 0.6  # estimated character advance as a fraction of the font size
 GRID_TOLERANCE_MM = 0.005
 ORTHO_TOLERANCE_MM = 0.001
 _POINT_KEY_MM = 0.01
-_NARROW = ".,:;'|! "  # counted as half a character
+# Advance of one character as a fraction of the font size (issue 225). Measured by one script with kicad-cli 10.0.7 `sch export svg`:
+# a local label "A<c>A" for every printable ASCII c, the advance is textLength("A<c>A") - textLength("AA"), at font sizes 1.27 and 2.54
+# (the two agree to 0.0002 after scaling; pairs and runs of up to 8 characters add up to within 0.21 mm, a constant that
+# does not scale, so the sum of advances is the drawn width within 0.21 mm). Space 0.762, tab about 2.9; a character outside
+# the table (non-ASCII) counts _DEFAULT_ADVANCE, unmeasured.
+_ADVANCE = {
+    "!": 0.476, "\"": 0.762, "#": 1.000, "$": 0.952, "%": 1.143, "&": 1.238, "'": 0.476, "(": 0.667, ")": 0.667,
+    "*": 0.762, "+": 1.238, ",": 0.476, "-": 1.238, ".": 0.476, "/": 1.048, "0": 0.952, "1": 0.952, "2": 0.952,
+    "3": 0.952, "4": 0.952, "5": 0.952, "6": 0.952, "7": 0.952, "8": 0.952, "9": 0.952, ":": 0.476, ";": 0.476,
+    "<": 1.238, "=": 1.238, ">": 1.238, "?": 0.857, "@": 1.286, "A": 0.857, "B": 1.000, "C": 1.000, "D": 1.000,
+    "E": 0.905, "F": 0.857, "G": 1.000, "H": 1.048, "I": 0.476, "J": 0.762, "K": 1.000, "L": 0.810, "M": 1.143,
+    "N": 1.048, "O": 1.048, "P": 1.000, "Q": 1.048, "R": 1.000, "S": 0.952, "T": 0.762, "U": 1.048, "V": 0.857,
+    "W": 1.143, "X": 0.952, "Y": 0.857, "Z": 0.952, "[": 0.667, "\\": 0.667, "]": 0.667, "^": 0.571, "_": 0.762,
+    "`": 0.381, "a": 0.905, "b": 0.905, "c": 0.857, "d": 0.905, "e": 0.857, "f": 0.571, "g": 0.905, "h": 0.905,
+    "i": 0.476, "j": 0.476, "k": 0.810, "l": 0.524, "m": 1.333, "n": 0.905, "o": 0.905, "p": 0.905, "q": 0.905,
+    "r": 0.619, "s": 0.810, "t": 0.571, "u": 0.905, "v": 0.762, "w": 1.048, "x": 0.810, "y": 0.762, "z": 0.810,
+    "{": 0.667, "|": 0.952, "}": 0.667, "~": 0.714, " ": 0.762, "\t": 2.9,
+    # beyond ASCII: measured the same way for µ Ω ° ± ß ä Ü; ö ü Ä Ö are the advance of their base letter (not measured)
+    "µ": 1.048, "Ω": 1.143, "°": 0.762, "±": 1.238, "ß": 1.095, "ä": 0.905, "ö": 0.905, "ü": 0.905, "Ä": 0.857, "Ö": 1.048, "Ü": 1.048,
+}
+_DEFAULT_ADVANCE = 1.0
+# What KiCad 10.0.7 draws for the escapes it writes into a stored text (measured: the svg draws the resolved character), and the
+# markup it resolves: ~{x} (overbar, x at full size), ^{x} and _{x} (super and subscript, measured at 0.8 of the size). A name that
+# is not listed ({dot}, {semi}, {amp}, {bslash}) is drawn literally. ${VAR} is drawn literally here: a text variable that the
+# project defines is drawn with its value, which the file does not give (a stated limit).
+_ESCAPES = {"{slash}": "/", "{dblquote}": "\"", "{quote}": "'", "{lt}": "<", "{gt}": ">", "{backslash}": "\\", "{bar}": "|",
+            "{comma}": ",", "{colon}": ":", "{brace}": "{", "{dollar}": "$", "{space}": " ", "{tab}": "\t"}
+_SCRIPT_SCALE = 0.8
 _QUIET_PROPERTIES = ("Footprint", "Datasheet", "Description")  # shown rarely and tiny: not graded
 _MODEL_NAME_PROPERTIES = ("Sim.Name", "Spice_Model")
 
@@ -381,12 +409,42 @@ def _justify(effects: Any | None) -> tuple[str, str]:
     return horizontal, vertical
 
 
+def _text_width(text: str, size: Point) -> float:
+    """The width KiCad draws for the widest line of ``text`` at font ``size`` (issue 225): the escapes and the markup resolved first
+    (``_ESCAPES``, ``~{x}``, ``^{x}``, ``_{x}``; an unclosed brace is drawn literally), then the sum of ``_ADVANCE``."""
+    return max(_line_width(line) for line in text.split("\n")) * size[0]
+
+
+def _line_width(text: str, scale: float = 1.0) -> float:
+    total, i = 0.0, 0
+    while i < len(text):
+        escape = next((e for e in _ESCAPES if text.startswith(e, i)), None)
+        if escape is not None:
+            total += _ADVANCE[_ESCAPES[escape]] * scale
+            i += len(escape)
+            continue
+        if text[i] in "~^_" and text.startswith("{", i + 1):
+            depth, j = 0, i + 1
+            while j < len(text):
+                depth += (text[j] == "{") - (text[j] == "}")
+                if depth == 0:
+                    break
+                j += 1
+            if j < len(text):
+                total += _line_width(text[i + 2:j], scale * (1.0 if text[i] == "~" else _SCRIPT_SCALE))
+                i = j + 1
+                continue
+        total += _ADVANCE.get(text[i], _DEFAULT_ADVANCE) * scale
+        i += 1
+    return total
+
+
 def _text_box(text: str, at: tuple[float, float, float], size: Point, horizontal: str, vertical: str,
               *, above: bool = False) -> Box:
     """The estimated box of ``text``: see the module doc. ``above`` puts it on the upper side of
     its anchor (a label sits above the wire it names)."""
     lines = text.split("\n") or [""]
-    width = max(sum(0.5 if c in _NARROW else 1.0 for c in line) for line in lines) * size[0] * TEXT_ADVANCE
+    width = _text_width(text, size)
     height = size[1] * len(lines)
     x, y, angle = at
     angle %= 360.0

@@ -47,7 +47,7 @@ def sheet(tmp_path, tools) -> Path:
     made = project_toolset._project_create(str(tmp_path / "proj"), "demo")
     sch = Path(made["schematic_path"])
     assert tools["add_symbols"](str(sch), [
-        {"lib_id": "Device:R", "x": 50.8, "y": 50.8, "ref": "R1", "value": "100k 1% 0603 thin film"},
+        {"lib_id": "Device:R", "x": 50.8, "y": 50.8, "ref": "R1", "value": "100k 1%"},
         {"lib_id": "Device:LED", "x": 76.2, "y": 50.8, "ref": "D1", "value": "LED"},
         {"lib_id": "Device:R", "x": 101.6, "y": 50.8, "ref": "R2", "value": "1k"},
         {"lib_id": "Device:R", "x": 127.0, "y": 50.8, "ref": "R3", "value": "22"},

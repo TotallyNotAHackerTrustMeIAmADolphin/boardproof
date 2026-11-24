@@ -184,6 +184,6 @@ def arrange(sheet: Any, root: Any, selector: dict | None, gap: float, outcome: A
         "skipped": skipped, "gap": gap,
         "text_text_overlaps": {"before": before, "after": len(after), "involving_selection": len(remaining),
                                "listed": remaining[:MAX_REMAINING], "estimated": True,
-                               "measure": "the estimated text boxes of find_overlaps (characters times font size times 0.6)"},
+                               "measure": "the estimated text boxes of find_overlaps (the drawn width from a per-character table measured with kicad-cli, issue 225)"},
     }
     return listed, extras

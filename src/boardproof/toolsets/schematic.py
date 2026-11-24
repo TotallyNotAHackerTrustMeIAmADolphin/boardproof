@@ -3041,7 +3041,7 @@ def build(mcp: MCPServer) -> list[str]:
         changes nothing writes nothing. The result has the usual count, symbols, changed_references and updated
         entries (each with `was` and `orientation`), plus text_text_overlaps {before, after, involving_selection,
         listed}: the text_text overlaps of the whole sheet before and after, by the estimated text boxes of
-        find_overlaps (characters times font size times 0.6, an estimate: the stroke font is wider) placed where KiCad draws a
+        find_overlaps (the width of the drawn text, estimated from a per-character table measured with kicad-cli, within 0.3 mm or 3 percent on the measured strings; see find_overlaps text_text) placed where KiCad draws a
         symbol's texts, and which of them still involve a selected symbol's text (for example a neighbouring part closer than
         the text is wide; move that part or use items). find_overlaps places its text boxes the same way (issue 223), so
         its text_text count for the sheet agrees with these figures. A multi-unit symbol is arranged per unit node
@@ -3755,8 +3755,8 @@ def build(mcp: MCPServer) -> list[str]:
         about ERC, the netlist or the board (only verify_board gives a verdict on a board).
 
         kinds: which findings to look for, a non-empty list drawn from symbol_symbol, text_text,
-        text_symbol, text_wire, wire_through_pin, outside_page, label_over_own_symbol and
-        text_hidden_behind_symbol; omitted, all of them. sch_path: any sheet of the
+        text_symbol, text_wire, wire_through_pin, outside_page, label_over_own_symbol,
+        text_hidden_behind_symbol and text_over_pin_text; omitted, all of them. sch_path: any sheet of the
         project; every sheet file of the tree is read once, starting at the root sheet (root_sch, optional
         when sch_path is the root or the only .kicad_pro of its folder names it). max_findings (1 to 5000,
         default 500) limits the listed findings, not the counts.
@@ -3771,13 +3771,27 @@ def build(mcp: MCPServer) -> list[str]:
         symbols, labels, free text) over another text, over the box of a symbol it does not belong to, or
         crossed by a wire. The Description, Footprint and Datasheet properties and the ki_* library fields are
         not read as texts, so an overlap they cause is NOT found (a gap in this check, not a clear sheet). The box of a text is an ESTIMATE (the font's extent is not in the file; the width
-        is the character count times the font size times 0.6), so each of these findings says
-        estimated true and a near miss is not reported. The box of a placed symbol's Reference, Value or other
+        is the sum of a per-character advance measured with kicad-cli svg (issue 225: a digit 0.95 of the font size, a capital 0.76 to 1.14 (I only 0.48), a
+        small letter 0.48 to 1.33 (i j l narrow, m wide), . , : ; ' 0.48) after KiCad's markup is resolved: the escapes it stores such as {slash} are drawn as the
+        character, ~{x} (overbar) as x, ^{x} and _{x} as x at 0.8 of the size; on the strings measured at font sizes 1.27 and 2.54 the estimate is within 0.3 mm or 3
+        percent of the drawn length; µ Ω ° ± ß ä ö ü Ä Ö Ü are in the table (µ Ω ° ± ß ä Ü measured, ö ü Ä Ö taken from their base letters), any other character outside ASCII counts 1.0 (not measured) and a text variable such as ${NAME} is taken literally (its value is not in the sheet file)), so each of these findings says
+        estimated true and a near miss is not reported (two texts that only touch, as lines of text stacked with no gap, are not a finding). The box of a placed symbol's Reference, Value or other
         property is placed as KiCad draws it: the symbol's turn and mirror applied to the field's stored angle and
         justify words (measured with kicad-cli svg over turns 0, 90, 180, 270 and mirrors none, x, y), the same rule
         set_property_positions arrange uses, so the two texts of a part turned 90 or 270 degrees that stand side
         by side are not a finding; the box of a hierarchical sheet symbol's text is not turned. A label is not
-        reported against the wire it sits on or a symbol it sits on a pin of.
+        reported against the wire it sits on or a symbol it sits on a pin of. The box of a global or hierarchical
+        label is its shape and its text as KiCad draws them (issue 225, measured with kicad-cli svg for the shapes input,
+        output, bidirectional, tri_state and passive at 0, 90, 180 and 270 degrees and both justify words): a global label is a
+        frame twice the text height high, its text starting 1.125 text heights (input, bidirectional, tri_state) or 0.375 (output,
+        passive) from the anchor, the frame ending 1.8 (input, output), 2.6 (bidirectional, tri_state) or 0.9 (passive) text heights
+        past the text; a hierarchical label is a marker one text height long at the anchor with its text starting 1.15 text heights
+        from the anchor. A global or hierarchical label follows its stored justify by the axis of its angle (measured; add_labels
+        writes right at 180 and left at the others): at 0 and 180 left runs right and right runs left, at 90 and 270 left runs up and
+        right runs down (left stored at 180 is not measured). A local label keeps
+        the box of label_over_own_symbol below (its text drawn about 0.35 mm higher than the box is not corrected: a stated limit). Sheet
+        pins of a hierarchical sheet symbol are not read as texts. A free text with no justify (what add_text writes) is drawn and
+        boxed centred on its anchor (measured with kicad-cli svg: text-anchor middle), one with a justify from that justify.
         wire_through_pin: a wire whose middle (not an end) runs over a pin with no junction on that point.
         KiCad joins a pin only to a wire end or a junction, so that pin joins nothing although it looks
         wired; split the wire at the pin or add a junction.
@@ -3799,9 +3813,9 @@ def build(mcp: MCPServer) -> list[str]:
 
         label_over_own_symbol: a label whose anchor is on a pin of the symbol (or sheet symbol) and whose
         estimated text box overlaps that part's box by more than 0.5 mm in both axes: the text runs into
-        the part it names. The box follows the label's stored justification and angle as KiCad draws them
+        the part it names. The box of a local label follows its stored justification and angle as KiCad draws them
         (measured with kicad-cli): 180 is drawn as 0 and 270 as 90, with no half-turn flip, so left runs
-        right or up and right runs left or down; a label on a pin whose text runs away from the part is
+        right or up and right runs left or down (a global or hierarchical label: see above); a label on a pin whose text runs away from the part is
         not reported. Items: the label, the part; overlap in mm.
         It replaces text_symbol for that pair (a label on a pin of a part is not a text_symbol finding).
         text_hidden_behind_symbol: the visible Reference, Value or other property text of another symbol, or
@@ -3812,8 +3826,22 @@ def build(mcp: MCPServer) -> list[str]:
         max_findings count such a pair under both kinds; this kind is the one to read for the share and the
         DNP flag. The box of a Reference or Value is the drawn one also on a symbol turned 90, 180 or 270
         degrees or mirrored (see text_text), so covered_fraction has the right shape there; its width stays
-        the estimate (0.6 of the font size per character, shorter than the drawn text). Not measured: which
+        the estimate (see text_text). Not measured: which
         unit copy of a multi-unit symbol KiCad draws (each unit node is read as stored).
+        text_over_pin_text (issue 225): a label, free text or visible property text (also a part's own Reference
+        or Value) whose estimated box overlaps by more than 0.5 mm in both axes the pin number or pin name KiCad
+        draws at a visible pin of a placed symbol. Items: the text, and a pin_text item (what: number or name, pin,
+        text, reference, box); overlap in mm. Measured with kicad-cli svg over turns and mirrors of a passive, a
+        connector and an amplifier: a pin number is centred on the middle of its pin line, 0.36 mm above a horizontal pin
+        and left of a vertical one (turned vertical); a pin name starts the library's pin_names offset (0.508 mm when none
+        is named) past the inner end of the line and runs into the body. Not obstacles: hidden pins, a library whose
+        pin_numbers or pin_names are hidden, empty and ~ names, power symbols. A label that sits on a pin by design is a
+        finding only when its text runs along the pin line over the number (the stored justify and angle decide, as in
+        label_over_own_symbol); a label running away from the part is not. The same label can be an item of this kind and of
+        label_over_own_symbol or text_symbol (its second item differs: the pin text against the part), and found, counts and
+        max_findings count each finding. Remaining limits: the names of a symbol whose pin_names offset is 0 (drawn outside the
+        body) are not checked (not measured); pin text sizes other than 1.27 mm and the number gap for them are not measured; only
+        the placed unit's pins are read, and which unit copy KiCad draws is not measured; boxes, not the ink, are compared.
 
         Returns found, counts (per kind, the full numbers), findings (each: kind, sheet, at, items with
         their uuid and box or points or text, estimated, fix, and the numbers behind it: overlap in mm,
