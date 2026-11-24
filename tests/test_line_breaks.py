@@ -674,11 +674,30 @@ def test_a_hierarchical_label_with_a_line_break_is_escaped(project: Path, brk: s
 # --------------------------------------------------------------------------- board texts
 
 
+def _square_the_outline(pcb: Path) -> None:
+    """The demo's top outline line runs from y = 51.8 to y = 51.816 over 100 mm, so the issue 214 rule
+    (an outline is an exact axis-aligned rectangle or it is refused) refuses the board as
+    outline_not_rectangular. This test is about line breaks, not the outline: the four Edge.Cuts lines
+    are replaced by the axis-aligned rectangle of the same corners, through the write layer."""
+    root = wl.load(pcb)
+    for node in [n for n in root.children if not n.is_atom and n.name == "gr_line" and n.find("layer").values[0] == "Edge.Cuts"]:
+        root.children.remove(node)
+    (x0, y0), (x1, y1) = (87.9, 51.8), (188.595, 131.826)
+    corners = [(x0, y0), (x1, y0), (x1, y1), (x0, y1)]
+    for k in range(4):
+        a, b = corners[k], corners[(k + 1) % 4]
+        root.append(SExp.list("gr_line", SExp.list("start", *a), SExp.list("end", *b),
+                              SExp.list("stroke", SExp.list("width", 0.2032), SExp.list("type", "solid")),
+                              SExp.list("layer", "Edge.Cuts"), SExp.list("uuid", str(uuid.uuid4()))))
+    wl.save(root, pcb)
+
+
 @pytest.mark.parametrize("brk", BREAKS, ids=list(BREAKS))
 def test_place_footprints_escapes_a_line_break_in_reference_and_value(project: Path, brk: str, tmp_path: Path) -> None:
     from boardproof.toolsets import placement
 
     pcb = project / "complex_hierarchy.kicad_pcb"
+    _square_the_outline(pcb)
     ref, value = f"R9{BREAKS[brk]}x", f"1k{BREAKS[brk]}1%"
     result = _tools(placement)["place_footprints"](
         str(pcb), [{"reference": ref, "library_id": "Resistor_SMD:R_0603_1608Metric", "x": 5, "y": 5, "value": value}]

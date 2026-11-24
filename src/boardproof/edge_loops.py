@@ -248,6 +248,12 @@ def _item(node: Any) -> tuple[list[Point] | None, bool, str | None]:
     return None, False, f"{what} is not read (only lines, arcs, rectangles, circles and polygons are)"
 
 
+def _free_ends(pieces: list[tuple[Any, list[Point]]]) -> list[tuple[Point, int]]:
+    """The ends (point, piece index) with no end of another piece within SNAP."""
+    ends = [(pt, k) for k, (_, pts) in enumerate(pieces) for pt in (pts[0], pts[-1])]
+    return [e for e in ends if not any(o[1] != e[1] and abs(e[0][0] - o[0][0]) <= SNAP and abs(e[0][1] - o[0][1]) <= SNAP for o in ends)]
+
+
 def read_edges(root: Any) -> Edges:
     """The top-level Edge.Cuts items of a parsed board as closed loops. Footprint-embedded
     Edge.Cuts (``fp_*``) are not read here: ``footprint_edge_items`` names them."""
@@ -272,6 +278,7 @@ def read_edges(root: Any) -> Edges:
 
     # chain lines and arcs: an endpoint is shared when two ends are within SNAP
     used = [False] * len(pieces)
+    free: list[tuple[Point, int]] | None = None
 
     def close(p: Point, q: Point) -> bool:
         return abs(p[0] - q[0]) <= SNAP and abs(p[1] - q[1]) <= SNAP
@@ -312,10 +319,18 @@ def read_edges(root: Any) -> Edges:
             else:
                 problems.append("a closed chain of Edge.Cuts items has no area")
         else:
-            problems.append(
-                "an open chain of " + ", ".join(f"{n.name} {_uuid(n) or '?'}" for n in nodes)
-                + " does not close (KiCad reports invalid_outline)"
-            )
+            if free is None:  # on first need, once per call: it is quadratic and a closed outline never needs it
+                free = _free_ends(pieces)
+            mine = [e for e in free if e[1] in chain]
+            gaps = [d for d in (math.dist(a[0], b[0]) for a in mine for b in free if b is not a) if d > SNAP]
+            nodes_text = ", ".join(f"{n.name} {_uuid(n) or '?'}" for n in nodes)
+            if gaps:
+                problems.append(
+                    f"an open chain of {nodes_text} does not close: its nearest free end is {min(gaps):.3g} mm from"
+                    f" another free end, and the tool joins ends only within {SNAP:g} mm"
+                    " (KiCad's own default is 0.01 mm: a gap above that is invalid_outline)")
+            else:  # a stray, duplicate, spur or branching item: there is no gap to name
+                problems.append(f"an open chain of {nodes_text} does not close (it has no pair of free ends to measure a gap between)")
     return Edges(tuple(loops), tuple(problems))
 
 

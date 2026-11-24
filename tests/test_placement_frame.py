@@ -13,6 +13,7 @@ library cannot read). Raw (at) nodes are always what the tests read back.
 
 from __future__ import annotations
 
+import math
 import shutil
 from pathlib import Path
 
@@ -57,6 +58,23 @@ def _edit(pcb: Path, mutate) -> None:
     board = PCB.load(pcb)
     mutate(board._sexp)
     write_layer.save_pcb(board, pcb)
+
+
+def _stadium(root, left: tuple[float, float], r: float, length: float) -> None:
+    """Replace the outline by a stadium (issue 214 accepts it): two outward semicircles of radius ``r``
+    centred at ``left`` and ``length`` mm to its right, joined by two lines. The arcs are written as
+    start, mid, end through the three-point form, so the bulge is computed from the circle."""
+    from kicad_tools.sexp import parse_string
+
+    cx, cy = left
+    st = '(stroke (width 0.1) (type default)) (layer "Edge.Cuts")'
+    for text in (
+        f'(gr_arc (start {cx} {cy - r}) (mid {cx - r} {cy}) (end {cx} {cy + r}) {st})',
+        f'(gr_arc (start {cx + length} {cy + r}) (mid {cx + length + r} {cy}) (end {cx + length} {cy - r}) {st})',
+        f'(gr_line (start {cx} {cy - r}) (end {cx + length} {cy - r}) {st})',
+        f'(gr_line (start {cx + length} {cy + r}) (end {cx} {cy + r}) {st})',
+    ):
+        root.append(parse_string(text))
 
 
 def _drop_outline(root) -> None:
@@ -245,25 +263,20 @@ def test_the_origin_numbers_reported_for_a_refused_board_match_the_librarys(
 
 
 def test_an_arc_bulge_sets_the_origin_and_the_raw_reader_agrees(fns: dict, board: Path) -> None:
-    """An Edge.Cuts arc whose leftmost point is neither its start, mid nor end: the origin is
-    the circle's axis extreme, computed by the raw reader and by the library alike."""
-    import math
-
-    from kicad_tools.sexp import parse_string
-
+    """The outline is a stadium (the issue 214 rule accepts it; a lone open arc is refused as
+    slots_unreadable). Its left semicircle (centre (136, 87.5), radius 10) bulges out to x = 126, a
+    point that is the arc's own mid point: the origin is the circle's axis extreme, computed by the raw
+    reader and by the library alike. (A stadium arc's mid point is always the axis extreme; an arc whose
+    extreme is none of start, mid and end cannot be part of an outline the rule accepts.)"""
     def mutate(root):
-        root.append(parse_string(
-            '(gr_arc (start 136 77.5) (mid 131 82) (end 136 97.5) '
-            '(stroke (width 0.1) (type default)) (layer "Edge.Cuts"))'
-        ))
+        _drop_outline(root)
+        _stadium(root, (136.0, 87.5), 10.0, 20.0)
 
     _edit(board, mutate)
-    # circle through the three points: centre on y = 87.5
-    cx = ((136**2 + 77.5**2) - (131**2 + 82**2) - 2 * 87.5 * (77.5 - 82)) / (2 * (136 - 131))
-    left = cx - math.dist((cx, 87.5), (136, 77.5))
+    left = 126.0
     result = _place(fns, board)
     assert result["status"] == "ok", result
-    assert result["origin_mm"][0] == pytest.approx(left, abs=1e-9) and left < 131
+    assert result["origin_mm"][0] == pytest.approx(left, abs=1e-9)
     assert result["origin_mm"][1] == 77.5
     assert _raw_at(board, "R1")[:2] == pytest.approx((left + 10.0, 82.5), abs=1e-6)
 
@@ -531,21 +544,17 @@ def test_a_legacy_arc_is_refused_with_a_true_reason(fns: dict, board: Path) -> N
 
 
 def test_the_origin_is_reported_without_float_noise(fns: dict, board: Path) -> None:
-    """An arc whose leftmost point is 80.3 mm, computed through the three-point circle as
-    80.29999999999998. The origin is rounded to 1e-9 mm."""
-    from kicad_tools.sexp import parse_string
-
+    """A stadium whose left semicircle (centre (90, 110), radius 9.7) reaches x = 80.3 mm, computed
+    through the three-point circle as 80.29999999999998. The origin is rounded to 1e-9 mm."""
     def mutate(root):
-        root.append(parse_string(
-            '(gr_arc (start 90 100.3) (mid 80.3 110) (end 90 119.7) '
-            '(stroke (width 0.1) (type default)) (layer "Edge.Cuts"))'
-        ))
+        _drop_outline(root)
+        _stadium(root, (90.0, 110.0), 9.7, 20.0)
 
     _edit(board, mutate)
     result = _place(fns, board)
     assert result["status"] == "ok", result
-    assert result["origin_mm"] == [80.3, 77.5]
-    assert "(80.3, 77.5)" in result["frame"]
+    assert result["origin_mm"] == [80.3, 100.3]
+    assert "(80.3, 100.3)" in result["frame"]
 
 
 def test_the_library_origin_in_a_disagreement_is_rounded_too(
@@ -560,3 +569,29 @@ def test_the_library_origin_in_a_disagreement_is_rounded_too(
     result = _place(fns, board)
     assert result["status"] == "error" and "disagree" in result["reason"]
     assert "[1.0, 1.0]" in result["reason"]
+
+
+R_ARC = math.sqrt(4.475**2 + 10**2)  # radius of the circle through (136, 77.5), (131, 82), (136, 97.5), centre (140.475, 87.5)
+
+
+@pytest.mark.parametrize("name,points,axis,pick,expected", [
+    # by hand: equal distance to start and end gives y = 87.5; to start and mid: 136^2 - 272 cx + 100 = 131^2 - 262 cx + 30.25,
+    # so cx = 140.475 and r = sqrt(4.475^2 + 10^2) = 10.9556; the leftmost point cx - r = 129.519 is none of the three points
+    ("left", ((136.0, 77.5), (131.0, 82.0), (136.0, 97.5)), 0, min, 140.475 - R_ARC),
+    # the same arc mirrored in x (x -> -x): centre (-140.475, 87.5), the rightmost point -140.475 + r = -129.519
+    ("right", ((-136.0, 77.5), (-131.0, 82.0), (-136.0, 97.5)), 0, max, -140.475 + R_ARC),
+    # x and y swapped: centre (87.5, 140.475), the topmost (smallest y) point 140.475 - r = 129.519
+    ("top", ((77.5, 136.0), (82.0, 131.0), (97.5, 136.0)), 1, min, 140.475 - R_ARC),
+    # swapped and y negated: centre (87.5, -140.475), the bottom (largest y) point -140.475 + r = -129.519
+    ("bottom", ((77.5, -136.0), (82.0, -131.0), (97.5, -136.0)), 1, max, -140.475 + R_ARC),
+])
+def test_arc_extent_includes_the_axis_extreme_that_is_none_of_start_mid_end(name, points, axis, pick, expected) -> None:
+    """Each arc is the bulge of a circle whose axis extreme (named by ``name``) is none of start, mid and end.
+    The two copies of the arc-extent code must agree."""
+    from boardproof import raw_geometry
+
+    given = [p[axis] for p in points]
+    assert (expected < min(given) if pick is min else expected > max(given)), name  # really beyond the three points
+    for fn in (placement_toolset._arc_extent, raw_geometry.arc_extent):
+        extent = [p[axis] for p in fn(*points)]
+        assert pick(extent) == pytest.approx(expected, abs=1e-9), (name, fn)
