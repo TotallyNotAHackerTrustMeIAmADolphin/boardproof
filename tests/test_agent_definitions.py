@@ -15,6 +15,8 @@ from pathlib import Path
 
 import pytest
 
+from tests._hermetic_git import run_git
+
 OLD_PLANNING_DIR = "." + "scratch"  # built, so this file names no quoted path
 ROOT = Path(__file__).resolve().parents[1]
 AGENTS = ROOT / "docs" / "dispatch"
@@ -424,8 +426,7 @@ def test_agents_read_and_record_tickets_as_issues():
 
 def test_hand_made_worktrees_are_history_only():
     # Issue 155: the plugin builder makes the worktree from a fresh origin/main (CLAUDE.md P5).
-    for line in __import__("subprocess").run(["git", "ls-files"], cwd=ROOT, capture_output=True, text=True,
-                                             check=True).stdout.splitlines():
+    for line in run_git("ls-files", cwd=ROOT, text=True).stdout.splitlines():
         if line in {"docs/HISTORY.md", "tests/test_agent_definitions.py"} or line.startswith("docs/playbook"):
             continue
         path = ROOT / line

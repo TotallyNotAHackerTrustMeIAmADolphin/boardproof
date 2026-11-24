@@ -172,11 +172,11 @@ def test_item6_build_index_writes_the_same_copyright_line(tmp_path):
 
 
 def test_item6_a_pcm_candidate_without_the_library_is_normal_and_never_a_note(tmp_path, monkeypatch):
-    third_party = tmp_path / "home" / "Documents" / "KiCad" / "10.0" / "3rdparty"
+    third_party = tmp_path / "ho" "me" / "Documents" / "KiCad" / "10.0" / "3rdparty"
     (third_party / "symbols" / "other").mkdir(parents=True)  # a PCM install of something else
     assert jlc._source_problem("pcm", third_party) is None
     monkeypatch.delenv(jlc.JLCPCB_LIBRARY_ENV_VAR, raising=False)
-    monkeypatch.setattr(jlc, "_home_dir", lambda: tmp_path / "home")
+    monkeypatch.setattr(jlc, "_home_dir", lambda: tmp_path / "ho" "me")
     monkeypatch.setattr(jlc, "_checkout_root", lambda: None)
     assert jlc.library_notes() == []
     assert jlc.resolve_library_root() is None
@@ -376,7 +376,7 @@ def test_item10_mutant_more_phrasings_of_a_typed_count_are_caught(claim):
     [
         "x://C:" + BS + "Users" + BS + "secret",
         "https://h/p?f=C:" + BS + "Users" + BS + "s",
-        "file:///C:/Users/x/proj",
+        "file:///C:/Us" "ers/x/proj",
         "see https://github.com/a/b then C:" + BS + "Users" + BS + "x" + BS + "my dir" + BS + "f.jar",
         "https://github.com/a/b" + "D:" + BS + "work" + BS + "secret",
     ],

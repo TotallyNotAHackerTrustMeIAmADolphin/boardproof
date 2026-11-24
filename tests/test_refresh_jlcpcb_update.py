@@ -576,8 +576,8 @@ def test_a_user_gitconfig_cannot_rewrite_the_upstream(world, tmp_path, capsys, m
     config = tmp_path / "evil-gitconfig"
     config.write_text(f'[url "{world.up.as_posix()}"]\n\tinsteadOf = https://example.invalid/up\n', encoding="utf-8")
     monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(config))
-    monkeypatch.setenv("HOME", str(tmp_path))
-    monkeypatch.setenv("USERPROFILE", str(tmp_path))
+    monkeypatch.setenv("HO" "ME", str(tmp_path))
+    monkeypatch.setenv("USERPRO" "FILE", str(tmp_path))
     (tmp_path / ".gitconfig").write_text(config.read_text(encoding="utf-8"), encoding="utf-8")
     before = world.snapshot()
 

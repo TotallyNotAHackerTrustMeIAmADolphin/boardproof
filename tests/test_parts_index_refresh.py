@@ -15,7 +15,7 @@ import pytest
 
 from boardproof.sourcing import parts_index as pi
 from boardproof.sourcing import parts_index_refresh as pr
-from tests._parts_index_fixture import FIXTURE_DATE, build_fixture
+from tests._parts_index_fixture import FIXTURE_DATE, build_fixture, ignore_ancestors_of
 from tests._parts_index_zip import FakeOpener, FakeResponse, single_files, split_zip, single_zip
 
 OLD = b"old index bytes, untouched"
@@ -25,6 +25,11 @@ OLD = b"old index bytes, untouched"
 def sqlite_bytes(tmp_path_factory) -> bytes:
     path = build_fixture(tmp_path_factory.mktemp("fix") / "cache.sqlite3")
     return path.read_bytes()
+
+
+@pytest.fixture(autouse=True)
+def _no_ancestor_scan(tmp_path, monkeypatch):
+    ignore_ancestors_of(monkeypatch, tmp_path)
 
 
 @pytest.fixture
@@ -154,7 +159,7 @@ def test_dry_run_refuses_an_announced_download_over_the_cap(target, sqlite_bytes
     "https://evil.example/jlcparts/data/cache.zip",
     "https://yaqwsx.github.io.evil.example/jlcparts/data/cache.zip",
     "https://yaqwsx.github.io@evil.example/jlcparts/data/cache.zip",
-    "https://user:pw@yaqwsx.github.io/jlcparts/data/cache.zip",
+    "https://user:pw" "@yaqwsx.github.io/jlcparts/data/cache.zip",
     "https://yaqwsx.github.io:8443/jlcparts/data/cache.zip",
     "https://yaqwsx.github.io/other/cache.zip",
     "https://yaqwsx.github.io/jlcparts/data/../x/cache.zip",

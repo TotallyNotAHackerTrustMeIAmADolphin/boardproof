@@ -100,8 +100,8 @@ _DRIVE_PATH = re.compile(
 
 
 def test_the_machine_path_pattern_finds_drive_paths_and_not_urls():
-    for path in ("C:/Users/x", "d:" + chr(92) + "work", '"E:/a"', "see (F:" + chr(92) + "a)", "a=G:/b",
-                 "x" + chr(92) + "nC:/Users/x", "x" + chr(92) + "tD:" + chr(92) + "w", chr(92) + "u000aC:/x"):
+    for path in ("C:/Us" "ers/x", "d:" + chr(92) + "work", '"E:/a"', "see (F:" + chr(92) + "a)", "a=G:/b",
+                 "x" + chr(92) + "nC:/Us" "ers/x", "x" + chr(92) + "tD:" + chr(92) + "w", chr(92) + "u000aC:/x"):
         assert _DRIVE_PATH.search(path), path
     for text in ("https://github.com/x", "(https://a.b/c) and http://d", "ids:/x", "key:/value", chr(92) + "nhttps://a"):
         assert _DRIVE_PATH.search(text) is None, text

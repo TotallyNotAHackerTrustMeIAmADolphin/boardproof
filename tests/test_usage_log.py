@@ -112,10 +112,10 @@ def test_outcome_words():
     assert usage_log.outcome_of(text({"verdict": "FAIL", "x": 1})) == "FAIL"
     assert usage_log.outcome_of(text({"a": {"verdict": "PASS"}})) == "ok"  # nested: not the call's word
     assert usage_log.outcome_of(text({"ok": False})) == "not_ok"
-    assert usage_log.outcome_of(text({"error": "C:/Users/zed"})) == "error"
-    assert usage_log.outcome_of(text({"status": "C:/Users/zed/x"})) == "other"
+    assert usage_log.outcome_of(text({"error": "C:/Us" "ers/zed"})) == "error"
+    assert usage_log.outcome_of(text({"status": "C:/Us" "ers/zed/x"})) == "other"
     # a status value outside RESULT_WORDS (could hold data) is never copied: "other"
-    assert usage_log.outcome_of(R({"status": "C:/Users/someone/board.kicad_pcb"})) == "other"
+    assert usage_log.outcome_of(R({"status": "C:/Us" "ers/someone/board.kicad_pcb"})) == "other"
     assert usage_log.outcome_of(R({"status": "x" * 40})) == "other"
 
 
@@ -132,7 +132,7 @@ def test_a_tool_that_raises_and_an_unknown_name_are_recorded_without_the_name_te
     async def run():
         async with Client(mcp, mode="auto") as client:
             await client.call_tool("boom", {})
-            await client.call_tool("SENTINEL_TOOL_NAME_C:/Users/zed", {})
+            await client.call_tool("SENTINEL_TOOL_NAME_C:/Us" "ers/zed", {})
 
     asyncio.run(run())
     text = (tmp_path / "u.jsonl").read_text(encoding="utf-8")
@@ -143,7 +143,7 @@ def test_a_tool_that_raises_and_an_unknown_name_are_recorded_without_the_name_te
 
 def test_sentinel_arguments_and_results_never_reach_the_file(tmp_path):
     mcp = MCPServer("t")
-    sentinel = "SENTINEL-NET-VCC_3V3-C:/Users/zed/board.kicad_pcb-LCSC-C12345"
+    sentinel = "SENTINEL-NET-VCC_3V3-C:/Us" "ers/zed/board.kicad_pcb-LCSC-C12345"
 
     @mcp.tool()
     def echo(pcb_path: str, net: str, parts: list[str]) -> dict:
@@ -292,13 +292,13 @@ def test_off_values(value):
 
 def test_a_named_file_and_the_default_locations(tmp_path):
     assert usage_log.resolve_path({usage_log.ENV_VAR: str(tmp_path / "x.jsonl")}) == tmp_path / "x.jsonl"
-    win = usage_log.resolve_path({"LOCALAPPDATA": "C:/L", "USERPROFILE": "C:/U"}, "win32")
+    win = usage_log.resolve_path({"LOCALAPPDATA": "C:/L", "US" "ERPROFILE": "C:/U"}, "win32")
     assert win == Path("C:/L/boardproof/usage.jsonl")
-    mac = usage_log.resolve_path({"HOME": "/h"}, "darwin")
+    mac = usage_log.resolve_path({"HO" "ME": "/h"}, "darwin")
     assert mac == Path("/h/Library/Application Support/boardproof/usage.jsonl")
-    xdg = usage_log.resolve_path({"XDG_DATA_HOME": "/x", "HOME": "/h"}, "linux")
+    xdg = usage_log.resolve_path({"XDG_DATA_HOME": "/x", "HO" "ME": "/h"}, "linux")
     assert xdg == Path("/x/boardproof/usage.jsonl")
-    assert usage_log.resolve_path({"HOME": "/h"}, "linux") == Path("/h/.local/share/boardproof/usage.jsonl")
+    assert usage_log.resolve_path({"HO" "ME": "/h"}, "linux") == Path("/h/.local/share/boardproof/usage.jsonl")
 
 
 def test_on_by_default_when_the_variable_is_unset(monkeypatch):

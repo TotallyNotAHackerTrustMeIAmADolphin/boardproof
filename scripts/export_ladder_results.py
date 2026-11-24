@@ -27,7 +27,7 @@ SCHEMA = 1
 _WIN_PATH = re.compile(r'[A-Za-z]:[\\/](?:[^\\/:*?"<>|\r\n]+[\\/])*[^\\/:*?"<>|\s]*')
 # The "scheme://" PREFIX of a URL is consumed first and kept: the "s:/" of "https://" is part of a scheme, not a
 # drive (issue 9). Only the prefix is exempt, never the rest of the URL: a drive path in its tail or glued after it
-# (a query "?f=C:\Users\s", "cwdD:\work") is still a path.
+# (a query "?f=C:\work\s", "cwdD:\work") is still a path.
 _URL_PREFIX = r"[A-Za-z][A-Za-z0-9+.-]*://"
 _URL_OR_WIN = re.compile(rf"(?P<url>{_URL_PREFIX})|(?P<win>{_WIN_PATH.pattern})")
 

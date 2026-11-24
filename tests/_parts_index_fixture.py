@@ -146,3 +146,17 @@ def build_fixture(path: Path, *, newest: int = NEWEST, with_optional_columns: bo
     finally:
         conn.close()
     return path
+
+
+def ignore_ancestors_of(monkeypatch, tmp_path: Path) -> None:
+    """Issue 235: the target check scans every parent folder for KiCad files, so a stray board in the system
+    temp folder refused every test. This patches ``Path.iterdir`` (through ``monkeypatch``, undone after the
+    test) so that the real parent folders of tmp_path list as empty. It hides them from ALL code that runs in
+    the test, not only the target check; tmp_path and below stay real."""
+    real = Path.iterdir
+    above = {p for p in tmp_path.resolve().parents}
+
+    def iterdir(self):
+        return iter(()) if self in above else real(self)
+
+    monkeypatch.setattr(Path, "iterdir", iterdir)

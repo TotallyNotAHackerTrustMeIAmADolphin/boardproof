@@ -15,7 +15,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 from boardproof.sourcing import parts_index as pi
 from boardproof.sourcing import parts_index_refresh as pir
 from boardproof.toolsets import sourcing as sourcing_toolset
-from tests._parts_index_fixture import FIXTURE_DATE, build_fixture
+from tests._parts_index_fixture import FIXTURE_DATE, build_fixture, ignore_ancestors_of
 from tests._parts_index_zip import FakeOpener, single_files
 
 REPO = Path(__file__).resolve().parents[1]
@@ -27,6 +27,11 @@ def mcp() -> MCPServer:
     server = MCPServer("test")
     sourcing_toolset.build(server)
     return server
+
+
+@pytest.fixture(autouse=True)
+def _no_ancestor_scan(tmp_path, monkeypatch):
+    ignore_ancestors_of(monkeypatch, tmp_path)
 
 
 @pytest.fixture
