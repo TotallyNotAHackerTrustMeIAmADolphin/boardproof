@@ -52,6 +52,7 @@ from typing import Any
 from boardproof import checkpoint, write_layer
 from boardproof.board_view import OUTLINE_SHAPES, read_board_view
 from boardproof import verify_board as gate
+from boardproof.raw_geometry import RawGeometryError, net_name, net_node_name, net_table
 from boardproof.sheet_tree import netlist_disagreement, parsed_sheet, path_key, placed_instances
 from boardproof.sheet_tree import walk as walk_sheet_tree
 
@@ -746,31 +747,14 @@ def _check_schematic(sch_path: Path, netlist: Any, raw: list[dict], nodes: set[t
     return tree
 
 
-def _net_table(root: Any) -> dict[int, str]:
-    out: dict[int, str] = {}
-    for n in root.children:
-        if n.name == "net" and len(n.values) > 1:
-            try:
-                out[int(n.values[0])] = str(n.values[1])
-            except (TypeError, ValueError):
-                continue
-    return out
-
-
 def _copper_on_nets(root: Any, names: set[str]) -> list[str]:
     """``kind uuid (net)`` of every top-level segment/arc/via/zone on one of ``names``, from raw nodes."""
-    table = _net_table(root)
+    table = net_table(root)
     hits: list[str] = []
     for n in root.copper_children():
         if n.name not in ("segment", "arc", "via", "zone"):
             continue
-        net = n.find("net")
-        name = ""
-        if net is not None and net.values:
-            try:
-                name = table.get(int(net.values[0]), "")
-            except (TypeError, ValueError):
-                name = str(net.values[0])
+        name = net_name(n, table)  # (net N), (net N "name") and (net "name"); an unknown form raises
         if not name:
             nn = n.find("net_name")
             name = str(nn.values[0]) if nn is not None and nn.values else ""
@@ -782,12 +766,9 @@ def _copper_on_nets(root: Any, names: set[str]) -> list[str]:
 
 def _net_number(node: Any) -> int | None:
     """The first value of a raw ``(net ...)`` node as an int, or None when it is not one."""
-    if not node.values:
-        return None
-    try:
-        return int(str(node.values[0]))
-    except (TypeError, ValueError):
-        return None
+    if not node.values or not isinstance(node.values[0], int):
+        return None  # a quoted name that looks like a number is a name, not a number
+    return node.values[0]
 
 
 def _stale_net_evidence(pcb_path: Path, stale: Sequence[str]) -> tuple[dict[str, int], dict[str, list[str]]]:
@@ -802,6 +783,7 @@ def _stale_net_evidence(pcb_path: Path, stale: Sequence[str]) -> tuple[dict[str,
     reference whose number cannot be read could refer to any net, so it blocks every stale net.
     Anything not shown to be unused is blocked, so the refusal stays."""
     root = _parse(pcb_path)
+    table = net_table(root)
     declared: list[tuple[int | None, str]] = []
     table_nodes = [n for n in root.children if n.name == "net"]
     for n in table_nodes:
@@ -824,7 +806,10 @@ def _stale_net_evidence(pcb_path: Path, stale: Sequence[str]) -> tuple[dict[str,
             owner = "pad"
         if node.name == "net":
             num = _net_number(node)
-            name = str(node.values[1]) if len(node.values) > 1 else None
+            try:
+                name = net_node_name(node, table)  # (net "name"), (net N "name"), (net N); "" is no net
+            except RawGeometryError:
+                name = None
             if num is None and name is None:
                 unreadable.append(f"{owner} (net {' '.join(str(v) for v in node.values)})")
             else:
@@ -839,7 +824,9 @@ def _stale_net_evidence(pcb_path: Path, stale: Sequence[str]) -> tuple[dict[str,
     for name in sorted(wanted):
         nums = numbers[name]
         if not nums:
-            blocked[name].append("its declaration could not be read")
+            blocked[name].append(
+                "its declaration could not be read" if declared else "the board has no net declarations (KiCad 10 files, version 20260206 and later, write none)"
+            )
         elif len(nums) > 1:
             blocked[name].append(f"it is declared {len(nums)} times")
         elif nums[0] is None:
@@ -905,7 +892,16 @@ def _rel(path: Path, base: Path) -> str:
         return str(path)
 
 
-def _plan(
+def _plan(*args: Any, **kwargs: Any) -> dict:
+    """``_plan_board`` with a net the board states in a form this reader does not know turned into
+    ``_Blocked`` (ticket 224): unknown is never read as an empty or a guessed net name."""
+    try:
+        return _plan_board(*args, **kwargs)
+    except RawGeometryError as exc:
+        raise _Blocked(f"the net names on the board cannot be read, nothing was planned: {exc}") from exc
+
+
+def _plan_board(
     pcb_path: Path,
     sch_path: Path,
     staging_origin: tuple[float, float] | None,
@@ -970,7 +966,8 @@ def _plan(
         want = pin_net.get((ref, pad))
         if want is not None and board_nets != {want}:
             renetted.append({"reference": ref, "pad": pad, "board_net": sorted(board_nets)[0], "schematic_net": want})
-    declared = {str(n.values[1]) for n in root.children if n.name == "net" and len(n.values) > 1} - {""}
+    # KiCad 10 files declare no nets: the names on the pads are then the declared ones (ticket 224).
+    declared = (set(net_table(root).values()) | set().union(*pads.values())) - {""}
     stale = sorted(declared - set(nets))
     removable, blocked_stale = _stale_net_evidence(pcb_path, stale) if stale else ({}, {})
     _check_net_reconciliation(root, nets, pin_net, pads, present, components, renetted, blocked_stale)
@@ -1138,8 +1135,7 @@ def _pad_nets(root: Any) -> dict[tuple[str, str], set[str]]:
         for pad in fp.children:
             if pad.name != "pad" or not pad.values:
                 continue
-            net = pad.find("net")
-            name = str(net.values[1]) if net is not None and len(net.values) > 1 else ""
+            name = net_name(pad)  # both pad forms; refuses an unknown one (ticket 224)
             out.setdefault((ref, str(pad.values[0])), set()).add(name)
     return out
 
@@ -1351,7 +1347,8 @@ def _dangling_net_reference(fresh: Any) -> str | None:
     for n in fresh.children:
         if n.name in ("segment", "arc", "via", "zone"):
             ref = n.find("net")
-            if ref is not None and len(ref.values) == 1 and _net_number(ref) not in known:
+            # (net "name") (KiCad 10) cannot dangle: it names no number
+            if ref is not None and len(ref.values) == 1 and not isinstance(ref.values[0], str) and _net_number(ref) not in known:
                 return f"{n.name} refers to net {ref.values[0]}"
     return None
 

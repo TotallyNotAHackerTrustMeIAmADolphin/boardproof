@@ -18,6 +18,7 @@ from kicad_tools.sexp import parse_file, parse_string
 
 from boardproof import board_view as bv
 from boardproof import schematic_import as si
+from boardproof.raw_geometry import net_table
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
 BOARDS = ["simple_led.kicad_pcb", "krt_stress_congestion.kicad_pcb", "krt_pad_geometry_isolated.kicad_pcb", "graphics_removal_board.kicad_pcb"]
@@ -61,8 +62,8 @@ def _assert_same_as_full(path: Path) -> bv.BoardView:
     assert si._footprint_facts(view) == si._footprint_facts(full)
     assert si._outline_bbox(view) == si._outline_bbox(full)
     assert si._pad_nets(view) == si._pad_nets(full)
-    assert si._net_table(view) == si._net_table(full)
-    names = set(si._net_table(full).values()) | {"GND", "+5V", "no-such-net"}
+    assert net_table(view) == net_table(full)
+    names = set(net_table(full).values()) | {"GND", "+5V", "no-such-net"}
     assert si._copper_on_nets(view, names) == _full_copper_on_nets(full, names)
     return view
 
@@ -106,12 +107,12 @@ def test_the_view_reads_the_file_every_call_and_never_serves_a_stale_one(tmp_pat
 
     board = tmp_path / "b.kicad_pcb"
     shutil.copy(FIXTURES / "simple_led.kicad_pcb", board)
-    assert si._net_table(bv.read_board_view(board)) == {0: "", 1: "VCC", 2: "LED_ANODE", 3: "GND"}
+    assert net_table(bv.read_board_view(board)) == {0: "", 1: "VCC", 2: "LED_ANODE", 3: "GND"}
     root = write_layer.load(board)
     net = next(c for c in root.children if c.name == "net" and str(c.values[0]) == "2")
     write_layer.set_string(net, 1, "RENAMED")  # a write through the write layer, between two reads
     write_layer.save(root, board)
-    assert si._net_table(bv.read_board_view(board)) == {0: "", 1: "VCC", 2: "RENAMED", 3: "GND"}
+    assert net_table(bv.read_board_view(board)) == {0: "", 1: "VCC", 2: "RENAMED", 3: "GND"}
 
 
 # --- the splitter's guards: each falls back to the full parse, never to a guess ---------------

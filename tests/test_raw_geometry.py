@@ -799,3 +799,89 @@ def test_a_copper_layer_the_padstack_does_not_hold_is_refused():
     (fp,) = raw_geometry.read_footprints(_pad_tree(_mode("front_inner_back"), _stack_layer("B.Cu")))
     with pytest.raises(raw_geometry.RawGeometryError, match="Inner"):
         fp.pads[0].copper_on("In1.Cu")
+
+
+# --- ticket 224: the net name of a node, in every form KiCad writes ------------------------------
+
+
+def _net_node(*values):
+    from kicad_tools.sexp import SExp
+
+    from boardproof import write_layer as wl
+
+    kinds = [wl.string(v) if isinstance(v, str) else wl.number(v) for v in values]
+    return SExp.list("pad", wl.string("1"), SExp.list("net", *kinds))
+
+
+def _table_root(*decls):
+    from kicad_tools.sexp import SExp
+
+    from boardproof import write_layer as wl
+
+    return SExp.list("kicad_pcb", *(SExp.list("net", wl.number(n), wl.string(v)) for n, v in decls))
+
+
+def test_net_name_reads_the_kicad10_form_without_a_number():
+    assert raw_geometry.net_name(_net_node("GND")) == "GND"
+
+
+def test_net_name_reads_the_numbered_pad_form():
+    assert raw_geometry.net_name(_net_node(3, "GND")) == "GND"
+
+
+def test_net_name_reads_the_number_only_form_from_the_table():
+    table = raw_geometry.net_table(_table_root((3, "GND")))
+    assert raw_geometry.net_name(_net_node(3), table) == "GND"
+
+
+def test_net_name_of_a_quoted_name_that_looks_like_a_number_is_the_name():
+    assert raw_geometry.net_name(_net_node("5")) == "5"
+
+
+def test_net_name_of_net_zero_and_of_no_net_node_is_empty():
+    from kicad_tools.sexp import SExp
+
+    assert raw_geometry.net_name(_net_node(0)) == ""
+    assert raw_geometry.net_name(_net_node(0, "")) == ""
+    assert raw_geometry.net_name(SExp.list("pad", "1")) == ""
+
+
+@pytest.mark.parametrize(
+    "values, table, why",
+    [
+        ((), None, "unknown form"),
+        ((1, 2), None, "unknown form"),
+        (("GND", "VCC"), None, "unknown form"),
+        ((1, "GND", "x"), None, "unknown form"),
+        ((7,), None, "net 7 is not declared"),
+        ((7,), {3: "GND"}, "net 7 is not declared"),
+    ],
+)
+def test_net_name_refuses_a_form_or_number_it_does_not_know(values, table, why):
+    with pytest.raises(raw_geometry.RawGeometryError, match=why):
+        raw_geometry.net_name(_net_node(*values), table)
+
+
+def test_net_table_is_empty_for_kicad10_and_reads_numbered_declarations():
+    assert raw_geometry.net_table(_table_root()) == {}
+    assert raw_geometry.net_table(_table_root((0, ""), (2, "VCC"))) == {0: "", 2: "VCC"}
+
+
+def test_net_table_refuses_a_declaration_of_another_form():
+    from kicad_tools.sexp import SExp
+
+    from boardproof import write_layer as wl
+
+    for decl in (SExp.list("net", wl.string("GND")), SExp.list("net", wl.number(1)),
+                 SExp.list("net", wl.number(1), wl.number(2)),
+                 SExp.list("net", wl.string("1"), wl.string("GND"))):
+        with pytest.raises(raw_geometry.RawGeometryError, match="unknown form"):
+            raw_geometry.net_table(SExp.list("kicad_pcb", decl))
+
+
+def test_net_table_refuses_a_number_declared_twice():
+    # KiCad 10.0.7 loads a table with a number declared twice without an error, but two measurements of
+    # which name a (net N) reference then gets disagree (ecc83-pp: the original name in both orders;
+    # complex_hierarchy: the last declaration in both orders), so the reader refuses it (issue 224).
+    with pytest.raises(raw_geometry.RawGeometryError, match=r"declared twice \('A', 'B'\)"):
+        raw_geometry.net_table(_table_root((1, "A"), (1, "B")))

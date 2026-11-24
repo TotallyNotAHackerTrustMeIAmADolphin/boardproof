@@ -23,6 +23,7 @@ from kicad_tools.sexp import SExp
 from boardproof import checkpoint
 from boardproof import schematic_import as si
 from boardproof import write_layer
+from boardproof.raw_geometry import net_name
 from tests import _kicad_faults as faults
 
 REPO = Path(__file__).resolve().parents[1]
@@ -82,10 +83,7 @@ def _footprints(pcb_path: Path) -> dict[str, dict]:
         for pad in fp.children:
             if pad.name != "pad":
                 continue
-            net = pad.find("net")
-            pads.setdefault(str(pad.values[0]), set()).add(
-                str(net.values[1]) if net is not None and len(net.values) > 1 else ""
-            )
+            pads.setdefault(str(pad.values[0]), set()).add(net_name(pad))  # either form (ticket 224)
         at = fp.find("at")
         out[ref] = {
             "name": str(fp.values[0]),
@@ -1025,3 +1023,147 @@ def test_a_stale_plan_at_confirm_spends_the_token(pcb: Path, tmp_path: Path, mon
     again = si.confirm_schematic_import(pcb, proposal["revision_token"])
     assert again["status"] == "error" and again["reason"] == "unknown or expired revision_token"
     assert _stray(tmp_path) == []
+
+
+# --- ticket 224: a KiCad 10 board stores pad nets as (net "name") with no number ----------------
+
+
+def _save_in_kicad10_form(pcb_path: Path) -> None:
+    """Test setup only: ``kicad-cli pcb upgrade`` re-saves the board in KiCad 10's format (version
+    20260206: ``(net "name")`` on pads, no top-level net table). Never a hand edit."""
+    import subprocess
+
+    from boardproof.kicad_cli import find_kicad_cli
+
+    proc = subprocess.run([str(find_kicad_cli()), "pcb", "upgrade", "--force", str(pcb_path)],
+                          capture_output=True, timeout=300)
+    assert proc.returncode == 0, proc.stderr
+
+
+def _kicad10_revision(pcb: Path, tmp_path: Path) -> Path:
+    rev = _first_revision(pcb, tmp_path) / pcb.name
+    _save_in_kicad10_form(rev)
+    root = write_layer.load(rev)
+    pads = [p for fp in root.children if fp.name == "footprint" for p in fp.children if p.name == "pad"]
+    nets = [p.find("net") for p in pads if p.find("net") is not None]
+    assert nets and all(len(n.values) == 1 for n in nets), "fixture is not in the one-value form"
+    assert not [n for n in root.children if n.name == "net"], "fixture still has a net table"
+    return rev
+
+
+def test_kicad10_pad_nets_without_a_number_are_read_not_renetted(pcb: Path, tmp_path: Path) -> None:
+    rev = _kicad10_revision(pcb, tmp_path)
+    proposal = si.propose_schematic_import(rev, output_dir=tmp_path / "out2")
+    assert proposal["status"] == "proposed", proposal
+    assert proposal["renetted"] == []
+
+
+def test_kicad10_form_still_reports_a_real_renet(pcb: Path, tmp_path: Path) -> None:
+    rev = _kicad10_revision(pcb, tmp_path)
+    _edit_sch(rev.parent, _swap_labels("UPDI", "LED_CTL"))
+    proposal = si.propose_schematic_import(rev, output_dir=tmp_path / "out2")
+    assert proposal["status"] == "proposed", proposal
+    assert {(r["reference"], r["pad"], r["board_net"], r["schematic_net"]) for r in proposal["renetted"]} == {
+        ("J2", "2", "/UPDI", "/LED_CTL"),
+        ("U1", "19", "/UPDI", "/LED_CTL"),
+        ("U1", "8", "/LED_CTL", "/UPDI"),
+        ("R3", "1", "/LED_CTL", "/UPDI"),
+    }
+
+
+def _bytes(path: Path) -> bytes:
+    return path.read_bytes()
+
+
+def test_kicad10_confirm_writes_a_board_kicad_loads_with_the_new_nets(pcb: Path, tmp_path: Path) -> None:
+    import subprocess
+
+    from boardproof.kicad_cli import find_kicad_cli
+
+    rev = _kicad10_revision(pcb, tmp_path)
+    _edit_sch(rev.parent, _swap_labels("UPDI", "LED_CTL"))
+    proposal = si.propose_schematic_import(rev, output_dir=tmp_path / "out2")
+    result = si.confirm_schematic_import(rev, proposal["revision_token"])
+    assert result["status"] == "imported", result
+    after = _footprints(tmp_path / "out2" / pcb.name)
+    assert after["J2"]["pads"]["2"] == {"/LED_CTL"} and after["U1"]["pads"]["8"] == {"/UPDI"}
+    run = subprocess.run([str(find_kicad_cli()), "pcb", "drc", "--output", str(tmp_path / "drc.rpt"),
+                          str(tmp_path / "out2" / pcb.name)], capture_output=True, timeout=300)
+    assert run.returncode == 0, run.stderr  # KiCad loads the result (mixed pad forms, measured)
+
+
+def test_kicad10_net_that_only_orphans_keep_is_blocked_at_propose_not_at_confirm(pcb: Path, tmp_path: Path) -> None:
+    rev = _kicad10_revision(pcb, tmp_path)
+    _edit_sch(rev.parent, _rename_ref("R3", "R9"))  # R3 becomes an orphan
+    _edit_sch(rev.parent, _rename_label("LED_A", "LED_B"))  # its net is gone from the netlist
+    before = _bytes(rev)
+    proposal = si.propose_schematic_import(rev, output_dir=tmp_path / "out2")
+    assert proposal["status"] == "blocked" and proposal["revision_token"] is None, proposal
+    assert "/LED_A" in proposal["reason"]
+    assert "the board has no net declarations (KiCad 10 files, version 20260206 and later, write none)" in proposal["reason"]
+    assert "use(s): pad" in proposal["reason"] and "could not be read (" not in proposal["reason"]
+    assert _bytes(rev) == before and not (tmp_path / "out2").exists()
+
+
+def test_kicad10_copper_on_a_renetted_net_is_still_blocked(pcb: Path, tmp_path: Path) -> None:
+    from kicad_tools.schema import PCB
+
+    first = _first_revision(pcb, tmp_path)
+    rev = first / pcb.name
+    board = PCB.load(rev)
+    board.add_trace((10.0, 10.0), (20.0, 10.0), width=0.2, layer="F.Cu", net="/UPDI")
+    write_layer.save_pcb(board, rev)
+    _save_in_kicad10_form(rev)
+    _edit_sch(first, _swap_labels("UPDI", "LED_CTL"))
+    result = si.propose_schematic_import(rev, output_dir=tmp_path / "out2")
+    assert result["status"] == "blocked" and "segment" in result["reason"] and "(/UPDI)" in result["reason"], result
+
+
+@pytest.mark.parametrize("values", [(1, 2), ("GND", "VCC"), (1, "GND", "x")])
+def test_a_pad_net_in_an_unknown_form_refuses_and_writes_nothing(pcb: Path, tmp_path: Path, monkeypatch, values) -> None:
+    # KiCad cannot load such a file (the write layer's parse check refuses to save it), so the tree
+    # the planner reads is altered in memory; the file on disk is never touched.
+    rev = _kicad10_revision(pcb, tmp_path)
+    real = si.read_board_view
+
+    def altered(path, *a, **kw):
+        root = real(path, *a, **kw)
+        pad = next(p for fp in root.children if fp.name == "footprint" for p in fp.children
+                   if p.name == "pad" and p.find("net") is not None)
+        pad.find("net").children[:] = [
+            write_layer.string(v) if isinstance(v, str) else write_layer.number(v) for v in values
+        ]
+        return root
+
+    monkeypatch.setattr(si, "read_board_view", altered)
+    before = _bytes(rev)
+    proposal = si.propose_schematic_import(rev, output_dir=tmp_path / "out2")
+    assert proposal["status"] == "blocked" and proposal["revision_token"] is None, proposal
+    assert "net names on the board cannot be read" in proposal["reason"]
+    assert _bytes(rev) == before and not (tmp_path / "out2").exists()
+
+
+def _tree(*items):
+    from kicad_tools.sexp import SExp
+
+    return SExp.list("kicad_pcb", *items)
+
+
+def test_net_number_is_only_ever_an_unquoted_integer() -> None:
+    from kicad_tools.sexp import SExp
+
+    assert si._net_number(SExp.list("net", write_layer.number(4), write_layer.string("A"))) == 4
+    assert si._net_number(SExp.list("net", write_layer.string("5"))) is None  # a name that looks like a number
+    assert si._net_number(SExp.list("net")) is None
+
+
+def test_dangling_net_reference_ignores_a_name_form_and_still_finds_an_undeclared_number() -> None:
+    from kicad_tools.sexp import SExp
+
+    def seg(*v):
+        return SExp.list("segment", SExp.list("net", *v))
+
+    declared = SExp.list("net", write_layer.number(2), write_layer.string("GND"))
+    assert si._dangling_net_reference(_tree(declared, seg(write_layer.string("GND")))) is None
+    assert si._dangling_net_reference(_tree(declared, seg(write_layer.number(2)))) is None
+    assert "refers to net 9" in si._dangling_net_reference(_tree(declared, seg(write_layer.number(9))))

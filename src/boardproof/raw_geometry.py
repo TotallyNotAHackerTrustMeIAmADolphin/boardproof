@@ -480,6 +480,56 @@ def read_zones(board: Any) -> list[ZoneGeometry]:
     return zones
 
 
+def _is_int(value: Any) -> bool:
+    return isinstance(value, int)  # the parser yields no bool
+
+
+def net_table(root: Any) -> dict[int, str]:
+    """The top-level ``(net N "name")`` declarations of a parsed ``kicad_pcb``; ``{}`` for KiCad 10
+    (file version 20260206), which writes none. A declaration of any other shape raises
+    :class:`RawGeometryError`, so a name is never guessed."""
+    table: dict[int, str] = {}
+    for node in _children(root, "net"):
+        values = node.values
+        if len(values) != 2 or not _is_int(values[0]) or not isinstance(values[1], str):
+            raise RawGeometryError(f"net declaration of an unknown form: (net {_show(values)})")
+        if values[0] in table:  # KiCad loads it, but which name it keeps was not reproducible: never guess
+            raise RawGeometryError(f"net number {values[0]} is declared twice ({table[values[0]]!r}, {values[1]!r})")
+        table[values[0]] = values[1]
+    return table
+
+
+def net_name(node: Any, table: dict[int, str] | None = None) -> str:
+    """The net name of a pad, track, via or zone node, in every form KiCad writes (measured, see
+    the known facts of the architecture notes): ``(net "name")`` (KiCad 10), ``(net N "name")`` (KiCad 9 and older, pads) and
+    ``(net N)`` (older tracks, vias, zones; the name comes from ``table``, see :func:`net_table`).
+    A node with no ``(net ...)`` child is on no net (""). Net 0 is KiCad's "no net" (""). Any other
+    form, or a number the table does not declare, raises :class:`RawGeometryError`: unknown is
+    never read as an empty or a guessed name."""
+    net = node.find("net")
+    return "" if net is None else net_node_name(net, table)
+
+
+def net_node_name(net: Any, table: dict[int, str] | None = None) -> str:
+    """:func:`net_name` for the ``(net ...)`` node itself (a reader that walks the whole tree)."""
+    values = net.values
+    if len(values) == 1 and isinstance(values[0], str):
+        return values[0]
+    if len(values) == 2 and _is_int(values[0]) and isinstance(values[1], str):
+        return values[1]
+    if len(values) == 1 and _is_int(values[0]):
+        if values[0] == 0:
+            return ""
+        if table is not None and values[0] in table:
+            return table[values[0]]
+        raise RawGeometryError(f"net {values[0]} is not declared in the net table")
+    raise RawGeometryError(f"net node of an unknown form: (net {_show(values)})")
+
+
+def _show(values: Any) -> str:
+    return " ".join(repr(v) for v in values)
+
+
 @dataclass(frozen=True)
 class OutlineItem:
     """One Edge.Cuts shape, page frame. ``points`` by kind: line (start, end), arc (start, mid,

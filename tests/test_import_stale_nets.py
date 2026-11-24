@@ -261,14 +261,6 @@ def test_a_net_entry_with_an_unreadable_number_is_undetermined_and_blocks(board:
     assert result["status"] == "blocked" and "Weird" in result["reason"]
 
 
-def test_a_copper_item_with_an_unreadable_net_reference_is_undetermined(board: Path, tmp_path: Path) -> None:
-    seg = _segment(1)
-    seg.find("net").children[0] = write_layer.string("not-a-number")
-    _add(board, seg)
-    result = _propose(board, tmp_path)
-    assert result["status"] == "blocked"
-
-
 # --- the confirm: rollback, self-check, lock -------------------------------------------------------
 
 
@@ -398,3 +390,63 @@ async def test_both_tool_descriptions_carry_the_pinned_orphan_net_sentence() -> 
         tools = {t.name: t.description for t in (await client.list_tools()).tools}
     for name in ("propose_schematic_import", "confirm_schematic_import"):
         assert sentence in tools[name], name
+
+
+# --- ticket 224 fix round 1: the net reference forms of copper on a board with a numbered table --------
+
+
+def _unchecked_segment(board: Path, *values) -> None:
+    """A segment whose ``(net ...)`` holds ``values`` as given. A one-value string is saved through the
+    write layer's checked save (KiCad loads it, measured); any other form is written without the check,
+    because KiCad cannot load it."""
+    seg = _segment(1)
+    seg.find("net").children[:] = [
+        write_layer.string(v) if isinstance(v, str) else write_layer.number(v) for v in values
+    ]
+    root = write_layer.load(board)
+    root.append(seg)
+    if len(values) == 1 and isinstance(values[0], str):
+        write_layer.save(root, board)
+    else:
+        faults.write_unchecked(root, board)
+
+
+@pytest.mark.parametrize("values", [(), (1.5,), ("a", "b")])
+def test_a_net_reference_of_no_known_form_blocks_every_stale_net(board: Path, tmp_path: Path, values) -> None:
+    _unchecked_segment(board, *values)
+    result = _propose(board, tmp_path)
+    assert result["status"] == "blocked" and result["revision_token"] is None, result
+    assert "a (net ...) reference could not be read" in result["reason"]
+
+
+def test_a_one_value_name_on_a_numbered_board_is_read_as_a_name_and_counts_as_a_use(board: Path, tmp_path: Path) -> None:
+    # kicad-cli loads (net "name") on a board with a net table (issue 224, measured). This segment touches
+    # nothing: an isolated track keeps its stored name on re-save, a track that touches a pad or track gets its
+    # connectivity net back and the stored name is dropped. The name still counts as a use (the safe direction).
+    _unchecked_segment(board, "VISO")
+    result = _propose(board, tmp_path)
+    assert result["status"] == "blocked" and "VISO" in result["reason"], result
+
+
+def test_a_one_value_name_the_table_does_not_declare_changes_no_stale_net(board: Path, tmp_path: Path) -> None:
+    # On an isolated track KiCad keeps such a name on re-save (measured), as a net of its own; it names no
+    # orphan, so the orphans stay removable.
+    _unchecked_segment(board, "NOT_IN_THE_TABLE")
+    result = _propose(board, tmp_path)
+    assert result["status"] == "proposed" and result["stale_nets_removed"] == sorted(ORPHANS), result
+
+
+def test_an_empty_one_value_net_reference_is_no_net_and_changes_no_stale_net(board: Path, tmp_path: Path) -> None:
+    _unchecked_segment(board, "")
+    result = _propose(board, tmp_path)
+    assert result["status"] == "proposed" and result["stale_nets_removed"] == sorted(ORPHANS), result
+
+
+def test_a_renet_with_copper_on_an_undeclared_net_number_is_blocked_not_read_as_empty(board: Path, tmp_path: Path) -> None:
+    from tests.test_schematic_import import _edit_sch, _swap_labels
+
+    _add(board, _segment(77777))  # a number the table does not declare
+    _edit_sch(board.parent, _swap_labels("UPDI", "LED_CTL"))
+    result = _propose(board, tmp_path)
+    assert result["status"] == "blocked" and "net 77777 is not declared" in result["reason"], result
+    assert "cannot be read" in result["reason"]

@@ -2253,6 +2253,13 @@ kind = "write_unchecked"
 code = '''faults.write_unchecked(root, board)'''
 note = "Issue 69: a board net declaration whose number is a bare word; kicad-cli pcb upgrade crashes on it (0xC0000005), so write_layer.save refuses to build it. The import must treat such a net as undetermined evidence and keep its refusal."
 
+[[test_kicad_fault_call]]
+file = "test_import_stale_nets.py"
+function = "_unchecked_segment"
+kind = "write_unchecked"
+code = '''faults.write_unchecked(root, board)'''
+note = "Issue 224: a segment whose (net ...) holds no value, 1.5 or two strings, forms KiCad itself cannot load; the stale-net step must block on such a reference. The one-value string forms KiCad loads go through the checked save; write_unchecked is used only for (net), (net 1.5) and (net \"a\" \"b\")."
+
 [[raw_write]]
 file = "usage_log.py"
 function = "UsageLog._open"
