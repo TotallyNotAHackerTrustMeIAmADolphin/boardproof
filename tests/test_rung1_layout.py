@@ -74,6 +74,16 @@ def test_placement_is_confirmed_against_raw_positions(flow_result):
     assert {"J1", "U1", "H1", "H4"} <= set(raw)
 
 
+def test_autoplacement_proposal_leaves_the_mounting_holes_as_obstacles(flow_result):
+    """Ticket 218: without the refs argument the packer proposes H1 to H4 too, and they stop being obstacles."""
+    _, _, _, result = flow_result
+    step = next(s for s in result["steps"] if s["step"] == "autoplacement_proposal_only")
+    pos = step["result"]["proposed_positions"]
+    refs = set(pos) if isinstance(pos, dict) else {p["reference"] for p in pos}
+    assert refs, "no parts proposed"
+    assert not refs & {"H1", "H2", "H3", "H4"}
+
+
 @pytest.mark.needs_krt  # blocked is None only once KRT's plane step has run (build ticket 53)
 def test_rules_loosening_is_limited_to_the_owner_approved_list(flow_result):
     mod, _, _, result = flow_result

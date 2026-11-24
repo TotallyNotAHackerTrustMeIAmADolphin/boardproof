@@ -93,13 +93,17 @@ def write_index(runs: Path, rows: list[dict]) -> None:
 
 
 # A drive letter starts a path only when no word character precedes it: "https://" ends in "s:/" and is not one.
-_DRIVE_PATH = re.compile(r"(?<![A-Za-z0-9_])[A-Za-z]:[/\x5c]")
+# Extra alternatives: a backslash-letter escape or a backslash-u-four-hex escape (raw JSON) glues a path to a word character.
+# Known over-match, kept on purpose (refuses too much, never too little): a backslash, a letter and "x:/" such as "a\b:/c".
+_DRIVE_PATH = re.compile(
+    r"(?<![A-Za-z0-9_])[A-Za-z]:[/\x5c]|(?<=\x5c[A-Za-z])[A-Za-z]:[/\x5c]|(?<=\x5cu[0-9A-Fa-f]{4})[A-Za-z]:[/\x5c]")
 
 
 def test_the_machine_path_pattern_finds_drive_paths_and_not_urls():
-    for path in ("C:/Users/x", "d:" + chr(92) + "work", '"E:/a"', "see (F:" + chr(92) + "a)", "a=G:/b"):
+    for path in ("C:/Users/x", "d:" + chr(92) + "work", '"E:/a"', "see (F:" + chr(92) + "a)", "a=G:/b",
+                 "x" + chr(92) + "nC:/Users/x", "x" + chr(92) + "tD:" + chr(92) + "w", chr(92) + "u000aC:/x"):
         assert _DRIVE_PATH.search(path), path
-    for text in ("https://github.com/x", "(https://a.b/c) and http://d", "ids:/x", "key:/value"):
+    for text in ("https://github.com/x", "(https://a.b/c) and http://d", "ids:/x", "key:/value", chr(92) + "nhttps://a"):
         assert _DRIVE_PATH.search(text) is None, text
 
 
