@@ -38,7 +38,7 @@ def tools() -> dict:
 
 
 def _golden(tmp_path: Path, name: str = "proj") -> Path:
-    shutil.copytree(GOLDEN_DIR, tmp_path / name)
+    shutil.copytree(GOLDEN_DIR, tmp_path / name, ignore=shutil.ignore_patterns("~*.lck"))  # a parallel worker may hold a KiCad lock in the fixture
     return tmp_path / name / GOLDEN_NAME
 
 

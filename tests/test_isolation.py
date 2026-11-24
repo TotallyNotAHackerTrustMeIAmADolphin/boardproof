@@ -64,7 +64,7 @@ def pour(layer="B.Cu"):
 
 
 def build(tmp_path: Path, nodes=(), name="proj") -> Path:
-    shutil.copytree(GOLDEN_DIR, tmp_path / name)
+    shutil.copytree(GOLDEN_DIR, tmp_path / name, ignore=shutil.ignore_patterns("~*.lck"))  # a parallel worker may hold a KiCad lock in the fixture
     pcb = tmp_path / name / GOLDEN_NAME
     if nodes:
         root = write_layer.load(pcb)
