@@ -863,6 +863,15 @@ proof = [
 ]
 note = "Checkpoint module; reload checks that exactly the planned footprints are gone and every other node is unchanged (ticket 227)."
 
+[writing_tool.confirm_dangling_copper_removal]
+self_check = "reload-verify"
+proof = [
+    "tests/test_dangling_copper.py::test_corrupted_write_that_drops_an_unlisted_item_is_caught",
+    "tests/test_dangling_copper.py::test_corrupted_write_that_removes_nothing_is_caught",
+    "tests/test_dangling_copper.py::test_a_lost_connection_in_the_second_drc_run_is_caught",
+]
+note = "Issue 246; reload checks that exactly the listed tracks and vias are gone and every other node is unchanged, then a second kicad-cli DRC run on the copy must show no unconnected pair that was not there before."
+
 [writing_tool.create_sheets]
 self_check = "reload-verify"
 note = "Issue 75: sheet_authoring.create_sheets saves each blank sheet through write_layer.save with a verify that reloads the temporary sibling and compares it with the serialised tree (decision 4), and walks the sheet tree afterwards; if the tree is not whole the new files are removed."
@@ -1136,6 +1145,16 @@ reaches = [
     "checkpoint.py | copy_project | shutil.copytree",
     "write_layer.py | _commit | os.replace",
     "write_layer.py | save_bytes | open",
+]
+
+[read_only_tool_writes.propose_dangling_copper_removal]
+reason = "Issue 246: plans on scratch copies of the project (checkpoint.copy_project into a temporary directory, removal of the already planned items through write_layer.save, the parse check's own copies) so that a chain is listed whole; kicad-cli DRC runs there and the caller's board is only read (tests/test_dangling_copper.py::test_dry_run_lists_each_candidate_and_writes_nothing)."
+reaches = [
+    "checkpoint.py | copy_project | shutil.copytree",
+    "write_layer.py | _commit | os.replace",
+    "write_layer.py | _write_temp | open",
+    "write_layer.py | parse_check | shutil.copyfile",
+    "write_layer.py | _check_sub_sheets | shutil.copyfile",
 ]
 
 [read_only_tool_writes.pin_rule_baseline]

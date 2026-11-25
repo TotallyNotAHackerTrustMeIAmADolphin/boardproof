@@ -37,7 +37,7 @@ The design changed twice by review: the paradigm review of the 2026-10-11 pivot,
 
 ## What exists (`src/boardproof/`)
 
-The server (`server.py`) starts with 23 tools and keeps 118 more in ten lazy toolsets, 141 in total (counted from a running server on 2026-11-18; `tests/test_docs_tool_counts.py` keeps these counts equal to the live registry).
+The server (`server.py`) starts with 23 tools and keeps 120 more in ten lazy toolsets, 143 in total (counted from a running server on 2026-11-18; `tests/test_docs_tool_counts.py` keeps these counts equal to the live registry).
 
 **Always loaded (21 tools):** the `project` toolset (`project_create`, `project_open`); the toolset tools `list_toolsets`, `load_toolset` and `unload_toolset`; the gate `verify_board` with `pin_rule_baseline` (`verify_board.py`, decision 14); and the checkpointed propose/confirm pairs for input preparation, the pour step, schematic import, board rules, the board outline, keepout zones with slots (issue 132) and silkscreen minimums (`input_prep.py`, `pour_step.py`, `schematic_import.py`, `board_rules.py`, `board_outline.py`, `isolation.py`, `silk_minimums.py`, registered in `server.py`; `edge_loops.py` is the raw Edge.Cuts loop reader the keepout and slot pair and the placement tools share). The pour step (build tickets 04 and 15) carries a gate-graded plane zone from KRT's plane script; it is not a general zone-editing tool.
 
@@ -46,7 +46,7 @@ The server (`server.py`) starts with 23 tools and keeps 118 more in ten lazy too
 - `sourcing` (17) and `library` (6).
 - `schematic` (47).
 - `placement` (14), including `place_footprints_at_edge` and `lock_footprints` (issue 133), `propose_remove_graphic_items` and `propose_placement_optimization` via KRT's placer.
-- `routing` (6): `propose_route_with_retry` with `backend="freerouting"|"kicad_routing_tools"`, `confirm_route`, `diagnose_placement_congestion`.
+- `routing` (8): `propose_route_with_retry` with `backend="freerouting"|"kicad_routing_tools"`, `confirm_route`, `diagnose_placement_congestion`, and the pair `propose_dangling_copper_removal` / `confirm_dangling_copper_removal` (KiCad DRC `track_dangling` and `via_dangling` items, removed into a new revision, issue 246).
 - `diagnostics` (3): renders, `authoritative: false`.
 - `manufacturing` (2): `export_manufacturing_package`, `panelize_board`.
 - `simulation` (2): the `kicad-cli` netlist export and a headless run of the real, pinned ngspice 47 (optional in the batch gate while the simulation map is parked, issue 40: without it the live ngspice tests skip, as `scripts/known-skips.toml` allows).

@@ -136,7 +136,7 @@ def test_rule_with_unmodelled_condition_is_never_guessed(board: Path) -> None:
 def test_a_layer_limited_rule_is_not_claimed_for_the_whole_pair(board: Path) -> None:
     put_rules(
         board,
-        '(version 1)\n(rule "outer" (layer "outer") (condition "A.NetClass == \'Mains\'") (constraint clearance (min 0.9mm)))\n',
+        '(version 1)\n(rule "outer" (layer outer) (condition "A.NetClass == \'Mains\'") (constraint clearance (min 0.9mm)))\n',
     )
     assert pair(coverage(board), "VCC", "GND")["may_be_overridden_by"] == ["outer"]
 

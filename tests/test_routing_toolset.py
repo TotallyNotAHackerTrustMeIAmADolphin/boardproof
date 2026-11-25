@@ -47,6 +47,8 @@ def test_build_registers_expected_tools():
         "confirm_route",
         "propose_route_with_retry",
         "diagnose_placement_congestion",
+        "propose_dangling_copper_removal",
+        "confirm_dangling_copper_removal",
     }
 
 

@@ -125,7 +125,16 @@ def test_the_wording_says_before_the_first_rule(tmp_path):
     "(foo)\n(version 1)\n" + _RULE,  # unknown top-level token first: measured loaded False
     "foo\n(version 1)\n" + _RULE,  # bare atom first: measured loaded False
     '(version 1)\n(rule "r" (version 1) (constraint clearance (min 0.5mm)))\n',  # nested version: measured loaded False
+    "(version 1)\n(foo)\n" + _RULE,  # unknown item after the version: measured loaded False (issue 251)
+    "(version 1)\n" + _RULE + "foo\n",  # bare atom after a rule: measured loaded False
+    '(version 1)\n(rule "r" (foo bar) (constraint clearance (min 0.5mm)))\n',  # unknown head in a rule: measured loaded False
+    "(version 1)\n" + _RULE.rstrip() + " # note\n",  # comment after code: measured loaded False
 ])
 def test_other_shapes_kicad_refuses_get_the_question_mark_entry(tmp_path, text):
     assert dru.parse(text)[2]
     assert _names(tmp_path, text)[-1] == "?"
+
+
+def test_the_docstring_says_the_list_covers_only_what_parse_can_see():
+    doc = " ".join((routing_toolset.custom_rules_not_seen.__doc__ or "").split())
+    assert "only the defects ``dru.parse`` can see" in doc and "left to ``dru.load_probe``" in doc

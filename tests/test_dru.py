@@ -45,6 +45,123 @@ def test_defects_that_make_kicad_drop_the_file_are_reported(text, needle):
     assert any(needle in p for p in problems), problems
 
 
+_C = "(constraint clearance (min 0.5mm))"
+_V = "(version 1)\n"
+_R = f'(rule "r" {_C})\n'
+
+# Each form was probed with dru.load_probe on kicad-cli 10 (issue 251): loaded False, and no other defect names it.
+_KICAD_REFUSES = {
+    "top-level unknown item": _V + "(foo)\n" + _R,
+    "top-level unknown item after a rule": _V + _R + "(foo)\n",
+    "top-level bare atom": _V + "foo\n" + _R,
+    "top-level string": _V + '"foo"\n' + _R,
+    "top-level empty list": _V + "()\n" + _R,
+    "bare atom in a rule": _V + f'(rule "r" foo {_C})\n',
+    "string in a rule": _V + f'(rule "r" "foo" {_C})\n',
+    "unknown head in a rule": _V + f'(rule "r" (foo bar) {_C})\n',
+    "empty list in a rule": _V + f'(rule "r" () {_C})\n',
+    "priority": _V + f'(rule "r" (priority 3) {_C})\n',
+    "comments": _V + f'(rule "r" (comments "x") {_C})\n',
+    "second name": _V + f'(rule "r" "s" {_C})\n',
+    "upper-case rule": _V + f'(RULE "r" {_C})\n',
+    "upper-case version": "(VERSION 1)\n" + _R,
+    "upper-case constraint": _V + '(rule "r" (CONSTRAINT clearance (min 0.5mm)))\n',
+    "upper-case condition": _V + f'(rule "r" (CONDITION "A.NetClass == \'x\'") {_C})\n',
+    "upper-case min": _V + '(rule "r" (constraint clearance (MIN 0.5mm)))\n',
+    "upper-case severity word": _V + f'(rule "r" (severity Warning) {_C})\n',
+    "severity unknown": _V + f'(rule "r" (severity bogus) {_C})\n',
+    "severity without value": _V + f'(rule "r" (severity) {_C})\n',
+    "severity two values": _V + f'(rule "r" (severity warning error) {_C})\n',
+    "layer without value": _V + f'(rule "r" (layer) {_C})\n',
+    "layer two values": _V + f'(rule "r" (layer outer inner) {_C})\n',
+    "layer keyword quoted": _V + f'(rule "r" (layer "outer") {_C})\n',
+    "layer twice": _V + f'(rule "r" (layer outer) (layer inner) {_C})\n',
+    "condition without value": _V + f'(rule "r" (condition) {_C})\n',
+    "condition as bare atom": _V + f'(rule "r" (condition x) {_C})\n',
+    "condition with two values": _V + f'(rule "r" (condition "A.NetClass == \'x\'" "y") {_C})\n',
+    "constraint without type": _V + '(rule "r" (constraint))\n',
+    "constraint with a number type": _V + '(rule "r" (constraint 5))\n',
+    "constraint bare min": _V + '(rule "r" (constraint clearance min 0.5mm))\n',
+    "skew option as a bare atom": _V + '(rule "r" (constraint skew (max 1mm) within_diff_pairs))\n',
+    "length without a unit": _V + '(rule "r" (constraint length (max 50)))\n',
+    "skew without a unit": _V + '(rule "r" (constraint skew (max 1)))\n',
+    "diff_pair_uncoupled without a unit": _V + '(rule "r" (constraint diff_pair_uncoupled (max 2)))\n',
+    "version with two numbers": "(version 1 2)\n" + _R,
+    "version as string": '(version "1")\n' + _R,
+    "later version with two numbers": _V + _R + "(version 1 2)\n",
+    "later version without number": _V + _R + "(version)\n",
+    "comment after code": _V + _R.rstrip() + " # hi\n",
+    "comment after the version": "(version 1) # hi\n" + _R,
+    "comment inside a rule after code": _V + '(rule "r" # hi\n' + _C + ")\n",
+    "byte order mark": "﻿" + _V + _R,
+}
+# Probed loaded True: a form KiCad accepts must stay unflagged (no false "?" entry).
+_KICAD_ACCEPTS = {
+    "clean": _V + _R,
+    "comment on its own line, top and in a rule": _V + "# hi\n" + '(rule "r"\n# hi\n' + _C + ")\n",
+    "comment inside a constraint": _V + '(rule "r"\n(constraint clearance\n# x\n(min 0.5mm)))\n',
+    "layers and severities": _V + f'(rule "r" (layer outer) (severity ignore) {_C})\n(rule "q" (layer "F.Cu") (severity exclusion) {_C})\n',
+    "two severities": _V + f'(rule "r" (severity warning) (severity error) {_C})\n',
+    "two constraints, min max opt": _V + '(rule "r" (constraint clearance (min 0.5mm) (max 1mm) (opt 1mm)) (constraint track_width (min 0.1mm)))\n',
+    "constraint without a value": _V + '(rule "r" (constraint clearance))\n',
+    "disallow": _V + '(rule "r" (constraint disallow track))\n',
+    "rule without a constraint, or without anything": _V + '(rule "r" (condition "A.NetClass == \'x\'"))\n(rule "q")\n',
+    "empty and bare-atom names": _V + f'(rule "" {_C})\n(rule r {_C})\n',
+    "versions": "(version 2)\n" + _R + _V,
+    "second version at the start": _V + _V + _R,
+    **{
+        f"constraint type {kind}": _V + f'(rule "r" (constraint {kind} {args}))\n'
+        for kind, args in {
+            **dict.fromkeys(
+                ("clearance", "creepage", "hole_clearance", "hole_to_hole", "edge_clearance", "courtyard_clearance",
+                 "silk_clearance", "physical_clearance", "physical_hole_clearance", "track_width", "annular_width",
+                 "via_diameter", "hole_size", "text_height", "text_thickness", "thermal_relief_gap",
+                 "thermal_spoke_width", "connection_width", "solder_mask_expansion", "solder_paste_abs_margin",
+                 "diff_pair_gap"), "(min 0.5mm)"),
+            "length": "(max 50mm)", "skew": "(max 1mm)", "via_count": "(max 2)", "diff_pair_uncoupled": "(max 2mm)",
+            "bridged_mask": "", "min_resolved_spokes": "2", "zone_connection": "solid",
+            "assertion": '"A.Length < 5mm"',
+        }.items()
+    },
+    # KiCad source (drc_rule_parser.cpp, parseConstraint): the generic path takes (min|max|opt <expression>) items,
+    # (within_diff_pairs) for skew only; track_angle reads a bare number as degrees; via_count, via_dangling and
+    # bridged_mask are unitless. Each probed loaded True on kicad-cli 10.
+    "skew with its option": _V + '(rule "r" (constraint skew (max 1mm) (within_diff_pairs)))\n',
+    "track_angle min": _V + '(rule "r" (constraint track_angle (min 45)))\n',
+    "track_angle max": _V + '(rule "r" (constraint track_angle (max 45)))\n',
+    "via_dangling": _V + '(rule "r" (constraint via_dangling (max 1)))\n',
+    "bridged_mask with a number": _V + '(rule "r" (constraint bridged_mask (min 1)))\n',
+    "track_segment_length": _V + '(rule "r" (constraint track_segment_length (min 1mm)))\n',
+    "solder_mask_sliver": _V + '(rule "r" (constraint solder_mask_sliver (min 0.1mm)))\n',
+    "zone_connection none": _V + '(rule "r" (constraint zone_connection none))\n',
+    "zone_connection thermal_reliefs": _V + '(rule "r" (constraint zone_connection thermal_reliefs))\n',
+    "assertion with a bare atom": _V + '(rule "r" (constraint assertion x))\n',
+    "disallow quoted item": _V + '(rule "r" (constraint disallow "track"))\n',
+    "disallow every item": _V + '(rule "r" (constraint disallow track via micro_via buried_via pad zone text graphic hole footprint))\n',
+    "escaped quote in a condition": _V + '(rule "r" (condition "A.NetName == \'x\\"y\'") ' + _C + ")\n",
+    "version with a fraction": "(version 1.5)\n" + _R,
+    "CRLF": (_V + _R).replace("\n", "\r\n"),
+    "comments, blank lines and indentation before the version": "# note\n\n  (version 1)\n" + _R,
+}
+
+
+@pytest.mark.parametrize("text", list(_KICAD_REFUSES.values()), ids=list(_KICAD_REFUSES))
+def test_file_shapes_kicad_ignores_as_a_whole_are_reported(text):
+    assert dru.parse(text)[2], "KiCad drops this file (probed) and parse() names no defect"
+
+
+@pytest.mark.parametrize("text", list(_KICAD_ACCEPTS.values()), ids=list(_KICAD_ACCEPTS))
+def test_file_shapes_kicad_loads_are_not_reported(text):
+    assert dru.parse(text)[2] == []
+
+
+def test_probe_agrees_with_the_shape_lists(tmp_path):  # the ground truth behind both lists (kicad-cli 10)
+    board = fx.build_pair_board(tmp_path, classes=False)
+    for label, text in {**_KICAD_REFUSES, **_KICAD_ACCEPTS}.items():
+        expected = label in _KICAD_ACCEPTS or text in _KICAD_ACCEPTS.values()
+        assert dru.load_probe(board, text, kicad_cli.run_drc)["loaded"] is expected, label
+
+
 A, B = NC("n1", ("Mains",)), NC("n2", ("Sense", "Default"))
 
 
@@ -204,3 +321,8 @@ def test_kicad_loads_a_space_before_the_unit(tmp_path):
     board = fx.build_pair_board(tmp_path, classes=False)
     text = '(version 1)\n(rule "r" (condition "A.NetClass == \'x\'") (constraint clearance (min 0.9 mm)))\n'
     assert dru.parse(text)[2] == [] and _probe(board, text)["loaded"] is True
+
+
+def test_a_byte_order_mark_is_reported_once_as_the_bare_atom_it_is():
+    problems = dru.parse("\uFEFF" + _V + _R)[2]
+    assert len(problems) == 1 and "neither (version N) nor (rule" in problems[0]

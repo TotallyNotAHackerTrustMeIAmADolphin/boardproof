@@ -54,6 +54,8 @@ def tokenize_checked(text: str) -> tuple[list[Any], list[str]]:
         if char.isspace():
             i += 1
         elif char == "#":
+            if text[text.rfind("\n", 0, i) + 1 : i].strip():  # measured: only a comment that starts its line is one
+                problems.append("a # comment after other text on its line: KiCad ignores the whole file")
             while i < n and text[i] not in "\r\n":
                 i += 1
         elif char == "(":
@@ -192,12 +194,76 @@ def _constraint(node: list) -> Constraint | None:
     return Constraint(kind, values.get("min"), values.get("max"), values.get("opt"), unitless)
 
 
+_RULE_ITEMS = ("constraint", "condition", "layer", "severity")  # measured: priority and comments are refused too
+_LENGTH_TYPES = frozenset(  # measured on kicad-cli 10: each loads with (item <length>) lists, refuses a bare atom or a unit-less length
+    "clearance creepage hole_clearance hole_to_hole edge_clearance courtyard_clearance silk_clearance "
+    "physical_clearance physical_hole_clearance track_width annular_width via_diameter hole_size text_height "
+    "text_thickness thermal_relief_gap thermal_spoke_width connection_width solder_mask_expansion "
+    "solder_paste_abs_margin diff_pair_gap diff_pair_uncoupled length skew".split()
+)
+_SEVERITIES = ("ignore", "warning", "error", "exclusion")
+
+
+def _bare(node: Any) -> bool:
+    return isinstance(node, str) and not isinstance(node, Str)
+
+
+def _shape_problems(tree: list[Any]) -> list[str]:
+    """The shapes KiCad 10 refuses as a whole that the model above would read past (each probed with
+    ``load_probe``, issue 251): keywords are lower case only; top level holds ``(version N)`` and
+    ``(rule ...)`` and nothing else; a rule holds a name and then only constraint, condition, layer and
+    severity items of the arity below."""
+    found: list[str] = []
+    for node in tree:
+        if not isinstance(node, list) or not node or not _bare(node[0]):
+            found.append(f"an item that is neither (version N) nor (rule ...): {render(node)[:60]}")
+        elif node[0] == "version":
+            if len(node) != 2 or not _bare(node[1]):
+                found.append(f"a malformed version line: {render(node)}")
+        elif node[0] != "rule":
+            found.append(f"an unknown top-level item (only version and rule, in lower case): {render(node)[:60]}")
+        else:
+            found.extend(_rule_shape_problems(node))
+    return found
+
+
+def _rule_shape_problems(rule: list[Any]) -> list[str]:
+    name = render(rule[1]) if len(rule) > 1 else "?"
+    if len(rule) > 1 and isinstance(rule[1], list):
+        return []  # parse() reports a rule without a name
+    seen: set[str] = set()
+    found: list[str] = []
+    for part in rule[2:]:
+        head = part[0] if isinstance(part, list) and part else None
+        args = part[1:] if head is not None else []
+        if not _bare(head) or head not in _RULE_ITEMS:
+            found.append(f"rule {name}: an item KiCad does not accept in a rule: {render(part)[:60]}")
+        elif head == "constraint":
+            ok = bool(args) and _bare(args[0]) and not _NUMBER.match(args[0])
+            # only the length types are probed for their arguments; the others (zone_connection solid, assertion
+            # "...", disallow ..., min_resolved_spokes 2) take other forms and are left to load_probe
+            if ok and args[0] in _LENGTH_TYPES:
+                ok = all(isinstance(a, list) and a and _bare(a[0]) and a[0] == a[0].lower() for a in args[1:])  # any lower-case head: skew also takes (within_diff_pairs)
+            if not ok:
+                found.append(f"rule {name}: a malformed constraint: {render(part)[:60]}")
+        elif head == "condition" and not (len(args) == 1 and isinstance(args[0], Str)):
+            found.append(f"rule {name}: a condition must be one quoted string: {render(part)[:60]}")
+        elif head == "layer" and (len(args) != 1 or head in seen or isinstance(args[0], list) or (isinstance(args[0], Str) and args[0] in ("outer", "inner"))):
+            found.append(f"rule {name}: a layer item must be one layer, once: {render(part)[:60]}")
+        elif head == "severity" and not (len(args) == 1 and _bare(args[0]) and args[0] in _SEVERITIES):
+            found.append(f"rule {name}: a severity must be ignore, warning, error or exclusion: {render(part)[:60]}")
+        if head == "layer":
+            seen.add(head)
+    return found
+
+
 def parse(text: str) -> tuple[list[Rule], int | None, list[str]]:
     """``(rules, version, problems)``. ``problems`` are the defects that make KiCad drop the whole
     file and that can be seen without KiCad: unbalanced input, no ``(version N)``, a rule without a
     name, a length without a unit. A file this finds nothing wrong with may still be refused by
     KiCad (an unknown constraint name or condition function): ``load_probe`` decides."""
     tree, problems = tokenize_checked(text)
+    problems.extend(_shape_problems(tree))
     version: int | None = None
     rules: list[Rule] = []
     managed_names = _managed_rule_names(text)
@@ -207,8 +273,8 @@ def parse(text: str) -> tuple[list[Rule], int | None, list[str]]:
         head = atom(node[0])
         if head == "version" and len(node) > 1:
             try:
-                version = int(str(node[1]))
-            except ValueError:
+                version = int(float(str(node[1])))  # measured: (version 1.5) loads
+            except (ValueError, OverflowError):
                 problems.append(f"the version line is not a number: {render(node)}")
         elif head == "rule":
             name = str(node[1]) if len(node) > 1 and not isinstance(node[1], list) else None
@@ -233,17 +299,17 @@ def parse(text: str) -> tuple[list[Rule], int | None, list[str]]:
                     parsed = _constraint(part)
                     if parsed is not None:
                         constraints.append(parsed)
-                        if parsed.unitless:
+                        if parsed.unitless and parsed.kind in _LENGTH_TYPES:  # track_angle (degrees), via_dangling, bridged_mask take bare numbers
                             problems.append(f"rule {name!r}: a length without a unit (write 0.5mm, not 0.5)")
             rules.append(
                 Rule(name, condition, tuple(constraints), layer, severity, render(node), len(rules), name in managed_names)
             )
     # measured (kicad-cli 10): comments and blank lines may precede (version N); a rule or any other item may not
     first = tree[0] if tree else None
-    if version is None or not (isinstance(first, list) and first and atom(first[0]) == "version"):
+    if _bare(first):
+        pass  # reported as the bare atom it is (a byte order mark is one)
+    elif version is None or not (isinstance(first, list) and first and atom(first[0]) == "version"):
         problems.append("no (version N) line before the first rule: KiCad ignores a rules file without one")
-    if text.startswith("﻿"):
-        problems.append("the file starts with a byte order mark: KiCad ignores the whole file")
     return rules, version, problems
 
 

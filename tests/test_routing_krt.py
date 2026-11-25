@@ -743,6 +743,8 @@ def test_no_new_tools_only_a_backend_parameter():
         "confirm_route",
         "propose_route_with_retry",
         "diagnose_placement_congestion",
+        "propose_dangling_copper_removal",
+        "confirm_dangling_copper_removal",
     }
 
 

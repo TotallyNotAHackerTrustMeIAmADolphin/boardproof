@@ -343,7 +343,7 @@ from typing import Any
 
 from mcp.server.mcpserver import MCPServer
 
-from boardproof import raw_geometry, write_layer
+from boardproof import dangling_copper as _dangling_copper, raw_geometry, write_layer
 from boardproof.routers import kicad_routing_tools as krt_backend
 
 ROUTING_BACKENDS = ("freerouting", "kicad_routing_tools")
@@ -836,6 +836,8 @@ def custom_rules_not_seen(pcb_path: str | Path) -> list[dict]:
     """Every rule of the board's ``.kicad_dru`` outside the managed block: the DSN carries only the managed
     two-class clearances, so the router sees none of these and DRC may flag copper they forbid (issue 236).
     ``[{"name", "condition", "constraints", "layer", "reason"}]``; an unreadable file is one entry named ``?``.
+    The ``?`` entries cover only the defects ``dru.parse`` can see; shapes it cannot judge (an unknown constraint
+    or layer name) are left to ``dru.load_probe``.
     shortcut: a hand-written rule of the managed shape is listed, not converted; convert when a board needs it."""
     from boardproof import dru
 
@@ -3073,6 +3075,39 @@ def build(mcp: MCPServer) -> list[str]:
         ),
         annotations={"readOnlyHint": True, "destructiveHint": False, "idempotentHint": False, "openWorldHint": True},
     )
+
+    def propose_dangling_copper_removal(pcb_path: str, output_dir: str | None = None) -> dict:
+        """Dry run: the dangling vias and track stubs KiCad's DRC reports, each with net, position, layer and reason."""
+        return _dangling_copper.propose_dangling_copper_removal(pcb_path, output_dir)
+
+    def confirm_dangling_copper_removal(pcb_path: str, revision_token: str) -> dict:
+        """Apply a propose_dangling_copper_removal proposal onto a new board revision."""
+        result = _dangling_copper.confirm_dangling_copper_removal(pcb_path, revision_token)
+        output = result.get("output_pcb")
+        return {**result, "pcb_path": output, "source_pcb": pcb_path} if isinstance(output, str) else result
+
+    mcp.add_tool(
+        propose_dangling_copper_removal,
+        description=(
+            "Dry run of removing dangling vias and track stubs (typically left by a router import) from a board; "
+            "writes nothing and returns a revision_token. "
+            + _dangling_copper.DANGLING_SENTENCE
+            + " dangling_removed lists each item the confirm would remove (net, position, layer, reason), kept the rest with the reason."
+        ),
+        annotations={"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
+    )
+    mcp.add_tool(
+        confirm_dangling_copper_removal,
+        description=(
+            "Apply a propose_dangling_copper_removal proposal: writes a NEW board revision without the listed items, "
+            "reloaded from disk and compared (exactly the listed items are gone, every other node is unchanged), then "
+            "checked with a second kicad-cli DRC run (no unconnected pair may be new); a mismatch returns ok false "
+            "and writes nothing. The revision_token is single use. This is not a routing or done claim: only a "
+            "verify_board PASS on the new revision may be reported as routed or done. "
+            + write_layer.LOCK_SENTENCE
+        ),
+        annotations={"readOnlyHint": False, "destructiveHint": True, "idempotentHint": False, "openWorldHint": False},
+    )
     return [
         "add_traces",
         "get_unrouted_nets",
@@ -3080,4 +3115,6 @@ def build(mcp: MCPServer) -> list[str]:
         "confirm_route",
         "propose_route_with_retry",
         "diagnose_placement_congestion",
+        "propose_dangling_copper_removal",
+        "confirm_dangling_copper_removal",
     ]
