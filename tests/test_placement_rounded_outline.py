@@ -25,6 +25,7 @@ from boardproof import board_outline, kicad_cli, placement_anchor, write_layer
 from boardproof.toolsets import placement as placement_toolset
 from tests.test_isolation import GOLDEN_DIR, GOLDEN_NAME, SQUARE, apply
 from tests.test_board_outline import _no_outline_drc
+from tests._fixture_copy import copy_fixture
 
 X0, Y0, W, H = 123.5, 85.0, 50.0, 40.0
 BOX = (X0, Y0, X0 + W, Y0 + H)
@@ -38,7 +39,7 @@ def tools() -> dict:
 
 
 def _golden(tmp_path: Path, name: str = "proj") -> Path:
-    shutil.copytree(GOLDEN_DIR, tmp_path / name, ignore=shutil.ignore_patterns("~*.lck"))  # a parallel worker may hold a KiCad lock in the fixture
+    copy_fixture(GOLDEN_DIR, tmp_path / name, ignore=shutil.ignore_patterns("~*.lck"))  # a parallel worker may hold a KiCad lock in the fixture
     return tmp_path / name / GOLDEN_NAME
 
 

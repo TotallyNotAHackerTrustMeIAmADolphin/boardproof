@@ -26,6 +26,7 @@ from pathlib import Path, PurePath
 from typing import NoReturn, TypeVar
 
 import pytest
+from tests._fixture_copy import copy_fixture
 
 DIR_VAR = "KICAD_DEMOS_DIR"
 SYMBOL_DIR_VAR = "KICAD_SYMBOL_DIR"
@@ -192,5 +193,5 @@ def copy_demo(
     while dest.exists():
         n += 1
         dest = Path(dest_root) / str(n) / name
-    shutil.copytree(source, dest, copy_function=shutil.copyfile)
+    copy_fixture(source, dest, copy_function=shutil.copyfile)
     return dest

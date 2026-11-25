@@ -7,7 +7,6 @@ Boards are the golden board (outline (123.5, 85) to (173.5, 125), a 50 x 40 rect
 
 from __future__ import annotations
 
-import shutil
 import uuid
 from pathlib import Path
 
@@ -15,6 +14,7 @@ import pytest
 from kicad_tools.sexp import SExp
 
 from boardproof import edge_loops, write_layer
+from tests._fixture_copy import copy_fixture
 
 GOLDEN_DIR = Path(__file__).parent / "fixtures" / "golden_attiny1616_board"
 GOLDEN_NAME = "golden_attiny1616_board.kicad_pcb"
@@ -40,7 +40,7 @@ def rect_lines(x0, y0, x1, y1):
 
 
 def board_with(tmp_path: Path, nodes) -> Path:
-    shutil.copytree(GOLDEN_DIR, tmp_path / "proj")
+    copy_fixture(GOLDEN_DIR, tmp_path / "proj")
     pcb = tmp_path / "proj" / GOLDEN_NAME
     root = write_layer.load(pcb)
     for node in nodes:

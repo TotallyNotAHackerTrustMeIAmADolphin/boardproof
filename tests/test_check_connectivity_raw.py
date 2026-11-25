@@ -20,7 +20,6 @@ from __future__ import annotations
 
 import json
 import re
-import shutil
 import subprocess
 from pathlib import Path
 
@@ -30,6 +29,7 @@ from mcp.server.mcpserver import MCPServer
 from boardproof import connectivity_check, kicad_cli, sheet_editing, write_layer
 from boardproof.toolsets import project as project_toolset
 from boardproof.toolsets import schematic as schematic_toolset
+from tests._fixture_copy import copy_fixture
 
 
 @pytest.fixture(autouse=True)
@@ -142,7 +142,7 @@ def sheet(tmp_path_factory, tools) -> Path:
 @pytest.fixture(scope="module")
 def result(sheet, tools, tmp_path_factory) -> dict:
     copy = tmp_path_factory.mktemp("run") / "proj"
-    shutil.copytree(sheet.parent, copy)  # the netlist cross-check writes beside its input
+    copy_fixture(sheet.parent, copy)  # the netlist cross-check writes beside its input
     got = tools["check_connectivity"](str(copy / sheet.name))
     assert got["status"] == "ok", got
     return got
@@ -166,7 +166,7 @@ def test_kicad_cli_agrees_with_the_clean_cases(sheet, tmp_path):
     """The sheet is right where the tool said it was not: ERC has no pin_not_connected for the marked,
     touching or labelled pins, no dangling wire at a pin, and the netlist lacks the power symbol."""
     copy = tmp_path / "p"
-    shutil.copytree(sheet.parent, copy)
+    copy_fixture(sheet.parent, copy)
     out = tmp_path / "erc.json"
     cli = kicad_cli.find_kicad_cli()
     subprocess.run([str(cli), "sch", "erc", "--format", "json", "-o", str(out), str(copy / sheet.name)],
@@ -221,7 +221,7 @@ def test_a_pin_on_the_middle_of_a_wire_is_unconnected(result):
 def test_a_marker_far_from_a_pin_hides_nothing(sheet, tools, tmp_path):
     """The marker is matched by position: one moved off the pin leaves the pin a finding."""
     copy = tmp_path / "p"
-    shutil.copytree(sheet.parent, copy)
+    copy_fixture(sheet.parent, copy)
     root = write_layer.load(copy / sheet.name)
     for node in root.children:
         if not node.is_atom and node.name == "no_connect":

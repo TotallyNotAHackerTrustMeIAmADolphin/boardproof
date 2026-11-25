@@ -25,6 +25,7 @@ from boardproof import schematic_import as si
 from boardproof import write_layer
 from boardproof.raw_geometry import net_name
 from tests import _kicad_faults as faults
+from tests._fixture_copy import copy_fixture
 
 REPO = Path(__file__).resolve().parents[1]
 RUNG1 = REPO / "evals" / "rung1"
@@ -47,7 +48,7 @@ pytestmark = pytest.mark.skipif(not _kicad_cli_available(), reason="kicad-cli no
 @pytest.fixture()
 def project(tmp_path: Path) -> Path:
     dest = tmp_path / "proj"
-    shutil.copytree(RUNG1 / "project", dest)
+    copy_fixture(RUNG1 / "project", dest)
     return dest
 
 
@@ -245,7 +246,7 @@ def test_unresolved_at_confirm_fails_whole_import_names_part_and_writes_nothing(
     from boardproof.schematic_import import _installed_footprint_dirs
 
     lib = tmp_path / "globallib" / "Resistor_SMD.pretty"
-    shutil.copytree(_installed_footprint_dirs()[0] / "Resistor_SMD.pretty", lib)
+    copy_fixture(_installed_footprint_dirs()[0] / "Resistor_SMD.pretty", lib)
     appdata = tmp_path / "appdata"
     (appdata / "kicad" / "10.0").mkdir(parents=True)
     table = _node("fp_lib_table", _node("version", 7), _node(
@@ -355,7 +356,7 @@ def test_confirm_with_a_different_pcb_path_is_refused_and_token_survives(
     pcb: Path, project: Path, tmp_path: Path
 ) -> None:
     other = tmp_path / "other"
-    shutil.copytree(project, other)
+    copy_fixture(project, other)
     proposal = si.propose_schematic_import(pcb, output_dir=tmp_path / "out")
     refused = si.confirm_schematic_import(other / pcb.name, proposal["revision_token"])
     assert refused["status"] == "error"

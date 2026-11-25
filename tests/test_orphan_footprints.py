@@ -8,7 +8,6 @@ an imported rung-1 board whose footprints are renamed to references the schemati
 from __future__ import annotations
 
 import hashlib
-import shutil
 from pathlib import Path
 
 import pytest
@@ -19,6 +18,7 @@ from boardproof import schematic_import as si
 from boardproof import write_layer
 from boardproof.kicad_cli import find_kicad_cli
 from boardproof.placement_anchor import set_locked
+from tests._fixture_copy import copy_fixture
 
 REPO = Path(__file__).resolve().parents[1]
 RUNG1 = REPO / "evals" / "rung1"
@@ -65,7 +65,7 @@ def board(tmp_path: Path) -> Path:
 def make_board(tmp_path: Path) -> Path:
     """An imported rung-1 board with R1 -> ZZ1 (plain orphan), R2 -> ZZ2 (locked), R3 -> ZZ3 (its net gets a track)."""
     proj = tmp_path / "proj"
-    shutil.copytree(RUNG1 / "project", proj)
+    copy_fixture(RUNG1 / "project", proj)
     first = tmp_path / "first"
     proposal = si.propose_schematic_import(proj / f"{NAME}.kicad_pcb", output_dir=first)
     assert proposal["status"] == "proposed", proposal

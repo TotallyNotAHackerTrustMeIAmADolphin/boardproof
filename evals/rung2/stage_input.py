@@ -99,7 +99,8 @@ def strip_tracks(pcb: Path) -> dict[str, int]:
         if write_layer.serialise(write_layer.load(temp), compact=True) != intended:
             raise StagingNotVerified(f"{pcb.name}: the written board does not read back as the stripped tree")
 
-    write_layer.save(root, pcb, verify=verify)
+    # the staged board's sha256 is a protocol pin (autonomy_protocol.json): keep the layout it was pinned in
+    write_layer.save(root, pcb, verify=verify, legacy_board_layout=True)
     return removed
 
 

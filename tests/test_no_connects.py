@@ -9,7 +9,6 @@ only stops reporting a pin when the marker sits exactly on it. Each guard has a 
 
 from __future__ import annotations
 
-import shutil
 from pathlib import Path
 
 import pytest
@@ -17,6 +16,7 @@ import pytest
 from boardproof import kicad_cli, no_connects, sheet_authoring, sheet_editing, write_layer
 from boardproof.toolsets import project as project_toolset
 from tests.test_sheet_editing import _bytes, _nets, _nodes, _tools
+from tests._fixture_copy import copy_fixture
 
 
 @pytest.fixture(autouse=True)
@@ -34,7 +34,7 @@ def tools() -> dict:
 
 def _erc(sch: Path, tmp_path: Path, kind: str = "pin_not_connected") -> int:
     copy = tmp_path / f"erc{len(list(tmp_path.glob('erc*')))}"
-    shutil.copytree(sch.parent, copy)
+    copy_fixture(sch.parent, copy)
     census = sheet_authoring.erc_census(copy / sch.name)
     return sum(n for (t, _s), n in census.items() if t == kind)
 

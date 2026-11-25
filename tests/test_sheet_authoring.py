@@ -24,6 +24,7 @@ from mcp.server.mcpserver import MCPServer
 from boardproof import kicad_cli, sheet_authoring, sheet_tree, write_layer
 from boardproof.toolsets import project as project_toolset
 from boardproof.toolsets import schematic as schematic_toolset
+from tests._fixture_copy import copy_fixture
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -81,7 +82,7 @@ def _node(parent, tag):
 def _erc(root: Path, tmp_path: Path) -> Counter:
     copy = tmp_path / "erc_copy"
     shutil.rmtree(copy, ignore_errors=True)
-    shutil.copytree(root.parent, copy)
+    copy_fixture(root.parent, copy)
     return sheet_authoring.erc_census(copy / root.name)
 
 

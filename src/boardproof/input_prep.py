@@ -161,7 +161,7 @@ def check_router_text_moves(pcb_path: str | Path) -> dict:
 
 
 def _tag_counts(root: Any) -> Counter:
-    return Counter(child.name for child in root.children if child.name)
+    return write_layer.saved_tag_counts(root)  # a KiCad 10 board is saved without net declarations (issue 226)
 
 
 def _default_output_dir(pcb_path: Path) -> Path:

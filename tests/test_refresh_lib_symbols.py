@@ -13,7 +13,6 @@ Pin 1 of U1 and U2 is wired (net NETA); pin 2 of both is free.
 
 from __future__ import annotations
 
-import shutil
 from collections import Counter
 from pathlib import Path
 
@@ -25,6 +24,7 @@ from boardproof import kicad_cli, lib_refresh, sheet_authoring, sheet_editing, w
 from boardproof.toolsets import library as library_toolset
 from boardproof.toolsets import project as project_toolset
 from boardproof.toolsets import schematic as schematic_toolset
+from tests._fixture_copy import copy_fixture
 
 
 @pytest.fixture(autouse=True)
@@ -112,7 +112,7 @@ def template(tmp_path_factory) -> Path:
 
 @pytest.fixture
 def sheet(template, tmp_path) -> Path:
-    shutil.copytree(template.parent, tmp_path / "proj")
+    copy_fixture(template.parent, tmp_path / "proj")
     return tmp_path / "proj" / template.name
 
 

@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import json
 import re
-import shutil
 from pathlib import Path
 
 
@@ -17,6 +16,7 @@ from boardproof import board_rules, dru, kicad_cli, write_layer
 from boardproof.toolsets import routing as routing_toolset
 from tests.test_freerouting_sandbox import needs_freerouting
 from tests.test_pcbnew_specctra import needs_kicad_python
+from tests._fixture_copy import copy_fixture
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -146,7 +146,7 @@ def test_no_file_or_no_block_is_no_pairs_and_a_hand_edited_block_is_a_problem(tm
 
 def _golden_with_pair(tmp_path: Path, pair: float | None = 0.6) -> Path:
     proj = tmp_path / "proj"
-    shutil.copytree(FIXTURES / "golden_attiny1616_board", proj)
+    copy_fixture(FIXTURES / "golden_attiny1616_board", proj)
     pcb = proj / "golden_attiny1616_board.kicad_pcb"
     kwargs = {"netclasses": [
         {"name": "Gnd", "track_width": 0.25, "clearance": 0.2, "via_diameter": 1.0, "via_drill": 0.5, "nets": ["GND"]},

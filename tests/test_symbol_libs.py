@@ -60,6 +60,7 @@ def project(tmp_path: Path) -> Path:
     """A project folder with a sheet and a registered project library ``scbe`` (lib/scbe.kicad_sym)."""
     sheet = tmp_path / "proj.kicad_sch"
     shutil.copy(FIXTURE, sheet)
+    write_layer.save_project({}, tmp_path / "proj.kicad_pro")  # the project folder is found by walking up to a .kicad_pro (issue 241)
     lib = _write_lib(tmp_path / "lib" / "scbe.kicad_sym")
     result = _tools(library_toolset)["register_library_asset"](str(tmp_path), symbol_lib_path=str(lib))
     assert result["symbol"]["status"] == "ok", result

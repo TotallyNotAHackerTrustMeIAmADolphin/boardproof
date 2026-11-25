@@ -20,6 +20,7 @@ from mcp.server.mcpserver import MCPServer
 from boardproof import kicad_cli, project_check, sheet_authoring, sheet_editing, text_edit, write_layer
 from boardproof.toolsets import project as project_toolset
 from boardproof.toolsets import schematic as schematic_toolset
+from tests._fixture_copy import copy_fixture
 
 SExp = write_layer.SExp
 BOX_UUID = "00000000-0000-4000-8000-0000000000b1"
@@ -70,7 +71,7 @@ def template(tmp_path_factory) -> Path:
 @pytest.fixture
 def proj(template, tmp_path) -> Path:
     dest = tmp_path / "proj"
-    shutil.copytree(template, dest)
+    copy_fixture(template, dest)
     return dest
 
 

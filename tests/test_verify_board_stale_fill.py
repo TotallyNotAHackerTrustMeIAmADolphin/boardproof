@@ -15,7 +15,6 @@ Fixtures (all through the write layer, on ``tmp_path`` copies; never hand-edited
 
 from __future__ import annotations
 
-import shutil
 from pathlib import Path
 
 import pytest
@@ -23,6 +22,7 @@ import pytest
 
 from boardproof import verify_board as gate
 from boardproof import write_layer
+from tests._fixture_copy import copy_fixture
 
 FIXTURES = Path(__file__).parent / "fixtures"
 OBSTACLE = FIXTURES / "zone_obstacle"
@@ -36,7 +36,7 @@ def _drc(path, **_kwargs):
 
 
 def _copy(directory: Path, tmp_path: Path) -> Path:
-    shutil.copytree(directory, tmp_path / "board")
+    copy_fixture(directory, tmp_path / "board")
     return next((tmp_path / "board").glob("*.kicad_pcb"))
 
 

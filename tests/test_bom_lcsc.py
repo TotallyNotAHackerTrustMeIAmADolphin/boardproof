@@ -21,6 +21,7 @@ from boardproof.sourcing.models import PartResult
 from tests import _kicad_faults as _faults
 from tests import test_check_symbol_fields as _check
 from tests import test_sheet_pins as _base
+from tests._fixture_copy import copy_fixture
 
 FIXTURES = Path(__file__).parent / "fixtures"
 RES = "Resistor_SMD:R_0603_1608Metric"
@@ -40,7 +41,7 @@ def _template(tmp_path_factory) -> Path:
 
 @pytest.fixture
 def project(_template, tmp_path) -> Path:
-    shutil.copytree(_template.parent, tmp_path / "proj")
+    copy_fixture(_template.parent, tmp_path / "proj")
     return tmp_path / "proj" / _template.name
 
 

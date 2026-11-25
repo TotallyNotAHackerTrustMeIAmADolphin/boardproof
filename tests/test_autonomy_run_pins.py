@@ -21,7 +21,6 @@ import hashlib
 import importlib.util
 import json
 import os
-import shutil
 from pathlib import Path
 
 import pytest
@@ -32,6 +31,7 @@ from tests import _kicad_faults as faults
 from test_autonomy_run_review import _measure
 from test_input_prep import GOLDEN_DIR, GOLDEN_NAME
 from tests._hermetic_git import run_git
+from tests._fixture_copy import copy_fixture
 
 ROOT = Path(__file__).resolve().parents[1]
 RUNG1_DIR = ROOT / "evals" / "rung1" / "layout_run" / "07_poured"
@@ -57,7 +57,7 @@ CLEAN = {"commit": "0" * 40, "dirty": False}
 def _eol_copy(src: Path, dest: Path, eol: bytes) -> Path:
     """Copy a project tree, rewriting the line endings of every file the pin covers to
     ``eol`` (what a checkout or an installer does). Other files are copied as they are."""
-    shutil.copytree(src, dest)
+    copy_fixture(src, dest)
     for path in dest.rglob("*"):
         if path.is_file() and (path.suffix.startswith(".kicad_") or path.name.endswith("-lib-table")):
             faults.rewrite_bytes(path, lambda data: _with_eol(data, eol))
@@ -332,7 +332,7 @@ def test_the_rung1_board_pin_is_the_committed_blob_content():
 
 def _copy_rung1(tmp_path: Path) -> Path:
     project = tmp_path / "rung1"
-    shutil.copytree(RUNG1_DIR, project)
+    copy_fixture(RUNG1_DIR, project)
     return project / RUNG1_NAME
 
 
@@ -429,7 +429,7 @@ def test_the_demo_with_either_line_ending_stages_to_the_same_pins(tmp_path, eol)
 
 def test_the_golden_fixture_is_not_any_rung(tmp_path):
     project = tmp_path / "golden"
-    shutil.copytree(GOLDEN_DIR, project)
+    copy_fixture(GOLDEN_DIR, project)
     pins = _pins(project / GOLDEN_NAME)
     protocol = rung_runner.load_protocol()
     for rung in ("1", "2"):

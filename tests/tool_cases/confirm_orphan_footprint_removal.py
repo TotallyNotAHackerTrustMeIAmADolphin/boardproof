@@ -1,4 +1,5 @@
 """confirm_orphan_footprint_removal: registration for the write-guard test (issue 147 contract, ticket 227)."""
+from tests._fixture_copy import copy_fixture
 
 TOOL = "confirm_orphan_footprint_removal"
 WRITES = True
@@ -6,13 +7,12 @@ WRITES = True
 
 def scenario(h):
     def make(tmp_path):
-        import shutil
 
         from boardproof import orphan_footprints, schematic_import, write_layer
         from tests.test_orphan_footprints import NAME, RUNG1
 
         proj = tmp_path / "proj"
-        shutil.copytree(RUNG1 / "project", proj)
+        copy_fixture(RUNG1 / "project", proj)
         first = tmp_path / "first"
         proposal = schematic_import.propose_schematic_import(proj / f"{NAME}.kicad_pcb", output_dir=first)
         assert schematic_import.confirm_schematic_import(proj / f"{NAME}.kicad_pcb", proposal["revision_token"])["status"] == "imported"

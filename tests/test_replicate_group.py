@@ -14,7 +14,6 @@ symbol. The group region is x 43.18..58.42, y 26.67..66.04.
 from __future__ import annotations
 
 import copy
-import shutil
 from pathlib import Path
 
 import pytest
@@ -23,6 +22,7 @@ from mcp.server.mcpserver import MCPServer
 from boardproof import kicad_cli, sheet_authoring, sheet_editing, sheet_replicate, write_layer
 from boardproof.toolsets import project as project_toolset
 from boardproof.toolsets import schematic as schematic_toolset
+from tests._fixture_copy import copy_fixture
 
 SExp = write_layer.SExp
 REGION = {"x1": 43.18, "y1": 26.67, "x2": 58.42, "y2": 66.04}
@@ -77,7 +77,7 @@ def template(tmp_path_factory, tools) -> Path:
 @pytest.fixture
 def sheet(template, tmp_path) -> Path:
     dest = tmp_path / "proj"
-    shutil.copytree(template.parent, dest)
+    copy_fixture(template.parent, dest)
     return dest / template.name
 
 
@@ -97,7 +97,7 @@ def hier_template(tmp_path_factory, tools) -> Path:
 @pytest.fixture
 def hier(hier_template, tmp_path) -> Path:
     dest = tmp_path / "proj"
-    shutil.copytree(hier_template.parent, dest)
+    copy_fixture(hier_template.parent, dest)
     return dest / hier_template.name
 
 

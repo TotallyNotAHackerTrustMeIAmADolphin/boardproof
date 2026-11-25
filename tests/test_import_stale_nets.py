@@ -10,7 +10,6 @@ the old refusal. Fixtures are built through the write layer on tmp copies, never
 from __future__ import annotations
 
 import hashlib
-import shutil
 from pathlib import Path
 
 import pytest
@@ -21,6 +20,7 @@ from boardproof import schematic_import as si
 from boardproof import write_layer
 from tests import _kicad_faults as faults
 from boardproof.kicad_cli import find_kicad_cli
+from tests._fixture_copy import copy_fixture
 
 REPO = Path(__file__).resolve().parents[1]
 RUNG1 = REPO / "evals" / "rung1"
@@ -68,7 +68,7 @@ def _table(pcb: Path) -> dict[str, int]:
 def board(tmp_path: Path) -> Path:
     """An imported rung-1 board (every pad on its netlist net) plus three orphan net declarations."""
     proj = tmp_path / "proj"
-    shutil.copytree(RUNG1 / "project", proj)
+    copy_fixture(RUNG1 / "project", proj)
     first = tmp_path / "first"
     proposal = si.propose_schematic_import(proj / f"{NAME}.kicad_pcb", output_dir=first)
     assert proposal["status"] == "proposed", proposal

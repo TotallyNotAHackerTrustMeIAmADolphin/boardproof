@@ -31,6 +31,7 @@ from kicad_tools.sexp import Document, SExp, parse_string
 from boardproof import kicad_cli
 from boardproof import write_layer as wl
 from tests import _kicad_faults as faults
+from tests._fixture_copy import copy_fixture
 
 _KT_VERSION = tuple(int(p) for p in kicad_tools.__version__.split(".")[:2])
 
@@ -187,6 +188,11 @@ def test_kicad_tools_pcb_save_on_windows_by_version(tmp_path: Path) -> None:
     assert _upgrade(board, "pcb").returncode == 0
 
 
+def _is_net_declaration(node) -> bool:
+    """The top-level ``(net N "name")`` that kicad_tools synthesises into a KiCad 10 board and the layer does not save (issue 226)."""
+    return not node.is_atom and node.name == "net" and len(node.children) == 2
+
+
 def test_save_pcb_never_calls_pcb_save(tmp_path: Path, monkeypatch) -> None:
     from kicad_tools.schema import PCB
 
@@ -199,7 +205,7 @@ def test_save_pcb_never_calls_pcb_save(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(PCB, "save", refuse)
     wl.save_pcb(pcb, board)
     assert [wl.serialise(c, compact=True) for c in wl.load(board).children] == [
-        wl.serialise(c, compact=True) for c in pcb._sexp.children
+        wl.serialise(c, compact=True) for c in pcb._sexp.children if not _is_net_declaration(c)
     ]
 
 
@@ -425,7 +431,7 @@ def test_every_sub_sheet_of_a_schematic_is_checked_on_its_own(tmp_path: Path) ->
 
     # The fact behind the rule: sch upgrade on the root reports success over the broken sheet.
     probe = tmp_path / "probe"
-    shutil.copytree(tmp_path / "p", probe)
+    copy_fixture(tmp_path / "p", probe)
     assert _upgrade(probe / root_file.name, "sch").returncode == 0
     assert _upgrade(probe / "ampli_ht.kicad_sch", "sch").returncode != 0
 
@@ -522,9 +528,9 @@ def test_unsupported_roots_and_a_missing_kicad_cli_write_nothing(tmp_path: Path,
 
 
 def test_serialise_lays_out_one_tab_per_level() -> None:
-    root = parse_string('(kicad_pcb (version 1) (footprint "R" (at 1 2) (pad "1" smd rect (at 0 0) (size 1 1))))')
+    root = parse_string('(kicad_symbol_lib (version 1) (footprint "R" (at 1 2) (pad "1" smd rect (at 0 0) (size 1 1))))')
     assert wl.serialise(root) == (
-        "(kicad_pcb\n"
+        "(kicad_symbol_lib\n"
         "\t(version 1)\n"
         '\t(footprint "R"\n'
         "\t\t(at 1 2)\n"
@@ -766,7 +772,7 @@ def test_a_control_character_kicad_itself_wrote_is_saved_as_kicad_writes_it(tmp_
         shutil.copyfile(kicad, copy)
     expected = {
         via_save: [wl.serialise(c, compact=True) for c in wl.load(kicad).children],
-        via_pcb: [wl.serialise(c, compact=True) for c in PCB.load(kicad)._sexp.children],
+        via_pcb: [wl.serialise(c, compact=True) for c in PCB.load(kicad)._sexp.children if not _is_net_declaration(c)],
     }
 
     wl.save(wl.load(via_save), via_save)

@@ -4,7 +4,6 @@ refusal, and a machine-checked "a track through the pour is clean after refill".
 from __future__ import annotations
 
 import json
-import shutil
 from pathlib import Path
 
 import pytest

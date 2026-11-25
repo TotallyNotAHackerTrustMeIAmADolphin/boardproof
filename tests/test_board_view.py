@@ -19,6 +19,7 @@ from kicad_tools.sexp import parse_file, parse_string
 from boardproof import board_view as bv
 from boardproof import schematic_import as si
 from boardproof.raw_geometry import net_table
+from tests._fixture_copy import copy_fixture
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
 BOARDS = ["simple_led.kicad_pcb", "krt_stress_congestion.kicad_pcb", "krt_pad_geometry_isolated.kicad_pcb", "graphics_removal_board.kicad_pcb"]
@@ -202,12 +203,11 @@ def test_blocks_keep_the_file_order() -> None:
 
 
 def test_the_default_exporter_parses_the_netlist_file_once(kicad_demos_dir: Path, tmp_path: Path, monkeypatch) -> None:
-    import shutil
 
     src = kicad_demos_dir / "cm5_minima"
     if not src.is_dir():
         pytest.skip("cm5_minima missing")
-    shutil.copytree(src, tmp_path / "p")
+    copy_fixture(src, tmp_path / "p")
     sch = tmp_path / "p" / "CM5_MINIMA_3.kicad_sch"
     parsed: list[str] = []
     real = si._parse
@@ -355,12 +355,11 @@ def test_a_dropped_child_with_an_at_after_the_direct_at_is_dropped() -> None:
 
 
 def _copy_demo(kicad_demos_dir: Path, tmp_path: Path, name: str) -> Path:
-    import shutil
 
     src = kicad_demos_dir / name
     if not src.is_dir():
         pytest.skip(f"{src} missing")
-    shutil.copytree(src, tmp_path / name)
+    copy_fixture(src, tmp_path / name)
     return tmp_path / name
 
 

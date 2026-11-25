@@ -8,7 +8,6 @@ raw ``(at ...)`` of the library pins in the sheet's own file, never against a ``
 
 from __future__ import annotations
 
-import shutil
 from pathlib import Path
 
 import pytest
@@ -17,6 +16,7 @@ from mcp.server.mcpserver import MCPServer
 from boardproof import kicad_cli, sheet_authoring, sheet_editing, sheet_orient, write_layer
 from boardproof.toolsets import project as project_toolset
 from boardproof.toolsets import schematic as schematic_toolset
+from tests._fixture_copy import copy_fixture
 
 
 @pytest.fixture(autouse=True)
@@ -65,7 +65,7 @@ def template(tmp_path_factory) -> Path:
 
 @pytest.fixture
 def sheet(template, tmp_path) -> Path:
-    shutil.copytree(template, tmp_path / "p")
+    copy_fixture(template, tmp_path / "p")
     return tmp_path / "p" / "demo.kicad_sch"
 
 

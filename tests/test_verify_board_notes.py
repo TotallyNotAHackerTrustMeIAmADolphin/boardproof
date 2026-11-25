@@ -13,7 +13,6 @@ builder is observed through its own public flow.
 
 from __future__ import annotations
 
-import shutil
 from pathlib import Path
 
 import pytest
@@ -24,6 +23,7 @@ from boardproof import verify_board as gate
 from boardproof.server import build_server
 
 from test_input_prep import GOLDEN_DIR, GOLDEN_NAME, _build_fixture
+from tests._fixture_copy import copy_fixture
 
 NOTE = "build ticket 86: an informational note that must reach the reader"
 _EMPTY = {"violations": [], "unconnected_items": [], "schematic_parity": [], "ignored_checks": []}
@@ -95,7 +95,7 @@ def test_input_preparations_input_floor_carries_notes(noted_gate, tmp_path: Path
 
 
 def test_the_board_rules_grading_carries_notes(noted_gate, tmp_path: Path) -> None:
-    shutil.copytree(GOLDEN_DIR, tmp_path / "proj")
+    copy_fixture(GOLDEN_DIR, tmp_path / "proj")
     board = tmp_path / "proj" / GOLDEN_NAME
     proposal = board_rules.propose_board_rules(board, output_dir=tmp_path / "rules_rev", min_clearance=0.3)
 
@@ -107,7 +107,7 @@ def test_the_board_rules_grading_carries_notes(noted_gate, tmp_path: Path) -> No
 
 def test_the_autonomy_runs_input_floor_carries_notes(noted_gate, tmp_path: Path) -> None:
     """A board without copper text: the floor is graded by autonomy_run itself."""
-    shutil.copytree(GOLDEN_DIR, tmp_path / "proj")
+    copy_fixture(GOLDEN_DIR, tmp_path / "proj")
     board = tmp_path / "proj" / GOLDEN_NAME
 
     prepared = autonomy_run._prepare_input(

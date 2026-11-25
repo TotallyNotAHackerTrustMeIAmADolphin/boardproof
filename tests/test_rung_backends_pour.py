@@ -5,7 +5,6 @@ real router and the real gate (see the ticket report)."""
 
 from __future__ import annotations
 
-import shutil
 from pathlib import Path
 
 import pytest
@@ -14,6 +13,7 @@ from boardproof import write_layer
 from boardproof import rung_backends, rung_runner
 
 from test_rung_backends import KRT_BASELINE, needs_krt  # noqa: F401
+from tests._fixture_copy import copy_fixture
 
 FIXTURES = Path(__file__).parent / "fixtures"
 POURED = (Path(__file__).resolve().parents[1] / "evals" / "rung1" / "layout_run" / "07_poured")
@@ -23,7 +23,7 @@ def _zone_board(tmp_path: Path, name: str, strip_fill: bool) -> Path:
     from kicad_tools.schema import PCB
 
     project = tmp_path / name
-    shutil.copytree(FIXTURES / "zone_obstacle", project)
+    copy_fixture(FIXTURES / "zone_obstacle", project)
     board = project / "zone_obstacle.kicad_pcb"
     if strip_fill:
         pcb = PCB.load(board)
@@ -59,7 +59,7 @@ def test_the_allowed_pour_zones_are_recorded_for_the_manifest(tmp_path):
 @pytest.mark.skipif(not (POURED / "rung1_usbc_attiny1616.kicad_pcb").is_file(), reason="rung-1 poured revision absent")
 def test_the_rung1_poured_revision_is_not_refused_but_records_its_pour(tmp_path):
     project = tmp_path / "poured"
-    shutil.copytree(POURED, project)  # a copy: the evals tree is never edited
+    copy_fixture(POURED, project)  # a copy: the evals tree is never edited
     board = project / "rung1_usbc_attiny1616.kicad_pcb"
     assert rung_backends.input_refusal(board) is None
     zones = rung_backends.pour_zones(board)

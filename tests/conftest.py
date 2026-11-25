@@ -17,15 +17,16 @@ ticket 53, rule in ``tests/_krt.py``).
 from __future__ import annotations
 
 import os
+import tempfile
 from collections.abc import Callable
 from pathlib import Path
 
 import pytest
 
-from tests import _kicad_demos, _krt, _ngspice
+from tests import _kicad_demos, _krt, _ngspice, _temp_guard
 from tests._test_times import pytest_runtest_logfinish as pytest_runtest_logfinish  # issue 65
 from tests._test_times import pytest_runtest_logstart as pytest_runtest_logstart
-from tests._test_times import pytest_sessionstart as pytest_sessionstart  # issue 154: xdist controller writes none
+from tests._test_times import pytest_sessionstart as _times_sessionstart  # issue 154: xdist controller writes none
 
 # Issue 172: the opt-in replay cache of kicad-cli upgrade runs (BOARDPROOF_CLI_REPLAY=1); docs/TESTING.md
 from tests import _cli_replay
@@ -71,6 +72,16 @@ def ngspice_exe() -> Path:
 
 
 _RUNG_TEST_PREFIXES = ("test_rung_runner", "test_autonomy_run", "test_rung_backends")
+
+
+# Issue 241: stop the run, naming the file, when a KiCad file lies in the temp folder pytest builds
+# in, or above it (``tests/_temp_guard.py``), instead of a hundred unrelated failures. Runs in the
+# xdist controller too, where an exit is clean (a worker's would crash the run).
+def pytest_sessionstart(session):
+    _times_sessionstart(session)
+    found = _temp_guard.stray_kicad_files(session.config.option.basetemp or tempfile.gettempdir())
+    if found:
+        pytest.exit(_temp_guard.stray_message(found), returncode=3)
 
 
 @pytest.fixture(autouse=True)

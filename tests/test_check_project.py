@@ -22,6 +22,7 @@ from boardproof.toolsets import library as library_toolset
 from boardproof.toolsets import project as project_toolset
 from tests import test_sheet_pins as _base
 from tests.test_sheet_pins import _bytes
+from tests._fixture_copy import copy_fixture
 
 tools = _base.tools
 _need_kicad_cli = _base._need_kicad_cli
@@ -162,7 +163,7 @@ def test_it_writes_nothing(project) -> None:
 
 def test_a_sheet_that_cannot_be_loaded_is_reported_not_dropped(project, tmp_path) -> None:
     copy = tmp_path / "copy"
-    shutil.copytree(project.parent, copy)
+    copy_fixture(project.parent, copy)
     (copy / "mcu.kicad_sch").unlink()
     res = _base._tools()["check_project"](str(copy / "demo.kicad_sch"))
     assert res["status"] == "incomplete" and res["ok"] is False and res["covered"] is False and res["no_findings"] is False, res
@@ -176,7 +177,7 @@ def test_a_sheet_that_cannot_be_loaded_is_reported_not_dropped(project, tmp_path
 
 def test_an_unloadable_root_is_refused(project, tmp_path) -> None:
     copy = tmp_path / "copy2"
-    shutil.copytree(project.parent, copy)
+    copy_fixture(project.parent, copy)
     (copy / "demo.kicad_sch").unlink()
     res = _base._tools()["check_project"](str(copy / "mcu.kicad_sch"), root_sch=str(copy / "demo.kicad_sch"))
     assert res["ok"] is False and res["code"] in {"root_not_found", "sheet_tree_incomplete"}, res
@@ -291,7 +292,7 @@ def test_an_unreported_sheet_use_alone_makes_the_result_incomplete(project, monk
 
 def test_a_broken_tree_alone_makes_the_result_incomplete_and_never_runs_connectivity(project, tmp_path, monkeypatch) -> None:
     copy = tmp_path / "copy3"
-    shutil.copytree(project.parent, copy)
+    copy_fixture(project.parent, copy)
     (copy / "mcu.kicad_sch").unlink()
     root = copy / "demo.kicad_sch"
     uses = project_check.sheet_tree.walk(root).uses
@@ -338,7 +339,7 @@ def test_a_sheet_file_used_twice_counts_the_violations_of_every_use(project, tmp
     from tests.test_sheet_pins import _add_twin
 
     copy = tmp_path / "twice"
-    shutil.copytree(project.parent, copy)
+    copy_fixture(project.parent, copy)
     root = copy / "demo.kicad_sch"
     _add_twin(root, "MCU", "MCU2", "11111111-1111-4111-8111-111111111111", 160.02)
     # the twin's symbol needs instance data for its own sheet path, else kicad-cli lists nothing for the second use
@@ -381,7 +382,7 @@ def test_every_use_of_a_shared_file_with_findings_is_counted_and_tagged(project,
     from tests.test_sheet_pins import _add_twin
 
     copy = tmp_path / "twice2"
-    shutil.copytree(project.parent, copy)
+    copy_fixture(project.parent, copy)
     root = copy / "demo.kicad_sch"
     _add_twin(root, "MCU", "MCU2", "11111111-1111-4111-8111-111111111111", 160.02)
     uses = project_check.sheet_tree.walk(root).uses
@@ -420,7 +421,7 @@ def _library_project(tmp_path: Path) -> Path:
 def test_project_local_libraries_give_the_same_erc_as_the_real_folder(tmp_path) -> None:
     sch = _library_project(tmp_path)
     reference = tmp_path / "reference"
-    shutil.copytree(sch.parent, reference)  # the real-folder run happens on a second copy: kicad-cli writes beside its input
+    copy_fixture(sch.parent, reference)  # the real-folder run happens on a second copy: kicad-cli writes beside its input
     direct = kicad_cli.run_erc(reference / sch.name)
     expected = Counter((v["type"], v["severity"]) for e in direct["sheets"] for v in e["violations"])
     res = _base._tools()["check_project"](str(sch), checks=["erc"])

@@ -12,7 +12,6 @@ module and copied per test (a folder copy, no kicad-cli run).
 
 from __future__ import annotations
 
-import shutil
 from pathlib import Path
 
 import pytest
@@ -21,6 +20,7 @@ from mcp.server.mcpserver import MCPServer
 from boardproof import kicad_cli, sheet_authoring, sheet_tree, write_layer
 from boardproof.toolsets import project as project_toolset
 from boardproof.toolsets import schematic as schematic_toolset
+from tests._fixture_copy import copy_fixture
 
 PIN = [{"name": "A", "direction": "input"}]
 
@@ -61,7 +61,7 @@ def base(tmp_path_factory) -> dict:
 def work(base, tmp_path) -> tuple[Path, Path, dict]:
     """(folder, sheet, pins) of a fresh copy of the base project."""
     copy = tmp_path / "proj"
-    shutil.copytree(base["folder"], copy)
+    copy_fixture(base["folder"], copy)
     return copy, copy / base["sheet"], base["pins"]
 
 
@@ -100,7 +100,7 @@ def test_dry_run_leaves_the_folder_byte_identical(work, case):
 def test_the_real_call_says_written_and_returns_the_same_net_change(work, tmp_path_factory, case, base):
     folder, sheet, pins = work
     other = tmp_path_factory.mktemp("real") / "proj"
-    shutil.copytree(base["folder"], other)
+    copy_fixture(base["folder"], other)
     dry = _run(_tools(), case, sheet, pins, dry_run=True)
     real = _run(_tools(), case, other / base["sheet"], pins)
     assert real["status"] == "ok", real

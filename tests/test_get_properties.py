@@ -18,6 +18,7 @@ from tests import test_check_symbol_fields as _check
 from tests import test_sheet_pins as _base
 from tests.test_check_symbol_fields import FULL, _sym, _uuid
 from tests.test_sheet_pins import _bytes
+from tests._fixture_copy import copy_fixture
 
 
 @pytest.fixture(scope="module")
@@ -34,9 +35,8 @@ def _template(tmp_path_factory) -> Path:
 
 @pytest.fixture
 def project(_template, tmp_path) -> Path:
-    import shutil
 
-    shutil.copytree(_template.parent, tmp_path / "proj")
+    copy_fixture(_template.parent, tmp_path / "proj")
     return tmp_path / "proj" / _template.name
 
 

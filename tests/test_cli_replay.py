@@ -14,6 +14,7 @@ from pathlib import Path
 import pytest
 
 from tests import _cli_replay as rp
+from tests._fixture_copy import copy_fixture
 
 CRASH = 3221225477  # 0xC0000005
 
@@ -263,12 +264,11 @@ def test_the_real_kicad_cli_replays_a_sheet_upgrade_exactly(kicad_demo, tmp_path
     monkeypatch.setattr(rp, "_stats", {"hit": 0, "miss": 0, "stored": 0})
     cli = str(kicad_cli.find_kicad_cli())
     one = kicad_demo("complex_hierarchy") / "complex_hierarchy.kicad_sch"
-    import shutil
 
     two = tmp_path / "second" / one.name
     fresh = tmp_path / "fresh" / one.name
-    shutil.copytree(one.parent, two.parent)
-    shutil.copytree(one.parent, fresh.parent)
+    copy_fixture(one.parent, two.parent)
+    copy_fixture(one.parent, fresh.parent)
 
     def run(path: Path):
         return rp._run([cli, "sch", "upgrade", "--force", str(path)], capture_output=True, text=True, timeout=300)

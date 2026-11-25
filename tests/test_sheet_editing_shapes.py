@@ -10,7 +10,6 @@ once per module; refusals do not change it, and the tests that write work on a c
 from __future__ import annotations
 
 import math
-import shutil
 from pathlib import Path
 
 import pytest
@@ -19,6 +18,7 @@ from boardproof import kicad_cli, sheet_editing, write_layer
 from boardproof.toolsets import project as project_toolset
 
 from tests.test_sheet_editing import _tools, _wire
+from tests._fixture_copy import copy_fixture
 
 NAN = float("nan")
 INF = float("inf")
@@ -55,7 +55,7 @@ def shared(tmp_path_factory, tools) -> Path:
 @pytest.fixture
 def copy(shared, tmp_path) -> Path:
     target = tmp_path / "proj"
-    shutil.copytree(shared.parent, target)
+    copy_fixture(shared.parent, target)
     return target / shared.name
 
 

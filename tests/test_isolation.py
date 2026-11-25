@@ -23,6 +23,7 @@ from boardproof import _self_check, edge_loops, isolation, kicad_cli, write_laye
 from tests import _kicad_faults as faults
 from tests._self_check_helpers import corrupt_writes, footprint_reference, in_revision_tmp, sexp_edit, top_nodes
 from tests.test_edge_loops import rect_lines
+from tests._fixture_copy import copy_fixture
 
 GOLDEN_DIR = Path(__file__).parent / "fixtures" / "golden_attiny1616_board"
 GOLDEN_NAME = "golden_attiny1616_board.kicad_pcb"
@@ -64,7 +65,7 @@ def pour(layer="B.Cu"):
 
 
 def build(tmp_path: Path, nodes=(), name="proj") -> Path:
-    shutil.copytree(GOLDEN_DIR, tmp_path / name, ignore=shutil.ignore_patterns("~*.lck"))  # a parallel worker may hold a KiCad lock in the fixture
+    copy_fixture(GOLDEN_DIR, tmp_path / name, ignore=shutil.ignore_patterns("~*.lck"))  # a parallel worker may hold a KiCad lock in the fixture
     pcb = tmp_path / name / GOLDEN_NAME
     if nodes:
         root = write_layer.load(pcb)

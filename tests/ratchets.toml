@@ -2337,3 +2337,27 @@ function = "_two_versions"
 kind = "write_unchecked"
 code = '''faults.write_unchecked(root, dest)'''
 note = "Issue 213: the committed rung-1 board or schematic with an older first (version) and a second, newer one; no tool writes two version tokens, and the text-path check must refuse it like check_file_version does."
+
+[[test_kicad_write]]
+file = "test_temp_guard.py"
+function = "test_a_kicad_file_in_a_parent_folder_is_named"
+kind = "write_text"
+count = 1
+use = "stub"
+note = "Issue 241: an empty-JSON stand-in for a stray KiCad file above a fake temp root; the guard only lists names, the content is never read."
+
+[[test_kicad_write]]
+file = "test_temp_guard.py"
+function = "test_files_in_or_below_the_base_do_not_count"
+kind = "write_text"
+count = 1
+use = "stub"
+note = "Issue 241: an empty stand-in file below the scanned root; the guard only lists names, the content is never read."
+
+[[test_kicad_write]]
+file = "test_temp_guard.py"
+function = "test_the_session_hook_ends_a_run_with_a_stray_file_in_the_temp_folder"
+kind = "write_text"
+count = 1
+use = "stub"
+note = "Issue 241: an empty-JSON stand-in stray file in a fake temp folder for a pytest subprocess; only its name is read."

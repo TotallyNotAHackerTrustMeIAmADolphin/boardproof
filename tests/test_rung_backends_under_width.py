@@ -23,6 +23,7 @@ import pytest
 from kicad_tools.sexp import parse_file
 
 from boardproof import rung_runner
+from tests._fixture_copy import copy_fixture
 
 ROOT = Path(__file__).resolve().parents[1]
 TICKET04 = Path(__file__).resolve().parent / "fixtures" / "uw" / "r1fr"
@@ -48,7 +49,7 @@ def _replay(facts: dict):
 
 def _run_one(tmp_path: Path, backend) -> dict:
     source = tmp_path / "input"
-    shutil.copytree(TICKET04 / "in", source)
+    copy_fixture(TICKET04 / "in", source)
     plan = rung_runner.load_protocol()["backends"]["freerouting"]["plan"][:1]
     return rung_runner.run_rung(
         rung="ticket04-replay", backend_name="freerouting", board=source / BOARD_NAME,

@@ -195,12 +195,18 @@ def test_the_tokens_do_not_change_with_the_layout() -> None:
     assert wl.serialise(parse_string(wl.serialise(tree)), compact=True) == wl.serialise(tree, compact=True)
 
 
-@pytest.mark.parametrize("root", ["kicad_pcb", "kicad_symbol_lib", "footprint", "fp_lib_table"])
+@pytest.mark.parametrize("root", ["kicad_symbol_lib", "footprint", "fp_lib_table"])
 def test_other_file_kinds_keep_their_layout(root: str) -> None:
     """Only a sheet takes the new layout: a board, a library and a table are written as before."""
     text = wl.serialise(parse_string(f"({root} (effects (font 1 1)) (pts (xy 1 1) (xy 2 2)))"))
     assert text.split("\n")[1] == "\t(effects (font 1 1))"
     assert text.split("\n")[2] == "\t(pts (xy 1 1) (xy 2 2))"
+
+
+def test_a_board_takes_the_sheet_layout() -> None:
+    """A board is laid out as KiCad lays it out (issue 226; the demo round trip is in test_board_layout)."""
+    text = wl.serialise(parse_string("(kicad_pcb (effects (font 1 1)))"))
+    assert text.split("\n")[2] == "\t\t(font 1 1)"
 
 
 def test_a_sub_tree_of_a_sheet_alone_keeps_the_old_layout() -> None:

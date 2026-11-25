@@ -18,6 +18,7 @@ import pytest
 from boardproof import write_layer
 from boardproof import rung_backends, rung_runner
 from boardproof.routers import kicad_routing_tools as krt_tools
+from tests._fixture_copy import copy_fixture
 
 FIXTURES = Path(__file__).parent / "fixtures"
 needs_krt = pytest.mark.needs_krt  # skip with the probe's reason, or fail in the gate run (build ticket 53)
@@ -122,7 +123,7 @@ def test_krt_adapter_refuses_a_lever_that_is_not_predeclared(stress_board, tmp_p
 def test_krt_adapter_refuses_a_board_with_a_filled_pour(tmp_path):
     src = FIXTURES / "zone_obstacle"
     project = tmp_path / "zone"
-    shutil.copytree(src, project)
+    copy_fixture(src, project)
     board = project / "zone_obstacle.kicad_pcb"
     (tmp_path / "a").mkdir()
     outcome = rung_backends.krt_backend()(board, dict(KRT_BASELINE), 60.0, tmp_path / "a" / "router.log")

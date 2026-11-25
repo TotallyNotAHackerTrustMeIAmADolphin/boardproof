@@ -23,6 +23,7 @@ from mcp.server.mcpserver import MCPServer
 from boardproof import kicad_cli, sheet_authoring, sheet_editing, sheet_pins, sheet_tree, write_layer
 from boardproof.toolsets import project as project_toolset
 from boardproof.toolsets import schematic as schematic_toolset
+from tests._fixture_copy import copy_fixture
 
 
 @pytest.fixture(autouse=True)
@@ -110,7 +111,7 @@ def _erc_types(sch: Path, tmp_path: Path) -> dict[str, int]:
 
     copy = tmp_path / "erc"
     shutil.rmtree(copy, ignore_errors=True)
-    shutil.copytree(sch.parent, copy)
+    copy_fixture(sch.parent, copy)
     counts: dict[str, int] = {}
     for (kind, _sev), n in sheet_authoring.erc_census(copy / sch.name).items():
         counts[kind] = counts.get(kind, 0) + n

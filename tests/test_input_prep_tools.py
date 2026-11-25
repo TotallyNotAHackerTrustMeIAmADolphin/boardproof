@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import shutil
 from pathlib import Path
 
 import pytest
@@ -18,6 +17,7 @@ from mcp.client.client import Client
 
 from boardproof import write_layer
 from boardproof.server import build_server
+from tests._fixture_copy import copy_fixture
 
 FIXTURES = Path(__file__).parent / "fixtures"
 GOLDEN_DIR = FIXTURES / "golden_attiny1616_board"
@@ -28,7 +28,7 @@ def _build_board(dest: Path, texts: list[tuple[str, str]]) -> Path:
     from kicad_tools.schema import PCB
     from kicad_tools.sexp import SExp
 
-    shutil.copytree(GOLDEN_DIR, dest)
+    copy_fixture(GOLDEN_DIR, dest)
     pcb = dest / GOLDEN_NAME
     board = PCB.load(pcb)
     for index, (text, layer) in enumerate(texts):

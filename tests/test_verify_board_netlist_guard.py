@@ -19,13 +19,13 @@ of the file is serialised by kicad_tools. Never by hand (CLAUDE.md hard rule 1).
 from __future__ import annotations
 
 import importlib.util
-import shutil
 from pathlib import Path
 
 import pytest
 
 from boardproof import kicad_cli, sheet_tree
 from boardproof.verify_board import snapshot_rules, verify_board
+from tests._fixture_copy import copy_fixture
 
 ROOT = Path(__file__).resolve().parents[1]
 RUNG1_INPUT = ROOT / "evals" / "rung1" / "layout_run" / "07_poured"
@@ -137,7 +137,7 @@ def test_a_healthy_demo_still_passes(kicad_demo, demo: str, board: str) -> None:
 
 def test_the_rung1_input_still_passes(tmp_path: Path) -> None:
     project = tmp_path / "rung1"
-    shutil.copytree(RUNG1_INPUT, project)
+    copy_fixture(RUNG1_INPUT, project)
 
     result = _clean_gate(project / "rung1_usbc_attiny1616.kicad_pcb")
 

@@ -29,6 +29,7 @@ from boardproof import write_layer
 from boardproof.toolsets import routing as routing_toolset
 from tests._dsn_pins import kids, misplaced_pins, one, parse
 from tests._self_check_helpers import corrupt_writes, sexp_edit, top_nodes
+from tests._fixture_copy import copy_fixture
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -48,7 +49,7 @@ def _stage_rung2(kicad_demo, tmp_path: Path) -> Path:
 
 
 def _copy_rung1(tmp_path: Path) -> Path:
-    shutil.copytree(RUNG1, tmp_path / "rung1")
+    copy_fixture(RUNG1, tmp_path / "rung1")
     return tmp_path / "rung1" / "rung1_usbc_attiny1616.kicad_pcb"
 
 

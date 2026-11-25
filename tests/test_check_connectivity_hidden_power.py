@@ -23,7 +23,6 @@ from __future__ import annotations
 
 import json
 import re
-import shutil
 import subprocess
 from pathlib import Path
 
@@ -34,6 +33,7 @@ from mcp.server.mcpserver import MCPServer
 from boardproof import connectivity_check, kicad_cli, sheet_editing, write_layer
 from boardproof.toolsets import project as project_toolset
 from boardproof.toolsets import schematic as schematic_toolset
+from tests._fixture_copy import copy_fixture
 
 # --------------------------------------------------------------------------- raw reader, no kicad-cli
 
@@ -234,7 +234,7 @@ def _erc_open(sch: Path, tmp_path: Path) -> set[tuple[str, str]]:
 
 def _tool_open(tools: dict, sch: Path, tmp_path: Path) -> set[tuple[str, str]]:
     copy = tmp_path / "copy"
-    shutil.copytree(sch.parent, copy)  # the netlist cross-check writes beside its input
+    copy_fixture(sch.parent, copy)  # the netlist cross-check writes beside its input
     got = tools["check_connectivity"](str(copy / sch.name))
     assert got["status"] == "ok", got
     return {(p["reference"], p["pin_number"]) for p in got["unconnected_pins"]}

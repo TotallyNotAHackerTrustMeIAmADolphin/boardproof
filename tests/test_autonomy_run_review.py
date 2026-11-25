@@ -5,7 +5,6 @@ through a free-form rung, a foreign runs root or a missing refusal."""
 from __future__ import annotations
 
 import json
-import shutil
 from pathlib import Path
 
 import pytest
@@ -14,6 +13,7 @@ from boardproof import write_layer
 from boardproof import autonomy_run, rung_backends, rung_runner
 
 from test_input_prep import _build_fixture, GOLDEN_DIR, GOLDEN_NAME
+from tests._fixture_copy import copy_fixture
 
 _EMPTY = {"violations": [], "unconnected_items": [], "schematic_parity": [], "ignored_checks": []}
 OK_INFO = {"available": True, "reason": None, "versions": {}}
@@ -178,7 +178,7 @@ def test_the_pinned_rung_fixture_is_accepted(board, tmp_path):
 
 def test_a_board_with_a_filled_pour_is_refused_not_scored(tmp_path):
     project = tmp_path / "zone"
-    shutil.copytree(Path(__file__).parent / "fixtures" / "zone_obstacle", project)
+    copy_fixture(Path(__file__).parent / "fixtures" / "zone_obstacle", project)
     outcome = _measure(project / "zone_obstacle.kicad_pcb", tmp_path, parity="not_applicable",
                        parity_reason="fixture has no schematic")
     assert outcome["status"] == "REFUSED"
@@ -217,7 +217,7 @@ def test_a_failing_input_floor_labels_report_summary_and_index(board, tmp_path):
 
 def test_the_nothing_to_do_branch_carries_the_same_floor_fields(tmp_path):
     project = tmp_path / "golden"
-    shutil.copytree(GOLDEN_DIR, project)
+    copy_fixture(GOLDEN_DIR, project)
     outcome = _measure(project / GOLDEN_NAME, tmp_path)
     floor = outcome["report"]["input_floor"]
     assert outcome["report"]["setup"]["input_preparation"]["status"] == "nothing_to_do"

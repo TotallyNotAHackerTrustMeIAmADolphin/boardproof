@@ -1515,7 +1515,7 @@ def _carry_over(
             out_dir.parent.mkdir(parents=True, exist_ok=True)
             tmp_pcb = input_prep._copy_project(src, tmp)
             board = write_layer.load_pcb(tmp_pcb)
-            original_counts = Counter(c.name for c in board._sexp.children if c.name)
+            original_counts = write_layer.saved_tag_counts(board._sexp)
             for node in added:
                 board._sexp.append(node)
             write_layer.save_pcb(board, tmp_pcb)
@@ -1527,7 +1527,7 @@ def _carry_over(
 
         # Verify from a fresh parse of the saved file, never the in-memory tree.
         expected = original_counts + Counter(n.name for n in added)
-        if Counter(c.name for c in fresh.children if c.name) != expected:
+        if write_layer.saved_tag_counts(fresh) != expected:
             return _result("error", "CRITICAL: top-level node counts are wrong after carry-over and reload")
         have = {_node_key(c): c for c in fresh.children if c.name in _CARRIED_TAGS}
         lost = [_node_key(n) for n in added if _node_key(n) not in have]

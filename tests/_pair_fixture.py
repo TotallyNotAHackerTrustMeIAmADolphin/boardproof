@@ -7,13 +7,13 @@ write layer, as ``test_board_rules._build``), on the nets VCC and GND; the net c
 
 from __future__ import annotations
 
-import shutil
 from pathlib import Path
 
 from kicad_tools.schema import PCB
 from kicad_tools.sexp import parse_string
 
 from boardproof import board_rules, write_layer
+from tests._fixture_copy import copy_fixture
 
 FIXTURES = Path(__file__).parent / "fixtures"
 GOLDEN_DIR = FIXTURES / "golden_attiny1616_board"
@@ -28,7 +28,7 @@ def fake_drc(path, **_kwargs):
 
 
 def build_pair_board(dest: Path, *, tracks: bool = True, classes: bool = True) -> Path:
-    shutil.copytree(GOLDEN_DIR, dest / "proj")
+    copy_fixture(GOLDEN_DIR, dest / "proj")
     pcb = dest / "proj" / GOLDEN_NAME
     if tracks:
         board = PCB.load(pcb)

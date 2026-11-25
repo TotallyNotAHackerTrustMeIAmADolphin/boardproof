@@ -13,7 +13,6 @@ tolerance of a move, a bad revision accepted, a state that does not load compare
 from __future__ import annotations
 
 import os
-import shutil
 from pathlib import Path
 
 import pytest
@@ -21,6 +20,7 @@ import pytest
 from boardproof import kicad_cli, schematic_diff, sheet_editing
 from tests import rename_fixture as F
 from tests._hermetic_git import apply_hermetic_env, run_git
+from tests._fixture_copy import copy_fixture
 
 # ------------------------------------------------------------------------------------------ unit: symbols
 
@@ -471,7 +471,7 @@ def test_two_paths_give_the_same_difference_as_the_two_revisions(history) -> Non
 def test_two_equal_copies_are_identical(history) -> None:
     root, revs, one_copy = history
     twin = one_copy.parent.parent / "twin"
-    shutil.copytree(one_copy.parent, twin, dirs_exist_ok=True)
+    copy_fixture(one_copy.parent, twin, dirs_exist_ok=True)
     same = schematic_diff.diff_schematic(str(one_copy), str(twin / one_copy.name))
     assert same["ok"] is True and same["no_symbol_or_net_differences"] is True and same["sheets"] == []
     assert same["totals"]["nets"] == {"added": 0, "removed": 0, "renamed": 0, "members_changed": 0}
@@ -535,7 +535,7 @@ def test_the_netlist_that_fails_is_reported_and_the_symbol_part_is_still_given(h
 def test_an_unreadable_working_sheet_is_reported_for_a_path_state(history, tmp_path) -> None:
     root, _, one_copy = history
     broken = tmp_path / "broken"
-    shutil.copytree(one_copy.parent, broken)
+    copy_fixture(one_copy.parent, broken)
     (broken / "sub.kicad_sch").unlink()
     out = schematic_diff.diff_schematic(str(broken / one_copy.name), str(root))
     assert out["ok"] is False and out["compared"] is False and out["states"][0]["loaded"] is False and "sub.kicad_sch" in out["reason"]

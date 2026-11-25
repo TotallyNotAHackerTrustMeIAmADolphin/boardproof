@@ -27,6 +27,7 @@ from boardproof import pour_step
 from boardproof import verify_board as gate
 from boardproof.kicad_cli import run_drc
 from boardproof.routers import kicad_routing_tools as krt
+from tests._fixture_copy import copy_fixture
 
 FIXTURES = Path(__file__).parent / "fixtures"
 SIMPLE_LED = FIXTURES / "simple_led.kicad_pcb"
@@ -294,13 +295,13 @@ def test_every_grade_ran_before_the_revision_existed_and_the_routers_file_is_not
 def test_routing_proceeds_on_the_poured_revision_and_welds_the_pending_pad(real_pour, tmp_path):
     """The claim behind 'pending': the router's own routing step connects what the plane step left."""
     revision = tmp_path / "rev"
-    shutil.copytree(real_pour["out_dir"], revision)
+    copy_fixture(real_pour["out_dir"], revision)
     pcb = revision / NAME
     pour_info = krt.board_pour_info(pcb)
     assert pour_info["pour_layers"] == ["B.Cu"]
     # route into a second directory so the revision itself is only read
     out = tmp_path / "routed_copy"
-    shutil.copytree(revision, out)
+    copy_fixture(revision, out)
     args = krt.build_route_args(pcb, out / NAME, nets=("*",), pour_info=pour_info)
     run = krt.run_router_script("route.py", args, output_pcb=out / NAME, original_pcb=pcb, timeout=180)
     assert run["exit_code"] == 0

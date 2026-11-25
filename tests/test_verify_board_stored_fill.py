@@ -15,7 +15,6 @@ zone nodes; ``zone_obstacle``: 1 zone, 1 ``(filled_polygon``.
 from __future__ import annotations
 
 import re
-import shutil
 from pathlib import Path
 
 import pytest
@@ -23,6 +22,7 @@ from kicad_tools.sexp import parse_string
 
 from boardproof import verify_board as gate
 from boardproof import write_layer
+from tests._fixture_copy import copy_fixture
 
 FIXTURES = Path(__file__).parent / "fixtures"
 RUNG1 = [FIXTURES / "uw" / "r1fr" / "out", FIXTURES / "uw" / "r1krt" / "out"]
@@ -46,7 +46,7 @@ def _raw_counts(pcb: Path) -> tuple[int, int]:
 
 
 def _copy(directory: Path, tmp_path: Path) -> Path:
-    shutil.copytree(directory, tmp_path / "board")
+    copy_fixture(directory, tmp_path / "board")
     return _pcb(tmp_path / "board")
 
 

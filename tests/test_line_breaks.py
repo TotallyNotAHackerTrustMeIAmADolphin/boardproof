@@ -17,7 +17,6 @@ the write layer, on ``tmp_path`` copies (CLAUDE.md hard rule 1).
 
 from __future__ import annotations
 
-import shutil
 import subprocess
 import uuid
 from pathlib import Path
@@ -30,6 +29,7 @@ from mcp.server.mcpserver import MCPServer
 from boardproof import kicad_cli
 from boardproof import write_layer as wl
 from tests import _kicad_faults as faults
+from tests._fixture_copy import copy_fixture
 
 # kicad_tools 0.25.0 escapes a CR itself (its changelog); up to 0.24 it wrote it raw.
 _KT_WRITES_CR_RAW = tuple(int(p) for p in kicad_tools.__version__.split(".")[:2]) < (0, 25)
@@ -113,7 +113,7 @@ def kicad_reads(path: Path, kind: str, tmp_path: Path) -> list[str]:
     KiCad's own save must hold no raw line break either: that encodes the fact that KiCad
     escapes every field these tests write (sheet-pin names are the exception, tested apart)."""
     scratch = tmp_path / f"kicad-read-{len(list(tmp_path.glob('kicad-read-*')))}"
-    shutil.copytree(path.parent, scratch)
+    copy_fixture(path.parent, scratch)
     copy = scratch / path.name
     proc = subprocess.run(
         [_cli(), kind, "upgrade", "--force", str(copy)],
@@ -649,7 +649,7 @@ def test_kicad_itself_writes_a_sheet_pin_name_with_a_raw_line_break(project: Pat
     assert netlist(project)[0] == COMPONENTS
 
     scratch = tmp_path / "kicad-saved"
-    shutil.copytree(project, scratch)
+    copy_fixture(project, scratch)
     first = subprocess.run([_cli(), "sch", "upgrade", "--force", str(scratch / ROOT)], capture_output=True, timeout=120)
     assert first.returncode == 0
     assert [b"PIN" in hit for hit in raw_breaks(scratch / ROOT)] == [True]
@@ -719,7 +719,7 @@ def test_register_library_asset_never_writes_a_raw_line_break(project: Path, brk
     any line break and names the parameter."""
     from boardproof.toolsets import library
 
-    shutil.copytree(project / "complex_hierarchy.pretty", project / "extra.pretty")
+    copy_fixture(project / "complex_hierarchy.pretty", project / "extra.pretty")
     table = project / "fp-lib-table"
     before = table.read_bytes()
     result = _tools(library)["register_library_asset"](
@@ -746,7 +746,7 @@ def test_register_library_asset_keeps_an_existing_escaped_line_break_escaped(pro
     wl.set_string(next(iter(root.find_all("lib"))).find("descr"), 0, descr)
     table.write_text(wl.serialise(root) + "\n", encoding="utf-8")
     assert raw_breaks(table) == []
-    shutil.copytree(project / "complex_hierarchy.pretty", project / "extra.pretty")
+    copy_fixture(project / "complex_hierarchy.pretty", project / "extra.pretty")
 
     result = _tools(library)["register_library_asset"](
         str(project), footprint_lib_path=str(project / "extra.pretty"), nickname="extra"

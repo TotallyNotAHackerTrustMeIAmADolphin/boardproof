@@ -78,8 +78,7 @@
       "F401": 1
     },
     "tests/test_rung_backends_pour_review.py": {
-      "B905": 2,
-      "F401": 1
+      "B905": 2
     },
     "tests/test_rung_backends_review.py": {
       "F401": 2,

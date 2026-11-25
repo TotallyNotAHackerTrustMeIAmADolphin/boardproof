@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 from boardproof import autonomy_run, rung_runner
+from tests._fixture_copy import copy_fixture
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -147,9 +148,8 @@ def test_the_staging_refuses_a_board_whose_group_holds_a_stripped_item(kicad_dem
 
     stage = _stage_module()
     work = tmp_path / "grouped"
-    import shutil
 
-    shutil.copytree(kicad_demo("pic_programmer"), work)
+    copy_fixture(kicad_demo("pic_programmer"), work)
     pcb = work / "pic_programmer.kicad_pcb"
     root = write_layer.load(pcb)
     segment = next(c for c in root.children if c.name == "segment")
@@ -177,9 +177,8 @@ def test_the_staging_refuses_any_node_whose_members_hold_a_stripped_item(kicad_d
 
     stage = _stage_module()
     work = tmp_path / "generated"
-    import shutil
 
-    shutil.copytree(kicad_demo("pic_programmer"), work)
+    copy_fixture(kicad_demo("pic_programmer"), work)
     pcb = work / "pic_programmer.kicad_pcb"
     root = write_layer.load(pcb)
     segment = next(c for c in root.children if c.name == "segment")
@@ -210,11 +209,11 @@ def test_the_staging_self_check_fires_on_a_corrupted_write(kicad_demo, tmp_path,
     real_save = write_layer.save
     seen = []
 
-    def corrupted_save(root, path, *, verify=None):
+    def corrupted_save(root, path, *, verify=None, **kwargs):
         seen.append(verify)
         footprint = next(c for c in root.children if c.name == "footprint")
         root.children = [c for c in root.children if c is not footprint]
-        return real_save(root, path, verify=verify)
+        return real_save(root, path, verify=verify, **kwargs)
 
     monkeypatch.setattr(write_layer, "save", corrupted_save)
     with pytest.raises(stage.StagingNotVerified):
@@ -1199,11 +1198,10 @@ def test_the_input_floor_script_strips_to_the_pinned_board(kicad_demo, tmp_path,
     spec = importlib.util.spec_from_file_location("measure_input_floor", ROOT / "evals" / "rung2" / "measure_input_floor.py")
     floor = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(floor)
-    import shutil
 
     source = kicad_demo("pic_programmer")
     work = tmp_path / "stripped"
-    shutil.copytree(source, work)
+    copy_fixture(source, work)
     strip = floor.strip_tracks(source / "pic_programmer.kicad_pcb", work / "pic_programmer.kicad_pcb")
     assert autonomy_run.board_sha(work / "pic_programmer.kicad_pcb") == rung_runner.load_protocol()["rungs"]["2"]["board_sha256"]
     assert strip["after"]["segment"] == strip["after"]["via"] == strip["after"]["zone"] == 0

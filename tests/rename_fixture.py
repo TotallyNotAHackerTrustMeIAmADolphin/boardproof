@@ -11,7 +11,6 @@ Nets in kicad-cli's netlist: ``VCC`` [R1.1], ``/SDA`` [R1.2, R10.1], ``GL`` [R2.
 
 from __future__ import annotations
 
-import shutil
 from pathlib import Path
 
 from mcp.server.mcpserver import MCPServer
@@ -19,6 +18,7 @@ from mcp.server.mcpserver import MCPServer
 from boardproof import sheet_authoring, sheet_editing, write_layer
 from boardproof.toolsets import project as project_toolset
 from boardproof.toolsets import schematic as schematic_toolset
+from tests._fixture_copy import copy_fixture
 
 
 def tools() -> dict:
@@ -67,7 +67,7 @@ def nets(root: Path) -> dict[str, list[str]]:
 
 def copy_of(template_root: Path, dest: Path) -> Path:
     """A private copy of the template project (same relative layout, same uuids)."""
-    shutil.copytree(template_root.parent, dest)
+    copy_fixture(template_root.parent, dest)
     return dest / template_root.name
 
 

@@ -8,7 +8,6 @@ and ``(pts ...)`` nodes and the pin maths on them, never from a kicad_tools prop
 
 from __future__ import annotations
 
-import shutil
 from pathlib import Path
 
 import pytest
@@ -17,6 +16,7 @@ from mcp.server.mcpserver import MCPServer
 from boardproof import kicad_cli, sheet_authoring, sheet_editing, sheet_grid, write_layer
 from boardproof.toolsets import project as project_toolset
 from boardproof.toolsets import schematic as schematic_toolset
+from tests._fixture_copy import copy_fixture
 
 GRID = 1.27
 
@@ -55,7 +55,7 @@ def template(tmp_path_factory) -> Path:
 
 @pytest.fixture
 def sheet(template, tmp_path) -> Path:
-    shutil.copytree(template.parent, tmp_path / "p")
+    copy_fixture(template.parent, tmp_path / "p")
     return tmp_path / "p" / template.name
 
 

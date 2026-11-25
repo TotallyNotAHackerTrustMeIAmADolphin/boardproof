@@ -16,6 +16,7 @@ import pytest
 from boardproof import board_rules, clearance_coverage, kicad_cli, raw_geometry, write_layer
 from tests import _pair_fixture as fx
 from tests.test_pair_clearance_rules import HAND, probe_drc, put_rules
+from tests._fixture_copy import copy_fixture
 
 
 @pytest.fixture
@@ -271,7 +272,7 @@ def _board_with(tmp_path: Path, *nodes: str, strip_nets: bool = False, no_parse_
     from kicad_tools.schema import PCB
     from kicad_tools.sexp import parse_string
 
-    shutil.copytree(fx.GOLDEN_DIR, tmp_path / "proj")
+    copy_fixture(fx.GOLDEN_DIR, tmp_path / "proj")
     pcb = tmp_path / "proj" / fx.GOLDEN_NAME
     board = PCB.load(pcb)
 

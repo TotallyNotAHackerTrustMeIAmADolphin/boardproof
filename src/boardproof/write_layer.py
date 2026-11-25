@@ -546,14 +546,38 @@ def _lines(node: SExp, depth: int, out: list[str]) -> None:
 # or more, each tab of the indent counting one character (the threshold is a total of 99: at
 # indent depth 3 a line breaks at 96 characters of text, at depth 6 at 93; measured with kicad-cli
 # 10.0.7 at those two depths, both sides of the threshold). The strings of an image's ``(data ..)`` take a line each.
-_SHEET_ROOT = "kicad_sch"
+# A board (``kicad_pcb``, GitHub issue 226) has the same layout, measured on the 18 KiCad 10 demo
+# boards (``pic_programmer`` round-trips byte for byte), plus one rule: the atoms of a ``(pins ..)``
+# list wrap to the next line, one indent deeper, once the line holds ``_PINS_LINE_BREAK`` characters
+# (a tab counts one) before the next atom; the ``)`` then has a line of its own (measured with
+# kicad-cli 10.0.7 by ``upgrade --force`` of synthetic lists: 71 characters stay, 72 break).
+# ``(group .. (members ..))`` wraps the same way (2 uuids per line; measured with kicad-cli on groups of 1, 2, 3, 5 members).
+# shortcut: only ``pins`` and ``members`` were measured to wrap; another long atom list stays on one line,
+# measure it when a demo shows one (a zone's ``(layers ..)`` could not be measured: kicad-cli drops the edit).
+_SHEET_ROOT = ("kicad_sch", "kicad_pcb")
 _PTS_LINE_BREAK = 99
+_PINS_LINE_BREAK = 72
+_WRAPPED_LISTS = ("pins", "members")
 
 
 def _sheet_lines(node: SExp, depth: int, out: list[str]) -> None:
     tabs = "\t" * depth
     children = node.children
     data = node.name == "data" and len(children) > 1
+    if node.name in _WRAPPED_LISTS and len(children) > 1 and all(c.is_atom for c in children):
+        line, wrapped = tabs + "(" + node.name, False
+        for c in children:
+            if len(line) >= _PINS_LINE_BREAK:
+                out.append(line)
+                line, wrapped = tabs + "	" + atom_text(c), True
+            else:
+                line += " " + atom_text(c)
+        out.append(line)
+        if wrapped:
+            out.append(tabs + ")")
+            return
+        out[-1] += ")"
+        return
     if not data and all(c.is_atom for c in children):
         out.append(tabs + _compact(node))
         return
@@ -582,15 +606,17 @@ def _sheet_lines(node: SExp, depth: int, out: list[str]) -> None:
     out.append(tabs + ")")
 
 
-def serialise(node: SExp, *, compact: bool = False) -> str:
+def serialise(node: SExp, *, compact: bool = False, legacy_board_layout: bool = False) -> str:
     """``node`` as KiCad S-expression text. ``compact`` gives one line with single spaces
     (what the self-checks compare); otherwise one tab per level. A whole sheet (root
     ``kicad_sch``) is laid out as KiCad lays it out; every other node, a board, a library or a
-    sub-tree, keeps one tab per level with short lists on one line."""
+    sub-tree, keeps one tab per level with short lists on one line. ``legacy_board_layout`` gives a board
+    that old layout too (the one before issue 226): for a file whose bytes are pinned, so that a layout
+    change never moves a protocol pin (``evals/rung2/stage_input.py`` is the only caller)."""
     if compact or node.is_atom:
         return _compact(node)
     out: list[str] = []
-    if node.name == _SHEET_ROOT:
+    if node.name in _SHEET_ROOT and not (legacy_board_layout and node.name == "kicad_pcb"):
         _sheet_lines(node, 0, out)
     else:
         _lines(node, 0, out)
@@ -853,7 +879,9 @@ def _write_temp(text: str, path: Path) -> Path:
     return temp
 
 
-def save(root: SExp, path: str | Path, *, verify: Callable[[Path], None] | None = None) -> Path:
+def save(
+    root: SExp, path: str | Path, *, verify: Callable[[Path], None] | None = None, legacy_board_layout: bool = False
+) -> Path:
     """Save the tree ``root`` to ``path``: serialise, write a temporary sibling (UTF-8), parse-
     check it with ``kicad-cli`` (each sub-sheet of a schematic on its own), call
     ``verify(temporary_path)`` if given (it raises to refuse), then ``os.replace`` it onto
@@ -871,8 +899,46 @@ def save(root: SExp, path: str | Path, *, verify: Callable[[Path], None] | None 
             file=str(path),
             pins=pins,
         )
-    temp = _write_temp(serialise(root) + "\n", path)
+    text = serialise(root, legacy_board_layout=True) if legacy_board_layout else _board_text(root)
+    temp = _write_temp(text + "\n", path)
     return _commit(temp, path, lambda: parse_check(temp, kind, target=path), verify)
+
+
+def drops_net_declarations(root: SExp) -> bool:
+    """True for a board of version 20260206 or newer (KiCad 10): ``save`` writes no top-level
+    ``(net N "name")`` declarations for it (GitHub issue 226)."""
+    if root.name != "kicad_pcb":
+        return False
+    version = next((c.values[0] for c in root.children if not c.is_atom and c.name == "version" and c.values), 0)
+    return isinstance(version, (int, float)) and version >= 20260206
+
+
+def is_net_declaration(node: SExp) -> bool:
+    """A top-level ``(net N "name")``: the form kicad_tools' loader synthesises for a KiCad 10 board."""
+    return not node.is_atom and node.name == "net" and len(node.children) == 2
+
+
+def saved_tag_counts(root: SExp) -> Counter:
+    """How many top-level children of each name ``root`` has as ``save`` writes them: the loader's
+    synthesised net declarations of a KiCad 10 board are not counted (issue 226)."""
+    skip = drops_net_declarations(root)
+    return Counter(c.name for c in root.children if c.name and not (skip and is_net_declaration(c)))
+
+
+def _board_text(root: SExp) -> str:
+    """``serialise(root)`` without the top-level ``(net N "name")`` declarations that kicad_tools' loader
+    synthesises into a KiCad 10 board and KiCad 10 never writes (``drops_net_declarations``). The tree
+    itself is left as it was."""
+    if not drops_net_declarations(root):
+        return serialise(root)
+    kept = [c for c in root.children if not is_net_declaration(c)]
+    if len(kept) == len(root.children):
+        return serialise(root)
+    saved, root.children[:] = list(root.children), kept
+    try:
+        return serialise(root)
+    finally:
+        root.children[:] = saved
 
 
 def layout_normalisation(path: str | Path) -> int:

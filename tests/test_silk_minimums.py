@@ -15,7 +15,6 @@ at 0.125 mm.
 from __future__ import annotations
 
 import hashlib
-import shutil
 from pathlib import Path
 
 import pytest
@@ -23,6 +22,7 @@ import pytest
 from boardproof import silk_minimums as sm
 from boardproof import write_layer
 from tests import _kicad_faults as faults
+from tests._fixture_copy import copy_fixture
 
 FIXTURES = Path(__file__).parent / "fixtures"
 GOLDEN_DIR = FIXTURES / "golden_attiny1616_board"
@@ -56,7 +56,7 @@ def _build(dest: Path, with_dru: bool = False) -> Path:
     from kicad_tools.schema import PCB
     from kicad_tools.sexp import SExp
 
-    shutil.copytree(GOLDEN_DIR, dest)
+    copy_fixture(GOLDEN_DIR, dest)
     pcb = dest / GOLDEN_NAME
     board = PCB.load(pcb)
     for i, (text, layer, h, w, t, x, mirror) in enumerate(_BOARD_TEXTS):
@@ -538,7 +538,7 @@ def test_only_unhandled_sub_minimum_text_is_not_nothing_to_do(tmp_path: Path) ->
     from kicad_tools.sexp import parse_string
 
     dest = tmp_path / "proj"
-    shutil.copytree(GOLDEN_DIR, dest)
+    copy_fixture(GOLDEN_DIR, dest)
     pcb = dest / GOLDEN_NAME
     b = PCB.load(pcb)
     b._sexp.append(parse_string(

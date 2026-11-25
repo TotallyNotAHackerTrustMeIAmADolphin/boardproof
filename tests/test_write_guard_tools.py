@@ -45,6 +45,7 @@ from tests import test_pour_step as t_pour
 from tests import test_silk_minimums as t_silk
 from tests import _tool_registry
 from tests.test_write_guard import CODE, OTHER_HOST, TOOL_CASES, WRITING_TOOLS
+from tests._fixture_copy import copy_fixture
 
 FIXTURES = Path(__file__).parent / "fixtures"
 RUNG1 = Path(__file__).resolve().parents[1] / "evals" / "rung1"
@@ -129,7 +130,7 @@ def _confirm_schematic_import(tmp_path):
         kicad_cli.find_kicad_cli()
     except Exception:  # noqa: BLE001
         pytest.skip("kicad-cli not installed")
-    shutil.copytree(RUNG1 / "project", tmp_path / "proj")
+    copy_fixture(RUNG1 / "project", tmp_path / "proj")
     pcb = tmp_path / "proj" / "rung1_usbc_attiny1616.kicad_pcb"
     proposal = schematic_import.propose_schematic_import(pcb, output_dir=tmp_path / "out")
     assert proposal["status"] == "proposed", proposal
@@ -145,7 +146,7 @@ def _confirm_board_rules(tmp_path):
 
 
 def _confirm_board_outline(tmp_path):
-    shutil.copytree(t_outline.GOLDEN_DIR, tmp_path / "proj")
+    copy_fixture(t_outline.GOLDEN_DIR, tmp_path / "proj")
     board = tmp_path / "proj" / t_outline.GOLDEN_NAME
     proposal = board_outline.propose_board_outline(board, t_outline.RECT, output_dir=tmp_path / "out")
     assert proposal["status"] == "proposed", proposal

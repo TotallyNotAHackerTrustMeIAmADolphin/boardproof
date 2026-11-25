@@ -1123,7 +1123,7 @@ def _apply_symbol_link(fp: Any, spec: dict) -> None:
 
 
 def _tag_counts(root: Any) -> Counter:
-    return Counter(c.name for c in root.children if c.name)
+    return write_layer.saved_tag_counts(root)  # a KiCad 10 board is saved without net declarations (issue 226)
 
 
 def _pad_nets(root: Any) -> dict[tuple[str, str], set[str]]:
@@ -1235,6 +1235,8 @@ def _verify(
             "copper net reference", "a declared net", dangling,
         )
     board_nets = {str(n.values[1]) for n in fresh.children if n.name == "net" and len(n.values) > 1} - {""}
+    if write_layer.drops_net_declarations(fresh):  # saved without declarations (issue 226): the pads hold the names
+        board_nets = set().union(*_pad_nets(fresh).values()) - {""}
     netlist_nets = {n.name for n in netlist.nets if n.name}
     if board_nets != netlist_nets:
         return (

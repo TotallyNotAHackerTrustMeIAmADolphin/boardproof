@@ -22,6 +22,7 @@ import pytest
 from boardproof import write_layer
 from boardproof import board_rules
 from boardproof.kicad_cli import run_drc
+from tests._fixture_copy import copy_fixture
 
 FIXTURES = Path(__file__).parent / "fixtures"
 GOLDEN_DIR = FIXTURES / "golden_attiny1616_board"
@@ -49,7 +50,7 @@ def _build(dest: Path, *, tracks: bool = True, constraints: dict | None = None) 
     from kicad_tools.schema import PCB
     from kicad_tools.sexp import SExp
 
-    shutil.copytree(GOLDEN_DIR, dest)
+    copy_fixture(GOLDEN_DIR, dest)
     pcb_path = dest / GOLDEN_NAME
     if tracks:
         board = PCB.load(pcb_path)
@@ -539,7 +540,7 @@ def test_default_table_matches_real_kicad_cli(tmp_path: Path) -> None:
     from kicad_tools.sexp import SExp
 
     proj = tmp_path / "p"
-    shutil.copytree(GOLDEN_DIR, proj)
+    copy_fixture(GOLDEN_DIR, proj)
     pcb = proj / GOLDEN_NAME
     brd = PCB.load(pcb)
 

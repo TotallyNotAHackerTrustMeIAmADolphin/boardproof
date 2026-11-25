@@ -20,6 +20,7 @@ from boardproof import write_layer
 from boardproof import verify_board as gate
 from boardproof.kicad_cli import run_drc
 from tests import _kicad_faults as faults
+from tests._fixture_copy import copy_fixture
 
 FIXTURES = Path(__file__).parent / "fixtures"
 GOLDEN_DIR = FIXTURES / "golden_attiny1616_board"
@@ -40,7 +41,7 @@ def _build_fixture(dest: Path, extra_nodes: tuple[str, ...] = (), routed: bool =
     from kicad_tools.schema import PCB
     from kicad_tools.sexp import SExp, parse_string
 
-    shutil.copytree(GOLDEN_DIR, dest)
+    copy_fixture(GOLDEN_DIR, dest)
     pcb_path = dest / GOLDEN_NAME
     board = PCB.load(pcb_path)
     for index, (text, layer, x, y) in enumerate(_ADDED):

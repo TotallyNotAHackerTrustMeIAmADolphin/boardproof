@@ -378,36 +378,132 @@ _JAVA_CANDIDATE_GLOBS: dict[str, list[str]] = {
 }
 
 
-def find_java() -> Path:
-    """Resolve a `java` executable. The pinned Freerouting 2.5.0 requires a JVM
-    built with a sufficiently recent class-file version (confirmed: JRE 21 is
-    NOT enough -- UnsupportedClassVersionError, class file version 69 needed;
-    JRE 25 works; Freerouting 2.4 and later is compiled for Java 25,
-    docs/ARCHITECTURE.md) -- an older JVM being present on PATH doesn't mean
-    it's usable for this specific Freerouting version, so a caller that hits
-    FreeroutingError should check the JVM version, not just its presence.
-    """
+# Freerouting 2.5.0 is compiled for Java 25 (class file version 69); JRE 21 is known NOT enough.
+MIN_JAVA_MAJOR = 25
+_JAVA_VERSION_RE = re.compile(r'version "(\d+)(?:\.(\d+))?')
+_JAVA_NAME = "java.exe" if sys.platform == "win32" else "java"  # tests point it at a fake script
+_JAVA_FOUND: dict[str, tuple[str, int | None]] = {}  # str(java path) -> (source, major) of the last find_java
+
+
+def _java_tools_roots() -> list[Path]:
+    """Project tools folders (`<root>/.tools`): the working directory and this checkout."""
+    return [Path.cwd(), krt_backend.REPO_ROOT]
+
+
+def java_major_version(java: Path) -> int | None:
+    """Major version from `java -version` (printed on stderr: `openjdk version "25.0.5"`,
+    old style `"1.8.0_312"` is 8), or None if it cannot be run or read."""
+    try:
+        # Same confinement as every Freerouting JVM call: no hsperfdata_<user> in the OS temp folder.
+        with freerouting_sandbox() as sandbox:
+            proc = subprocess.run([str(java), "-XX:-UsePerfData", f"-Djava.io.tmpdir={sandbox}", "-version"],
+                                  capture_output=True, check=False, timeout=30, cwd=sandbox)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if proc.returncode != 0:
+        return None
+    match = _JAVA_VERSION_RE.search(decode_jvm_output(proc.stderr) + decode_jvm_output(proc.stdout))
+    if match is None:
+        return None
+    major = int(match.group(1))
+    return int(match.group(2) or 0) if major == 1 else major
+
+
+def locate_java(java_path: str | Path | None = None) -> tuple[Path, str]:
+    """``(java, source)``. Order: the ``java_path`` argument (must exist, and its version is
+    probed: older than MIN_JAVA_MAJOR is refused), ``JAVA_PATH``, ``JAVA_HOME``, PATH, a
+    ``.tools`` folder (``.tools/**/bin/java``), the per-platform install globs."""
+    exe = _JAVA_NAME
+    if java_path:
+        path = Path(java_path)
+        if not path.is_file():
+            raise FreeroutingError(f"java_path={str(java_path)!r} is not an existing file")
+        major = java_major_version(path)
+        if major is None:
+            raise FreeroutingError(f"java_path={str(path)!r} is not a java executable: `-version` printed no version")
+        if major < MIN_JAVA_MAJOR:
+            raise FreeroutingError(
+                f"java_path={str(path)!r} is Java {major}; Freerouting 2.5.0 needs Java {MIN_JAVA_MAJOR} or newer "
+                "(JRE 21 is known NOT enough: UnsupportedClassVersionError).")
+        return path, "java_path argument"
+    searched: list[str] = []
+    too_old: list[str] = []
+
+    def usable(path: Path, *, explicit: bool = False) -> bool:
+        major = java_major_version(path)
+        if major is None and explicit:  # JAVA_PATH is the user's own choice: an unreadable version is theirs to own
+            return True
+        if major is None:
+            too_old.append(f"{path} is found but unusable: `-version` printed no version")
+            return False
+        if major < MIN_JAVA_MAJOR:
+            too_old.append(f"{path} is Java {major}")
+            return False
+        return True
+
     env_override = os.environ.get("JAVA_PATH")
     if env_override:
         path = Path(env_override)
-        if path.is_file():
-            return path
-        raise FreeroutingError(f"JAVA_PATH={env_override!r} does not point to a file")
-
+        if not path.is_file():
+            raise FreeroutingError(f"JAVA_PATH={env_override!r} does not point to a file")
+        if usable(path, explicit=True):
+            return path, "JAVA_PATH"
+    else:
+        searched.append("JAVA_PATH (not set)")
+    home = os.environ.get("JAVA_HOME")
+    if home and (Path(home) / "bin" / exe).is_file():
+        if usable(Path(home) / "bin" / exe):
+            return Path(home) / "bin" / exe, "JAVA_HOME"
+    else:
+        searched.append(f"JAVA_HOME ({home!r}: no bin/{exe})" if home else "JAVA_HOME (not set)")
     which = shutil.which("java")
-    if which:
-        return Path(which)
-
+    if which and usable(Path(which)):
+        return Path(which), "PATH"
+    if not which:
+        searched.append("PATH")
+    for root in _java_tools_roots():
+        found = False
+        for pattern in (f"*/bin/{exe}", f"*/*/bin/{exe}"):
+            for match in sorted((root / ".tools").glob(pattern), reverse=True):
+                found = True
+                if usable(match):
+                    return match, f"project tools folder {root / '.tools'}"
+        if not found:
+            searched.append(str(root / ".tools"))
     for pattern in _JAVA_CANDIDATE_GLOBS.get(sys.platform, []):
         matches = sorted(glob.glob(pattern), reverse=True)
-        if matches:
-            return Path(matches[0])
-
+        for match in matches:
+            if usable(Path(match)):
+                return Path(match), "install folder"
+        if not matches:
+            searched.append(pattern)
+    old = f" Found but not usable: {'; '.join(too_old)}." if too_old else ""
     raise FreeroutingError(
-        "java not found. Set JAVA_PATH, add java to PATH, or install a JRE "
+        "java not found." + old + " Searched: " + "; ".join(searched or ["(all places had a candidate)"])
+        + ". Pass java_path, set JAVA_PATH or JAVA_HOME, "
+        "add java to PATH, put a JRE under <project>/.tools, or install one "
         "(e.g. `winget install EclipseAdoptium.Temurin.25.JRE`). Freerouting "
-        "2.5.0 needs a fairly recent JVM (JRE 21 is confirmed NOT sufficient)."
+        f"2.5.0 needs Java {MIN_JAVA_MAJOR} or newer (JRE 21 is confirmed NOT sufficient)."
     )
+
+
+def find_java(java_path: str | Path | None = None) -> Path:
+    """Resolve a `java` executable (see ``locate_java`` for the order). The pinned Freerouting
+    2.5.0 requires a JVM built with a sufficiently recent class-file version (confirmed: JRE 21
+    is NOT enough -- UnsupportedClassVersionError, class file version 69 needed; JRE 25 works;
+    Freerouting 2.4 and later is compiled for Java 25, docs/ARCHITECTURE.md) -- an older JVM
+    being present on PATH doesn't mean it's usable for this specific Freerouting version, so a
+    caller that hits FreeroutingError should check the JVM version, not just its presence.
+    """
+    path, source = locate_java(java_path)
+    _JAVA_FOUND[str(path)] = (source, java_major_version(path))
+    return path
+
+
+def java_report(java: Path) -> dict:
+    """Where java was found and its major version (None if unknown), as recorded by find_java."""
+    source, major = _JAVA_FOUND.get(str(java), (None, None))
+    return {"path": str(java), "source": source, "major_version": major}
 
 
 def find_freerouting_jar() -> Path:
@@ -1021,6 +1117,7 @@ def run_freerouting(
     selection_strategy: str | None = None,
     fanout_enabled: bool | None = None,
     neck_width_um: int | None = None,
+    java_path: str | None = None,
 ) -> dict:
     """Run Freerouting without a window (``--gui.enabled=false``, see ``freerouting_command``)
     as a loopback-only local subprocess.
@@ -1046,7 +1143,7 @@ def run_freerouting(
     a fixed allow-list, into the command line; nothing writes `freerouting.json`.
     """
     router_options = freerouting_router_options(fanout_enabled=fanout_enabled, neck_width_um=neck_width_um)
-    java = find_java()
+    java = find_java(java_path) if java_path else find_java()
     jar = find_freerouting_jar()
     dsn_path = Path(dsn_path).resolve()
     ses_output_path = Path(ses_output_path).resolve()
@@ -1081,7 +1178,7 @@ def run_freerouting(
             f"Freerouting did not produce {ses_output_path} (exit {proc.returncode}):\n"
             f"stdout: {stdout}\nstderr: {stderr}"
         )
-    return _parse_freerouting_log(f"{stdout}\n{stderr}")
+    return {**_parse_freerouting_log(f"{stdout}\n{stderr}"), "java": java_report(java)}
 
 
 # ---------------------------------------------------------------------------
@@ -2234,6 +2331,7 @@ def _freerouting_attempt(
     timeout: int,
     optimization_strategy: str | None = None,
     selection_strategy: str | None = None,
+    java_path: str | None = None,
 ) -> dict:
     """One Freerouting run on KiCad's DSN (``export_dsn_with_kicad``'s result), its SES
     imported by KiCad into a copy of the export's snapshot and diffed against it
@@ -2241,7 +2339,8 @@ def _freerouting_attempt(
     (``BoardChangedDuringRouting`` when the board changed meanwhile)."""
     ses = attempt_dir / "board.ses"
     log = run_freerouting(export["dsn_path"], ses, max_passes=max_passes, timeout=timeout,
-                          optimization_strategy=optimization_strategy, selection_strategy=selection_strategy)
+                          optimization_strategy=optimization_strategy, selection_strategy=selection_strategy,
+                          **({"java_path": java_path} if java_path else {}))
     imported = import_ses_with_kicad(export, ses, attempt_dir / "routed")
     return {"freerouting_log": log, **imported}
 
@@ -2360,7 +2459,8 @@ def build(mcp: MCPServer) -> list[str]:
             "note": GATE_NOTE,
         }
 
-    def propose_route_with_freerouting(pcb_path: str, max_passes: int = 10, timeout_seconds: int = 300) -> dict:
+    def propose_route_with_freerouting(pcb_path: str, max_passes: int = 10, timeout_seconds: int = 300,
+                                       java_path: str | None = None) -> dict:
         """Run Freerouting (a real local subprocess, GPLv3, never imported
         as a library) against a board and PROPOSE the result -- does not
         modify the board file. Returns a revision_token; call
@@ -2375,6 +2475,16 @@ def build(mcp: MCPServer) -> list[str]:
         the result read back by KiCad's own Specctra exporter and importer in
         KiCad's bundled Python (KICAD_PYTHON_PATH, else the one next to
         kicad-cli); without it this returns `status: incomplete`.
+
+        `java_path` (optional): an existing java executable to run Freerouting with. Without it java
+        is looked up in JAVA_PATH, JAVA_HOME, PATH, `<project>/.tools` and the install folders;
+        a `java_path` older than Java 25 is refused (JRE 21 is known not enough). The answer's
+        `freerouting_log.java` names the path, where it was found and its version; when nothing is
+        found the reason lists the places searched.
+
+        The DSN is exported by pcbnew with the net classes of the project: pcbnew applies ONE class
+        width to every net of a class, so give supply nets their own net class to get their own
+        width. The SES is imported into a copy that keeps locked tracks.
 
         A board (or its .kicad_pro, .kicad_dru or library tables) saved while
         Freerouting runs is refused: `status: refused`, `ok: false`,
@@ -2394,7 +2504,8 @@ def build(mcp: MCPServer) -> list[str]:
             work = Path(tmp_dir)
             try:
                 export = export_dsn_with_kicad(path, work / "dsn")
-                attempt = _freerouting_attempt(export, work, max_passes=max_passes, timeout=timeout_seconds)
+                attempt = _freerouting_attempt(export, work, max_passes=max_passes, timeout=timeout_seconds,
+                                               java_path=java_path)
             except BoardChangedDuringRouting as exc:
                 return _board_changed(exc)
             except KicadSpecctraError as exc:
@@ -2438,6 +2549,7 @@ def build(mcp: MCPServer) -> list[str]:
         escalation: str = "board",
         manufacturer: str = "jlcpcb",
         acknowledge_unmodeled_zone_risk: bool = False,
+        java_path: str | None = None,
     ) -> dict:
         """Diagnose-and-retry autorouting (archived backlog P4-03/P4-05): run the
         chosen autorouter, score the result against real `kicad-cli` DRC
@@ -2490,6 +2602,16 @@ def build(mcp: MCPServer) -> list[str]:
         never rewrites them. As with propose_route_with_freerouting, a board
         saved while Freerouting runs is refused with
         `code: board_changed_during_routing` and no proposal.
+
+        `java_path` (optional): an existing java executable to run Freerouting with. Without it java
+        is looked up in JAVA_PATH, JAVA_HOME, PATH, `<project>/.tools` and the install folders;
+        a `java_path` older than Java 25 is refused (JRE 21 is known not enough). The answer's
+        `freerouting_log.java` names the path, where it was found and its version; when nothing is
+        found the reason lists the places searched.
+
+        The DSN is exported by pcbnew with the net classes of the project: pcbnew applies ONE class
+        width to every net of a class, so give supply nets their own net class to get their own
+        width. The SES is imported into a copy that keeps locked tracks.
 
         `acknowledge_unmodeled_zone_risk` (archived backlog P4-06): both backends
         route this board's file as-is; neither treats a pre-existing FILLED
@@ -2614,7 +2736,7 @@ def build(mcp: MCPServer) -> list[str]:
                         "parameters": parameters}
 
                 try:
-                    attempt = _freerouting_attempt(export, attempt_dir, timeout=timeout_seconds, **parameters)
+                    attempt = _freerouting_attempt(export, attempt_dir, timeout=timeout_seconds, java_path=java_path, **parameters)
                 except BoardChangedDuringRouting as exc:
                     return _board_changed(exc, attempts=attempts)
                 except FreeroutingError as exc:

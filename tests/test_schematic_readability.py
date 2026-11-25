@@ -21,6 +21,7 @@ import pytest
 
 from boardproof import schematic_readability as sr
 from boardproof import write_layer
+from tests._fixture_copy import copy_fixture
 
 FIXTURES = Path(__file__).parent / "fixtures"
 SIMPLE_LED = FIXTURES / "simple_led.kicad_sch"
@@ -293,7 +294,7 @@ def test_a_malformed_coordinate_is_refused():
 
 def test_check_project_walks_the_sheet_tree_and_reports_a_problem(tmp_path):
     project = tmp_path / "p"
-    shutil.copytree(GOLDEN.parent, project)
+    copy_fixture(GOLDEN.parent, project)
     report = sr.check_project(project / GOLDEN.name)
     assert [s.sheet for s in report.sheets] == [GOLDEN.name] and not report.problems
     summary = sr.summarise([report])
@@ -304,7 +305,7 @@ def test_check_project_walks_the_sheet_tree_and_reports_a_problem(tmp_path):
 
 def test_main_prints_the_baseline(tmp_path, capsys):
     project = tmp_path / "p"
-    shutil.copytree(GOLDEN.parent, project)
+    copy_fixture(GOLDEN.parent, project)
     assert sr.main([str(project)]) == 0
     out = capsys.readouterr().out
     assert "sheets in 1 projects pass" in out and "text_overlap:" in out

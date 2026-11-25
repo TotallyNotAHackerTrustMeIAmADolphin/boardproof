@@ -2461,6 +2461,27 @@ def test_raw_kicad_writes_in_tests_are_the_frozen_list() -> None:
     _assert_ratchet("Raw KiCad write in tests", scan(KicadTestWriteScanner, modules), "test_kicad_write", FIX_TEST_WRITE)
 
 
+class FixtureCopyScanner(CommitScanner):
+    """Issue 238: a direct ``shutil.copytree`` in tests/ (the CommitScanner's copy sites, filtered)."""
+
+    root = "tests"
+
+    def hit(self, node: ast.AST, kind: str) -> None:
+        if kind == "shutil.copytree" and self.file != "_fixture_copy.py":
+            super().hit(node, kind)
+
+
+def test_tests_copy_fixture_folders_only_through_copy_fixture() -> None:
+    found = scan(FixtureCopyScanner, _test_modules())
+    assert not found, (
+        "Issue 238: a test copies a folder with shutil.copytree, which carries a stray KiCad lock "
+        "(~*.lck) along. Use tests._fixture_copy.copy_fixture instead:\n  " + "\n  ".join(s.where() for s in found)
+    )
+    assert _scan_text(FixtureCopyScanner, "def f(a, b):\n    shutil.copytree(a, b)\n    shutil.copy(a, b)\n") == [
+        ("f", "shutil.copytree")
+    ]
+
+
 def test_test_kicad_write_scanner_catches_kicad_targets_and_payloads() -> None:
     text = """
 import io

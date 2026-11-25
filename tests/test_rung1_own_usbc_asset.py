@@ -31,6 +31,7 @@ import pytest
 from tests._hermetic_git import run_git
 
 from boardproof import kicad_cli, write_layer
+from tests._fixture_copy import copy_fixture
 
 ROOT = Path(__file__).resolve().parents[1]
 RUNG1 = ROOT / "evals" / "rung1"
@@ -281,7 +282,7 @@ def test_the_symbol_pins_are_typed_and_none_is_unspecified():
 
 def test_erc_of_the_rung1_project_has_no_violation(tmp_path):
     project = tmp_path / "project"
-    shutil.copytree(RUNG1 / "project", project)
+    copy_fixture(RUNG1 / "project", project)
     report = kicad_cli.run_erc(project / f"{NAME}.kicad_sch")
     violations = [v for sheet in report.get("sheets", []) for v in sheet.get("violations", [])]
     assert violations == []

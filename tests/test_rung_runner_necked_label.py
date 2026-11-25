@@ -17,6 +17,7 @@ from kicad_tools.sexp import parse_string
 from boardproof import autonomy_run, rung_backends, rung_runner, write_layer
 
 from test_rung_runner import make_run as _make_run
+from tests._fixture_copy import copy_fixture
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -144,7 +145,7 @@ def _router_adding(segments):
 
 def _run_rung1(tmp_path, segments):
     source = tmp_path / "input"
-    shutil.copytree(RUNG1, source)
+    copy_fixture(RUNG1, source)
     name = "rung1_usbc_attiny1616"
     return rung_runner.run_rung(
         rung="neck-e2e", backend_name="freerouting", board=source / f"{name}.kicad_pcb",

@@ -24,7 +24,6 @@ from __future__ import annotations
 
 import json
 import math
-import shutil
 from collections import Counter
 from pathlib import Path
 
@@ -32,6 +31,7 @@ import pytest
 from kicad_tools.sexp import parse_string
 
 from boardproof import rung_backends, rung_runner, write_layer
+from tests._fixture_copy import copy_fixture
 
 ROOT = Path(__file__).resolve().parents[1]
 RUNG1 = ROOT / "evals" / "rung1" / "layout_run" / "07_poured"
@@ -55,7 +55,7 @@ PASS_BOARD_BEYOND_PAD_MM = (0.6972 - 0.4) + 0.4659 + 0.0103 + 0.9845  # 1.7579: 
 @pytest.fixture
 def board(tmp_path):
     project = tmp_path / "proj"
-    shutil.copytree(RUNG1, project)
+    copy_fixture(RUNG1, project)
     return project / BOARD_NAME
 
 
@@ -274,7 +274,7 @@ def test_an_unreadable_neighbour_pad_makes_the_attempt_a_router_failure_never_a_
 
     # the router adds the neck; its output board has the unreadable neighbour pad already (input copy edited)
     source = tmp_path / "pre"
-    shutil.copytree(RUNG1, source)
+    copy_fixture(RUNG1, source)
     _make_neighbour_unreadable(source / BOARD_NAME)
     report = _run_rung1_from(tmp_path, source, [((151.55, 107.9), (150.8528, 107.9), 0.15)])
     attempt = report["attempts"][0]

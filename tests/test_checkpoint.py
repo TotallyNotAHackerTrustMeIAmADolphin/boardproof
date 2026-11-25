@@ -16,6 +16,7 @@ from typing import Any
 import pytest
 
 from boardproof import checkpoint, gate_state, write_layer
+from tests._fixture_copy import copy_fixture
 
 FIXTURES = Path(__file__).parent / "fixtures"
 GOLDEN_DIR = FIXTURES / "golden_attiny1616_board"
@@ -24,7 +25,7 @@ GOLDEN_NAME = "golden_attiny1616_board.kicad_pcb"
 
 @pytest.fixture
 def board(tmp_path: Path) -> Path:
-    shutil.copytree(GOLDEN_DIR, tmp_path / "proj")
+    copy_fixture(GOLDEN_DIR, tmp_path / "proj")
     return tmp_path / "proj" / GOLDEN_NAME
 
 
@@ -104,7 +105,7 @@ def test_an_extra_file_outside_the_project_is_checked_too(board: Path, tmp_path:
 
 def test_a_different_path_is_refused_and_keeps_the_token(board: Path, tmp_path: Path) -> None:
     other = tmp_path / "other" / GOLDEN_NAME
-    shutil.copytree(GOLDEN_DIR, other.parent)
+    copy_fixture(GOLDEN_DIR, other.parent)
     pending = checkpoint.Pending(clock=_Clock())
     token = pending.issue(board, {"n": 1})
     _, refusal = pending.claim(token, other, drift_reason="drift")
@@ -419,7 +420,7 @@ class _BoardOutline:
     def build(self, tmp_path: Path) -> Path:
         from tests.test_board_outline import GOLDEN_DIR, GOLDEN_NAME
 
-        shutil.copytree(GOLDEN_DIR, tmp_path / "proj")
+        copy_fixture(GOLDEN_DIR, tmp_path / "proj")
         return tmp_path / "proj" / GOLDEN_NAME
 
     def propose(self, board: Path, out: Path, variant: str) -> dict:
@@ -494,7 +495,7 @@ class _SchematicImport:
             find_kicad_cli()
         except Exception:  # noqa: BLE001
             pytest.skip("kicad-cli not installed")
-        shutil.copytree(RUNG1 / "project", tmp_path / "proj")
+        copy_fixture(RUNG1 / "project", tmp_path / "proj")
         return tmp_path / "proj" / f"{NAME}.kicad_pcb"
 
     def propose(self, board: Path, out: Path, variant: str) -> dict:

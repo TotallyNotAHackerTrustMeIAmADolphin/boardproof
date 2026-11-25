@@ -11,7 +11,6 @@ from __future__ import annotations
 import ast
 import hashlib
 import json
-import shutil
 from pathlib import Path
 
 import pytest
@@ -22,6 +21,7 @@ from boardproof import verify_board as gate
 from boardproof.server import build_server
 from test_board_rules import _build as build_rules_board
 from test_silk_minimums import _build as build_silk_board
+from tests._fixture_copy import copy_fixture
 
 FIXTURES = Path(__file__).parent / "fixtures"
 GOLDEN_DIR = FIXTURES / "golden_attiny1616_board"
@@ -97,14 +97,14 @@ def _rules_case(tmp: Path):
 
 
 def _outline_case(tmp: Path):
-    shutil.copytree(GOLDEN_DIR, tmp / "proj")
+    copy_fixture(GOLDEN_DIR, tmp / "proj")
     args = dict(outline={"x": 100.0, "y": 70.0, "width": 100.0, "height": 70.0})
     return (tmp / "proj" / GOLDEN_NAME, "propose_board_outline", args,
             "confirm_board_outline", {}, "built")
 
 
 def _isolation_case(tmp: Path):
-    shutil.copytree(GOLDEN_DIR, tmp / "proj")
+    copy_fixture(GOLDEN_DIR, tmp / "proj")
     args = dict(
         keepouts=[{"name": "MAINS", "rect": {"x": 138, "y": 95, "width": 20, "height": 5}, "layers": ["F.Cu"]}],
         slots=[{"x1": 140, "y1": 112, "x2": 156, "y2": 112, "width_mm": 1.5, "ends": "round"}],
@@ -120,7 +120,7 @@ def _silk_case(tmp: Path):
 def _import_case(tmp: Path):
     if not _kicad_cli_available():
         pytest.skip("kicad-cli not installed")
-    shutil.copytree(RUNG1 / "project", tmp / "proj")
+    copy_fixture(RUNG1 / "project", tmp / "proj")
     return (tmp / "proj" / f"{RUNG1_NAME}.kicad_pcb", "propose_schematic_import", {},
             "confirm_schematic_import", {}, "imported")
 

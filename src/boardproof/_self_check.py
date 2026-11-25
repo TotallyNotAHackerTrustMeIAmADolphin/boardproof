@@ -105,6 +105,13 @@ def reload_differences(
     expected.subtract(node_text(n) for n in removed)
     expected.update(node_text(n) for n in written)
 
+    from boardproof import write_layer
+
+    if write_layer.drops_net_declarations(reloaded):  # not saved for a KiCad 10 board (issue 226)
+        for counter in (memory_texts, expected):
+            for text in [t for t in counter if t in by_text and write_layer.is_net_declaration(by_text[t])]:
+                del counter[text]
+
     source_has_nets = any(c.name == "net" for c in source.children if not c.is_atom)
     missing = _surplus(memory_texts, reload_texts) + _surplus(+expected, reload_texts)
     unexpected, tolerated = list(_surplus(reload_texts, memory_texts)), []

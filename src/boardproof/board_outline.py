@@ -967,7 +967,7 @@ def _write(src: Path, tmp: Path, plan: dict) -> dict:
     tmp_pcb = _copy_project(src, tmp)
     board = write_layer.load_pcb(tmp_pcb)
     root = board._sexp
-    before_counts = Counter(c.name for c in root.children if c.name)
+    before_counts = write_layer.saved_tag_counts(root)
     copper = _copper_layers(root)
     hole_footprints: list[Any] = []  # the nodes this build writes, compared with the reload below
 
@@ -1067,7 +1067,7 @@ def _verify(src: Path, state: dict, plan: dict, drc: Any) -> dict:
             "CRITICAL: keepout zones missing after reload",
             [checkpoint.mismatch(name, "keepout zones", f"at least {len(plan['holes'])}", len(keepouts))],
         )
-    after_counts = Counter(c.name for c in fresh.children if c.name)
+    after_counts = write_layer.saved_tag_counts(fresh)
     expect = Counter(state["before_counts"])
     for kind, n in plan["replaces"].items():
         expect[kind] -= n

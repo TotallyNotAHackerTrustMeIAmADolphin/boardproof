@@ -1,4 +1,5 @@
 """confirm_keepouts_and_slots: registration for the write-guard test (issue 147 contract, issue 132 tool)."""
+from tests._fixture_copy import copy_fixture
 
 TOOL = "confirm_keepouts_and_slots"
 WRITES = True
@@ -6,11 +7,10 @@ WRITES = True
 
 def scenario(h):
     def make(tmp_path):
-        import shutil
 
         from boardproof import isolation
 
-        shutil.copytree(h.t_outline.GOLDEN_DIR, tmp_path / "proj")
+        copy_fixture(h.t_outline.GOLDEN_DIR, tmp_path / "proj")
         board = tmp_path / "proj" / h.t_outline.GOLDEN_NAME
         slot = {"x1": 140, "y1": 112, "x2": 156, "y2": 112, "width_mm": 1.5, "ends": "round"}
         proposal = isolation.propose_keepouts_and_slots(board, slots=[slot], output_dir=tmp_path / "out")

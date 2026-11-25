@@ -25,6 +25,7 @@ from pathlib import Path
 import pytest
 
 from boardproof import rung_backends, rung_runner
+from tests._fixture_copy import copy_fixture
 
 UW = Path(__file__).resolve().parent / "fixtures" / "uw"
 RUNG2 = UW / "r2krt"
@@ -41,7 +42,7 @@ def _run_one(tmp_path: Path, batch: Path, board_name: str, facts: dict) -> dict:
     """The committed attempt-00 delivery, fed through the shared under-width wrapper and the
     runner with the router facts KRT's adapter recorded for it."""
     source = tmp_path / "input"
-    shutil.copytree(batch / "in", source)
+    copy_fixture(batch / "in", source)
     routed = batch / "out" / board_name
 
     def backend(board, params, timeout_s, log):

@@ -19,6 +19,7 @@ import pytest
 from boardproof import board_outline
 from boardproof import write_layer
 from tests import _kicad_faults as faults
+from tests._fixture_copy import copy_fixture
 
 FIXTURES = Path(__file__).parent / "fixtures"
 GOLDEN_DIR = FIXTURES / "golden_attiny1616_board"
@@ -29,7 +30,7 @@ HOLE = "MountingHole:MountingHole_3.2mm_M3"
 
 @pytest.fixture
 def board(tmp_path: Path) -> Path:
-    shutil.copytree(GOLDEN_DIR, tmp_path / "proj")
+    copy_fixture(GOLDEN_DIR, tmp_path / "proj")
     return tmp_path / "proj" / GOLDEN_NAME
 
 

@@ -4,7 +4,6 @@ failures in the index, superscript-safe rung parsing, policy counts in the summa
 from __future__ import annotations
 
 import json
-import shutil
 from pathlib import Path
 
 import pytest
@@ -13,6 +12,7 @@ from boardproof import autonomy_run, rung_runner
 
 from test_autonomy_run_review import OK_INFO, _drc, _measure, _ok_backend, board  # noqa: F401
 from test_input_prep import GOLDEN_DIR, GOLDEN_NAME
+from tests._fixture_copy import copy_fixture
 
 
 def _reasons(outcome):
@@ -34,7 +34,7 @@ def test_an_injected_preflight_and_rule_files_are_named(board, tmp_path, enforce
 
 def test_the_rung_pin_binds_the_whole_graded_project_not_just_the_pcb(tmp_path, enforce_seams):
     project = tmp_path / "golden"
-    shutil.copytree(GOLDEN_DIR, project)
+    copy_fixture(GOLDEN_DIR, project)
     pcb = project / GOLDEN_NAME
     protocol = rung_runner.load_protocol()
     protocol["rungs"]["2"]["board_sha256"] = autonomy_run.board_sha(pcb)
