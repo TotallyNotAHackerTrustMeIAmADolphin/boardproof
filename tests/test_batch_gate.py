@@ -1449,3 +1449,10 @@ def test_missing_times_file_is_not_red(root):
 
 def test_cleanup_knows_the_times_file():
     assert gate._LOG_FILE.fullmatch("abcdef1-20261104-101010-42.times.out")
+
+
+def test_exit_code_3_of_the_temp_guard_names_the_stray_file(root):
+    out = "!!! _pytest.outcomes.Exit: Issue 241: KiCad file(s) in the pytest temp folder. Move or delete: /t/a.kicad_pcb !!!\n"
+    res, said = run(root, FakeRunner(root, suite_rc=3, suite_out=out))
+    assert not res.green
+    assert any("temp guard" in r and "/t/a.kicad_pcb" in r and "delete" in r for r in res.reasons), res.reasons

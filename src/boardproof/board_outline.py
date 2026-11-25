@@ -41,7 +41,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
-from boardproof import _self_check, checkpoint, input_prep, write_layer
+from boardproof import _self_check, checkpoint, input_prep, raw_geometry, write_layer
 from boardproof import verify_board as gate
 
 for _name in ("_top_level", "_parse"):
@@ -616,6 +616,7 @@ def _overlaps(root: Any, holes: list[dict], geometry: list[dict] | None = None) 
     if not holes:
         return hard, pours
     geometry = geometry if geometry is not None else _footprint_geometry(root)
+    net_names = raw_geometry.net_table(root)
     for hole in holes:
         c = (hole["at"][0], hole["at"][1])
         vr = _keepout_vertex_radius(hole["keepout_radius_mm"])
@@ -651,14 +652,13 @@ def _overlaps(root: Any, holes: list[dict], geometry: list[dict] | None = None) 
                 if node.find("keepout") is not None:
                     add("zone", _uuid(node), name=label, keepout=True)
                 else:
-                    net = node.find("net_name")
                     pours.append(
                         {
                             "hole": hole["reference"],
                             "kind": "pour",
                             "item": _uuid(node),
                             "name": label,
-                            "net": str(net.values[0]) if net is not None and net.values else "",
+                            "net": raw_geometry.net_name(node, net_names),
                             "layer": _layer(node),
                         }
                     )

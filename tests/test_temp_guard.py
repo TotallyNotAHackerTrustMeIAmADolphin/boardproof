@@ -40,3 +40,10 @@ def test_the_session_hook_ends_a_run_with_a_stray_file_in_the_temp_folder(tmp_pa
     )
     assert run.returncode == 3, run.stdout + run.stderr
     assert "fo_test.kicad_stray" in run.stdout + run.stderr
+
+
+def test_a_file_directly_in_pytest_of_user_below_the_root_is_named(tmp_path):
+    (tmp_path / "pytest-of-someone").mkdir()
+    stray = tmp_path / "pytest-of-someone" / "x.kicad_stray"
+    stray.write_text("{}")
+    assert stray.resolve() in stray_kicad_files(tmp_path)

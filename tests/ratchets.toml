@@ -2361,3 +2361,11 @@ kind = "write_text"
 count = 1
 use = "stub"
 note = "Issue 241: an empty-JSON stand-in stray file in a fake temp folder for a pytest subprocess; only its name is read."
+
+[[test_kicad_write]]
+file = "test_temp_guard.py"
+function = "test_a_file_directly_in_pytest_of_user_below_the_root_is_named"
+kind = "write_text"
+count = 1
+use = "stub"
+note = "Issue 242: an empty-JSON stand-in stray file in a fake pytest-of-user folder; only its name is read."

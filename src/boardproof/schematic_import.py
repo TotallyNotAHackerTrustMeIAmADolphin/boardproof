@@ -1317,6 +1317,8 @@ def _build_inner(
         node.set_value(0, spec["library_id"])  # nickname as KiCad's update-from-schematic writes it
     stats = board.assign_nets_from_netlist(plan["netlist"])
     _remove_stale_nets(board._sexp, plan)
+    if write_layer.drops_net_declarations(board._sexp):
+        _drop_net_numbers(board._sexp)
     if stats["missing_pads"] or stats["missing_footprints"]:
         raise checkpoint.Failed(
             "error",
@@ -1325,6 +1327,16 @@ def _build_inner(
         )
     write_layer.save_pcb(board, tmp_pcb)
     return {"pcb": tmp_pcb, "plan": plan, "before": before, "present": present, "before_facts": before_facts}
+
+
+def _drop_net_numbers(root: Any) -> None:
+    """A KiCad 10 board names pad nets as ``(net "name")``: undo the ``(net N "name")`` pad form that
+    ``assign_nets_from_netlist`` writes, so one form remains (issue 239; the table is not saved, issue 226)."""
+    for fp in root.find_all("footprint"):
+        for pad in fp.find_all("pad"):
+            net = pad.find("net")
+            if net is not None and len(net.values) == 2:
+                net.children[:] = [write_layer.string(net_node_name(net))]
 
 
 def _remove_stale_nets(root: Any, plan: dict) -> None:

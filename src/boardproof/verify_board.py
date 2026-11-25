@@ -19,7 +19,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Literal, get_args
 
-from boardproof import kicad_cli, kicad_lock, write_layer
+from boardproof import kicad_cli, kicad_lock, raw_geometry, write_layer
 
 Parity = Literal["required", "not_applicable"]
 PARITY_MODES: tuple[str, ...] = get_args(Parity)
@@ -723,6 +723,7 @@ def _read_stored_fill(pcb_path: str | Path) -> dict[str, Any]:
             name = entry.values[0] if entry.values else None  # (0 "F.Cu" signal): number is the node name
             if isinstance(name, str) and name.endswith(".Cu"):
                 board_copper.append(name)
+    net_names = raw_geometry.net_table(root)  # raises on an unknown declaration: the fill reads "unreadable"
     zones: list[dict[str, Any]] = []
     # Board-level zones and zones nested in footprints: both are copper the file may hold.
     candidates = [c for c in root.children if c.name == "zone"]
@@ -753,12 +754,11 @@ def _read_stored_fill(pcb_path: str | Path) -> dict[str, Any]:
             status = "partial"
         uuid = zone.find("uuid")
         name = zone.find("name")
-        net = zone.find("net_name")
         zones.append(
             {
                 "uuid": str(uuid.values[0]) if uuid is not None and uuid.values else "",
                 "name": str(name.values[0]) if name is not None and name.values else "",
-                "net": str(net.values[0]) if net is not None and net.values else "",
+                "net": raw_geometry.net_name(zone, net_names),
                 "intended_layers": intended,
                 "filled_layers": sorted(set(filled)),
                 "missing_layers": missing,

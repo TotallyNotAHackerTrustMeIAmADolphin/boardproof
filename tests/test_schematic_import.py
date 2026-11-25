@@ -1168,3 +1168,16 @@ def test_dangling_net_reference_ignores_a_name_form_and_still_finds_an_undeclare
     assert si._dangling_net_reference(_tree(declared, seg(write_layer.string("GND")))) is None
     assert si._dangling_net_reference(_tree(declared, seg(write_layer.number(2)))) is None
     assert "refers to net 9" in si._dangling_net_reference(_tree(declared, seg(write_layer.number(9))))
+
+
+def test_kicad10_confirm_leaves_one_net_form_and_no_net_table(pcb: Path, tmp_path: Path) -> None:
+    # issue 239: the numbered table and (net N "name") that kicad_tools adds are not kept on a board with none
+    rev = _kicad10_revision(pcb, tmp_path)
+    _edit_sch(rev.parent, _swap_labels("UPDI", "LED_CTL"))
+    proposal = si.propose_schematic_import(rev, output_dir=tmp_path / "out2")
+    assert si.confirm_schematic_import(rev, proposal["revision_token"])["status"] == "imported"
+    root = write_layer.load(tmp_path / "out2" / pcb.name)
+    assert [n for n in root.children if n.name == "net"] == []
+    nets = [p.find("net") for fp in root.children if fp.name == "footprint" for p in fp.children
+            if p.name == "pad" and p.find("net") is not None]
+    assert nets and all(len(n.values) == 1 and isinstance(n.values[0], str) for n in nets)

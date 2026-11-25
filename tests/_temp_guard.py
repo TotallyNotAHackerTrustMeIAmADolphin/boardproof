@@ -14,7 +14,7 @@ from pathlib import Path
 
 def stray_kicad_files(root: Path) -> list[Path]:
     """The KiCad files (suffix ``.kicad_*``; a ``.bak`` or ``.lck`` is no project) lying directly in ``root`` or a
-    parent of it, not below it. ``root`` is the temp folder pytest puts its base temp folder in."""
+    parent of it, not below it, except the files directly in a ``pytest-of-*`` folder under ``root``. ``root`` is the temp folder pytest puts its base temp folder in."""
     found: list[Path] = []
     root = Path(root).resolve()
     for parent in (root, *root.parents):
@@ -23,6 +23,11 @@ def stray_kicad_files(root: Path) -> list[Path]:
         except OSError:
             continue  # a folder the process cannot list cannot hold a file the tests can find
         found += [parent / n for n in names if Path(n).suffix.startswith(".kicad_") and (parent / n).is_file()]
+    for base in sorted(root.glob("pytest-of-*")):  # pytest's own folder below the temp root: its files count too
+        try:
+            found += [f for f in sorted(base.iterdir()) if f.suffix.startswith(".kicad_") and f.is_file()]
+        except OSError:
+            continue
     return found
 
 

@@ -42,7 +42,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
-from boardproof import _self_check, board_outline, checkpoint, edge_loops, input_prep, write_layer
+from boardproof import _self_check, board_outline, checkpoint, edge_loops, input_prep, raw_geometry, write_layer
 
 for _name in ("_fp_transform", "_courtyard_box", "_copper_layers", "_zone_ring", "_fp_reference", "_copy_project"):
     if not hasattr(board_outline, _name):  # private helpers reused on purpose
@@ -128,6 +128,7 @@ class _Copper:
 
     def __init__(self, root: Any) -> None:
         self.layers = board_outline._copper_layers(root)
+        self._net_names = raw_geometry.net_table(root)
         self.tracks: list[dict] = []  # points (polyline), half, layer, uuid
         self.vias: list[dict] = []  # center, radius, layers, uuid
         self.pads: list[dict] = []  # ring, layers, reference, number
@@ -171,14 +172,13 @@ class _Copper:
             elif node.name == "zone" and node.find("keepout") is None:
                 ring = board_outline._zone_ring(node)
                 if ring:
-                    net = node.find("net_name")
                     name = node.find("name")
                     self.pours.append(
                         {
                             "ring": ring,
                             "layers": set(_zone_layers(node)),
                             "name": str(name.values[0]) if name is not None and name.values else "",
-                            "net": str(net.values[0]) if net is not None and net.values else "",
+                            "net": raw_geometry.net_name(node, self._net_names),
                             "uuid": board_outline._uuid(node),
                         }
                     )

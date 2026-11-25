@@ -338,7 +338,11 @@ def test_an_unexpected_node_shape_is_unreadable_not_an_exception(tmp_path: Path,
 
 # --- issue 55: nested keepouts and nested multi-layer zones ------------------------------------
 
-_BOARD_LAYERS = '(layers (0 "F.Cu" signal) (1 "In1.Cu" signal) (31 "B.Cu" signal) (44 "Edge.Cuts" user))'
+_BOARD_LAYERS = (
+    '(layers (0 "F.Cu" signal) (1 "In1.Cu" signal) (31 "B.Cu" signal) (44 "Edge.Cuts" user))'
+    # a zone's (net N) is named by the net table only (issue 239), so the board declares what its zones use
+    ' (net 0 "") (net 1 "GND") (net 2 "B") (net 3 "C")'
+)
 
 
 def _fill(layer: str) -> str:

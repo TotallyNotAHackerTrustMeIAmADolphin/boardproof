@@ -31,7 +31,8 @@ RED, never silence, when:
 - a skip that ``scripts/known-skips.toml`` does not allow (by test file and reason prefix, at most
   ``max`` times), or skip lines that do not add up to the summary's count;
 - a timeout; a pytest exit code other than 0 and 1; exit 1 without failure ids or exit 0 with them;
-  failure lines that do not add up to the summary's counts;
+  failure lines that do not add up to the summary's counts; exit 3 from the temp guard (a KiCad file in the
+  temp folder, issue 242), whose RED reason names the stray file;
 - any failure not in ``scripts/known-red.txt``, or a known-red entry without an owning ticket;
 - lint (``scripts/lint_gate.py``);
 - the standing publishability check (publish-prep ticket 03a): ``scripts/check_publishable.py`` over
@@ -636,6 +637,9 @@ def run_gate(
     ids = failure_ids(out)
     if rc is None:
         res.reasons.append("suite timed out")
+    elif rc == 3 and (guard := re.search(r"Issue 241: .*?(?= !+$|$)", out, re.M)):
+        # tests/conftest.py's session guard stopped the run: a KiCad file in the temp folder (issue 242)
+        res.reasons.append(f"pytest exit code 3 (temp guard, nothing ran): {guard.group(0)}")
     elif rc not in (0, 1):
         res.reasons.append(f"pytest exit code {rc}")
     elif rc == 1 and not ids:

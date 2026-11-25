@@ -70,7 +70,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from boardproof import _self_check, input_prep, kicad_cli, kicad_lock, write_layer
+from boardproof import _self_check, input_prep, kicad_cli, kicad_lock, raw_geometry, write_layer
 from boardproof import verify_board as gate
 from boardproof.routers import kicad_routing_tools as krt
 
@@ -118,12 +118,9 @@ def _is_number(value: Any) -> bool:
 
 
 def _net_table(root: Any) -> dict[int, str]:
-    """The top-level ``(net N "name")`` table. KiCad 10 files have none."""
-    table: dict[int, str] = {}
-    for node in root.children:
-        if node.name == "net" and len(node.values) >= 2 and _is_number(node.values[0]):
-            table[int(node.values[0])] = str(node.values[1])
-    return table
+    """The top-level ``(net N "name")`` table (KiCad 10 files have none); a declaration of any other
+    shape raises ``RawGeometryError`` (a ValueError): the shared reader, never a guessed name."""
+    return raw_geometry.net_table(root)
 
 
 def _net_of(node: Any) -> dict:
@@ -133,14 +130,12 @@ def _net_of(node: Any) -> dict:
     net_id: int | None = None
     name: str | None = None
     net = node.find("net")
-    if net is not None and net.values:
-        first = net.values[0]
-        if _is_number(first):
-            net_id = int(first)
-            if len(net.values) > 1:
-                name = str(net.values[1])
+    if net is not None:
+        if len(net.values) == 1 and _is_number(net.values[0]):
+            net_id = int(net.values[0])  # the name comes from the table
         else:
-            name = str(first)
+            name = raw_geometry.net_node_name(net)  # refuses every other form
+            net_id = int(net.values[0]) if len(net.values) == 2 else None
     if name is None:
         net_name = node.find("net_name")
         if net_name is not None and net_name.values:
@@ -639,8 +634,14 @@ def _detach_pads(root: Any, targets: list[dict]) -> int:
         net = pad.find("net")
         if str(pad.values[0]) != number or net is None:
             continue
-        net.set_value(0, 0)
-        net.set_value(1, "")
+        if len(net.values) == 1 and isinstance(net.values[0], str):
+            pad.remove(net)  # KiCad 10 writes a bare (net "name"); no net node is the "no net" form
+        elif len(net.values) in (1, 2) and _is_number(net.values[0]):
+            net.set_value(0, 0)
+            if len(net.values) == 2:
+                net.set_value(1, "")
+        else:
+            raise ValueError(f"a waiting pad has a net node of an unknown form: (net {net.values})")
         changed += 1
     return changed
 
