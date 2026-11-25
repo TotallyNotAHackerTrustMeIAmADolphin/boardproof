@@ -416,3 +416,74 @@ def test_a_real_freerouting_run_opens_no_window(tmp_path, fixture_dsn):
     assert ses.exists()
     windows = {row for row in seen if row.split("|", 1)[0] not in ("", "0")}
     assert not windows, windows
+
+
+# --- build ticket 243: -mp is deprecated in Freerouting 2.5.0 ------------------------------------
+# 2.5.0's GlobalSettings names `--router.autorouter.max_passes` as the replacement of
+# `-mp / --router.max_passes`. The jar is probed for that option name (no JVM run), so an older
+# jar keeps `-mp`.
+
+def _fake_jar(path: Path, settings_text: bytes) -> Path:
+    import zipfile
+    with zipfile.ZipFile(path, "w") as z:
+        z.writestr("app/freerouting/settings/GlobalSettings.class", settings_text)
+    return path
+
+
+def test_max_passes_option_uses_the_new_name_when_the_jar_knows_it(tmp_path):
+    jar = _fake_jar(tmp_path / "new.jar", b"x--router.autorouter.max_passesx-mp / --router.max_passes")
+    assert routing_toolset.freerouting_max_passes_option(jar, 7) == ["--router.autorouter.max_passes=7"]
+
+
+def test_max_passes_option_keeps_mp_for_an_older_or_unreadable_jar(tmp_path):
+    old = _fake_jar(tmp_path / "old.jar", b"-mp / --router.max_passes")
+    assert routing_toolset.freerouting_max_passes_option(old, 7) == ["-mp", "7"]
+    (tmp_path / "bad.jar").write_bytes(b"not a zip")
+    assert routing_toolset.freerouting_max_passes_option(tmp_path / "bad.jar", 3) == ["-mp", "3"]
+
+
+def test_the_real_2_5_0_jar_knows_the_new_option():
+    jar = os.environ.get("FREEROUTING_JAR_PATH")
+    if not jar or not Path(jar).is_file():
+        pytest.skip("no Freerouting jar")
+    if "2.5" not in Path(jar).name:
+        pytest.skip("not a 2.5.x jar")
+    assert routing_toolset.freerouting_max_passes_option(Path(jar), 4) == ["--router.autorouter.max_passes=4"]
+
+
+def _run_command(tmp_path, monkeypatch, jar_text: bytes, **kwargs) -> list[str]:
+    jar = _fake_jar(tmp_path / "r.jar", jar_text)
+    monkeypatch.setattr(routing_toolset, "find_java", lambda *a, **k: Path("java"))
+    monkeypatch.setattr(routing_toolset, "find_freerouting_jar", lambda: jar)
+    seen = {}
+
+    def fake_run(args, **kw):
+        seen["args"] = list(args)
+        Path(args[args.index("-do") + 1]).write_text("(session)")
+        return subprocess.CompletedProcess(args, 0, b"final score: 1.0 (0 unrouted and 0 violations)", b"")
+
+    monkeypatch.setattr(routing_toolset.subprocess, "run", fake_run)
+    routing_toolset.run_freerouting(tmp_path / "a.dsn", tmp_path / "a.ses", timeout=4, **kwargs)
+    return seen["args"]
+
+
+def test_run_freerouting_builds_the_new_max_passes_option_for_a_new_jar(tmp_path, monkeypatch):
+    args = _run_command(tmp_path, monkeypatch, b"--router.autorouter.max_passes", max_passes=6)
+    assert "--router.autorouter.max_passes=6" in args
+    assert "-mp" not in args
+
+
+def test_run_freerouting_builds_mp_for_an_older_jar(tmp_path, monkeypatch):
+    args = _run_command(tmp_path, monkeypatch, b"-mp / --router.max_passes", max_passes=6)
+    assert args[args.index("-mp") + 1] == "6"
+    assert not any(a.startswith("--router.autorouter.max_passes") for a in args)
+
+
+@pytest.mark.parametrize("bad", [0, -1, 10000, 2.5, "7", True, None])
+def test_max_passes_outside_1_to_9999_or_not_an_int_is_refused(tmp_path, bad):
+    # Freerouting treats 0 as "default" and a huge value as no cap (build ticket 243).
+    jar = _fake_jar(tmp_path / "x.jar", b"--router.autorouter.max_passes")
+    with pytest.raises(routing_toolset.FreeroutingError, match="max_passes"):
+        routing_toolset.freerouting_max_passes_option(jar, bad)
+    with pytest.raises(routing_toolset.FreeroutingError, match="max_passes"):
+        routing_toolset.freerouting_max_passes_option(tmp_path / "none.jar", bad)

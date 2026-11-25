@@ -335,6 +335,7 @@ import sys
 import tempfile
 import time
 import uuid
+import zipfile
 from collections import Counter
 from contextlib import contextmanager
 from pathlib import Path
@@ -342,7 +343,7 @@ from typing import Any
 
 from mcp.server.mcpserver import MCPServer
 
-from boardproof import write_layer
+from boardproof import raw_geometry, write_layer
 from boardproof.routers import kicad_routing_tools as krt_backend
 
 ROUTING_BACKENDS = ("freerouting", "kicad_routing_tools")
@@ -972,7 +973,10 @@ def import_ses_with_kicad(snapshot: dict, ses_path: str | Path, work_dir: str | 
         )
 
     delta = krt_backend.route_delta(base, routed)
-    raw = raw_copper_delta(write_layer.load(base), write_layer.load(routed))
+    try:
+        raw = raw_copper_delta(write_layer.load(base), write_layer.load(routed))
+    except raw_geometry.RawGeometryError as exc:
+        raise KicadSpecctraError(f"a net of the board or of the routed copy is unreadable: {exc}") from exc
     added_kinds = Counter(key[0] for key in raw["added"].elements())
     if (added_kinds["segment"], added_kinds["via"]) != (len(delta["trace_specs"]), len(delta["via_specs"])):
         raise KicadSpecctraError(
@@ -1007,23 +1011,8 @@ def _number(node: Any, tag: str, index: int = 0) -> float | None:
     return round(float(str(child.values[index])), 6)  # 1 nm: KiCad's internal unit
 
 
-def _net_names(root: Any) -> dict[str, str]:
-    table = {}
-    for child in root.children:
-        if not child.is_atom and child.name == "net" and len(child.values) >= 2:
-            table[str(child.values[0])] = str(child.values[1])
-    return table
-
-
-def _copper_key(node: Any, nets: dict[str, str]) -> tuple:
-    net = node.find("net")
-    values = [str(v) for v in net.values] if net is not None else []
-    if len(values) >= 2:
-        name = values[1]
-    elif values:
-        name = nets.get(values[0], values[0])
-    else:
-        name = ""
+def _copper_key(node: Any, nets: dict[int, str]) -> tuple:
+    name = raw_geometry.net_name(node, nets)  # an unknown net form raises RawGeometryError
     if node.name == "via":
         layers = node.find("layers")
         kind = node.find("type")
@@ -1039,7 +1028,7 @@ def _copper_key(node: Any, nets: dict[str, str]) -> tuple:
 def raw_copper(root: Any) -> Counter:
     """Every top-level segment, arc and via of a board root as a key of its raw tokens
     (positions, width, size, drill, layers, net name), uuid and lock state left out."""
-    nets = _net_names(root)
+    nets = raw_geometry.net_table(root)
     return Counter(_copper_key(c, nets) for c in root.children if not c.is_atom and c.name in _COPPER_TAGS)
 
 
@@ -1144,6 +1133,25 @@ def freerouting_router_options(*, fanout_enabled: Any = None, neck_width_um: Any
     return options
 
 
+def freerouting_max_passes_option(jar: Path, max_passes: int) -> list[str]:
+    """``--router.autorouter.max_passes=N`` where the jar names it, else the old ``-mp N``.
+
+    Freerouting 2.5.0 marks ``-mp / --router.max_passes`` deprecated (build ticket 243). The jar's
+    ``GlobalSettings`` class lists the new name, so a jar is probed by reading that class from the
+    zip, with no JVM run; an unreadable jar keeps ``-mp``. ``max_passes`` must be a whole number
+    in 1..9999 for both forms: Freerouting reads 0 as its default and a huge value as no cap
+    (a coordinator-proposed range, 2026-11-25, pending owner confirmation)."""
+    if type(max_passes) is not int or not 1 <= max_passes <= 9999:
+        raise FreeroutingError(f"max_passes must be a whole number in 1..9999, not {max_passes!r}")
+    try:
+        with zipfile.ZipFile(jar) as z:
+            if b"--router.autorouter.max_passes" in z.read("app/freerouting/settings/GlobalSettings.class"):
+                return [f"--router.autorouter.max_passes={max_passes}"]
+    except (OSError, KeyError, zipfile.BadZipFile):
+        pass
+    return ["-mp", str(max_passes)]
+
+
 def run_freerouting(
     dsn_path: str | Path,
     ses_output_path: str | Path,
@@ -1189,7 +1197,7 @@ def run_freerouting(
     options = [
         "-de", str(dsn_path),
         "-do", str(ses_output_path),
-        "-mp", str(max_passes),
+        *freerouting_max_passes_option(jar, max_passes),
         "-mt", "1",  # see docstring -- multi-threaded optimization is known-broken
         # No "-l": Freerouting 2.5.0 reads it as a log location too and created `<cwd>/en/`
         # (build tickets 33 and 46); its log language is not needed, the score regex is English.
@@ -1624,7 +1632,12 @@ def _apply_specs(
         if expected_copper is not None:
             # Copper removed from the board needs no check here: reload_differences above
             # already reports every source node missing from the reload.
-            have = set(raw_copper_delta(source, reloaded)["added"])
+            try:
+                have = set(raw_copper_delta(source, reloaded)["added"])
+            except raw_geometry.RawGeometryError as exc:  # unreadable net: the write is not verified
+                raise write_layer.WriteLayerError(
+                    WRITE_NOT_VERIFIED, f"a net of the written board is unreadable: {exc}", file=str(board_path),
+                ) from exc
             want = {tuple(tuple(v) if isinstance(v, list) else v for v in key) for key in expected_copper}
             if have != want:
                 problems.append(

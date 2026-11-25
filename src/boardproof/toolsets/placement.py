@@ -21,7 +21,7 @@ from typing import Any
 
 from mcp.server.mcpserver import MCPServer
 
-from boardproof import placement_anchor, write_layer
+from boardproof import placement_anchor, raw_geometry, write_layer
 
 _footprint_dir_checked = False
 
@@ -103,9 +103,8 @@ def _evict_stale_pending_placements() -> None:
 # M-03 extension: `zone` was added to the removable-shape set. A top-level
 # `(zone ...)` node is structurally the same kind of node as a gr_rect/
 # gr_poly for every helper below -- it has its own (uuid ...), an optional
-# (net N)/(net_name "...") pair (find("net") already resolves a numeric net
-# id via board.get_net(), which is exactly what a zone's (net N) child is,
-# so _graphic_node_net_name needed no change), a (layer "...") child, and
+# net child (any form KiCad writes, read by _graphic_node_net_name through the
+# shared raw_geometry.net_name), a (layer "...") child, and
 # its outline lives under (polygon (pts ...)) which SExp.find("pts") reaches
 # fine since find() searches all descendants, not just immediate children.
 # No new removal technique -- same live-_sexp-node-removal path P3-10 proved
@@ -154,22 +153,15 @@ def _graphic_node_layer(node: Any) -> str:
 
 
 def _graphic_node_net_name(node: Any, board: Any) -> str | None:
-    """Net name of a graphic item's (net ...) child, or None if it has no
-    net. Handles both the numeric-net-id dialect and KiCad 10's name-only
-    (net "name") dialect (see kicad_tools' own net_name_only handling for
-    segments/vias -- graphics need the same tolerance, but kicad_tools
-    doesn't parse graphics' nets at all, so this is done from scratch here).
+    """Net name of a graphic item's (net ...) child: None if it has no (net ...)
+    child, "" for net 0 (KiCad's "no net"). Read from the raw S-expression by
+    raw_geometry.net_name, so KiCad 10's (net "name") and the older (net N) and
+    (net N "name") forms all work; an unknown form or an undeclared number
+    raises raw_geometry.RawGeometryError.
     """
-    net = node.find("net")
-    if net is None:
+    if node.find("net") is None:
         return None
-    raw = net.get_value(0)
-    if raw is None:
-        return None
-    if isinstance(raw, str):
-        return raw
-    net_obj = board.get_net(int(raw))
-    return net_obj.name if net_obj is not None else None
+    return raw_geometry.net_name(node, raw_geometry.net_table(board._sexp))  # unknown form: RawGeometryError
 
 
 def _graphic_node_uuid(node: Any) -> str:
@@ -1880,7 +1872,11 @@ def build(mcp: MCPServer) -> list[str]:
         except Exception as exc:  # noqa: BLE001
             return {"status": "incomplete", "reason": f"failed to load board: {exc}"}
 
-        matched_nodes = _match_graphic_items(board, filters)
+        try:
+            matched_nodes = _match_graphic_items(board, filters)
+            items = [_describe_graphic_node(n, board) for n in matched_nodes]
+        except raw_geometry.RawGeometryError as exc:
+            return {"status": "incomplete", "reason": f"net of a graphic item unreadable: {exc}"}
         if not matched_nodes:
             return {
                 "status": "complete",
@@ -1889,7 +1885,6 @@ def build(mcp: MCPServer) -> list[str]:
                 "note": "no graphic items matched the given filters -- nothing to remove",
             }
 
-        items = [_describe_graphic_node(n, board) for n in matched_nodes]
         if any(not it["uuid"] for it in items):
             # Without a stable per-item identifier we cannot safely
             # re-locate the exact same node at confirm time if the file

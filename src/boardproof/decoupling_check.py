@@ -119,9 +119,8 @@ def _octilinear(dx: float, dy: float) -> float:
 # --- reading the board ---------------------------------------------------------------------------------------------
 
 
-def _pad_net(pad_node: Any) -> str:
-    net = pad_node.find("net")
-    return str(net.values[-1]) if net is not None and net.values else ""
+def _pad_net(pad_node: Any, table: dict[int, str]) -> str:
+    return raw_geometry.net_name(pad_node, table)  # an unknown net form raises RawGeometryError
 
 
 def _pin_function(pad_node: Any) -> str | None:
@@ -177,16 +176,18 @@ def check_decoupling_placement(
     try:
         root = write_layer.load(src)
         footprints = raw_geometry.read_footprints(root)
+        table = raw_geometry.net_table(root)
+        nodes = [c for c in root.children if c.name == "footprint"]
+        pad_lists = [[c for c in node.children if c.name == "pad"] for node in nodes]
+        pad_nets = [[_pad_net(n, table) for n in pads] for pads in pad_lists]
     except Exception as exc:  # noqa: BLE001 - the message names the file or token
         return _error(f"could not read the board: {exc}")
-    nodes = [c for c in root.children if c.name == "footprint"]
     caller_power = set(power_nets or [])
 
     Pads = list[tuple[raw_geometry.PadGeometry, str, Any]]
     all_fps: list[tuple[raw_geometry.FootprintGeometry, Pads, Pads]] = []  # footprint, usable pads, unnumbered pads
-    for fp, node in zip(footprints, nodes, strict=True):
-        pad_nodes = [c for c in node.children if c.name == "pad"]
-        both = [(p, _pad_net(n), n) for p, n in zip(fp.pads, pad_nodes, strict=True) if p.kind != "np_thru_hole"]
+    for fp, pad_nodes, nets in zip(footprints, pad_lists, pad_nets, strict=True):
+        both = [(p, net, n) for p, net, n in zip(fp.pads, nets, pad_nodes, strict=True) if p.kind != "np_thru_hole"]
         all_fps.append((fp, [t for t in both if t[0].number], [t for t in both if not t[0].number]))
 
     count: dict[str, int] = {}
