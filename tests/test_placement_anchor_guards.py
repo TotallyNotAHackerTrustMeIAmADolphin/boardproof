@@ -54,6 +54,7 @@ def _fake_optimizer(monkeypatch, delta):
     from boardproof import kicad_cli
     from boardproof.routers import kicad_placer_tools, kicad_routing_tools
 
+    monkeypatch.setattr(kicad_placer_tools, "placer_script_problem", lambda: None)
     monkeypatch.setattr(kicad_placer_tools, "run_placement_repair", lambda *a, **k: {"exit_code": 0, "output_produced": True})
     monkeypatch.setattr(kicad_placer_tools, "placement_delta", lambda *a, **k: dict(delta))
     monkeypatch.setattr(kicad_routing_tools, "run_kicad_routing_tools", lambda *a, **k: {})
@@ -108,6 +109,106 @@ def test_a_missing_placer_script_or_nonzero_exit_is_an_error_never_complete(tmp_
     )
     result = tools["propose_placement_optimization"](str(pcb))
     assert result["status"] == "error" and "exit code 2" in result["reason"] and "boom" in result["reason"], result
+
+
+def test_a_missing_placer_script_is_reported_before_any_routing_time_is_spent(tmp_path, chips, tools, monkeypatch):
+    """Issue 240 (d): the pinned KRT ships no router-in-the-loop script; no baseline run first."""
+    from boardproof.routers import kicad_placer_tools, kicad_routing_tools
+
+    pcb = _board(tmp_path, chips, [("R1", "1206", 10, 10)])
+    _fake_optimizer(monkeypatch, {"R1": (50.0, 20.0, 0.0)})
+    monkeypatch.setattr(kicad_placer_tools, "placer_script_problem", lambda: "placer script X is missing; pinned 0.23.8")
+
+    def _no_routing(*a, **k):
+        raise AssertionError("the baseline must not run when the placer script is missing")
+
+    monkeypatch.setattr(kicad_routing_tools, "run_kicad_routing_tools", _no_routing)
+    result = tools["propose_placement_optimization"](str(pcb))
+    assert result["status"] == "error" and "pinned 0.23.8" in result["reason"], result
+
+
+def test_a_baseline_that_cannot_finish_is_stopped_early_and_names_the_open_nets(tmp_path, chips, tools, monkeypatch):
+    """Issue 240 (a, b): graceful stop before the hard limit; the comparison is stated missing."""
+    import time
+
+    from boardproof import kicad_cli
+    from boardproof.routers import kicad_routing_tools
+
+    pcb = _board(tmp_path, chips, [("R1", "1206", 10, 10)])
+    _fake_optimizer(monkeypatch, {"R1": (50.0, 20.0, 0.0)})
+    monkeypatch.setattr(placement_toolset, "_BASELINE_BUDGET_SECONDS", 1)
+    calls = []
+
+    def _router(inp, out, **k):
+        calls.append(out.name)
+        if len(calls) == 1:  # the baseline: waits for the stop request, writes a partial board
+            end = time.time() + 5
+            while time.time() < end and not kicad_routing_tools.stop_file_for(out).exists():
+                time.sleep(0.05)
+            assert kicad_routing_tools.stop_file_for(out).exists(), "no graceful stop was requested"
+        return {}
+
+    drc = {"violations": [], "unconnected_items": [{"items": [{"description": "Pad 1 [VBUS] of J1"}]},
+                                                   {"items": [{"description": "Pad 2 [GND] of R1"}]}]}
+    monkeypatch.setattr(kicad_routing_tools, "run_kicad_routing_tools", _router)
+    monkeypatch.setattr(kicad_cli, "run_drc", lambda *a, **k: drc)
+    result = tools["propose_placement_optimization"](str(pcb))
+    before = result["before_drc"]
+    assert before["status"] == "incomplete" and before["open_nets"] == ["GND", "VBUS"], before
+    assert "stopped early" in before["reason"] and "GND" in before["reason"], before
+    assert result["comparison"].startswith("missing"), result  # the before/after comparison is stated absent
+
+
+def test_a_failed_verification_route_makes_the_comparison_missing(tmp_path, chips, tools, monkeypatch):
+    from boardproof.routers import kicad_routing_tools
+
+    pcb = _board(tmp_path, chips, [("R1", "1206", 10, 10)])
+    _fake_optimizer(monkeypatch, {"R1": (50.0, 20.0, 0.0)})
+    calls = []
+
+    def _router(inp, out, **k):
+        calls.append(out)
+        if len(calls) == 2:  # the verification route after the placer's delta
+            raise kicad_routing_tools.KicadRoutingToolsError("verify route failed")
+        return {}
+
+    monkeypatch.setattr(kicad_routing_tools, "run_kicad_routing_tools", _router)
+    result = tools["propose_placement_optimization"](str(pcb))
+    assert result["after_drc"]["status"] == "incomplete", result
+    assert result["comparison"].startswith("missing"), result
+
+
+def test_the_graceful_stop_is_asked_at_80_percent_of_the_baseline_limit(tmp_path, monkeypatch):
+    import threading
+
+    intervals = []
+
+    class _Timer:
+        def __init__(self, interval, *a, **k):
+            intervals.append(interval)
+            self.daemon = False
+
+        def start(self): ...
+        def cancel(self): ...
+
+    monkeypatch.setattr(threading, "Timer", _Timer)
+    monkeypatch.setattr(placement_toolset, "_BASELINE_BUDGET_SECONDS", 100)
+    placement_toolset._baseline_route(lambda *a, **k: {}, tmp_path / "in.kicad_pcb", tmp_path / "out.kicad_pcb")
+    assert intervals == [80.0]
+
+
+def test_an_unexpected_failure_of_the_optimizer_is_an_error_message_never_silence(tmp_path, chips, tools, monkeypatch):
+    from boardproof.routers import kicad_placer_tools
+
+    pcb = _board(tmp_path, chips, [("R1", "1206", 10, 10)])
+    _fake_optimizer(monkeypatch, {})
+
+    def _boom(*a, **k):
+        raise ValueError("kaboom")
+
+    monkeypatch.setattr(kicad_placer_tools, "run_placement_repair", _boom)
+    result = tools["propose_placement_optimization"](str(pcb))
+    assert result["status"] == "error" and "kaboom" in result["reason"], result
 
 
 def test_an_optimizer_that_only_moves_locked_parts_proposes_nothing(tmp_path, chips, tools, monkeypatch):

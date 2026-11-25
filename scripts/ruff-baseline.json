@@ -32,8 +32,7 @@
       "F402": 1
     },
     "src/boardproof/toolsets/placement.py": {
-      "B905": 1,
-      "F841": 1
+      "B905": 1
     },
     "src/boardproof/toolsets/sourcing.py": {
       "F401": 1

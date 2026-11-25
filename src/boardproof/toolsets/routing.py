@@ -831,6 +831,37 @@ def managed_pair_clearances(pcb_path: str | Path) -> tuple[dict[tuple[str, str],
     return ({}, list(block[3])) if block[3] else (dict(block[2]), [])
 
 
+def custom_rules_not_seen(pcb_path: str | Path) -> list[dict]:
+    """Every rule of the board's ``.kicad_dru`` outside the managed block: the DSN carries only the managed
+    two-class clearances, so the router sees none of these and DRC may flag copper they forbid (issue 236).
+    ``[{"name", "condition", "constraints", "layer", "reason"}]``; an unreadable file is one entry named ``?``.
+    shortcut: a hand-written rule of the managed shape is listed, not converted; convert when a board needs it."""
+    from boardproof import dru
+
+    path = Path(pcb_path).with_suffix(dru.DRU_SUFFIX)
+    if not path.is_file():
+        return []
+    try:
+        text = path.read_bytes().decode("utf-8")
+    except UnicodeDecodeError as exc:
+        return [{"name": "?", "condition": None, "constraints": [], "layer": None,
+                 "reason": f"{path.name} is not UTF-8 text ({exc}); no rule in it reached the router"}]
+    block = dru.split_block(text) if dru.BLOCK_BEGIN in text or dru.BLOCK_END in text else None
+    # "managed" is the block's position, never a rule's name; a damaged block makes every rule unseen
+    rules, _version, problems = dru.parse(dru.outside_block(text) if block is None or not block[3] else text)
+    listed = [{"name": r.name, "condition": r.condition, "constraints": r.as_dict()["constraints"], "layer": r.layer,
+               "reason": "not carried into the DSN (only the managed two-class clearances are)"} for r in rules]
+    for problem in problems:
+        if problem.startswith("no (version N)"):
+            if not listed:
+                continue  # nothing hand-written to say anything about
+            why = f"{path.name} has no (version N) line, so KiCad ignores the whole file and DRC applies none of these rules either"
+        else:
+            why = f"{path.name} has a defect, so rules after it may be missing from this list: {problem}"
+        listed.append({"name": "?", "condition": None, "constraints": [], "layer": None, "reason": why})
+    return listed
+
+
 def pair_rules_note(pair_rules: dict | None) -> str | None:
     """The sentence a route result carries about ``export_dsn_with_kicad``'s ``pair_rules`` (None when
     there were none)."""
@@ -845,6 +876,11 @@ def pair_rules_note(pair_rules: dict | None) -> str | None:
     if refused or problems:
         parts.append(f"{len(refused)} pair(s) not applied and {len(problems)} rules-file problem(s) (pairs_not_applied, "
                      "problems): the router does not see those, and DRC flags copper closer than the rule")
+    unseen = pair_rules.get("custom_rules_not_seen") or []
+    if unseen:
+        names = ", ".join(str(r.get("name")) for r in unseen[:5]) + (", ..." if len(unseen) > 5 else "")
+        parts.append(f"{len(unseen)} custom rule(s) of the board's .kicad_dru (custom_rules_not_seen: {names}): the router "
+                     "does not see them and DRC may flag copper they forbid")
     if not parts:
         return None
     return "; ".join(parts) + ". Freerouting's own report is no evidence either way: kicad-cli DRC and verify_board are the measure."
@@ -853,9 +889,10 @@ def pair_rules_note(pair_rules: dict | None) -> str | None:
 def _patch_dsn_with_pair_rules(dsn: Path, pcb_path: Path) -> dict:
     """Add the managed pair clearances of ``pcb_path``'s ``.kicad_dru`` to the exported ``dsn`` (see
     ``add_class_class_rules``). The DSN is rewritten only when a rule was added; the rules file is
-    only read. ``{"applied_pair_rules", "pairs_not_applied", "problems"}``."""
+    only read. ``{"applied_pair_rules", "pairs_not_applied", "problems", "custom_rules_not_seen"}``."""
     pairs, problems = managed_pair_clearances(pcb_path)
-    report: dict = {"applied_pair_rules": [], "pairs_not_applied": [], "problems": problems}
+    report: dict = {"applied_pair_rules": [], "pairs_not_applied": [], "problems": problems,
+                    "custom_rules_not_seen": custom_rules_not_seen(pcb_path)}
     if not pairs:
         return report
     try:
@@ -2484,7 +2521,10 @@ def build(mcp: MCPServer) -> list[str]:
 
         The DSN is exported by pcbnew with the net classes of the project: pcbnew applies ONE class
         width to every net of a class, so give supply nets their own net class to get their own
-        width. The SES is imported into a copy that keeps locked tracks.
+        width. The SES is imported into a copy that keeps locked tracks. Only the two-class clearances of
+        the managed `.kicad_dru` block may reach the router (as class_class rules; refused pairs are in
+        `pair_rules.pairs_not_applied`); any other rule of the file
+        is listed in `pair_rules.custom_rules_not_seen`, and DRC may flag copper it forbids.
 
         A board (or its .kicad_pro, .kicad_dru or library tables) saved while
         Freerouting runs is refused: `status: refused`, `ok: false`,
@@ -2611,7 +2651,10 @@ def build(mcp: MCPServer) -> list[str]:
 
         The DSN is exported by pcbnew with the net classes of the project: pcbnew applies ONE class
         width to every net of a class, so give supply nets their own net class to get their own
-        width. The SES is imported into a copy that keeps locked tracks.
+        width. The SES is imported into a copy that keeps locked tracks. Only the two-class clearances of
+        the managed `.kicad_dru` block may reach the router (as class_class rules; refused pairs are in
+        `pair_rules.pairs_not_applied`); any other rule of the file
+        is listed in `pair_rules.custom_rules_not_seen`, and DRC may flag copper it forbids.
 
         `acknowledge_unmodeled_zone_risk` (archived backlog P4-06): both backends
         route this board's file as-is; neither treats a pre-existing FILLED

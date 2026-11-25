@@ -54,13 +54,14 @@ import re
 import subprocess
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from boardproof import write_layer
 from boardproof.routers.kicad_routing_tools import (
     KicadRoutingToolsError,
     find_kicad_routing_tools,
     find_kicad_routing_tools_python,
+    load_cli_snapshot,
     router_version,
 )
 
@@ -112,6 +113,22 @@ def build_placer_args(
     return args
 
 
+def placer_script_problem() -> str | None:
+    """None when the installed KiCadRoutingTools ships `place_route_loop.py`, else a plain sentence
+    naming the script, the installed version and the pinned one (issue 240: asked before any routing
+    time is spent). Contract decision: this project does not adopt `place_simple.py` and does not move
+    the pin; with the pinned release the optimisation tool answers with this error."""
+    checkout = find_kicad_routing_tools()
+    if (checkout / PLACER_SCRIPT).is_file():
+        return None
+    pinned = load_cli_snapshot().get("router_version") or "unknown version"
+    return (
+        f"placer script {PLACER_SCRIPT.as_posix()} is missing in the installed KiCadRoutingTools "
+        f"{router_version(checkout) or 'unknown version'} ({checkout}); the pinned version is {pinned}, which "
+        f"ships no router-in-the-loop placement script (0.23.1 does). Nothing was changed."
+    )
+
+
 def run_placement_repair(
     input_pcb: str | Path,
     output_pcb: str | Path,
@@ -123,6 +140,8 @@ def run_placement_repair(
     lock: tuple[str, ...] = (),
     movie: bool = True,
     timeout: int = 1800,
+    progress: Callable[[list[dict]], None] | None = None,
+    poll_seconds: float = 30.0,
 ) -> dict:
     """Run KRT's `place_route_loop.py` as a local subprocess on `input_pcb`
     (a disposable trial copy -- same discipline as `run_kicad_routing_tools`,
@@ -146,12 +165,8 @@ def run_placement_repair(
     """
     checkout = find_kicad_routing_tools()
     python = find_kicad_routing_tools_python()
-    if not (checkout / PLACER_SCRIPT).is_file():
-        raise KicadRoutingToolsError(
-            f"placer script {PLACER_SCRIPT.as_posix()} is missing in the installed KiCadRoutingTools "
-            f"{router_version(checkout) or 'unknown version'} ({checkout}); this tool needs a release that "
-            f"ships it (0.23.1 does, 0.23.8 does not)"
-        )
+    if (problem := placer_script_problem()) is not None:
+        raise KicadRoutingToolsError(problem)
     input_pcb = Path(input_pcb)
     output_pcb = Path(output_pcb)
     output_pcb.parent.mkdir(parents=True, exist_ok=True)
@@ -179,14 +194,28 @@ def run_placement_repair(
              open(stderr_log, "w", encoding="utf-8", errors="replace") as err_f:
             # place_route_loop.py, like route.py, bootstraps its own sys.path
             # relative to itself -- run from the checkout root.
-            proc = subprocess.Popen(args, cwd=str(checkout), stdout=out_f, stderr=err_f, env=env)
             try:
-                returncode = proc.wait(timeout=timeout)
-            except subprocess.TimeoutExpired:
-                proc.kill()
-                proc.wait()
+                proc = subprocess.Popen(args, cwd=str(checkout), stdout=out_f, stderr=err_f, env=env)
+            except OSError as exc:
+                raise KicadRoutingToolsError(f"could not start place_route_loop.py via {python}: {exc}") from exc
+            deadline = started + timeout
+            try:
+                while True:
+                    try:
+                        returncode = proc.wait(timeout=max(0.0, min(poll_seconds, deadline - time.time())))
+                        break
+                    except subprocess.TimeoutExpired:
+                        if time.time() >= deadline:
+                            break  # the finally below kills the child
+                        if progress is not None:  # a long run is never silent (issue 240)
+                            out_f.flush()
+                            progress(_parse_round_summary(stdout_log.read_text(encoding="utf-8", errors="replace")))
+            finally:  # every exit (timeout, a raising callback, an unreadable log) leaves no child running
+                if proc.poll() is None:
+                    proc.kill()
+                    proc.wait()
     except OSError as exc:
-        raise KicadRoutingToolsError(f"could not start place_route_loop.py via {python}: {exc}") from exc
+        raise KicadRoutingToolsError(f"could not follow the placer run (log files): {exc}") from exc
     elapsed = time.time() - started
 
     stdout_text = stdout_log.read_text(encoding="utf-8", errors="replace") if stdout_log.is_file() else ""
@@ -226,8 +255,15 @@ def _parse_round_summary(stdout_text: str) -> list[dict]:
     file is always there to read directly."""
     rounds: list[dict] = []
     for match in _ROUND_LINE_RE.finditer(stdout_text):
-        rounds.append({"round": int(match.group(1)), "raw": match.group(0)})
+        line_end = stdout_text.find("\n", match.start())
+        line = stdout_text[match.start(): line_end if line_end >= 0 else None]
+        failed = _FAILED_RE.search(line)
+        rounds.append({"round": int(match.group(1)), "raw": match.group(0),
+                       "open_nets": int(failed.group(1)) if failed else None})
     return rounds
+
+
+_FAILED_RE = re.compile(r"(\d+)\s+failed")
 
 
 def _raw_board_origin(root: Any) -> tuple[float, float]:

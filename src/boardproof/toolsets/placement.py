@@ -10,8 +10,10 @@ follows.
 
 from __future__ import annotations
 
+import logging
 import math
 import os
+import re
 import time
 import uuid
 from pathlib import Path
@@ -629,6 +631,56 @@ def _fail_closed(fn):
                     "reason": f"{exc}: nothing was moved"}
 
     return wrapper
+
+
+_BASELINE_BUDGET_SECONDS = 300  # hard limit of the baseline routing; a graceful stop is asked at 80% of it
+_LOG = logging.getLogger("boardproof.placement")
+
+
+def _error_on_failure(fn):
+    """A long tool never ends in silence: any unexpected exception becomes an error result (issue 240)."""
+    import functools
+
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        try:
+            return fn(*args, **kwargs)
+        except Exception as exc:  # noqa: BLE001 - reported, never swallowed; _LockUnreadable passes through
+            if isinstance(exc, _LockUnreadable):
+                raise
+            _LOG.exception("%s failed", fn.__name__)
+            return {"status": "error", "reason": f"{fn.__name__} failed: {type(exc).__name__}: {exc}; nothing was moved"}
+
+    return wrapper
+
+
+def _open_net_names(report: dict) -> list[str]:
+    """Net names in the `[NET]` of each unconnected item's description of a kicad-cli DRC report."""
+    names = set()
+    for entry in report.get("unconnected_items", []):
+        for item in entry.get("items", []) if isinstance(entry, dict) else []:
+            names.update(re.findall(r"\[([^\]]+)\]", str(item.get("description", ""))))
+    return sorted(names)
+
+
+def _baseline_route(run, baseline_input: Path, baseline_output: Path):
+    """Run the baseline routing; at 80% of its limit ask for a graceful stop so a partial board is
+    written (and DRC can name the open nets) instead of a bare kill. Returns (run result, stopped_early)."""
+    import threading
+
+    from boardproof.routers.kicad_routing_tools import request_graceful_stop, stop_file_for
+
+    timer = threading.Timer(
+        _BASELINE_BUDGET_SECONDS * 0.8, request_graceful_stop,
+        args=(baseline_output, "baseline routing cannot finish within its limit"),
+    )
+    timer.daemon = True
+    timer.start()
+    try:
+        result = run(baseline_input, baseline_output, timeout=_BASELINE_BUDGET_SECONDS)
+    finally:
+        timer.cancel()
+    return result, stop_file_for(baseline_output).exists()
 
 
 class _SlotsUnreadable(Exception):
@@ -1521,6 +1573,7 @@ def build(mcp: MCPServer) -> list[str]:
         return {"status": "confirmed", "applied": list(proposed.keys()), **fields}
 
     @_fail_closed
+    @_error_on_failure
     def propose_placement_optimization(
         pcb_path: str,
         rounds: int = 2,
@@ -1564,14 +1617,26 @@ def build(mcp: MCPServer) -> list[str]:
         import tempfile
 
         from boardproof import kicad_cli
+        from boardproof.routers import kicad_placer_tools
         from boardproof.routers.kicad_placer_tools import placement_delta, run_placement_repair
-        from boardproof.routers.kicad_routing_tools import KicadRoutingToolsError, run_kicad_routing_tools
+        from boardproof.routers.kicad_routing_tools import (
+            KicadRoutingToolsError,
+            KicadRoutingToolsTimeout,
+            krt_run_progress,
+            run_kicad_routing_tools,
+        )
         from boardproof.toolsets.routing import _trial_copy
 
         path = Path(pcb_path)
         if not path.is_file():
             return {"status": "incomplete", "reason": f"file not found: {pcb_path}"}
         _locked_references(path)  # fail closed before the long run if the lock state cannot be read
+        try:  # issue 240 (d): no routing time is spent when the pinned KRT cannot place at all
+            problem = kicad_placer_tools.placer_script_problem()
+        except KicadRoutingToolsError as exc:
+            problem = str(exc)
+        if problem is not None:
+            return {"status": "error", "reason": problem}
 
         def _drc(target: Path) -> dict:
             try:
@@ -1580,6 +1645,7 @@ def build(mcp: MCPServer) -> list[str]:
                 return {
                     "violation_count": len(report.get("violations", [])),
                     "unconnected_count": len(report.get("unconnected_items", [])),
+                    "open_nets": _open_net_names(report),
                     "short_count": sum(
                         1 for v in report.get("violations", []) if "short" in str(v.get("type", "")).lower()
                     ),
@@ -1596,10 +1662,21 @@ def build(mcp: MCPServer) -> list[str]:
 
             baseline_output = tmp / "baseline" / (path.stem + "_routed" + path.suffix)
             try:
-                baseline_run = run_kicad_routing_tools(baseline_input, baseline_output, timeout=300)
+                _baseline_run, stopped_early = _baseline_route(run_kicad_routing_tools, baseline_input, baseline_output)
                 before_drc = _drc(baseline_output)
+                if stopped_early:
+                    nets = before_drc.get("open_nets") or []
+                    before_drc = {**before_drc, "status": "incomplete", "reason": (
+                        f"baseline routing was stopped early: it could not finish within {_BASELINE_BUDGET_SECONDS} s; "
+                        f"nets left open: {', '.join(nets) if nets else 'none could be named from the DRC report'}")}
+            except KicadRoutingToolsTimeout as exc:
+                where = krt_run_progress(baseline_output).get("net") or {}
+                at = f" while routing {where['net_name']} (net {where['net_index']} of {where['net_total']})" if where else ""
+                before_drc = {"status": "incomplete", "reason": f"baseline routing hit its {_BASELINE_BUDGET_SECONDS} s limit{at} "
+                              f"and was killed before it could write a partial board: {exc}"}
             except KicadRoutingToolsError as exc:
                 before_drc = {"status": "incomplete", "reason": f"baseline routing failed: {exc}"}
+            _LOG.info("placement optimisation: baseline routing done (%s)", before_drc.get("status", "complete"))
 
             try:
                 placer_input = _trial_copy(path, tmp / "placer")
@@ -1610,6 +1687,9 @@ def build(mcp: MCPServer) -> list[str]:
             try:
                 repair_run = run_placement_repair(
                     placer_input, placer_output, rounds=rounds, route_args=route_args, timeout=timeout_seconds,
+                    progress=lambda rs: _LOG.info(
+                        "placement optimisation: round %s, %s open net(s)",
+                        rs[-1]["round"] if rs else "starting", rs[-1]["open_nets"] if rs else "?"),
                 )
             except KicadRoutingToolsError as exc:
                 return {"status": "error", "reason": f"placement repair failed: {exc}"}
@@ -1682,6 +1762,11 @@ def build(mcp: MCPServer) -> list[str]:
             "locked_skipped": locked_skipped,
             "before_drc": before_drc,
             "after_drc": after_drc,
+            "comparison": (
+                "available: before_drc against after_drc"
+                if "status" not in before_drc and "status" not in after_drc else
+                "missing: the before/after comparison is incomplete (before_drc or after_drc has status "
+                "incomplete); do not read this proposal as an improvement"),
             "repair_run": repair_run,
             "warning": (
                 "Placement proposal from a real optimizer, compared by an independent routing+DRC pass on "

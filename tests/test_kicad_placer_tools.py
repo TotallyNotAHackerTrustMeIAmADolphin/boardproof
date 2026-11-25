@@ -149,6 +149,71 @@ def test_missing_placer_script_raises_naming_script_and_krt_version(tmp_path, mo
         placer.run_placement_repair(input_pcb, tmp_path / "out" / "o.kicad_pcb", timeout=30)
 
 
+_FAKE_PLACER_SLOW = """\
+import sys, time
+from pathlib import Path
+sys.stdout.write("Round 1: 3 target parts, 7 failed nets\\n")
+sys.stdout.flush()
+time.sleep(1.5)
+Path(sys.argv[2]).write_text("(kicad_pcb fake-repaired)\\n", encoding="utf-8")
+"""
+
+
+def test_round_summary_carries_the_number_of_open_nets():
+    rounds = placer._parse_round_summary("Round 1: 3 target parts, 7 failed nets\n")
+    assert rounds[0]["round"] == 1 and rounds[0]["open_nets"] == 7, rounds
+
+
+def test_run_placement_repair_reports_progress_while_it_runs(tmp_path, monkeypatch):
+    """Issue 240: a long run is never silent; the callback sees round and open nets before the run ends."""
+    checkout = _fake_checkout(tmp_path / "krt", _FAKE_PLACER_SLOW)
+    monkeypatch.setenv(krt.ENV_PATH, str(checkout))
+    monkeypatch.delenv(krt.ENV_PYTHON, raising=False)
+    input_pcb = tmp_path / "board.kicad_pcb"
+    input_pcb.touch()  # the stand-in placer never reads it
+    seen: list[list[dict]] = []
+
+    placer.run_placement_repair(
+        input_pcb, tmp_path / "out" / "o.kicad_pcb", timeout=30, progress=seen.append, poll_seconds=0.2,
+    )
+    assert any(r and r[-1]["round"] == 1 and r[-1]["open_nets"] == 7 for r in seen), seen
+
+
+def test_a_raising_progress_callback_leaves_no_placer_process_running(tmp_path, monkeypatch):
+    checkout = _fake_checkout(tmp_path / "krt", _FAKE_PLACER_HANGS)
+    monkeypatch.setenv(krt.ENV_PATH, str(checkout))
+    monkeypatch.delenv(krt.ENV_PYTHON, raising=False)
+    input_pcb = tmp_path / "board.kicad_pcb"
+    input_pcb.touch()
+    procs = []
+    real_popen = placer.subprocess.Popen
+
+    def _spy(*a, **k):
+        procs.append(real_popen(*a, **k))
+        return procs[-1]
+
+    monkeypatch.setattr(placer.subprocess, "Popen", _spy)
+
+    def _boom(_rounds):
+        raise ValueError("callback failed")
+
+    with pytest.raises(ValueError, match="callback failed"):
+        placer.run_placement_repair(input_pcb, tmp_path / "out" / "o.kicad_pcb", timeout=30, progress=_boom,
+                                    poll_seconds=0.2)
+    assert procs and procs[0].poll() is not None, "the placer child is still running"
+
+
+def test_placer_script_problem_names_script_installed_and_pinned_versions(tmp_path, monkeypatch):
+    checkout = _fake_checkout(tmp_path / "krt", _FAKE_PLACER_SUCCESS)
+    (checkout / "VERSION").write_text("0.23.8\n", encoding="utf-8")
+    monkeypatch.setenv(krt.ENV_PATH, str(checkout))
+    monkeypatch.delenv(krt.ENV_PYTHON, raising=False)
+    assert placer.placer_script_problem() is None
+    (checkout / "py_placer" / "place_route_loop.py").unlink()
+    problem = placer.placer_script_problem()
+    assert problem and "place_route_loop.py" in problem and "0.23.8" in problem and "pinned" in problem, problem
+
+
 def test_no_graceful_stop_mechanism_exists_for_the_placer(tmp_path):
     """Confirmed by direct source reading (ticket 08): neither
     place_route_loop.py nor place_optimize.py reference KICAD_STOP_FILE or

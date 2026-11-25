@@ -180,7 +180,7 @@ def test_a_board_without_pair_rules_exports_a_dsn_without_class_class(tmp_path):
     pcb = _golden_with_pair(tmp_path, pair=None)
     export = routing_toolset.export_dsn_with_kicad(pcb, tmp_path / "work")
     assert "class_class" not in Path(export["dsn_path"]).read_text(encoding="utf-8")
-    assert export["pair_rules"] == {"applied_pair_rules": [], "pairs_not_applied": [], "problems": []}
+    assert export["pair_rules"] == {"applied_pair_rules": [], "pairs_not_applied": [], "problems": [], "custom_rules_not_seen": []}
 
 
 @needs_kicad_python
