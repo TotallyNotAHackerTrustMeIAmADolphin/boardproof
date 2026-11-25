@@ -106,6 +106,8 @@ def report_clearance_coverage(
         nets = sorted(board_rules._board_net_names(src))
     except Exception as exc:  # noqa: BLE001
         return _error(f"could not read the board or its project: {exc}")
+    if not nets:  # never "complete" over nothing: a net form the reader missed would look the same
+        return _error("the board has no nets, so no pair of nets was checked")
     if len(nets) > MAX_NETS:
         return _error(f"{len(nets)} nets: more than the {MAX_NETS} this report resolves pair by pair", net_count=len(nets))
     chains: dict[str, tuple[str, ...]] = {}

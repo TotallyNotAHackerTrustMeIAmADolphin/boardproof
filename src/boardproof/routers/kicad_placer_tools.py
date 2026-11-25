@@ -61,6 +61,7 @@ from boardproof.routers.kicad_routing_tools import (
     KicadRoutingToolsError,
     find_kicad_routing_tools,
     find_kicad_routing_tools_python,
+    router_version,
 )
 
 PLACER_SCRIPT = Path("py_placer") / "place_route_loop.py"
@@ -145,6 +146,12 @@ def run_placement_repair(
     """
     checkout = find_kicad_routing_tools()
     python = find_kicad_routing_tools_python()
+    if not (checkout / PLACER_SCRIPT).is_file():
+        raise KicadRoutingToolsError(
+            f"placer script {PLACER_SCRIPT.as_posix()} is missing in the installed KiCadRoutingTools "
+            f"{router_version(checkout) or 'unknown version'} ({checkout}); this tool needs a release that "
+            f"ships it (0.23.1 does, 0.23.8 does not)"
+        )
     input_pcb = Path(input_pcb)
     output_pcb = Path(output_pcb)
     output_pcb.parent.mkdir(parents=True, exist_ok=True)

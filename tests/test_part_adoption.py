@@ -207,6 +207,7 @@ def test_confirm_adopts_a_batch_with_every_check_passing(project: Path, tmp_path
             "model_file_present": "pass",
             "mandatory_properties": "pass",
             "pin_pad_numbers": "pass",
+            "courtyard_encloses_pads": "pass",
             "side_view_render": "pass",
         }, part
         assert part["evidence"]["body_above_board_mm"] >= 0.1

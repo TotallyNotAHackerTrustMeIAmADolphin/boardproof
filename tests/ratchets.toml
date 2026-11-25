@@ -251,14 +251,6 @@ note = "Build ticket 12: replaces 4 in-place Schematic.write calls (add_symbols,
 # Mutation paths, named properties (ticket 07: placement.py, 6 lines).
 [[convenience_read]]
 file = "toolsets/placement.py"
-function = "_footprint_courtyard_or_pad_bbox"
-kind = "position"
-count = 2
-path = "mutation"
-note = "Pad.position (pad-bbox fallback) and Footprint.position (no-pad fallback); feeds align_footprints, pack_footprints_densely and the autoplacement pair. The P3-11 suspect."
-
-[[convenience_read]]
-file = "toolsets/placement.py"
 function = "build.align_footprints"
 kind = "position"
 count = 1
@@ -862,6 +854,14 @@ proof = [
     "tests/test_schematic_import.py::test_a_wrong_raw_position_in_the_saved_file_is_caught",
 ]
 note = "Checkpoint module; verifies raw (at), sheet paths and every pad net against the kicad-cli netlist."
+
+[writing_tool.confirm_orphan_footprint_removal]
+self_check = "reload-verify"
+proof = [
+    "tests/test_orphan_footprints.py::test_corrupted_write_is_caught_by_the_self_check",
+    "tests/test_orphan_footprints.py::test_corrupted_write_that_removes_nothing_is_caught",
+]
+note = "Checkpoint module; reload checks that exactly the planned footprints are gone and every other node is unchanged (ticket 227)."
 
 [writing_tool.create_sheets]
 self_check = "reload-verify"
@@ -2052,6 +2052,13 @@ count = 1
 use = "stub"
 note = "An existing target holding the bytes b'old' so save_bytes' verify-before-replace is observed; the content is never parsed as KiCad (build ticket 71 test, owner ticket 90)."
 
+
+[[test_kicad_fault_call]]
+file = "test_courtyard_hull_review.py"
+function = "test_b4_an_unreadable_footprint_makes_the_list_incomplete"
+kind = "rewrite_bytes"
+code = '''faults.rewrite_bytes(broken, lambda data: data[:30])'''
+note = "Issue 228: a footprint file cut off after 30 bytes, which cannot be parsed: list_adopted must report it as unreadable and the status as incomplete."
 
 [[test_kicad_fault_call]]
 file = "test_autonomy_run_pins.py"

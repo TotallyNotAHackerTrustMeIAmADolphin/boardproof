@@ -135,6 +135,20 @@ def test_run_placement_repair_timeout_preserves_log_and_raises(tmp_path, monkeyp
     assert not output_pcb.is_file()
 
 
+def test_missing_placer_script_raises_naming_script_and_krt_version(tmp_path, monkeypatch):
+    """Issue 232: KRT 0.23.8 ships no py_placer/place_route_loop.py."""
+    checkout = _fake_checkout(tmp_path / "krt", _FAKE_PLACER_SUCCESS)
+    (checkout / "py_placer" / "place_route_loop.py").unlink()
+    (checkout / "VERSION").write_text("0.23.8\n", encoding="utf-8")
+    monkeypatch.setenv(krt.ENV_PATH, str(checkout))
+    monkeypatch.delenv(krt.ENV_PYTHON, raising=False)
+    input_pcb = tmp_path / "board.kicad_pcb"
+    input_pcb.touch()  # content is never read: the script check comes first
+
+    with pytest.raises(krt.KicadRoutingToolsError, match=r"place_route_loop\.py.*0\.23\.8"):
+        placer.run_placement_repair(input_pcb, tmp_path / "out" / "o.kicad_pcb", timeout=30)
+
+
 def test_no_graceful_stop_mechanism_exists_for_the_placer(tmp_path):
     """Confirmed by direct source reading (ticket 08): neither
     place_route_loop.py nor place_optimize.py reference KICAD_STOP_FILE or

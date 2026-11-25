@@ -318,7 +318,7 @@ def _as_revision(result: dict, source: str) -> dict:
 
 
 def _register_layout_tools(mcp: MCPServer) -> None:
-    from boardproof import schematic_import  # the tool text pins a sentence defined next to the code
+    from boardproof import orphan_footprints, schematic_import  # the tool text pins a sentence defined next to the code
 
     @mcp.tool(
         annotations=_READ_ONLY,
@@ -369,6 +369,41 @@ def _register_layout_tools(mcp: MCPServer) -> None:
         from boardproof import schematic_import
 
         result = schematic_import.confirm_schematic_import(pcb_path, revision_token)
+        return _as_revision(result, pcb_path)
+
+    @mcp.tool(
+        annotations=_READ_ONLY,
+        description=(
+            "Dry run of removing orphaned footprints (footprints whose reference has no symbol in the "
+            "schematic) from the board; writes nothing and returns a revision_token. "
+            + orphan_footprints.ORPHAN_SENTENCE
+            + " orphans_removed lists what the confirm would remove, orphans_kept the rest with the reason. "
+            + _LAYOUT_ORDER
+        ),
+    )
+    def propose_orphan_footprint_removal(
+        pcb_path: str, schematic_path: str | None = None, output_dir: str | None = None
+    ) -> dict:
+        from boardproof import orphan_footprints
+
+        return orphan_footprints.propose_orphan_footprint_removal(pcb_path, schematic_path, output_dir)
+
+    @mcp.tool(
+        annotations=_DESTRUCTIVE,
+        description=(
+            "Apply a propose_orphan_footprint_removal proposal: writes a NEW board revision without the "
+            "listed orphans, reloaded from disk and compared (the planned footprints are gone, every other "
+            "node is unchanged); a mismatch returns ok false and writes nothing. "
+            "The revision_token is single use. "
+            + _LAYOUT_ORDER
+            + " "
+            + write_layer.LOCK_SENTENCE
+        ),
+    )
+    def confirm_orphan_footprint_removal(pcb_path: str, revision_token: str) -> dict:
+        from boardproof import orphan_footprints
+
+        result = orphan_footprints.confirm_orphan_footprint_removal(pcb_path, revision_token)
         return _as_revision(result, pcb_path)
 
     @mcp.tool(

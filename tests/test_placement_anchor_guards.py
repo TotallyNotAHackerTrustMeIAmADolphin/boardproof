@@ -54,7 +54,7 @@ def _fake_optimizer(monkeypatch, delta):
     from boardproof import kicad_cli
     from boardproof.routers import kicad_placer_tools, kicad_routing_tools
 
-    monkeypatch.setattr(kicad_placer_tools, "run_placement_repair", lambda *a, **k: {"output_produced": True})
+    monkeypatch.setattr(kicad_placer_tools, "run_placement_repair", lambda *a, **k: {"exit_code": 0, "output_produced": True})
     monkeypatch.setattr(kicad_placer_tools, "placement_delta", lambda *a, **k: dict(delta))
     monkeypatch.setattr(kicad_routing_tools, "run_kicad_routing_tools", lambda *a, **k: {})
     monkeypatch.setattr(kicad_cli, "run_drc", lambda *a, **k: {"violations": [], "unconnected_items": []})
@@ -86,6 +86,28 @@ def test_an_optimizer_proposal_for_a_part_locked_since_is_refused_and_keeps_its_
     assert pcb.read_bytes() == before
     tools["lock_footprints"](str(pcb), ["R1"], locked=False)
     assert tools["confirm_placement_optimization"](proposal["revision_token"])["status"] == "confirmed"
+
+
+def test_a_missing_placer_script_or_nonzero_exit_is_an_error_never_complete(tmp_path, chips, tools, monkeypatch):
+    """Issue 232."""
+    from boardproof.routers import kicad_placer_tools, kicad_routing_tools
+
+    pcb = _board(tmp_path, chips, [("R1", "1206", 10, 10)])
+    _fake_optimizer(monkeypatch, {"R1": (50.0, 20.0, 0.0)})
+
+    def _missing(*a, **k):
+        raise kicad_routing_tools.KicadRoutingToolsError("py_placer/place_route_loop.py is missing (KiCadRoutingTools 0.23.8)")
+
+    monkeypatch.setattr(kicad_placer_tools, "run_placement_repair", _missing)
+    result = tools["propose_placement_optimization"](str(pcb))
+    assert result["status"] == "error" and "place_route_loop.py" in result["reason"] and "0.23.8" in result["reason"], result
+
+    monkeypatch.setattr(
+        kicad_placer_tools, "run_placement_repair",
+        lambda *a, **k: {"exit_code": 2, "output_produced": False, "stderr_tail": "boom"},
+    )
+    result = tools["propose_placement_optimization"](str(pcb))
+    assert result["status"] == "error" and "exit code 2" in result["reason"] and "boom" in result["reason"], result
 
 
 def test_an_optimizer_that_only_moves_locked_parts_proposes_nothing(tmp_path, chips, tools, monkeypatch):

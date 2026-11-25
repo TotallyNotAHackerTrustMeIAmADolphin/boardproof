@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from boardproof import board_rules, clearance_coverage, kicad_cli, write_layer
+from boardproof import board_rules, clearance_coverage, kicad_cli, raw_geometry, write_layer
 from tests import _pair_fixture as fx
 from tests.test_pair_clearance_rules import HAND, probe_drc, put_rules
 
@@ -241,3 +241,96 @@ def test_the_probe_decides_over_the_parser_when_it_ran(board: Path) -> None:
     assert pair(report, "VCC", "GND")["rule"] == "odd"  # what KiCad loaded is what applies
     unchecked = coverage(board)  # without the probe the parser's defect stands
     assert unchecked["rules_ignored_by_kicad"] is True
+
+
+def _raw_net_names(path: Path) -> set[str]:
+    """Net names read straight off the file text: (net "name") and (net N "name"), never an empty one."""
+    import re
+
+    return {m for m in re.findall(r'\(net (?:\d+ )?"([^"]*)"\)', path.read_text(encoding="utf8")) if m}
+
+
+def test_kicad10_board_with_no_net_declarations_has_net_names(kicad_demo) -> None:
+    """Issue 229: KiCad 10 (file version 20260206) writes no top-level (net N "name"); the names sit on pads."""
+    pcb = kicad_demo("pic_programmer") / "pic_programmer.kicad_pcb"
+    assert "(version 20260206" in pcb.read_text(encoding="utf8")
+    names = board_rules._board_net_names(pcb)
+    assert len(names) == 111
+    assert names == _raw_net_names(pcb)
+
+
+def test_older_format_board_keeps_its_declared_nets(board: Path) -> None:
+    names = board_rules._board_net_names(board)
+    assert len(names) >= 2
+    assert names == _raw_net_names(board)
+
+
+def _board_with(tmp_path: Path, *nodes: str, strip_nets: bool = False, no_parse_check: bool = False) -> Path:
+    """A copy of the golden board (older format) with extra S-expression nodes appended through the write
+    layer, or with every (net ...) node removed."""
+    from kicad_tools.schema import PCB
+    from kicad_tools.sexp import parse_string
+
+    shutil.copytree(fx.GOLDEN_DIR, tmp_path / "proj")
+    pcb = tmp_path / "proj" / fx.GOLDEN_NAME
+    board = PCB.load(pcb)
+
+    def strip(node) -> None:
+        node.children[:] = [c for c in node.children if c.is_atom or c.name != "net"]
+        for c in node.children:
+            if not c.is_atom:
+                strip(c)
+
+    if strip_nets:
+        strip(board._sexp)
+    for text in nodes:
+        board._sexp.append(parse_string(text))
+    if no_parse_check:  # KiCad itself refuses some malformed nodes; the reader must refuse them too
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(write_layer, "parse_check", lambda *_a, **_k: [])
+            write_layer.save_pcb(board, pcb)
+    else:
+        write_layer.save_pcb(board, pcb)
+    return pcb
+
+
+_SEG = '(segment (start 130 88) (end 140 88) (width 0.25) (layer "F.Cu") {net} (uuid "66666666-0000-4000-8000-000000000000"))'
+BAD_NET_FORMS = {
+    "three values": _SEG.format(net="(net 1 2 3)"),
+    "undeclared number": _SEG.format(net="(net 99)"),
+    "duplicate declaration": '(net 1 "DUP")',
+}
+
+
+def test_a_board_without_any_net_node_is_an_error_never_complete(tmp_path: Path) -> None:
+    pcb = _board_with(tmp_path, strip_nets=True)
+    assert board_rules._board_net_names(pcb) == set()
+    report = coverage(pcb)
+    assert report["status"] == "error" and "no nets" in report["reason"]
+    assert "net_pairs" not in report
+
+
+@pytest.mark.parametrize("form", sorted(BAD_NET_FORMS))
+def test_an_unknown_net_form_is_refused_never_guessed(tmp_path: Path, form: str) -> None:
+    pcb = _board_with(tmp_path, BAD_NET_FORMS[form], no_parse_check=True)
+    with pytest.raises(raw_geometry.RawGeometryError):
+        board_rules._board_net_names(pcb)
+    report = coverage(pcb)
+    assert report["status"] == "error" and "net_pairs" not in report, report
+    proposal = board_rules.propose_board_rules(pcb, netclasses=[{"name": "X", "clearance": 0.2, "nets": ["VCC"]}],
+                                               output_dir=tmp_path / "rev")
+    assert proposal["status"] == "error", proposal
+
+
+def test_a_backslash_in_a_net_name_is_read_as_the_shared_parser_reads_it() -> None:
+    """Pinned, not endorsed: in a quoted string, two backslashes read as one backslash, backslash-n as a
+    newline, and a backslash before any other character is dropped. The parser is not changed here."""
+    from kicad_tools.sexp import parse_string
+
+    def read(text: str) -> str:
+        return raw_geometry.net_name(parse_string("(segment (net " + text + "))"))
+
+    bs = chr(92)
+    assert read('"A' + bs + bs + 'B"') == "A" + bs + "B"
+    assert read('"A' + bs + 'nB"') == "A" + chr(10) + "B"
+    assert read('"A' + bs + 'B"') == "AB"

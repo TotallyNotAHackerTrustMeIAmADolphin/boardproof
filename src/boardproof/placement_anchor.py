@@ -66,8 +66,8 @@ class Part:
     locked: bool
     side: str  # "front" or "back"
     through_hole: bool
-    box: Box  # courtyard (or pad) box, page frame
-    box_source: str  # "courtyard" or "pads"
+    box: Box  # hull of the courtyard and the pads (the pads alone without a courtyard), page frame
+    box_source: str  # "courtyard" (it has one, the pads are added) or "pads"
     pads: tuple[raw_geometry.PadGeometry, ...] = ()  # raw pads, page frame (the box source where no courtyard exists)
 
     def sides(self) -> set[str]:
@@ -174,10 +174,10 @@ def read_parts(root: Any, only: set[str] | None = None) -> list[Part]:
     for node, geo in zip(nodes, geometry, strict=True):
         if only is not None and geo.reference not in only:
             continue
+        # the hull of the courtyard and the pads: an adopted footprint can have pads outside its courtyard (issue 228)
         points = _courtyard_points(node, geo.at_mm, geo.angle_deg)
-        source = "courtyard"
-        if not points:
-            points, source = _pad_points(geo.pads), "pads"
+        source = "courtyard" if points else "pads"
+        points = points + _pad_points(geo.pads)
         if not points:
             raise RawGeometryError(f"footprint {geo.reference or geo.lib_id or '?'} has no courtyard and no pad to measure")
         parts.append(Part(
@@ -189,11 +189,9 @@ def read_parts(root: Any, only: set[str] | None = None) -> list[Part]:
 
 def box_at(part: Part, at: Point, angle: float) -> Box:
     """The part's box if its footprint stood at page ``at`` with ``angle``, from the same raw
-    courtyard items (or pads, where it has no courtyard) as ``read_parts``. Pad angles are stored
+    courtyard items and pads as ``read_parts`` (their hull). Pad angles are stored
     board-absolute, so a pad turns with the footprint by the difference of the angles."""
-    if part.box_source == "courtyard":
-        return _box(_courtyard_points(part.node, at, angle))
-    out: list[Point] = []
+    out: list[Point] = _courtyard_points(part.node, at, angle) if part.box_source == "courtyard" else []
     cos_sin = raw_geometry._cos_sin(part.angle)  # inverse of place(): page offset -> footprint-local
     for pad in part.pads:
         dx, dy = pad.at_mm[0] - part.at[0], pad.at_mm[1] - part.at[1]

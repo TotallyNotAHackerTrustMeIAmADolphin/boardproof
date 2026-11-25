@@ -21,18 +21,6 @@ from mcp.server.mcpserver import MCPServer
 
 from boardproof import placement_anchor, write_layer
 
-# _courtyard_polygon / Layer are internal (underscore) API, not a documented
-# public surface -- consistent with this project's existing acceptance of
-# kicad_tools-internals risk (P1-07's sexp/fp_lib_table usage, P1-06's
-# library.generators) given the version is pinned (pyproject.toml
-# kicad-tools>=0.20.0,<0.21.0). No public courtyard-bbox function exists in
-# kicad_tools as of 0.20.x; this is the real source of truth for courtyard
-# geometry (see the module's own docstring, "single source of truth ...
-# consumed by the courtyard-overlap DRC rule and the placement analyzer") --
-# reusing it is more correct than re-deriving bounding boxes naively, which
-# is exactly what docs/ARCHITECTURE.md's alignment-tools spec warns against.
-from kicad_tools.geometry.courtyard import _courtyard_polygon  # noqa: F401 (re-exported name kept private-looking deliberately)
-
 _footprint_dir_checked = False
 
 
@@ -68,45 +56,20 @@ def _ensure_kicad_footprint_dir_set() -> None:
         os.environ["KICAD_FOOTPRINT_DIR"] = str(footprint_dir)
 
 
-def _footprint_courtyard_or_pad_bbox(footprint: Any) -> tuple[tuple[float, float, float, float], bool]:
-    """Return ((minx, miny, maxx, maxy), used_real_courtyard) for a footprint.
-
-    Prefers the real courtyard polygon (accounts for rotation/mirroring
-    correctly, per kicad_tools' own courtyard module). Falls back to a pad
-    bounding box -- and reports that fallback honestly via the second
-    return value -- when the footprint has no courtyard artwork at all
-    (e.g. some hand-authored/legacy footprints), since a fixture/generated
-    footprint with real IPC-7351 courtyard graphics is the common case this
-    project actually cares about (see footprint_gen.py).
-    """
+def _hull_boxes(path: Path, refs: list[str]) -> tuple[dict[str, tuple[tuple[float, float, float, float], bool]], dict | None]:
+    """({reference: (box, has_courtyard)}, refusal): the hull of each footprint's courtyard and
+    pads, read from the raw tokens (issue 228: pads can reach outside the courtyard of an adopted
+    footprint). A refusal dict when a reference is unknown or a footprint cannot be measured."""
     try:
-        from shapely.geometry import Polygon
-    except ImportError as exc:  # pragma: no cover -- shapely is a kicad-tools core dep
-        raise RuntimeError("shapely is required (should be a transitive kicad-tools dependency)") from exc
-
-    side = "F" if footprint.layer.upper().startswith("F.") or footprint.layer.upper().startswith("F") else "B"
-    polygon = _courtyard_polygon(footprint, side, Polygon)
-    if polygon is not None:
-        minx, miny, maxx, maxy = polygon.bounds
-        return (minx, miny, maxx, maxy), True
-
-    # Fallback: bounding box of the footprint's own pads, in board space.
-    # Pads already carry absolute board-space positions on a loaded PCB
-    # footprint (kicad_tools resolves this internally) -- if that turns out
-    # not to hold for a given footprint, this raises rather than silently
-    # returning a wrong box.
-    xs: list[float] = []
-    ys: list[float] = []
-    for pad in footprint.pads:
-        px, py = pad.position
-        xs.append(px)
-        ys.append(py)
-    if not xs:
-        # No pads either -- fall back to a zero-size box at the footprint's
-        # own position, the least-wrong thing possible.
-        x, y = footprint.position
-        return (x, y, x, y), False
-    return (min(xs), min(ys), max(xs), max(ys)), False
+        parts = {p.reference: p for p in placement_anchor.read_parts(write_layer.load_file(path), set(refs))}
+    except placement_anchor.RawGeometryError as exc:
+        return {}, {"status": "error", "code": "footprint_unmeasurable", "reason": f"{exc}: nothing was moved"}
+    except Exception as exc:  # noqa: BLE001 - an unreadable board measures nothing
+        return {}, {"status": "incomplete", "reason": f"the board's footprints cannot be read raw: {exc}: nothing was moved"}
+    missing = [r for r in refs if r not in parts]
+    if missing:
+        return {}, {"status": "error", "reason": f"unknown references: {missing}"}
+    return {r: (parts[r].box, parts[r].box_source == "courtyard") for r in refs}, None
 
 
 # Module-level pending-state for autoplacement proposals, mirroring
@@ -883,10 +846,9 @@ def build(mcp: MCPServer) -> list[str]:
         Takes references and works on relative offsets (no coordinates are passed in); it
         reports local positions, relative to origin_mm (see frame in the result).
 
-        axis: "x" or "y". edge: "min"/"max"/"center" of the courtyard
-        bounding box on that axis (courtyard-accurate when the footprint
-        has real courtyard artwork; falls back to a pad bounding box
-        otherwise -- reported per-footprint via "used_courtyard").
+        axis: "x" or "y". edge: "min"/"max"/"center" of the bounding box on that axis of the
+        hull of the courtyard and the pads (read from the raw footprint tokens; the pads alone
+        when the footprint has no courtyard, reported per footprint via "used_courtyard").
 
         Refuses with file_open_in_kicad, naming the lock file, while KiCad holds a lock file for a file
         it would write; close the file in KiCad, then retry.
@@ -910,16 +872,9 @@ def build(mcp: MCPServer) -> list[str]:
         if refusal is not None:
             return refusal
 
-        boxes: dict[str, tuple[tuple[float, float, float, float], bool]] = {}
-        missing: list[str] = []
-        for ref in refs:
-            fp = board.get_footprint(ref)
-            if fp is None:
-                missing.append(ref)
-                continue
-            boxes[ref] = _footprint_courtyard_or_pad_bbox(fp)
-        if missing:
-            return {"status": "error", "reason": f"unknown references: {missing}"}
+        boxes, refused_boxes = _hull_boxes(path, refs)
+        if refused_boxes is not None:
+            return refused_boxes
 
         axis_idx_min = 0 if axis == "x" else 1
         axis_idx_max = 2 if axis == "x" else 3
@@ -965,7 +920,8 @@ def build(mcp: MCPServer) -> list[str]:
     @_with_frame
     @_fail_closed
     def distribute_footprints(pcb_path: str, refs: list[str], axis: str) -> dict:
-        """Evenly space a batch of footprints (by center) along an axis
+        """Evenly space a batch of footprints (by the centre of the hull of courtyard and pads,
+        not the footprint origin) along an axis
         between the first and last ref in the list (used as anchors).
         Takes references and works on relative offsets (no coordinates are passed in); it
         reports local positions, relative to origin_mm (see frame in the result).
@@ -990,20 +946,21 @@ def build(mcp: MCPServer) -> list[str]:
         if refusal is not None:
             return refusal
 
+        # centres of the hull of courtyard and pads, not the footprint origins (issue 228)
+        boxes, refused_boxes = _hull_boxes(path, refs)
+        if refused_boxes is not None:
+            return refused_boxes
         positions: dict[str, tuple[float, float]] = {}
-        missing: list[str] = []
         for ref in refs:
             fp = board.get_footprint(ref)
             if fp is None:
-                missing.append(ref)
-                continue
+                return {"status": "error", "reason": f"unknown references: {[ref]}"}
             positions[ref] = fp.position
-        if missing:
-            return {"status": "error", "reason": f"unknown references: {missing}"}
 
         idx = 0 if axis == "x" else 1
-        start = positions[refs[0]][idx]
-        end = positions[refs[-1]][idx]
+        centre = {r: (boxes[r][0][idx] + boxes[r][0][idx + 2]) / 2 for r in refs}
+        start = centre[refs[0]]
+        end = centre[refs[-1]]
         step = (end - start) / (len(refs) - 1)
 
         locked = _locked_references(path)
@@ -1013,7 +970,7 @@ def build(mcp: MCPServer) -> list[str]:
             if ref in locked:
                 continue
             cur_x, cur_y = positions[ref]
-            new_val = start + step * i
+            new_val = cur_x + (start + step * i - centre[ref]) if axis == "x" else cur_y + (start + step * i - centre[ref])
             new_x = new_val if axis == "x" else cur_x
             new_y = new_val if axis == "y" else cur_y
             board.update_footprint_position(ref, new_x, new_y, None)
@@ -1152,16 +1109,9 @@ def build(mcp: MCPServer) -> list[str]:
                     "reason": f"{locked} are locked and packing moves every footprint it is given; "
                               "unlock them with lock_footprints (locked=false) or leave them out: nothing was moved"}
 
-        boxes: dict[str, tuple[tuple[float, float, float, float], bool]] = {}
-        missing: list[str] = []
-        for ref in refs:
-            fp = board.get_footprint(ref)
-            if fp is None:
-                missing.append(ref)
-                continue
-            boxes[ref] = _footprint_courtyard_or_pad_bbox(fp)
-        if missing:
-            return {"status": "error", "reason": f"unknown references: {missing}"}
+        boxes, refused_boxes = _hull_boxes(path, refs)
+        if refused_boxes is not None:
+            return refused_boxes
 
         centers_x = [(boxes[r][0][0] + boxes[r][0][2]) / 2 for r in refs]
         centers_y = [(boxes[r][0][1] + boxes[r][0][3]) / 2 for r in refs]
@@ -1282,9 +1232,9 @@ def build(mcp: MCPServer) -> list[str]:
         "along_mm": float (optional: where the courtyard centre sits along the edge, measured
         from the outline's top-left corner, so from the top on left and right, from the left
         on top and bottom; default the middle of the edge)}. The footprint keeps its rotation
-        and layer; rotate it first with place_footprints. The box measured is the courtyard
-        read from the raw footprint tokens, or its pads' box when it has no courtyard (reported
-        as box_source).
+        and layer; rotate it first with place_footprints. The box measured is the hull of the
+        courtyard and the pads, read from the raw footprint tokens (the pads' box alone when it
+        has no courtyard; reported as box_source).
 
         Needs an outline that is one axis-aligned rectangle (one gr_rect or four closing
         gr_line, each corner optionally replaced by a quarter-circle gr_arc), else
@@ -1662,7 +1612,15 @@ def build(mcp: MCPServer) -> list[str]:
                     placer_input, placer_output, rounds=rounds, route_args=route_args, timeout=timeout_seconds,
                 )
             except KicadRoutingToolsError as exc:
-                return {"status": "incomplete", "reason": f"placement repair failed: {exc}"}
+                return {"status": "error", "reason": f"placement repair failed: {exc}"}
+
+            if repair_run.get("exit_code") != 0:  # a crashed placer is never "no repair found"
+                return {
+                    "status": "error",
+                    "reason": f"placement repair failed: place_route_loop.py exit code {repair_run.get('exit_code')}; "
+                              f"stderr tail: {repair_run.get('stderr_tail', '')}",
+                    "run": repair_run,
+                }
 
             if not repair_run.get("output_produced"):
                 return {
@@ -2004,7 +1962,7 @@ def build(mcp: MCPServer) -> list[str]:
     mcp.add_tool(
         place_footprints_at_edge,
         name="place_footprints_at_edge",
-        description=("Place a batch of existing footprints at an edge of the board outline, offset_mm in from it (connectors, banana sockets), optionally along_mm along the edge; the courtyard is measured from the raw footprint tokens and the file is read back after the write. Needs an outline that is one axis-aligned rectangle, its corners optionally rounded by quarter arcs. All or nothing: an unknown or locked footprint, a courtyard that would leave the outline, overlap a slot or a rounded corner (in_cutout) or overlap another one refuses the whole call and writes nothing. Rotation and layer are kept." + " " + _FRAME_RULE + " " + write_layer.LOCK_SENTENCE),
+        description=("Place a batch of existing footprints at an edge of the board outline, offset_mm in from it (connectors, banana sockets), optionally along_mm along the edge; the box measured is the hull of the courtyard and the pads (a custom pad counts by its anchor size), from the raw footprint tokens, and the file is read back after the write. Needs an outline that is one axis-aligned rectangle, its corners optionally rounded by quarter arcs. All or nothing: an unknown or locked footprint, a courtyard that would leave the outline, overlap a slot or a rounded corner (in_cutout) or overlap another one refuses the whole call and writes nothing. Rotation and layer are kept." + " " + _FRAME_RULE + " " + write_layer.LOCK_SENTENCE),
         annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
     )
     mcp.add_tool(
@@ -2022,13 +1980,13 @@ def build(mcp: MCPServer) -> list[str]:
     mcp.add_tool(
         align_footprints,
         name="align_footprints",
-        description=("Align a batch of footprints' courtyard edges or centers along a shared X/Y coordinate; locked footprints stay (locked_skipped)." + " " + _RELATIVE_RULE + " " + write_layer.LOCK_SENTENCE),
+        description=("Align a batch of footprints' edges or centers (of the hull of courtyard and pads; a custom pad counts by its anchor size) along a shared X/Y coordinate; locked footprints stay (locked_skipped)." + " " + _RELATIVE_RULE + " " + write_layer.LOCK_SENTENCE),
         annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
     )
     mcp.add_tool(
         distribute_footprints,
         name="distribute_footprints",
-        description=("Evenly space a batch of footprints along an axis between the first and last given ref; locked footprints stay (locked_skipped)." + " " + _RELATIVE_RULE + " " + write_layer.LOCK_SENTENCE),
+        description=("Evenly space a batch of footprints along an axis between the first and last given ref, by the centres of the hull of courtyard and pads (not the footprint origins; a custom pad counts by its anchor size); locked footprints stay (locked_skipped)." + " " + _RELATIVE_RULE + " " + write_layer.LOCK_SENTENCE),
         annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
     )
     mcp.add_tool(
@@ -2040,13 +1998,13 @@ def build(mcp: MCPServer) -> list[str]:
     mcp.add_tool(
         pack_footprints_densely,
         name="pack_footprints_densely",
-        description=("Tighten spacing between an aligned row/column of footprints toward a minimum clearance (refuses locked footprints), then re-checked with the placement collision checker, which is not a verdict: only verify_board gives one." + " " + write_layer.LOCK_SENTENCE),
+        description=("Tighten spacing between an aligned row/column of footprints toward a minimum clearance between the hulls of courtyard and pads (refuses locked footprints; a custom pad counts by its anchor size here), then re-checked with the placement collision checker, which is not a verdict: only verify_board gives one." + " " + write_layer.LOCK_SENTENCE),
         annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": False, "openWorldHint": False},
     )
     mcp.add_tool(
         propose_autoplacement,
         name="propose_autoplacement",
-        description="Propose an automated placement for a set of footprints. Returns a proposal + revision_token; does not modify the board. Call confirm_autoplacement to apply." + " " + _FRAME_RULE + " With an outline (one axis-aligned rectangle, its corners optionally rounded by quarter arcs, else outline_not_rectangular; slots and rounded corners are obstacles) every proposed courtyard lies inside it, edge_clearance_mm (default 0.5) from its edge and spacing_mm (default 2) from other courtyards; footprints not in refs and locked ones stay and are obstacles (locked_skipped); parts that fit nowhere refuse the proposal as does_not_fit. Without an outline rows start at local (0,0), 50 mm wide. Rotations are kept.",
+        description="Propose an automated placement for a set of footprints. Returns a proposal + revision_token; does not modify the board. Call confirm_autoplacement to apply." + " " + _FRAME_RULE + " With an outline (one axis-aligned rectangle, its corners optionally rounded by quarter arcs, else outline_not_rectangular; slots and rounded corners are obstacles) every proposed footprint box (the hull of its courtyard and pads; a custom pad counts by its anchor size) lies inside it, edge_clearance_mm (default 0.5) from its edge and spacing_mm (default 2) from other boxes; footprints not in refs and locked ones stay and are obstacles (locked_skipped); parts that fit nowhere refuse the proposal as does_not_fit. Without an outline rows start at local (0,0), 50 mm wide. Rotations are kept.",
         annotations={"readOnlyHint": True, "destructiveHint": False, "idempotentHint": False, "openWorldHint": False},
     )
     mcp.add_tool(
@@ -2058,7 +2016,7 @@ def build(mcp: MCPServer) -> list[str]:
     mcp.add_tool(
         propose_placement_optimization,
         name="propose_placement_optimization",
-        description="Propose a real router-in-the-loop placement repair (KiCadRoutingTools' place_route_loop.py) -- routes the board, relocates only footprints on nets that actually failed (never a locked footprint: those are left out and listed in locked_skipped), re-routes, iterating. Compared with independent before/after kicad-cli DRC on trial copies after routing, not the tool's own self-report; those counts only compare the two placements and are not the acceptance gate. Returns a proposal + revision_token; does not modify the board. Call confirm_placement_optimization to apply (it applies footprint positions only, not the trial routing). Only a verify_board PASS may be reported as routed or done.",
+        description="Propose a real router-in-the-loop placement repair (KiCadRoutingTools' place_route_loop.py) -- routes the board, relocates only footprints on nets that actually failed (never a locked footprint: those are left out and listed in locked_skipped), re-routes, iterating. Compared with independent before/after kicad-cli DRC on trial copies after routing, not the tool's own self-report; those counts only compare the two placements and are not the acceptance gate. Returns a proposal + revision_token; does not modify the board. Needs a KiCadRoutingTools release that ships py_placer/place_route_loop.py (0.23.1 does, 0.23.8 does not); without it, or when the placer exits non-zero, the status is error and the reason names the script and the installed version. Call confirm_placement_optimization to apply (it applies footprint positions only, not the trial routing). Only a verify_board PASS may be reported as routed or done.",
         annotations={"readOnlyHint": True, "destructiveHint": False, "idempotentHint": False, "openWorldHint": False},
     )
     mcp.add_tool(

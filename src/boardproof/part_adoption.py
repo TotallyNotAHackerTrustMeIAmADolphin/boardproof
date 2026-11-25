@@ -66,6 +66,7 @@ from kicad_tools.schema import PCB
 from kicad_tools.sexp import SExp
 
 from boardproof import checkpoint, write_layer
+from boardproof import footprint_courtyard as courtyard
 from boardproof import verify_board as gate
 from boardproof.toolsets import library as lib
 
@@ -593,6 +594,17 @@ def _plan_part(
             )
         if len(_model_nodes(fp_found[0])) > 1:
             problems.append("the footprint carries more than one (model ...): pass a footprint with one")
+        try:
+            fit = courtyard.check(fp_found[0])
+        except Exception as exc:  # noqa: BLE001 - an unmeasurable footprint is not adopted
+            problems.append(f"the footprint's pads and courtyard cannot be measured: {exc}")
+        else:
+            if not fit["encloses"]:
+                entry["courtyard_check"] = {"severity": "error", **fit}
+                normalised.append(
+                    f"ERROR in the source: {courtyard.describe(fit)} (pads reach {fit['pads_box']}); the courtyard is "
+                    f"set to {fit['will_be_set_to']} (pads plus {courtyard.MARGIN_MM} mm, never smaller than the old one)"
+                )
     if model_path is not None:
         target = paths["models"] / model_path.name
         if target.exists() and target.read_bytes() != model_path.read_bytes():
@@ -1095,6 +1107,7 @@ def _write(src: Path, tmp: Path, payload: dict) -> dict:
             fp_root.append(model)
         if fp_root.get_string(0) != fp_name:
             write_layer.set_string(fp_root, 0, fp_name)
+        courtyard.fix(fp_root)
         write_layer.save(fp_root, paths["footprints"] / f"{fp_name}.kicad_mod")
         props = {"Footprint": f"{fp_nick}:{fp_name}", **part["properties"]}
         before = _properties(symbol)
@@ -1270,6 +1283,17 @@ def _verify(state: dict, render: Callable[[Path, Path, str], dict]) -> dict:
         else:
             pin_pad_status, pin_pad_detail = "pass", f"verdict {comparison['verdict']}"
         checks.append({"check": "pin_pad_numbers", "status": pin_pad_status, "detail": pin_pad_detail})
+        try:
+            fit = courtyard.check(fp_root)
+            fit_status = "pass" if fit["encloses"] else "fail"
+            fit_detail = (
+                f"the courtyard {fit['courtyard_box']} encloses every pad (they reach {fit['pads_box']})"
+                if fit["encloses"]
+                else courtyard.describe(fit)
+            )
+        except Exception as exc:  # noqa: BLE001
+            fit_status, fit_detail = "incomplete", f"the courtyard could not be measured: {exc}"
+        checks.append({"check": "courtyard_encloses_pads", "status": fit_status, "detail": fit_detail})
         render_check, evidence = _render_check(tmp, want["lcsc_id"], fp_file, render)
         checks.append(render_check)
         parts_out.append(

@@ -65,7 +65,7 @@ from kicad_tools.footprints.fp_lib_table import expand_kicad_vars
 from kicad_tools.schema import Footprint
 from kicad_tools.sexp.parser import SExp
 
-from boardproof import kicad_lock, write_layer
+from boardproof import footprint_courtyard, kicad_lock, write_layer
 
 _TableKind = Literal["sym", "fp"]
 
@@ -875,7 +875,11 @@ def build(mcp: MCPServer) -> list[str]:
         rules). Checked: reference designator is the literal placeholder
         "REF**" (KLC G1.1), a Value field is present, a component
         attribute (smd/through_hole) is declared, and a courtyard outline
-        (F.CrtYd/B.CrtYd) and fab-layer outline (F.Fab/B.Fab) both exist.
+        (F.CrtYd/B.CrtYd) and fab-layer outline (F.Fab/B.Fab) both exist, and the courtyard
+        encloses every pad (courtyard_encloses_pads, an error: measured from the raw pad
+        (at)/(size) and the courtyard items, a custom pad also by its primitives; a pad that
+        cannot be measured fails the check, never passes it; "courtyard" in the result holds the
+        boxes and the uncovered pad numbers, or "unmeasurable" with the reason).
         NOT checked: pad sizing/spacing against IPC-7351 tables, silkscreen
         clearance, 3D model association, naming-convention rules, and
         everything else in the real KLC document.
@@ -903,13 +907,28 @@ def build(mcp: MCPServer) -> list[str]:
         checks["has_courtyard_outline"] = bool(layers & {"F.CrtYd", "B.CrtYd"})
         checks["has_fab_layer_outline"] = bool(layers & {"F.Fab", "B.Fab"})
 
+        fit: dict | None = None
+        try:
+            fit = footprint_courtyard.check(node)
+            checks["courtyard_encloses_pads"] = fit["encloses"]
+        except Exception as exc:  # noqa: BLE001 -- unmeasurable is a failed check, never a pass
+            checks["courtyard_encloses_pads"] = False
+            fit = {"unmeasurable": str(exc)}
+
         failed = [name for name, passed in checks.items() if not passed]
         return {
             "status": "ok" if not failed else "violations_found",
             "checks": checks,
             "failed_checks": failed,
+            "courtyard": fit,
             "scope": "minimal subset only -- see validate_klc's docstring for exactly what is and isn't checked",
         }
+
+    def list_adopted_courtyard_errors(pcb_path: str, library_name: str = "project_parts", library_dir: str = "lib") -> dict:
+        """Read-only: list the footprints of the project's adopted library (library_dir/library_name.pretty,
+        beside the board) whose courtyard does not enclose every pad, each with the pad numbers, the
+        courtyard box, the pads' box and the box a new adoption would set. Writes nothing."""
+        return footprint_courtyard.list_adopted(pcb_path, library_name, library_dir)
 
     def propose_adopt_parts(
         pcb_path: str,
@@ -958,6 +977,19 @@ def build(mcp: MCPServer) -> list[str]:
         annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
     )
     mcp.add_tool(
+        list_adopted_courtyard_errors,
+        name="list_adopted_courtyard_errors",
+        description=(
+            "Read-only list of the adopted footprints (the project's library, default lib/project_parts.pretty beside the "
+            "board) whose courtyard does not enclose every pad: each entry names the footprint, the uncovered pad "
+            "numbers, the courtyard box, the pads' box and the box a new adoption would set (pads plus 0.25 mm). "
+            "Such a footprint packs and aligns too tightly and gives shorting items or solder-mask bridges in DRC "
+            "with no courtyard overlap. Refuses a library_dir that is absolute or holds '..'. An unreadable footprint makes the "
+            "status incomplete (listed under unreadable). Writes nothing; nothing rewrites an adopted footprint yet."
+        ),
+        annotations={"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
+    )
+    mcp.add_tool(
         check_project_portability,
         name="check_project_portability",
         description="Audit a project's library tables for absolute (non-portable) paths that would break if the project were moved to another machine.",
@@ -997,7 +1029,10 @@ def build(mcp: MCPServer) -> list[str]:
             "listed as mechanical_pads, not as errors; alternate pin names are shown. What easyeda2kicad delivers is accepted: a "
             "footprint named '<library>:<name>' in the old (module ...) format is saved under the bare name, "
             "and the symbol's Footprint becomes '<adopting library>:<name>'; each part's 'normalised' list "
-            "states every such change. Then call confirm_adopt_parts with the token."
+            "states every such change. A courtyard that does not enclose every pad is an error of the source: "
+            "courtyard_check (severity error) names the uncovered pads, and the footprint is written with its courtyard set "
+            "to the pads plus 0.25 mm (never smaller than the old one); a courtyard that already encloses the pads is left as it is. A custom pad is measured "
+            "by its primitives; a pad that cannot be measured rejects the part. Then call confirm_adopt_parts with the token."
         ),
         annotations={"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
     )
@@ -1009,6 +1044,7 @@ def build(mcp: MCPServer) -> list[str]:
             "never touched) holding the library, both lib-table rows (${KIPRJMOD}-relative), model paths "
             "rewritten to ${KIPRJMOD}/..., and the mandatory properties set. Re-read from a fresh reload, then "
             "checked per part: model_path_project_relative, model_file_present, mandatory_properties, "
+            "courtyard_encloses_pads (read back from the saved footprint: a courtyard that misses a pad fails), "
             "pin_pad_numbers (symbol pin numbers against footprint pad numbers: a pin without a pad fails, a pad "
             "without a pin is status warn and pin_pad_verdict 'mismatch': tell the user) and "
             "side_view_render (kicad-cli pcb render --side front, with and without the model: the model must "
@@ -1028,4 +1064,4 @@ def build(mcp: MCPServer) -> list[str]:
         ),
         annotations={"readOnlyHint": False, "destructiveHint": True, "idempotentHint": False, "openWorldHint": False},
     )
-    return ["register_library_asset", "check_project_portability", "validate_klc", "propose_adopt_parts", "confirm_adopt_parts"]
+    return ["register_library_asset", "check_project_portability", "validate_klc", "list_adopted_courtyard_errors", "propose_adopt_parts", "confirm_adopt_parts"]

@@ -44,7 +44,7 @@ from typing import Any
 
 from kicad_tools.core import project_file as _pf
 
-from boardproof import checkpoint, dru, kicad_cli, write_layer
+from boardproof import checkpoint, dru, kicad_cli, raw_geometry, write_layer
 from boardproof import verify_board as gate
 
 # request argument -> key under board.design_settings.rules
@@ -139,12 +139,24 @@ def _leaf_diff(a: Any, b: Any, path: str = "") -> list[str]:
 
 
 def _board_net_names(pcb_path: Path) -> set[str]:
-
+    """Every net name of the board, whatever the file version: the top-level declarations (KiCad 9 and
+    older) plus every ``(net ...)`` of a pad, track, via or zone (KiCad 10 writes only those). Read by the
+    shared reader of issue 224; a net form it does not know raises ``RawGeometryError``."""
     root = write_layer.load(pcb_path)
-    names: set[str] = set()
-    for node in root.children:
-        if node.name == "net" and len(node.values) >= 2 and str(node.values[1]):
-            names.add(str(node.values[1]))
+    table = raw_geometry.net_table(root)
+    names = {n for n in table.values() if n}
+
+    def walk(node: Any) -> None:
+        for child in node.children:
+            if child.is_atom:
+                continue
+            if child.name == "net" and node is not root:
+                if name := raw_geometry.net_node_name(child, table):
+                    names.add(name)
+            else:
+                walk(child)
+
+    walk(root)
     return names
 
 

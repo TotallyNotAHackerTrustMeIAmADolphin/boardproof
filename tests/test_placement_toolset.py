@@ -279,7 +279,7 @@ STRESS_PCB = Path(__file__).parent / "fixtures" / "krt_stress_congestion.kicad_p
 
 @pytest.mark.needs_krt
 class TestRealPlacementOptimizationOnStressFixture:
-    def test_propose_reports_real_before_after_drc_evidence(self, tmp_path):
+    def test_propose_reports_real_before_after_drc_evidence(self, tmp_path, krt_checkout):
         import shutil
 
         board = tmp_path / STRESS_PCB.name
@@ -294,6 +294,16 @@ class TestRealPlacementOptimizationOnStressFixture:
 
         result = tools["propose_placement_optimization"](str(board), rounds=2, timeout_seconds=120)
 
+        from boardproof.routers import kicad_placer_tools
+        from boardproof.routers.kicad_routing_tools import router_version
+
+        checkout = krt_checkout
+        if not (checkout / kicad_placer_tools.PLACER_SCRIPT).is_file():
+            # Issue 232: the pinned KRT (0.23.8) ships no place_route_loop.py -- an error, never "complete".
+            assert result["status"] == "error", result
+            assert "place_route_loop.py" in result["reason"], result
+            assert (router_version(checkout) or "unknown version") in result["reason"], result
+            return
         assert result["status"] in ("pending_confirmation", "complete"), result
         assert "before_drc" in result
         if result["status"] == "pending_confirmation":
