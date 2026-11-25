@@ -221,7 +221,9 @@ def parse(text: str) -> tuple[list[Rule], int | None, list[str]]:
                 if not (isinstance(part, list) and part):
                     continue
                 key = atom(part[0])
-                if key == "condition" and len(part) > 1:
+                if key == "version":
+                    problems.append(f"rule {name!r}: a (version N) inside a rule: KiCad ignores the whole file")
+                elif key == "condition" and len(part) > 1:
                     condition = str(part[1])
                 elif key == "layer" and len(part) > 1:
                     layer = str(part[1])
@@ -236,8 +238,12 @@ def parse(text: str) -> tuple[list[Rule], int | None, list[str]]:
             rules.append(
                 Rule(name, condition, tuple(constraints), layer, severity, render(node), len(rules), name in managed_names)
             )
-    if version is None:
-        problems.append("no (version N) line: KiCad ignores a rules file without one")
+    # measured (kicad-cli 10): comments and blank lines may precede (version N); a rule or any other item may not
+    first = tree[0] if tree else None
+    if version is None or not (isinstance(first, list) and first and atom(first[0]) == "version"):
+        problems.append("no (version N) line before the first rule: KiCad ignores a rules file without one")
+    if text.startswith("﻿"):
+        problems.append("the file starts with a byte order mark: KiCad ignores the whole file")
     return rules, version, problems
 
 

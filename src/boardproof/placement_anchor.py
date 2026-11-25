@@ -151,12 +151,17 @@ def _courtyard_points(fp: Any, at: Point, angle: float) -> list[Point]:
     return out
 
 
+def _pad_corners(pad: raw_geometry.PadGeometry) -> list[Point]:
+    """Pad-local corners of the pad's anchor box and, for a custom pad, its primitives' box (issue 233)."""
+    w, h = pad.size_mm
+    boxes = [(-w / 2, -h / 2, w / 2, h / 2)] + ([pad.custom_box] if pad.custom_box else [])
+    return [c for x0, y0, x1, y1 in boxes for c in ((x0, y0), (x1, y0), (x1, y1), (x0, y1))]
+
+
 def _pad_points(pads: tuple[raw_geometry.PadGeometry, ...]) -> list[Point]:
     out: list[Point] = []
     for pad in pads:
-        w, h = pad.size_mm
-        for sx, sy in ((-1, -1), (1, -1), (1, 1), (-1, 1)):
-            out.append(raw_geometry.place(pad.at_mm, pad.angle_deg, (sx * w / 2, sy * h / 2)))
+        out += [raw_geometry.place(pad.at_mm, pad.angle_deg, c) for c in _pad_corners(pad)]
     return out
 
 
@@ -168,12 +173,12 @@ def read_parts(root: Any, only: set[str] | None = None) -> list[Part]:
     """Every footprint (or only those whose reference is in ``only``), in file order, with its raw
     box. Raises ``RawGeometryError`` naming a measured footprint with no courtyard and no pad, or a
     token that is not a number; a footprint left out by ``only`` is not measured."""
-    geometry = raw_geometry.read_footprints(root)
+    geometry = raw_geometry.read_footprints(root, only)
     nodes = [c for c in root.children if not c.is_atom and c.name == "footprint"]
+    if only is not None:
+        nodes = [n for n in nodes if raw_geometry._reference(n) in only]
     parts = []
     for node, geo in zip(nodes, geometry, strict=True):
-        if only is not None and geo.reference not in only:
-            continue
         # the hull of the courtyard and the pads: an adopted footprint can have pads outside its courtyard (issue 228)
         points = _courtyard_points(node, geo.at_mm, geo.angle_deg)
         source = "courtyard" if points else "pads"
@@ -197,9 +202,7 @@ def box_at(part: Part, at: Point, angle: float) -> Box:
         dx, dy = pad.at_mm[0] - part.at[0], pad.at_mm[1] - part.at[1]
         local = (dx * cos_sin[0] - dy * cos_sin[1], dx * cos_sin[1] + dy * cos_sin[0])
         centre = raw_geometry.place(at, angle, local)
-        w, h = pad.size_mm
-        for sx, sy in ((-1, -1), (1, -1), (1, 1), (-1, 1)):
-            out.append(raw_geometry.place(centre, pad.angle_deg + (angle - part.angle), (sx * w / 2, sy * h / 2)))
+        out += [raw_geometry.place(centre, pad.angle_deg + (angle - part.angle), c) for c in _pad_corners(pad)]
     return _box(out)
 
 

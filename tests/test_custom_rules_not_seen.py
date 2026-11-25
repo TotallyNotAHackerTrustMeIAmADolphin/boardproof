@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from boardproof import dru, write_layer
 from boardproof.toolsets import routing as routing_toolset
 
@@ -88,3 +90,42 @@ def test_a_rule_without_a_version_line_is_listed_with_honest_wording(tmp_path):
     unseen = routing_toolset.custom_rules_not_seen(_pcb(tmp_path, '(rule "A" (constraint clearance (min 1mm)))\n'))
     assert [r["name"] for r in unseen] == ["A", "?"]
     assert "version" in unseen[1]["reason"] and "may be missing" not in unseen[1]["reason"]
+
+
+def test_a_version_line_after_a_rule_is_the_same_as_none(tmp_path):
+    unseen = routing_toolset.custom_rules_not_seen(_pcb(tmp_path, '(rule "A" (constraint clearance (min 1mm)))\n(version 1)\n'))
+    assert [r["name"] for r in unseen] == ["A", "?"] and "ignores the whole file" in unseen[1]["reason"]
+
+
+_RULE = '(rule "r" (constraint clearance (min 0.5mm)))\n'
+_BLOCK = dru.render_block({("Gnd", "Sig"): 0.3})
+
+
+def _names(tmp_path, text):
+    return [r["name"] for r in routing_toolset.custom_rules_not_seen(_pcb(tmp_path, text))]
+
+
+def test_a_second_version_line_after_a_rule_is_fine(tmp_path):  # measured: load_probe True on kicad-cli 10
+    assert dru.parse("(version 1)\n" + _RULE + "(version 1)\n")[2] == []
+    assert _names(tmp_path, "(version 1)\n" + _RULE + "(version 1)\n") == ["r"]
+
+
+def test_the_managed_block_before_the_version_line_counts_as_a_rule_before_it(tmp_path):  # measured: loaded False
+    assert _names(tmp_path, _BLOCK + "(version 1)\n" + _RULE) == ["r", "?"]
+    assert _names(tmp_path, "(version 1)\n" + _BLOCK + _RULE) == ["r"]  # measured: loaded True
+
+
+def test_the_wording_says_before_the_first_rule(tmp_path):
+    reason = routing_toolset.custom_rules_not_seen(_pcb(tmp_path, _RULE + "(version 1)\n"))[-1]["reason"]
+    assert "before its first rule" in reason
+
+
+@pytest.mark.parametrize("text", [
+    "﻿(version 1)\n" + _RULE,  # byte order mark: measured loaded False
+    "(foo)\n(version 1)\n" + _RULE,  # unknown top-level token first: measured loaded False
+    "foo\n(version 1)\n" + _RULE,  # bare atom first: measured loaded False
+    '(version 1)\n(rule "r" (version 1) (constraint clearance (min 0.5mm)))\n',  # nested version: measured loaded False
+])
+def test_other_shapes_kicad_refuses_get_the_question_mark_entry(tmp_path, text):
+    assert dru.parse(text)[2]
+    assert _names(tmp_path, text)[-1] == "?"

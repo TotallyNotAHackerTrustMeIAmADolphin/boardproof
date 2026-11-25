@@ -849,14 +849,15 @@ def custom_rules_not_seen(pcb_path: str | Path) -> list[dict]:
                  "reason": f"{path.name} is not UTF-8 text ({exc}); no rule in it reached the router"}]
     block = dru.split_block(text) if dru.BLOCK_BEGIN in text or dru.BLOCK_END in text else None
     # "managed" is the block's position, never a rule's name; a damaged block makes every rule unseen
-    rules, _version, problems = dru.parse(dru.outside_block(text) if block is None or not block[3] else text)
+    rules = dru.parse(dru.outside_block(text) if block is None or not block[3] else text)[0]
+    problems = dru.parse(text)[2]  # the whole file: a managed rule before (version N) drops the file too
     listed = [{"name": r.name, "condition": r.condition, "constraints": r.as_dict()["constraints"], "layer": r.layer,
                "reason": "not carried into the DSN (only the managed two-class clearances are)"} for r in rules]
     for problem in problems:
         if problem.startswith("no (version N)"):
             if not listed:
                 continue  # nothing hand-written to say anything about
-            why = f"{path.name} has no (version N) line, so KiCad ignores the whole file and DRC applies none of these rules either"
+            why = f"{path.name} has no (version N) line before its first rule, so KiCad ignores the whole file and DRC applies none of these rules either"
         else:
             why = f"{path.name} has a defect, so rules after it may be missing from this list: {problem}"
         listed.append({"name": "?", "condition": None, "constraints": [], "layer": None, "reason": why})

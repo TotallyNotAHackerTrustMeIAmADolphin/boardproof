@@ -32,7 +32,8 @@ def test_parse_reads_rules_conditions_and_units():
     ("text", "needle"),
     [
         ('(rule "r" (constraint clearance (min 0.5mm)))\n', "no (version N)"),
-        ('(version 1)\n(rule "r" (constraint clearance (min 0.5)))\n', "without a unit"),
+        ('(rule "r" (constraint clearance (min 0.5mm)))\n(version 1)\n', "no (version N)"),  # measured: load_probe False
+        ('# note\n\n  (version 1)\n(rule "r" (constraint clearance (min 0.5)))\n', "without a unit"),
         ('(version 1)\n(rule "r" (constraint clearance (min 0.5mm))\n', "never closed"),
         ('(version 1)\n(rule "r" (constraint clearance (min 0.5mm))))\n', "closing parenthesis"),
         ('(version 1)\n(rule "r\n', "never closed"),
@@ -141,6 +142,9 @@ def test_probe_says_loaded_for_a_good_file_and_not_loaded_for_each_defect(tmp_pa
     board = fx.build_pair_board(tmp_path, classes=False)
     good = '(version 1)\n(rule "ok" (condition "A.NetClass == \'x\'") (constraint clearance (min 0.5mm)))\n'
     assert _probe(board, good)["loaded"] is True
+    # comments and blank lines before (version N) are fine for KiCad and parse alike
+    spaced = '# note\n\n  (version 1)\n(rule "r" (constraint clearance (min 0.5mm)))\n'
+    assert _probe(board, spaced)["loaded"] is True and dru.parse(spaced)[2] == []
     defects = {
         "unit": '(version 1)\n(rule "r" (constraint clearance (min 0.5)))\n',
         "paren": '(version 1)\n(rule "r" (constraint clearance (min 0.5mm))\n',
@@ -148,6 +152,7 @@ def test_probe_says_loaded_for_a_good_file_and_not_loaded_for_each_defect(tmp_pa
         "condition": '(version 1)\n(rule "r" (condition "A.NetClass ==== ") (constraint clearance (min 0.5mm)))\n',
         "function": '(version 1)\n(rule "r" (condition "A.foo(\'x\')") (constraint clearance (min 0.5mm)))\n',
         "version": '(rule "r" (constraint clearance (min 0.5mm)))\n',
+        "version after a rule": '(rule "r" (constraint clearance (min 0.5mm)))\n(version 1)\n',
     }
     for label, text in defects.items():
         assert _probe(board, text)["loaded"] is False, label

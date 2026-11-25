@@ -36,43 +36,6 @@ def _round(box: tuple[float, float, float, float]) -> Box:
     return [round(v, 6) + 0.0 for v in box]
 
 
-def _primitive_box(node: Any) -> tuple[float, float, float, float]:
-    """The pad-local box of one custom-pad primitive, with half its line width."""
-
-    def xy(name: str) -> tuple[float, float]:
-        child = node.find(name)
-        if child is None or len(child.values) < 2:
-            raise RawGeometryError(f"a ({node.name} ...) primitive has no ({name} x y)")
-        return float(child.values[0]), float(child.values[1])
-
-    kind = node.name
-    if kind in ("gr_line", "gr_rect"):
-        points = [xy("start"), xy("end")]
-    elif kind == "gr_circle":
-        (cx, cy), (ex, ey) = xy("center"), xy("end")
-        r = math.hypot(ex - cx, ey - cy)
-        points = [(cx - r, cy - r), (cx + r, cy + r)]
-    elif kind == "gr_arc":
-        points = raw_geometry.arc_extent(xy("start"), xy("mid"), xy("end")) or [xy("start"), xy("mid"), xy("end")]
-    elif kind in ("gr_poly", "gr_curve", "gr_bezier"):
-        pts = node.find("pts")
-        points = [
-            (float(c.values[0]), float(c.values[1]))
-            for c in (pts.children if pts is not None else [])
-            if not c.is_atom and c.name == "xy" and len(c.values) >= 2
-        ]
-        if not points:
-            raise RawGeometryError(f"a ({kind} ...) primitive has no points")
-    else:
-        raise RawGeometryError(f"a custom pad primitive ({kind} ...) is not measured")
-    width = node.find("width")
-    half = abs(float(width.values[0])) / 2 if width is not None and width.values else 0.0
-    return (
-        min(p[0] for p in points) - half, min(p[1] for p in points) - half,
-        max(p[0] for p in points) + half, max(p[1] for p in points) + half,
-    )  # fmt: skip
-
-
 def _pads(root: Any) -> list[tuple[str, tuple[float, float, float, float]]]:
     """(pad number, box) of every pad, from the raw ``(at x y [angle])`` and ``(size w h)``; a pad
     turned by ``angle`` covers ``|w cos| + |h sin|`` by ``|w sin| + |h cos|``. A custom pad also
@@ -94,7 +57,7 @@ def _pads(root: Any) -> list[tuple[str, tuple[float, float, float, float]]]:
             for prim in primitives.children:
                 if prim.is_atom:
                     continue
-                x0, y0, x1, y1 = _primitive_box(prim)
+                x0, y0, x1, y1 = raw_geometry.primitive_box(prim)
                 corners = [raw_geometry.place((x, y), angle_deg, c) for c in ((x0, y0), (x1, y0), (x1, y1), (x0, y1))]
                 box = _hull([box, (min(c[0] for c in corners), min(c[1] for c in corners),
                                    max(c[0] for c in corners), max(c[1] for c in corners))])  # fmt: skip

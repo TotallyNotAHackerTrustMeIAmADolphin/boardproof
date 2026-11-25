@@ -79,6 +79,7 @@ class PadGeometry:
     # entry, also on a back-side footprint: with a padstack the copper on any other layer can
     # differ, so ask copper_on(layer).
     size_mm: Point
+    custom_box: tuple[float, float, float, float] | None = None  # custom pad: its primitives' box, pad-local (before the pad's angle)
     stack_mode: str = "normal"  # normal, front_inner_back, custom: KiCad 10's (padstack (mode))
     copper: tuple[PadCopper, ...] = ()  # the F.Cu entry first, then the padstack's, as stored
     layers: tuple[str, ...] = ()  # the pad's (layers ...) as stored: "*.Cu", "F&B.Cu", names
@@ -221,13 +222,16 @@ def _side(footprint: Any) -> str:
     return "back" if layer is not None and layer.values and layer.values[0] == "B.Cu" else "front"
 
 
-def read_footprints(board: Any) -> list[FootprintGeometry]:
-    """Every footprint on the board, in file order."""
+def read_footprints(board: Any, only: set[str] | None = None) -> list[FootprintGeometry]:
+    """Every footprint on the board (or only those whose reference is in ``only``; the others are
+    not read, so a footprint that cannot be measured does not matter), in file order."""
     root = _root(board)
     copper = _board_copper(root)
     out = []
     for fp in _children(root, "footprint"):
         reference = _reference(fp)
+        if only is not None and reference not in only:
+            continue
         lib_id = str(fp.children[0].value) if fp.children and fp.children[0].is_atom else ""
         what = f"footprint {reference or lib_id or '?'}"
         x, y, angle = _at(fp, what)
@@ -273,6 +277,54 @@ def _yes_no(pad: Any, name: str, what: str) -> bool:
     return str(values[0]) == "yes"
 
 
+def primitive_box(node: Any) -> tuple[float, float, float, float]:
+    """The pad-local box of one custom-pad primitive, with half its line width."""
+
+    def xy(name: str) -> tuple[float, float]:
+        child = node.find(name)
+        if child is None or len(child.values) < 2:
+            raise RawGeometryError(f"a ({node.name} ...) primitive has no ({name} x y)")
+        return float(child.values[0]), float(child.values[1])
+
+    kind = node.name
+    if kind in ("gr_line", "gr_rect"):
+        points = [xy("start"), xy("end")]
+    elif kind == "gr_circle":
+        (cx, cy), (ex, ey) = xy("center"), xy("end")
+        r = math.hypot(ex - cx, ey - cy)
+        points = [(cx - r, cy - r), (cx + r, cy + r)]
+    elif kind == "gr_arc":
+        points = arc_extent(xy("start"), xy("mid"), xy("end")) or [xy("start"), xy("mid"), xy("end")]
+    elif kind in ("gr_poly", "gr_curve", "gr_bezier"):
+        pts = node.find("pts")
+        points = [
+            (float(c.values[0]), float(c.values[1]))
+            for c in (pts.children if pts is not None else [])
+            if not c.is_atom and c.name == "xy" and len(c.values) >= 2
+        ]
+        if not points:
+            raise RawGeometryError(f"a ({kind} ...) primitive has no points")
+    else:
+        raise RawGeometryError(f"a custom pad primitive ({kind} ...) is not measured")
+    width = node.find("width")
+    half = abs(float(width.values[0])) / 2 if width is not None and width.values else 0.0
+    return (
+        min(p[0] for p in points) - half, min(p[1] for p in points) - half,
+        max(p[0] for p in points) + half, max(p[1] for p in points) + half,
+    )  # fmt: skip
+
+
+def _custom_box(pad: Any, shape: str) -> tuple[float, float, float, float] | None:
+    """Pad-local hull of a custom pad's primitives; None for any other shape. Raises for a primitive not measured."""
+    if shape != "custom":
+        return None
+    prims = pad.find("primitives")
+    boxes = [primitive_box(c) for c in (prims.children if prims is not None else []) if not c.is_atom]
+    if not boxes:
+        return None
+    return (min(b[0] for b in boxes), min(b[1] for b in boxes), max(b[2] for b in boxes), max(b[3] for b in boxes))
+
+
 def _pad(pad: Any, fp_at: Point, fp_angle: float, owner: str,
          board_copper: tuple[tuple[str, str], ...] | None = None) -> PadGeometry:
     atoms = [c.value for c in pad.children if c.is_atom]
@@ -292,6 +344,7 @@ def _pad(pad: Any, fp_at: Point, fp_angle: float, owner: str,
         angle_deg=angle,
         local_angle_deg=(angle - fp_angle) % 360.0 + 0.0,
         size_mm=front.size_mm,
+        custom_box=_custom_box(pad, shape),
         stack_mode=mode,
         copper=(front, *stack),
         layers=_strings(pad, "layers"),
