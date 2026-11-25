@@ -863,6 +863,15 @@ proof = [
 ]
 note = "Checkpoint module; reload checks that exactly the planned footprints are gone and every other node is unchanged (ticket 227)."
 
+[writing_tool.confirm_courtyard_rewrite]
+self_check = "reload-verify"
+proof = [
+    "tests/test_courtyard_rewrite.py::test_a_courtyard_written_too_small_is_caught",
+    "tests/test_courtyard_rewrite.py::test_a_copy_that_moves_is_caught",
+    "tests/test_courtyard_rewrite.py::test_a_changed_node_outside_the_courtyards_is_caught",
+]
+note = "Issue 250; reload checks that the library footprints and the placed copies changed only in their courtyard items, every other board node is unchanged and each rewritten footprint now encloses its pads."
+
 [writing_tool.confirm_dangling_copper_removal]
 self_check = "reload-verify"
 proof = [

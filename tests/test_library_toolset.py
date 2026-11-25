@@ -33,7 +33,7 @@ def test_build_registers_expected_tools():
     mcp = MCPServer("test")
     names = library_toolset.build(mcp)
     assert set(names) == {
-        "register_library_asset", "check_project_portability", "validate_klc", "list_adopted_courtyard_errors", "propose_adopt_parts", "confirm_adopt_parts",
+        "register_library_asset", "check_project_portability", "validate_klc", "list_adopted_courtyard_errors", "propose_courtyard_rewrite", "confirm_courtyard_rewrite", "propose_adopt_parts", "confirm_adopt_parts",
     }
 
 

@@ -130,6 +130,13 @@ def fix(root: Any, margin: float = MARGIN_MM) -> Box | None:
     box = fit["will_be_set_to"]
     if box is None or fit["encloses"]:
         return None
+    apply_box(root, box)
+    return box
+
+
+def apply_box(root: Any, box: Box) -> None:
+    """Replace the courtyard items of ``root`` by one rectangle ``box`` (footprint-local mm), on the layer of
+    the first old courtyard item (``F.CrtYd`` without one). The caller decides the box."""
     old = _crtyd_items(root)
     layer = (old[0].find("layer").values[0] if old else "F.CrtYd")
     for node in old:
@@ -142,14 +149,13 @@ def fix(root: Any, margin: float = MARGIN_MM) -> Box | None:
                 "fp_line", write_layer.SExp.list("start", n(a[0]), n(a[1])), write_layer.SExp.list("end", n(b[0]), n(b[1])),
                 write_layer.SExp.list("layer", write_layer.symbol(layer)), write_layer.SExp.list("width", n(LINE_WIDTH_MM)),
             ))  # fmt: skip
-        return box
+        return
     root.append(write_layer.SExp.list(
         "fp_rect", write_layer.SExp.list("start", n(x0), n(y0)), write_layer.SExp.list("end", n(x1), n(y1)),
         write_layer.SExp.list("stroke", write_layer.SExp.list("width", n(LINE_WIDTH_MM)),
                               write_layer.SExp.list("type", write_layer.symbol("solid"))),
         write_layer.SExp.list("fill", write_layer.symbol("none")), write_layer.SExp.list("layer", s(layer)),
     ))  # fmt: skip
-    return box
 
 
 def describe(fit: dict) -> str:
@@ -195,5 +201,5 @@ def list_adopted(
         "checked": len(files),
         "violations": violations,
         "unreadable": unreadable,
-        "note": "read-only: nothing was changed. No tool rewrites an already adopted footprint yet (adoption never overwrites); new adoptions set the courtyard to the pads plus margin.",
+        "note": "read-only: nothing was changed. propose_courtyard_rewrite/confirm_courtyard_rewrite fix the ones listed here (adoption never overwrites); new adoptions set the courtyard to the pads plus margin.",
     }

@@ -1343,7 +1343,63 @@ def _read_board_constraints(pcb_path: str | Path) -> dict:
         return {}
 
 
-def _pre_existing_filled_zone_report(board: Any) -> dict | None:
+def _direct_uuid(node: Any) -> str:
+    """The node's own ``(uuid ...)``; ``find`` would also return a descendant's, so look at children."""
+    for child in node.children:
+        if not child.is_atom and child.name == "uuid" and child.values:
+            return str(child.values[0])
+    return ""
+
+
+def _raw_reference(node: Any) -> str:
+    """A raw footprint's reference: ``(property "Reference" "R1")`` or ``(fp_text reference "R1")``; "" if none."""
+    for child in node.children:
+        if child.is_atom or len(child.values) < 2:
+            continue
+        if (child.name, child.values[0]) in (("property", "Reference"), ("fp_text", "reference")):
+            return str(child.values[1])
+    return ""
+
+
+def _raw_layer(node: Any) -> str:
+    for child in node.children:
+        if not child.is_atom and child.name == "layer" and child.values:
+            return str(child.values[0])
+    return ""
+
+
+def _same_footprint(model: Any, raw: Any) -> bool:
+    ref, raw_ref = getattr(model, "reference", "") or "", _raw_reference(raw)
+    return not (ref and raw_ref and ref != raw_ref)
+
+
+def _same_zone(model: Any, raw: Any) -> bool:
+    layer, raw_layer = getattr(model, "layer", "") or "", _raw_layer(raw)
+    return not (layer and raw_layer and layer != raw_layer)
+
+
+def _align_raw(models: list, raws: list, what: str, same: Any = None) -> list:
+    """The raw node of each model object. By uuid where the model's uuid names exactly one raw
+    node's own uuid, else by file order; the counts must agree, a uuid both sides carry must
+    match and ``same(model, raw)`` (a second key: reference, layer) must hold, otherwise
+    RawGeometryError (some boards have objects with no own uuid)."""
+    if len(models) != len(raws):
+        raise raw_geometry.RawGeometryError(f"the model has {len(models)} {what}s, the raw board {len(raws)}")
+    own = [_direct_uuid(r) for r in raws]
+    out = []
+    for model, raw, ru in zip(models, raws, own, strict=True):
+        mu = getattr(model, "uuid", "") or ""
+        if mu and ru and mu != ru:
+            if own.count(mu) != 1:
+                raise raw_geometry.RawGeometryError(f"{what} {mu!r} is not in the raw board at its place")
+            raw = raws[own.index(mu)]
+        if same is not None and not same(model, raw):
+            raise raw_geometry.RawGeometryError(f"a {what} of the model does not match the raw {what} it was paired with")
+        out.append(raw)
+    return out
+
+
+def _pre_existing_filled_zone_report(board: Any, root: Any) -> dict | None:
     """archived backlog P4-06: neither routing backend treats a pre-existing
     FILLED COPPER ZONE (a pour/plane; a KiCad keepout rule area is a
     different `Zone.keepout is not None` case and both backends DO honor
@@ -1383,6 +1439,10 @@ def _pre_existing_filled_zone_report(board: Any) -> dict | None:
       shape as openMPPT v1.3's 12 real shorts, including a power rail
       shorted directly to another.
 
+    ``root`` is the raw board (``write_layer.load``): a zone's net is read from its own
+    S-expression through the shared reader (hard rule 2); a net of an unknown form, or a zone
+    the raw board lacks, raises ``raw_geometry.RawGeometryError`` (the caller refuses).
+
     Returns None if the board has no filled copper-pour zone (a board
     with only keepout rule areas, or only unfilled zone definitions, is
     fine). Otherwise a dict naming every such zone, for an evidence-gated
@@ -1400,10 +1460,14 @@ def _pre_existing_filled_zone_report(board: Any) -> dict | None:
     ]
     if not pours:
         return None
+    nets = raw_geometry.net_table(root)
+    raw_zones = [c for c in root.children if not c.is_atom and c.name == "zone"]
+    # Top-level zones only: the model's ``zones`` does not list footprint-nested ones (they stay unread, as before).
+    raw_of = dict(zip(map(id, zones), _align_raw(zones, raw_zones, "zone", _same_zone), strict=True))
     return {
         "filled_zone_count": len(pours),
         "filled_zones": [
-            {"net": zone.net_name, "layer": zone.layer, "priority": getattr(zone, "priority", 0)}
+            {"net": raw_geometry.net_name(raw_of[id(zone)], nets), "layer": zone.layer, "priority": getattr(zone, "priority", 0)}
             for zone in pours
         ],
     }
@@ -1944,7 +2008,7 @@ def parse_krt_blocking_lines(log_text: str) -> dict[str, "Counter[str]"]:
     return result
 
 
-def _absolute_footprint_positions_by_net(board: Any) -> dict[str, list[tuple[str, float, float]]]:
+def _absolute_footprint_positions_by_net(board: Any, root: Any) -> dict[str, list[tuple[str, float, float]]]:
     """Real (ref, x_mm, y_mm) footprint anchors per net name, keyed by every
     net each footprint has at least one pad on.
 
@@ -1957,10 +2021,19 @@ def _absolute_footprint_positions_by_net(board: Any) -> dict[str, list[tuple[str
     A footprint's own anchor doesn't have that problem, and is precise
     enough for "which footprint is near this congestion" -- exact per-pad
     geometry isn't needed for a placement suggestion.
+
+    Pad nets come from the raw board ``root`` through the shared reader (hard rule 2); an
+    unknown net form, or a footprint the raw board lacks, raises ``raw_geometry.RawGeometryError``.
     """
     by_net: dict[str, list[tuple[str, float, float]]] = {}
-    for fp in board.footprints:
-        nets_here = {pad.net_name for pad in fp.pads if getattr(pad, "net_name", None)}
+    nets = raw_geometry.net_table(root)
+    footprints = list(board.footprints)
+    raw_fps = _align_raw(footprints, [c for c in root.children if not c.is_atom and c.name == "footprint"],
+        "footprint", _same_footprint,
+    )
+    for fp, raw_fp in zip(footprints, raw_fps, strict=True):
+        nets_here = {n for n in (raw_geometry.net_name(p, nets) for p in raw_fp.children
+                                 if not p.is_atom and p.name == "pad") if n}
         if not nets_here:
             continue
         x, y = fp.position
@@ -2007,7 +2080,10 @@ def suggest_placement_fixes_for_congestion(
     except Exception as exc:  # noqa: BLE001 - evidence-gated verdict
         return _incomplete(f"could not load board: {exc}")
 
-    positions_by_net = _absolute_footprint_positions_by_net(board)
+    try:
+        positions_by_net = _absolute_footprint_positions_by_net(board, write_layer.load(path))
+    except Exception as exc:  # noqa: BLE001 - evidence-gated verdict; an unreadable net is no answer
+        return _incomplete(f"could not read the board's pad nets: {exc}")
 
     suggestions: list[dict] = []
     for failing_net, blockers in blocking_by_net.items():
@@ -2708,7 +2784,10 @@ def build(mcp: MCPServer) -> list[str]:
         except Exception as exc:  # noqa: BLE001 - evidence-gated verdict
             return _incomplete(f"could not load board: {exc}")
 
-        zone_report = _pre_existing_filled_zone_report(board)
+        try:
+            zone_report = _pre_existing_filled_zone_report(board, write_layer.load(path))
+        except Exception as exc:  # noqa: BLE001 - an unreadable zone net must refuse, never pass
+            return _incomplete(f"could not read the board's zone nets: {exc}")
         if zone_report and not acknowledge_unmodeled_zone_risk:
             return _incomplete(
                 f"board has {zone_report['filled_zone_count']} pre-existing filled copper "

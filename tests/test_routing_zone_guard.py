@@ -36,6 +36,7 @@ from pathlib import Path
 import pytest
 from mcp.server.mcpserver import MCPServer
 
+from boardproof import write_layer
 from boardproof.toolsets import routing as routing_toolset
 
 NO_ZONE_PCB = Path(__file__).parent / "fixtures" / "simple_led.kicad_pcb"
@@ -65,10 +66,19 @@ def _copy_fixture(src: Path, dest_dir: Path) -> Path:
 # ---------------------------------------------------------------------------
 
 
+def _root(*zone_nets: str):
+    """A raw board with one zone per net text, uuid z0, z1, ... (in memory, never a file)."""
+    from kicad_tools.sexp import parse_string
+
+    zones = "".join(f'(zone (net "{n}") (layer "F.Cu") (uuid "z{i}"))' for i, n in enumerate(zone_nets))
+    return parse_string(f"(kicad_pcb (version 20260206) {zones})")
+
+
 @dataclass
 class _FakeZone:
     net_name: str
     layer: str
+    uuid: str = "z0"
     is_filled: bool = False
     filled_polygons: list | None = None
     keepout: object | None = None
@@ -81,31 +91,31 @@ class _FakeBoard:
 
 
 def test_report_none_when_board_has_no_zones():
-    assert routing_toolset._pre_existing_filled_zone_report(_FakeBoard(zones=[])) is None
+    assert routing_toolset._pre_existing_filled_zone_report(_FakeBoard(zones=[]), _root()) is None
 
 
 def test_report_none_for_keepout_only_zone():
     # A KiCad `(zone ... (keepout ...))` rule area -- both backends DO
     # already honor these; only copper-pour zones are the P4-06 gap.
     board = _FakeBoard(zones=[_FakeZone(net_name="", layer="F.Cu", is_filled=False, keepout=object())])
-    assert routing_toolset._pre_existing_filled_zone_report(board) is None
+    assert routing_toolset._pre_existing_filled_zone_report(board, _root("")) is None
 
 
 def test_report_none_for_unfilled_zone_definition():
     # A zone was defined (e.g. queued via ZoneGenerator) but never actually
     # filled -- no real copper exists yet, so nothing to route across.
     board = _FakeBoard(zones=[_FakeZone(net_name="GND", layer="F.Cu", is_filled=False, filled_polygons=[])])
-    assert routing_toolset._pre_existing_filled_zone_report(board) is None
+    assert routing_toolset._pre_existing_filled_zone_report(board, _root("")) is None
 
 
 def test_report_detects_filled_pour():
     board = _FakeBoard(
         zones=[
             _FakeZone(net_name="GND", layer="F.Cu", is_filled=True, filled_polygons=[[(0.0, 0.0)]], priority=1),
-            _FakeZone(net_name="", layer="F.Cu", is_filled=False, keepout=object()),  # ignored
+            _FakeZone(net_name="", uuid="z1", layer="F.Cu", is_filled=False, keepout=object()),  # ignored
         ]
     )
-    report = routing_toolset._pre_existing_filled_zone_report(board)
+    report = routing_toolset._pre_existing_filled_zone_report(board, _root("GND", ""))
     assert report is not None
     assert report["filled_zone_count"] == 1
     assert report["filled_zones"] == [{"net": "GND", "layer": "F.Cu", "priority": 1}]
@@ -115,7 +125,7 @@ def test_report_on_the_real_zone_obstacle_fixture():
     from kicad_tools.schema import PCB
 
     board = PCB.load(ZONE_PCB)
-    report = routing_toolset._pre_existing_filled_zone_report(board)
+    report = routing_toolset._pre_existing_filled_zone_report(board, write_layer.load(ZONE_PCB))
     assert report is not None
     assert report["filled_zone_count"] == 1
     assert report["filled_zones"][0]["net"] == "GND"
@@ -126,7 +136,7 @@ def test_report_none_on_the_plain_no_zone_fixture():
     from kicad_tools.schema import PCB
 
     board = PCB.load(NO_ZONE_PCB)
-    assert routing_toolset._pre_existing_filled_zone_report(board) is None
+    assert routing_toolset._pre_existing_filled_zone_report(board, write_layer.load(NO_ZONE_PCB)) is None
 
 
 # ---------------------------------------------------------------------------

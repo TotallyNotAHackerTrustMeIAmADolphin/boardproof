@@ -66,6 +66,7 @@ from kicad_tools.schema import Footprint
 from kicad_tools.sexp.parser import SExp
 
 from boardproof import footprint_courtyard, kicad_lock, write_layer
+from boardproof.courtyard_rewrite import REWRITE_SENTENCE
 
 _TableKind = Literal["sym", "fp"]
 
@@ -930,6 +931,26 @@ def build(mcp: MCPServer) -> list[str]:
         courtyard box, the pads' box and the box a new adoption would set. Writes nothing."""
         return footprint_courtyard.list_adopted(pcb_path, library_name, library_dir)
 
+    def propose_courtyard_rewrite(
+        pcb_path: str,
+        footprints: list[str],
+        library_name: str = "project_parts",
+        library_dir: str = "lib",
+        output_dir: str | None = None,
+    ) -> dict:
+        from boardproof import courtyard_rewrite
+
+        return courtyard_rewrite.propose_courtyard_rewrite(pcb_path, footprints, library_name, library_dir, output_dir)
+
+    def confirm_courtyard_rewrite(pcb_path: str, revision_token: str) -> dict:
+        from boardproof import courtyard_rewrite
+
+        result = courtyard_rewrite.confirm_courtyard_rewrite(pcb_path, revision_token)
+        output = result.get("output_pcb")
+        if isinstance(output, str):  # the gate field marks the source and the revision
+            return {**result, "pcb_path": output, "source_pcb": pcb_path}
+        return result
+
     def propose_adopt_parts(
         pcb_path: str,
         parts: list[dict],
@@ -985,9 +1006,33 @@ def build(mcp: MCPServer) -> list[str]:
             "numbers, the courtyard box, the pads' box and the box a new adoption would set (pads plus 0.25 mm). "
             "Such a footprint packs and aligns too tightly and gives shorting items or solder-mask bridges in DRC "
             "with no courtyard overlap. Refuses a library_dir that is absolute or holds '..'. An unreadable footprint makes the "
-            "status incomplete (listed under unreadable). Writes nothing; nothing rewrites an adopted footprint yet."
+            "status incomplete (listed under unreadable). Writes nothing; propose_courtyard_rewrite fixes the ones it lists."
         ),
         annotations={"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
+    )
+    mcp.add_tool(
+        propose_courtyard_rewrite,
+        name="propose_courtyard_rewrite",
+        description=(
+            "Dry run: for a list of adopted footprint names (library_dir/library_name.pretty beside the board, the ones "
+            "list_adopted_courtyard_errors reports) show the courtyard before and after and the placed copies on the board "
+            "that follow. Writes nothing; returns a revision_token for confirm_courtyard_rewrite. A footprint that is not "
+            "in the library, already encloses its pads, cannot be measured or has a copy on the back side is listed under "
+            "refused with the reason. " + REWRITE_SENTENCE
+        ),
+        annotations={"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
+    )
+    mcp.add_tool(
+        confirm_courtyard_rewrite,
+        name="confirm_courtyard_rewrite",
+        description=(
+            "Apply a propose_courtyard_rewrite proposal onto a new project revision (output_pcb; the source stays untouched), "
+            "reload it, verify it and only then move it into place. " + REWRITE_SENTENCE + " A failed check returns ok false "
+            "and leaves the source as it was. After it, list_adopted_courtyard_errors on the new "
+            "revision's board lists none of the rewritten footprints. The revision_token is single use and is refused if the "
+            "project changed since the proposal. " + write_layer.LOCK_SENTENCE
+        ),
+        annotations={"readOnlyHint": False, "destructiveHint": True, "idempotentHint": False, "openWorldHint": False},
     )
     mcp.add_tool(
         check_project_portability,
@@ -1064,4 +1109,4 @@ def build(mcp: MCPServer) -> list[str]:
         ),
         annotations={"readOnlyHint": False, "destructiveHint": True, "idempotentHint": False, "openWorldHint": False},
     )
-    return ["register_library_asset", "check_project_portability", "validate_klc", "list_adopted_courtyard_errors", "propose_adopt_parts", "confirm_adopt_parts"]
+    return ["register_library_asset", "check_project_portability", "validate_klc", "list_adopted_courtyard_errors", "propose_courtyard_rewrite", "confirm_courtyard_rewrite", "propose_adopt_parts", "confirm_adopt_parts"]
