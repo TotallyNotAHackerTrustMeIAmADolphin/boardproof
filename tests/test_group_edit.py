@@ -388,7 +388,7 @@ def test_the_pairs_are_registered_and_the_proposes_are_read_only(tools: dict) ->
     assert tools["propose_create_group"].annotations.read_only_hint is True
     for n in names:
         code = tools[n].fn.__code__
-        assert set(code.co_varnames[: code.co_argcount]) <= {"pcb_path", "groups", "dx", "dy", "name", "members", "output_dir", "revision_token"}
+        assert set(code.co_varnames[: code.co_argcount]) <= {"pcb_path", "groups", "dx", "dy", "name", "members", "output_dir", "revision_token", "detail"}
 
 
 def test_the_confirm_tools_name_the_new_revision(board: Path, tmp_path: Path, tools: dict) -> None:

@@ -24,7 +24,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
-from boardproof import _self_check, edge_loops, raw_geometry, write_layer
+from boardproof import _self_check, edge_loops, output_detail, raw_geometry, write_layer
 from boardproof.raw_geometry import Point, RawGeometryError
 
 Box = tuple[float, float, float, float]  # (min x, min y, max x, max y), page mm, y down
@@ -510,6 +510,45 @@ def collisions(moved: dict[str, Box], parts: list[Part]) -> list[dict]:
                 continue
             seen.add(key)
             out.append({"between": list(key)})
+    return out
+
+
+COLLISION_NOTE = (
+    "collisions lists the courtyard overlaps (hull of courtyard and pads) in which a footprint this call moved takes part, "
+    "existed_before marking one that was there before the call; it is a measurement of those footprints only, and a count of 0 says "
+    "only that none was measured. A footprint with neither courtyard nor pad is named under collisions_not_measured and is "
+    "absent from the check; collision_check not_measured means the check could not run and no count is given."
+)
+
+
+def moved_collisions(before: list[Part], after: list[Part], moved: set[str]) -> list[dict]:
+    """Courtyard overlaps in which a footprint of ``moved`` takes part, in ``after``; each with
+    ``existed_before``: the pair also overlapped in ``before`` (a footprint new in ``after`` has no before)."""
+    now = collisions({p.reference: p.box for p in after if p.reference in moved}, after)
+    was = {tuple(c["between"]) for c in collisions({p.reference: p.box for p in before if p.reference in moved}, before)}
+    return [{"between": c["between"], "existed_before": tuple(c["between"]) in was} for c in now]
+
+
+def collision_report(before_root: Any, after_parts: Callable[[list[str]], list[Part]] | Any, moved: set[str]) -> dict:
+    """The full collision fields of a call that moved ``moved`` (references), read raw: ``before_root`` is
+    the board before and ``after_parts`` the board after (a parsed root) or a callable giving its parts.
+    Never raises: a board that cannot be read gives ``collision_check: not_measured`` and a reason."""
+    blind: list[str] = []
+    try:
+        before = read_parts(before_root, unmeasured=[])
+        after = after_parts(blind) if callable(after_parts) else read_parts(after_parts, unmeasured=blind)
+        found = moved_collisions(before, after, moved)
+    except Exception as exc:  # noqa: BLE001 - unknown never reads as no collision
+        return {"collision_check": "not_measured", "collision_reason": f"the collision check could not run: {exc}"}
+    return {"collision_check": "measured", "collisions": found, **({"collisions_not_measured": sorted(blind)} if blind else {})}
+
+
+def collision_fields(report: dict, detail: bool) -> dict:
+    """``report`` as answer fields: the first 20 collisions with ``collisions_count`` unless ``detail`` (pass
+    ``True`` where the collisions are decision data: a partial or refused answer)."""
+    out = {k: v for k, v in report.items() if k != "collisions"}
+    if "collisions" in report:
+        out.update(output_detail.listing("collisions", report["collisions"], detail))
     return out
 
 

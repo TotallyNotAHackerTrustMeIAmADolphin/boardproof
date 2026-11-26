@@ -77,6 +77,23 @@ def _moved_lists(moved: list[dict], detail: bool) -> dict:
     return output_detail.listing("moved", moved, detail)
 
 
+def _raw_or_none(path: Path) -> Any:
+    """The board's raw tokens as they are now (the state before a move), or None when they cannot be read."""
+    try:
+        return write_layer.load_file(path)
+    except Exception:  # noqa: BLE001 - the collision report then says not_measured
+        return None
+
+
+def _collision_fields(before_root: Any, path: Path, moved: set[str], detail: bool) -> dict:
+    """The collisions in which a footprint of ``moved`` takes part on the board now at ``path`` (issue 264)."""
+    if before_root is None:
+        report = {"collision_check": "not_measured", "collision_reason": "the board before the move could not be read"}
+    else:
+        report = placement_anchor.collision_report(before_root, _raw_or_none(path), moved)
+    return placement_anchor.collision_fields(report, detail)
+
+
 def _hull_boxes(path: Path, refs: list[str]) -> tuple[dict[str, tuple[tuple[float, float, float, float], bool]], dict | None]:
     """({reference: (box, has_courtyard)}, refusal): the hull of each footprint's courtyard and
     pads, read from the raw tokens (issue 228: pads can reach outside the courtyard of an adopted
@@ -803,6 +820,7 @@ def build(mcp: MCPServer) -> list[str]:
         rotation_kept: list[str] = []
         errors: list[dict] = []
         locked = _locked_references(path)
+        before_root = _raw_or_none(path)
         try:
             in_slot = _slot_conflicts(path, specs, locked)
         except _SlotsUnreadable as exc:
@@ -862,8 +880,10 @@ def build(mcp: MCPServer) -> list[str]:
         # which specs succeeded and which failed decides the retry: a partial or error answer
         # lists every item; only the plain success is counted without detail
         full = detail or status != "ok"
+        collision = _collision_fields(before_root, path, {*placed, *moved}, full) if placed or moved else {}
         return {
             "status": status,
+            **collision,
             **output_detail.counted("placed", placed, full),
             **output_detail.counted("moved", moved, full),
             **output_detail.listing("errors", errors, True),
@@ -1151,12 +1171,14 @@ def build(mcp: MCPServer) -> list[str]:
                 "locked_skipped": locked_skipped}
 
     @_fail_closed
-    def pack_footprints_densely(pcb_path: str, refs: list[str], min_clearance_mm: float = 0.2) -> dict:
+    def pack_footprints_densely(pcb_path: str, refs: list[str], min_clearance_mm: float = 0.2, detail: bool = False) -> dict:
         """Tighten spacing between an already-aligned row/column of
         footprints toward min_clearance_mm, without violating clearance.
         Verifies the result with pcb_check_collisions before returning
         (evidence-gated -- if the packed result still collides, that's
-        reported, not silently accepted).
+        reported, not silently accepted). The answer also carries the courtyard collisions in which
+        a packed footprint takes part (the first 20 with collisions_count, every one with
+        detail=true; see collision_check).
 
         Assumes refs are given in the order they should be packed along
         whichever axis they're already predominantly separated on (inferred
@@ -1188,6 +1210,7 @@ def build(mcp: MCPServer) -> list[str]:
         if refused_boxes is not None:
             return refused_boxes
 
+        before_root = _raw_or_none(path)
         centers_x = [(boxes[r][0][0] + boxes[r][0][2]) / 2 for r in refs]
         centers_y = [(boxes[r][0][1] + boxes[r][0][3]) / 2 for r in refs]
         axis = "x" if (max(centers_x) - min(centers_x)) >= (max(centers_y) - min(centers_y)) else "y"
@@ -1218,6 +1241,7 @@ def build(mcp: MCPServer) -> list[str]:
                 return locked
             return {"status": "incomplete", "reason": f"packed in-memory but failed to save: {exc}"}
 
+        collision = _collision_fields(before_root, path, set(refs), detail)
         # Verify via the existing, already-tested collision checker rather
         # than trusting our own arithmetic.
         try:
@@ -1229,6 +1253,7 @@ def build(mcp: MCPServer) -> list[str]:
                 "reason": f"packed and saved but post-pack verification failed: {exc}",
                 "axis": axis,
                 "moved": moved,
+                **_collision_fields(before_root, path, set(refs), True),
             }
         violation_count = getattr(collision_result, "violation_count", None)
         if violation_count is None and hasattr(collision_result, "violations"):
@@ -1239,6 +1264,7 @@ def build(mcp: MCPServer) -> list[str]:
             "axis": axis,
             "moved": moved,
             "post_pack_violation_count": violation_count,
+            **(_collision_fields(before_root, path, set(refs), True) if not clean else collision),
             "note": None if clean else "packed result still has DRC/placement violations at the requested clearance -- see post_pack_violation_count",
         }
 
@@ -1322,15 +1348,15 @@ def build(mcp: MCPServer) -> list[str]:
             return {**result, "pcb_path": output, "source_pcb": pcb_path}
         return result
 
-    def propose_move_group(pcb_path: str, groups: list[str], dx: float, dy: float, output_dir: str | None = None) -> dict:
+    def propose_move_group(pcb_path: str, groups: list[str], dx: float, dy: float, output_dir: str | None = None, detail: bool = False) -> dict:
         from boardproof import group_edit
 
-        return group_edit.propose_move_group(pcb_path, groups, dx, dy, output_dir)
+        return group_edit.propose_move_group(pcb_path, groups, dx, dy, output_dir, detail)
 
-    def confirm_move_group(pcb_path: str, revision_token: str) -> dict:
+    def confirm_move_group(pcb_path: str, revision_token: str, detail: bool = False) -> dict:
         from boardproof import group_edit
 
-        return _named_revision(group_edit.confirm_move_group(pcb_path, revision_token), pcb_path)
+        return _named_revision(group_edit.confirm_move_group(pcb_path, revision_token, detail), pcb_path)
 
     def propose_create_group(pcb_path: str, name: str, members: list[str], output_dir: str | None = None) -> dict:
         from boardproof import group_edit
@@ -2042,7 +2068,7 @@ def build(mcp: MCPServer) -> list[str]:
     mcp.add_tool(
         place_footprints,
         name="place_footprints",
-        description=("Place or move a batch of footprints on a board in one call (add new ones with a library_id, move existing ones by reference; a locked footprint is refused per spec; a move of an existing footprint whose courtyard would overlap a slot or a rounded corner of the outline refuses the whole call as in_cutout, nothing written; a footprint that already overlaps a cut-out is refused for any move whose new courtyard still overlaps one; also refused: outline_arcs_unreadable, slots_unreadable, footprint_unmeasurable; an outer loop of lines and arcs, or a gr_poly, that is neither a plain rectangle nor a rectangle with quarter-circle corner arcs is refused for the whole call, nothing written (outline_arcs_unreadable when it has any arc, such as a bite, a notch or a corner built from several arcs; outline_not_rectangular when it is lines only or a gr_poly, such as an L shape); circles, stadiums and well-formed slots are not refused; any other Edge.Cuts problem (a stray or open item, a slot that touches the outline or another slot, a duplicate outer loop, an item the tool cannot read) is refused as slots_unreadable; a board with no Edge.Cuts at all is not checked). The answer carries counts (placed_count, moved_count, rotation_kept_count) and every error; the optional detail=true adds the lists placed, moved and rotation_kept, which a partial or error answer always carries." + " " + _FRAME_RULE + " " + write_layer.LOCK_SENTENCE),
+        description=("Place or move a batch of footprints on a board in one call (add new ones with a library_id, move existing ones by reference; a locked footprint is refused per spec; a move of an existing footprint whose courtyard would overlap a slot or a rounded corner of the outline refuses the whole call as in_cutout, nothing written; a footprint that already overlaps a cut-out is refused for any move whose new courtyard still overlaps one; also refused: outline_arcs_unreadable, slots_unreadable, footprint_unmeasurable; an outer loop of lines and arcs, or a gr_poly, that is neither a plain rectangle nor a rectangle with quarter-circle corner arcs is refused for the whole call, nothing written (outline_arcs_unreadable when it has any arc, such as a bite, a notch or a corner built from several arcs; outline_not_rectangular when it is lines only or a gr_poly, such as an L shape); circles, stadiums and well-formed slots are not refused; any other Edge.Cuts problem (a stray or open item, a slot that touches the outline or another slot, a duplicate outer loop, an item the tool cannot read) is refused as slots_unreadable; a board with no Edge.Cuts at all is not checked). The answer carries counts (placed_count, moved_count, rotation_kept_count) and every error; the optional detail=true adds the lists placed, moved and rotation_kept, which a partial or error answer always carries. " + placement_anchor.COLLISION_NOTE + " The first 20 collisions are listed with collisions_count (collisions_truncated when more); detail=true lists every one, and a partial answer always does." + " " + _FRAME_RULE + " " + write_layer.LOCK_SENTENCE),
         annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
     )
     mcp.add_tool(
@@ -2152,7 +2178,7 @@ def build(mcp: MCPServer) -> list[str]:
     mcp.add_tool(
         pack_footprints_densely,
         name="pack_footprints_densely",
-        description=("Tighten spacing between an aligned row/column of footprints toward a minimum clearance between the hulls of courtyard and pads (refuses locked footprints; a custom pad counts by its anchor size here), then re-checked with the placement collision checker, which is not a verdict: only verify_board gives one." + " " + write_layer.LOCK_SENTENCE),
+        description=("Tighten spacing between an aligned row/column of footprints toward a minimum clearance between the hulls of courtyard and pads (refuses locked footprints; a custom pad counts by its anchor size here), then re-checked with the placement collision checker, which is not a verdict: only verify_board gives one. " + placement_anchor.COLLISION_NOTE + " The first 20 collisions are listed with collisions_count (collisions_truncated when more); detail=true lists every one, and a partial answer always does." + " " + write_layer.LOCK_SENTENCE),
         annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": False, "openWorldHint": False},
     )
     mcp.add_tool(

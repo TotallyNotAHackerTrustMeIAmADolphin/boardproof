@@ -26,6 +26,7 @@ import hashlib
 import math
 import time
 import uuid
+from dataclasses import replace
 from collections import Counter
 from pathlib import Path
 from typing import Any, Callable
@@ -47,8 +48,10 @@ MOVE_GROUP_SENTENCE = (
     "footprint stay. A group that holds a nested group, a member that is not on the board, a member that is not a "
     "footprint (track, via, text), a locked member footprint, a locked group, or a footprint whose reference is empty or "
     "shared is refused and listed with the reason, never partly moved. The confirm reloads the written copy and checks "
-    "that only the member footprints' (at) changed, by exactly dx, dy. No collision, cutout or board-edge check is made: "
-    "run pcb_check_placement on the new revision after a move. A footprint on the board with neither courtyard nor pad "
+    "that only the member footprints' (at) changed, by exactly dx, dy. The answer lists the courtyard collisions in which a moved "
+    "footprint takes part (the proposal for the proposed poses, the confirm for the written revision): the first 20 with "
+    "collisions_count, every one with detail=true, always every one when a group was refused. " + placement_anchor.COLLISION_NOTE + " "
+    "No cutout or board-edge check is made: run pcb_check_placement on the new revision after a move. A footprint on the board with neither courtyard nor pad "
     "(a logo) is listed under not_measured and does not stop the move; a member footprint with neither is refused and "
     "listed, never moved."
 )
@@ -191,16 +194,26 @@ def _plan_move(pcb: Path, a: dict) -> dict:
                             "to": [round(x + a["dx"], 6), round(y + a["dy"], 6)]})
             plan.append({"group": g["name"], "uuid": g["uuid"], "footprints": sorted(fps, key=lambda p: p["reference"])})
     key = (a["dx"], a["dy"], [(g["uuid"], [(p["uuid"], p["from"]) for p in g["footprints"]]) for g in plan])
-    return {"groups": plan, "refused": refused, "changes": bool(plan), "digest": _hash(key), "not_measured": sorted(not_measured)}
+    moved = {f["reference"] for g in plan for f in g["footprints"]}
+    report = placement_anchor.collision_report(root, lambda blind: _shifted(root, moved, a, blind), moved) if plan else {}
+    return {"groups": plan, "refused": refused, "changes": bool(plan), "digest": _hash(key), "not_measured": sorted(not_measured),
+            "collision": report}
 
 
-def _move_public(plan: dict) -> dict:
+def _shifted(root: Any, moved: set[str], a: dict, blind: list[str]) -> list[placement_anchor.Part]:
+    """The parts as the move would leave them: the moved ones' boxes shifted by the offset."""
+    return [replace(p, box=placement_anchor.shift(p.box, a["dx"], a["dy"])) if p.reference in moved else p
+            for p in placement_anchor.read_parts(root, unmeasured=blind)]
+
+
+def _move_public(plan: dict, detail: bool = False) -> dict:
     groups = [{"group": g["group"], "uuid": g["uuid"], "footprints": [{k: v for k, v in p.items() if k != "uuid"} for p in g["footprints"]]}
               for g in plan["groups"]]
-    return {"groups": groups, "refused": plan["refused"], "not_measured": plan["not_measured"]}
+    collision = placement_anchor.collision_fields(plan["collision"], detail or bool(plan["refused"])) if plan["collision"] else {}
+    return {"groups": groups, "refused": plan["refused"], "not_measured": plan["not_measured"], **collision}
 
 
-def propose_move_group(pcb_path: str | Path, groups: list[str], dx: float, dy: float, output_dir: str | Path | None = None) -> dict:
+def propose_move_group(pcb_path: str | Path, groups: list[str], dx: float, dy: float, output_dir: str | Path | None = None, detail: bool = False) -> dict:
     """Dry run: per group the member footprints with their old and new (at x y). Writes nothing."""
     if not isinstance(groups, list) or not groups or not all(isinstance(g, str) and g for g in groups):
         return {"status": "error", "reason": "groups must be a non-empty list of group names or uuids"}
@@ -210,7 +223,7 @@ def propose_move_group(pcb_path: str | Path, groups: list[str], dx: float, dy: f
     if dx == 0 and dy == 0:
         return {"status": "nothing_to_do", "revision_token": None, "reason": "dx and dy are both 0"}
     return _propose(_MOVE, pcb_path, output_dir, "group_moved", "the group move", _plan_move,
-                    {"groups": list(groups), "dx": float(dx), "dy": float(dy)}, _move_public)
+                    {"groups": list(groups), "dx": float(dx), "dy": float(dy)}, lambda plan: _move_public(plan, detail))
 
 
 def _write_move(src: Path, entry: dict, tmp: Path) -> dict:
@@ -228,7 +241,7 @@ def _write_move(src: Path, entry: dict, tmp: Path) -> dict:
         moved[index[u]] = {"reference": p["reference"], "from": p["from"], "angle": raw_geometry._at(node, p["reference"])[2],
                            "stripped": _without_at(node), "pads": pads[p["reference"]], "pad_angles": pad_angles[p["reference"]]}
     placement_anchor.write_positions(pcb, {p["reference"]: tuple(p["to"]) for p in moves.values()})
-    return {"pcb": pcb, "before": before, "moved": moved, "dx": entry["args"]["dx"], "dy": entry["args"]["dy"]}
+    return {"pcb": pcb, "before": before, "moved": moved, "before_root": root, "dx": entry["args"]["dx"], "dy": entry["args"]["dy"]}
 
 
 def _without_at(node: Any) -> str:
@@ -270,13 +283,16 @@ def _verify_move(tmp: Path, state: dict) -> dict:
         raise checkpoint.NotVerified(
             f"CRITICAL: {len(bad)} difference(s) between the intended move and the saved file (first: {bad[0]['item']}); nothing is written", bad
         )
-    return {"footprints_moved": len(state["moved"])}
+    report = placement_anchor.collision_report(state["before_root"], fresh, {m["reference"] for m in state["moved"].values()})
+    return {"footprints_moved": len(state["moved"]), "_collision_report": report}
 
 
-def confirm_move_group(pcb_path: str | Path, revision_token: str) -> dict:
+def confirm_move_group(pcb_path: str | Path, revision_token: str, detail: bool = False) -> dict:
     """Apply a proposal onto a new board revision, reload it and check it before it is moved into place."""
-    return _confirm(_MOVE, pcb_path, revision_token, "the group move", "moved", _write_move, _verify_move,
+    built = _confirm(_MOVE, pcb_path, revision_token, "the group move", "moved", _write_move, _verify_move,
                     "reloaded from disk: only the member footprints' (at) changed, each by exactly the offset, and their pads follow")
+    report = built.pop("_collision_report", None)
+    return {**built, **placement_anchor.collision_fields(report, detail)} if report else built
 
 
 # --------------------------------------------------------------------------- create_group
