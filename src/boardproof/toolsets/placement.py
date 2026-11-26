@@ -1265,6 +1265,16 @@ def build(mcp: MCPServer) -> list[str]:
                 return {"status": "incomplete", "reason": f"failed to write the lock state: {exc}"}
         return {"status": "ok", "locked": locked, "changed": changing, "unchanged": unchanged}
 
+    def list_footprint_groups(pcb_path: str) -> dict:
+        """List the KiCad groups of a board, read only. Per group: name, uuid, locked, member count,
+        the references of its footprints (and which of them are locked), nested group uuids, the
+        count of other members by kind, and member uuids that match nothing on the board
+        (unresolved). Placement writes keep groups and members; a plain move of one footprint does
+        not move the rest of its group."""
+        from boardproof import board_groups
+
+        return board_groups.list_groups(pcb_path)
+
     @_with_frame
     def place_footprints_at_edge(pcb_path: str, specs: list[dict]) -> dict:
         """Place a batch of existing footprints at an edge of the board outline, a given distance
@@ -2052,6 +2062,12 @@ def build(mcp: MCPServer) -> list[str]:
         annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
     )
     mcp.add_tool(
+        list_footprint_groups,
+        name="list_footprint_groups",
+        description="List the KiCad groups of a board with their members: footprint references (and the locked ones), nested groups, other members by kind, and member uuids that match nothing. Reads the raw file; writes nothing. A plain move of one footprint does not move its group.",
+        annotations={"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
+    )
+    mcp.add_tool(
         move_reference_designators_to_layer,
         name="move_reference_designators_to_layer",
         description=("Move a batch of footprints' reference-designator silkscreen TEXT to a different layer (e.g. F.Fab) in one call -- does not change which side the footprint itself is mounted on." + " " + write_layer.LOCK_SENTENCE),
@@ -2121,6 +2137,7 @@ def build(mcp: MCPServer) -> list[str]:
         "place_footprints",
         "place_footprints_at_edge",
         "lock_footprints",
+        "list_footprint_groups",
         "move_reference_designators_to_layer",
         "align_footprints",
         "distribute_footprints",

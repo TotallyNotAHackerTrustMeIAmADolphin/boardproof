@@ -717,7 +717,10 @@ def under_width_items(board: str | Path, before: Counter, project: dict) -> tupl
             remaining[text] -= 1
             continue
         checked += 1
-        net = pour_step._resolved_net(node, table)
+        try:
+            net = pour_step._resolved_net(node, table)
+        except raw_geometry.RawGeometryError as exc:
+            raise UnderWidthCheckError(f"{node.name} on a net the board does not define ({exc}): {text[:200]}") from exc
         if net is None:
             raise UnderWidthCheckError(f"{node.name} on a net the board does not define: {text[:200]}")
         netclass = board_rules._effective_netclass(project, net)  # KiCad's name: "A,B"

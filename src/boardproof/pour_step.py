@@ -147,8 +147,8 @@ def _resolved_net(node: Any, table: dict[int, str]) -> str | None:
     info = _net_of(node)
     if info["name"] is not None:
         return info["name"]
-    if info["id"] is not None:
-        return table.get(info["id"], "" if info["id"] == 0 else None)
+    if info["id"] is not None:  # net 0 is "no net"; an undeclared number raises RawGeometryError
+        return raw_geometry.net_node_name(node.find("net"), table)
     return None
 
 
@@ -462,7 +462,10 @@ def _diff_boards(original: Any, candidate: Any, plane_nets: set[str]) -> dict:
                 f"{label}: net id {info['id']} is {table_before.get(info['id'])!r} in the net table "
                 f"but the node says {info['name']!r} (net id collision)"
             )
-        name = _resolved_net(node, table_before)
+        try:
+            name = _resolved_net(node, table_before)
+        except raw_geometry.RawGeometryError:
+            name = None  # the undeclared number is already a problem above
         if name is None or (name and name not in known):
             problems.append(f"{label}: names a net that is not on the board ({name!r})")
         if node.name == "zone" and name not in plane_nets:
