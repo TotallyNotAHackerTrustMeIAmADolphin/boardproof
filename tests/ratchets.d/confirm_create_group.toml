@@ -1,0 +1,6 @@
+[writing_tool.confirm_create_group]
+self_check = "reload-verify"
+proof = [
+    "tests/test_group_edit.py::test_the_create_self_check_fires",
+]
+note = "Issue 255; group_edit reloads the saved revision and compares it node by node with the intended change (move: each member equal but for its raw (at), shifted by exactly dx, dy, pads following; create: one new node equal to the proposed group, all others identical)."

@@ -633,6 +633,146 @@ def write_positions(
     return save_footprint_edits(path, edit, check)
 
 
+class PoseRefused(Exception):
+    """``write_poses`` refused before writing anything; ``problems`` lists every reason."""
+
+    def __init__(self, problems: list[str]) -> None:
+        super().__init__("; ".join(problems))
+        self.problems = problems
+
+
+def _wrap(angle: float) -> float:
+    """``angle`` folded into (-180, 180], rounded so a turn by a non-quarter angle stays tidy."""
+    a = round(math.fmod(angle, 360.0), 9) + 0.0
+    return a - 360.0 if a > 180.0 else (a + 360.0 if a <= -180.0 else a)
+
+
+def _angle_nodes(fp: Any) -> list[tuple[Any, int]]:
+    """Every token of footprint ``fp`` that stores a board-absolute angle, as ``(node, index)``: a
+    pad's, a text's or a property's ``(at x y angle)`` (index 2) and a text box's ``(angle a)``
+    (index 0). The footprint's own ``(at)`` is not among them. Graphics (fp_line, fp_arc, ...),
+    pad shapes and the 3D model carry no angle and stay in the footprint's own frame."""
+    out: list[tuple[Any, int]] = []
+    for child in fp.children:
+        if child.is_atom:
+            continue
+        if child.name in ("pad", "fp_text", "property"):
+            if child.find("at") is not None:
+                out.append((child.find("at"), 2))
+        elif child.name == "fp_text_box" and child.find("angle") is not None:
+            out.append((child.find("angle"), 0))
+    return out
+
+
+def _angle_of(node: Any, index: int) -> float:
+    return _num(node.values[index]) if len(node.values) > index else 0.0
+
+
+def _frame(fp: Any) -> tuple[Any, list[float]]:
+    """What a pose write must leave alone: the footprint as nested tuples without its own ``(at)``
+    and without every absolute-angle atom, and each such angle relative to the footprint's own."""
+    own = _angle_of(fp.find("at"), 2)
+    tokens = _angle_nodes(fp)
+    skip = {id(n): i for n, i in tokens}
+
+    def strip(node: Any) -> Any:
+        if node.is_atom:
+            return ("atom", node.value)
+        if node is fp.find("at"):
+            return ("own-at",)
+        drop = skip.get(id(node))
+        # an (at x y angle) keeps x, y (children before index 2: a missing angle is not a change);
+        # an (angle a) keeps nothing
+        return (node.name, tuple(strip(c) for i, c in enumerate(node.children) if drop is None or i < drop))
+
+    return strip(fp), [(_angle_of(n, i) - own) % 360.0 for n, i in tokens]
+
+
+def _same_angle(a: float, b: float) -> bool:
+    d = (a - b) % 360.0
+    return min(d, 360.0 - d) < 1e-6
+
+
+def write_poses(path: Path, targets: dict[str, tuple[float, float, float]]) -> dict:
+    """Set the page ``(at x y angle)`` of each footprint in ``targets`` (reference -> (x, y, angle)).
+
+    The footprint turns by ``delta = new angle - old angle``. KiCad stores pad, text and property
+    angles board-absolute, so every one of them (and a text box's ``(angle)``) moves by the same
+    ``delta`` in the file's own sense, on F.Cu and on B.Cu alike; pad and graphic coordinates are
+    footprint-local and stay. A locked, unknown, ambiguous or non-finite target is refused with
+    ``PoseRefused`` before anything is written. The reload must hold: every other node unchanged;
+    each target at its pose; each pad's page position equal to the old offset from the footprint
+    origin turned by ``delta`` (hand-computed, hard rule 2); every pad, text and graphic otherwise
+    exactly as before (their angles relative to the footprint unchanged)."""
+    frames: dict[str, tuple[Any, list[float]]] = {}
+
+    def edit(root: Any, parts: list[Part]) -> list[Any]:
+        problems = []
+        for ref, pose in targets.items():
+            if len(pose) != 3 or not all(isinstance(v, (int, float)) and math.isfinite(v) for v in pose):
+                problems.append(f"{ref}: the pose {pose!r} is not three finite numbers")
+            hits = [p for p in parts if p.reference == ref]
+            if len(hits) != 1:
+                problems.append(f"{ref}: {'no footprint' if not hits else 'more than one footprint'} has this reference")
+            elif hits[0].locked:
+                problems.append(f"{ref}: the footprint is locked")
+        if problems:
+            raise PoseRefused(problems)
+        nodes = []
+        for part in parts:
+            if part.reference not in targets:
+                continue
+            x, y, angle = targets[part.reference]
+            turns = not _same_angle(angle, part.angle)
+            if not turns and abs(x - part.at[0]) <= 1e-9 and abs(y - part.at[1]) <= 1e-9:
+                continue
+            frames[part.reference] = _frame(part.node)  # before the edit
+            if turns:
+                for node, index in _angle_nodes(part.node):
+                    write_layer.set_number(node, index, _wrap(_angle_of(node, index) + angle - part.angle))
+            at = part.node.find("at")
+            write_layer.set_number(at, 0, x)
+            write_layer.set_number(at, 1, y)
+            if turns:
+                write_layer.set_number(at, 2, _wrap(angle))
+            nodes.append(part.node)
+        return nodes
+
+    def check(reloaded: Any, parts: list[Part]) -> list[str]:
+        complaints = []
+        after = {p.reference: p for p in read_parts(reloaded)}
+        for part in parts:
+            if part.reference not in frames:
+                continue
+            now = after.get(part.reference)
+            if now is None:
+                complaints.append(f"{part.reference} is gone")
+                continue
+            x, y, angle = targets[part.reference]
+            if abs(now.at[0] - x) > 1e-6 or abs(now.at[1] - y) > 1e-6 or not _same_angle(now.angle, angle):
+                complaints.append(f"{part.reference} is at {list(now.at)} angle {now.angle}, intended {[x, y, angle]}")
+            if now.locked != part.locked:
+                complaints.append(f"{part.reference} changed its lock")
+            if len(now.pads) != len(part.pads):
+                complaints.append(f"{part.reference} changed its pad count")
+                continue
+            for old, new in zip(part.pads, now.pads, strict=True):
+                # the old offset from the origin, turned by delta, from the new origin
+                offset = (old.at_mm[0] - part.at[0], old.at_mm[1] - part.at[1])
+                want = raw_geometry.place((x, y), angle - part.angle, offset)
+                if math.dist(want, new.at_mm) > 1e-6 or math.dist(old.local_mm, new.local_mm) > 1e-9:
+                    complaints.append(f"{part.reference} pad {old.number} is at {list(new.at_mm)}, expected {list(want)}")
+            node = next(n for n in reloaded.children
+                        if not n.is_atom and n.name == "footprint" and raw_geometry._reference(n) == part.reference)
+            new_shape, new_rel = _frame(node)
+            old_shape, old_rel = frames[part.reference]
+            if old_shape != new_shape or len(old_rel) != len(new_rel) or not all(map(_same_angle, old_rel, new_rel)):
+                complaints.append(f"{part.reference}: something other than the pose changed inside the footprint")
+        return complaints
+
+    return save_footprint_edits(path, edit, check)
+
+
 # --------------------------------------------------------------------------- edge anchoring
 
 

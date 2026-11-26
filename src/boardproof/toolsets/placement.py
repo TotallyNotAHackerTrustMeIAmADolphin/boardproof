@@ -22,9 +22,17 @@ from typing import Any
 from mcp.server.mcpserver import MCPServer
 
 from boardproof import placement_anchor, raw_geometry, write_layer
+from boardproof.group_edit import CREATE_GROUP_SENTENCE, MOVE_GROUP_SENTENCE
 from boardproof.group_lock import GROUP_LOCK_SENTENCE
 
+
 _footprint_dir_checked = False
+
+
+def _named_revision(result: dict, source: str) -> dict:
+    """The gate field marks the source and the new revision, as confirm_group_lock does."""
+    output = result.get("output_pcb")
+    return {**result, "pcb_path": output, "source_pcb": source} if isinstance(output, str) else result
 
 
 def _ensure_kicad_footprint_dir_set() -> None:
@@ -1290,6 +1298,26 @@ def build(mcp: MCPServer) -> list[str]:
             return {**result, "pcb_path": output, "source_pcb": pcb_path}
         return result
 
+    def propose_move_group(pcb_path: str, groups: list[str], dx: float, dy: float, output_dir: str | None = None) -> dict:
+        from boardproof import group_edit
+
+        return group_edit.propose_move_group(pcb_path, groups, dx, dy, output_dir)
+
+    def confirm_move_group(pcb_path: str, revision_token: str) -> dict:
+        from boardproof import group_edit
+
+        return _named_revision(group_edit.confirm_move_group(pcb_path, revision_token), pcb_path)
+
+    def propose_create_group(pcb_path: str, name: str, members: list[str], output_dir: str | None = None) -> dict:
+        from boardproof import group_edit
+
+        return group_edit.propose_create_group(pcb_path, name, members, output_dir)
+
+    def confirm_create_group(pcb_path: str, revision_token: str) -> dict:
+        from boardproof import group_edit
+
+        return _named_revision(group_edit.confirm_create_group(pcb_path, revision_token), pcb_path)
+
     @_with_frame
     def place_footprints_at_edge(pcb_path: str, specs: list[dict]) -> dict:
         """Place a batch of existing footprints at an edge of the board outline, a given distance
@@ -2104,6 +2132,47 @@ def build(mcp: MCPServer) -> list[str]:
         annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": False, "openWorldHint": False},
     )
     mcp.add_tool(
+        propose_move_group,
+        name="propose_move_group",
+        description=(
+            "Dry run: for a list of KiCad groups (names or uuids, see list_footprint_groups) list each member footprint with its "
+            "old and new (at x y) for one offset dx, dy in mm. Writes nothing; returns a revision_token for confirm_move_group. "
+            + MOVE_GROUP_SENTENCE
+        ),
+        annotations={"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
+    )
+    mcp.add_tool(
+        confirm_move_group,
+        name="confirm_move_group",
+        description=(
+            "Apply a propose_move_group proposal onto a new board revision (output_pcb; the source stays untouched), reload it, "
+            "check it and only then move it into place. " + MOVE_GROUP_SENTENCE + " A failed check returns ok false and leaves "
+            "the source as it was. The revision_token is single use and is refused if the board changed since the proposal. "
+            + write_layer.LOCK_SENTENCE
+        ),
+        annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": False, "openWorldHint": False},
+    )
+    mcp.add_tool(
+        propose_create_group,
+        name="propose_create_group",
+        description=(
+            "Dry run: the new KiCad group that would be added for a name and a list of footprint references. Writes nothing; "
+            "returns a revision_token for confirm_create_group. " + CREATE_GROUP_SENTENCE
+        ),
+        annotations={"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
+    )
+    mcp.add_tool(
+        confirm_create_group,
+        name="confirm_create_group",
+        description=(
+            "Apply a propose_create_group proposal onto a new board revision (output_pcb; the source stays untouched), reload it, "
+            "check it and only then move it into place. " + CREATE_GROUP_SENTENCE + " A failed check returns ok false and leaves "
+            "the source as it was. The revision_token is single use and is refused if the board changed since the proposal. "
+            + write_layer.LOCK_SENTENCE
+        ),
+        annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": False, "openWorldHint": False},
+    )
+    mcp.add_tool(
         move_reference_designators_to_layer,
         name="move_reference_designators_to_layer",
         description=("Move a batch of footprints' reference-designator silkscreen TEXT to a different layer (e.g. F.Fab) in one call -- does not change which side the footprint itself is mounted on." + " " + write_layer.LOCK_SENTENCE),
@@ -2176,6 +2245,10 @@ def build(mcp: MCPServer) -> list[str]:
         "list_footprint_groups",
         "propose_group_lock",
         "confirm_group_lock",
+        "propose_move_group",
+        "confirm_move_group",
+        "propose_create_group",
+        "confirm_create_group",
         "move_reference_designators_to_layer",
         "align_footprints",
         "distribute_footprints",
