@@ -141,10 +141,10 @@ def test_texts_on_texts_and_on_bodies_and_wires_are_found_as_estimates(result):
     assert len(crossed) == 1 and crossed[0]["estimated"] is True and crossed[0]["length_inside"] > 0.5
 
 
-def test_a_text_over_a_power_symbol_is_not_reported_against_it(result):
-    """The tool text says power symbols are not compared: OVERGND lies over the GND symbol on R5 (and so over R5)."""
+def test_a_text_over_a_power_symbol_is_a_text_symbol_finding_against_it(result):
+    """Issue 262: OVERGND lies over the GND symbol on R5 (and over R5); the power symbol is now an item too."""
     over = [f for f in _of(result, "text_symbol") if "OVERGND" in _refs(f)]
-    assert over and all("#PWR01" not in _refs(f) for f in over)
+    assert {"#PWR01", "R5"} <= {r for f in over for r in _refs(f)}
 
 
 def test_a_wire_clipping_a_text_box_counts_only_beyond_half_a_millimetre(result):

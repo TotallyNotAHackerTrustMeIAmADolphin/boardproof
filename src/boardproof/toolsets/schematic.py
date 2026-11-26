@@ -3785,7 +3785,7 @@ def build(mcp: MCPServer) -> list[str]:
 
         kinds: which findings to look for, a non-empty list drawn from symbol_symbol, text_text,
         text_symbol, text_wire, wire_through_pin, outside_page, label_over_own_symbol,
-        text_hidden_behind_symbol and text_over_pin_text; omitted, all of them. sch_path: any sheet of the
+        text_hidden_behind_symbol, text_over_pin_text and pin_on_wire; omitted, all of them. sch_path: any sheet of the
         project; every sheet file of the tree is read once, starting at the root sheet (root_sch, optional
         when sch_path is the root or the only .kicad_pro of its folder names it). max_findings (1 to 5000,
         default 500) limits the listed findings, not the counts.
@@ -3821,6 +3821,13 @@ def build(mcp: MCPServer) -> list[str]:
         the box of label_over_own_symbol below (its text drawn about 0.35 mm higher than the box is not corrected: a stated limit). Sheet
         pins of a hierarchical sheet symbol are not read as texts. A free text with no justify (what add_text writes) is drawn and
         boxed centred on its anchor (measured with kicad-cli svg: text-anchor middle), one with a justify from that justify.
+        pin_on_wire (issue 262): a visible pin of a symbol or sheet symbol (not a power symbol) that lies on the middle of a
+        wire, with or without a junction there: the pin has no stub of its own, the rail runs straight through it. Items:
+        the part and the wire; pin (x, y), junction (true or false). Without a junction the pair is also a wire_through_pin.
+        A pin on a wire end, a stub shorter than 1.27 mm and the pins of power symbols are not read. check_project carries
+        only its count (totals pin_on_wire).
+        A text over a power symbol (a label on the power symbol's own pin excepted) is a text_symbol finding with the
+        power symbol as second item.
         wire_through_pin: a wire whose middle (not an end) runs over a pin with no junction on that point.
         KiCad joins a pin only to a wire end or a junction, so that pin joins nothing although it looks
         wired; split the wire at the pin or add a junction.
@@ -4007,6 +4014,10 @@ def build(mcp: MCPServer) -> list[str]:
         changed by it. checked false, with a reason (and the objects under unmeasured), means the sheet's paper is not one
         KiCad reads or an object could not be measured: such a sheet is never read as inside its page, and no_findings is false.
         Bring notes back with move_text, remove them with delete_text, or change the paper with set_paper.
+
+        Pin-on-wire count (issue 262, always, read from the sheet files): every sheet entry has pin_on_wire {severity
+        warning, count}, the number of visible pins that lie on the middle of a wire, and totals.pin_on_wire is the sum;
+        a count above 0 makes no_findings false. The pins are listed by find_overlaps with kinds ["pin_on_wire"].
 
         Refusals: file_not_found, root_not_found, parent_not_in_tree, invalid_spec (checks), and a root sheet
         that cannot be loaded at all (sheet_tree_incomplete). check_connectivity and sch_run_erc stay for a

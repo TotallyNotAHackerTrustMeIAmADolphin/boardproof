@@ -41,6 +41,11 @@ numbers behind it:
     ``covered_fraction``: the part of the text box inside the symbol box. Own texts and labels are not
     read here (labels are ``label_over_own_symbol`` or ``text_symbol``). Every such pair is ALSO reported
     as ``text_symbol``; this kind adds the share and the DNP flag.
+``pin_on_wire``
+    A visible pin of a symbol or sheet symbol (not a power symbol) that lies on the interior of a wire, with or without a
+    junction there (issue 262): the pin has no stub of its own, the rail runs straight through it. ``junction`` says whether a
+    junction sits on the pin. With no junction the pair is also a ``wire_through_pin``. Pins on a wire END, wire stubs shorter
+    than 1.27 mm and the pins of power symbols are not read.
 ``outside_page``
     A symbol, sheet symbol, label, free text or visible property text whose box reaches beyond the drawing
     frame (``FRAME_MARGIN_MM`` inside the page edge) of the sheet's own page, with how many mm over the
@@ -80,7 +85,7 @@ from boardproof.sheet_authoring import SheetAuthoringError
 from boardproof.sheet_property_arrange import drawn_box
 
 KINDS = ("symbol_symbol", "text_text", "text_symbol", "text_wire", "wire_through_pin", "outside_page",
-         "label_over_own_symbol", "text_hidden_behind_symbol", "text_over_pin_text")
+         "label_over_own_symbol", "text_hidden_behind_symbol", "text_over_pin_text", "pin_on_wire")
 # The default drawing sheet's frame lies 10 mm inside the page on every side. Measured: the SVG that kicad-cli 10.0.7
 # exports draws the outer frame line 10 mm from each edge of A4 landscape and A3 portrait
 # (tests/test_find_overlaps_outside_page.py reads it back).
@@ -418,9 +423,13 @@ def _findings(sheet: str, root: Any, margin: float | None, page_check: bool) -> 
                     "move one of the two texts (set_property_positions for symbol texts, move_labels for labels)", True)
     for text in texts:
         for body in bodies:
-            if body.power or text.owner is body.node or not readability._overlaps(text.box, body.box, TEXT_MM):
+            if text.owner is body.node or not readability._overlaps(text.box, body.box, TEXT_MM):
                 continue
             items = [text.item(), body.item()]
+            if body.power:  # issue 262: a text over a power symbol is a text_symbol; a label on its pin names that net and is not
+                if not (text.kind == "label" and any(se._same(text.at, pin) for pin in body.pins)):
+                    add("text_symbol", text.at, items, "move the text clear of the power symbol", True)
+                continue
             if text.kind == "label" and any(se._same(text.at, pin) for pin in body.pins):
                 px, py = readability._penetration(text.box, body.box)
                 add("label_over_own_symbol", text.at, items, "turn the label (move_labels) or move it to the far side of the pin so its text runs away from the part",
@@ -454,6 +463,14 @@ def _findings(sheet: str, root: Any, margin: float | None, page_check: bool) -> 
                         [text.item(), {"kind": "pin_text", "what": what, "pin": number, "text": pin_text, "reference": body.name, "uuid": body.uuid, "box": _box_dict(pbox)}],
                         "move the text clear of the pin " + what + " (move_labels, move_text or set_property_positions), or turn the label so it runs away from the part",
                         True, overlap=[se._r(px), se._r(py)])
+    for body in solid:  # issue 262: a pin on the middle of a wire has no stub of its own, with or without a junction
+        for pin in body.pins:
+            on_junction = any(se._same(pin, j) for j in junctions)
+            for node, a, b in wires:
+                if _strictly_inside(a, b, pin):
+                    add("pin_on_wire", pin, [body.item(), {"kind": "wire", "uuid": se._uuid(node), "points": [se._round_pt(*a), se._round_pt(*b)]}],
+                        "give the pin a stub: end the rail's wire at a short wire from the pin (at least 1.27 mm), or move the part off the rail",
+                        False, pin=se._round_pt(*pin), junction=on_junction)
     for body in bodies:
         for pin in body.pins:
             if any(se._same(pin, j) for j in junctions):
@@ -495,7 +512,7 @@ def find_overlaps(sch_path: str, kinds: Any = None, root_sch: str | None = None,
             "findings": everything[:max_findings], "truncated": len(everything) > max_findings,
             "skipped": skipped,
             "note": "a layout aid, not a verdict: symbol boxes are the raw library geometry of the sheet file (graphics plus visible pins), "
-                    "text boxes are estimates from the font size (a finding with estimated true), power symbols are not compared",
+                    "text boxes are estimates from the font size (a finding with estimated true), power symbols are not compared as bodies of symbol_symbol and text_hidden_behind_symbol (a text over one is a text_symbol)",
             **{k: v for k, v in tree.report().items() if k != "sheets"},
         }
     except SheetAuthoringError as exc:
