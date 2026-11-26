@@ -24,7 +24,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from boardproof import sheet_authoring, sheet_extents, sheet_tree, write_layer
+from boardproof import output_detail, sheet_authoring, sheet_extents, sheet_tree, write_layer
 from boardproof.sheet_authoring import SheetAuthoringError
 
 CHECKS = ("connectivity", "erc")
@@ -96,11 +96,32 @@ def _group_connectivity(result: dict[str, Any], tree: Any, root_rel: str) -> tup
     return grouped, unattributed
 
 
+def _cut_sheets(sheets: list[dict[str, Any]]) -> None:
+    """The default answer (issue 230): per sheet, connectivity findings and non-error ERC violations are cut to the
+    first 20 (``<name>_truncated``), no-connect pins are only counted; error-severity violations, every count and
+    the totals are never cut."""
+    for sheet in sheets:
+        conn = sheet.get("connectivity")
+        if conn is not None:
+            conn.pop("no_connect_pins", None)
+            for key in ("unconnected_pins", "connection_issues", "missing_from_netlist"):
+                if len(conn[key]) > output_detail.LIMIT:
+                    conn[key] = conn[key][: output_detail.LIMIT]
+                    conn[f"{key}_truncated"] = True
+        erc = sheet.get("erc")
+        if erc is not None:
+            errors = [v for v in erc["violations"] if v.get("severity") == "error"]
+            others = [v for v in erc["violations"] if v.get("severity") != "error"]
+            if len(others) > output_detail.LIMIT:
+                erc["violations"] = errors + others[: output_detail.LIMIT]
+                erc["violations_truncated"] = True
+
+
 def _severities(violations: list[dict[str, Any]]) -> dict[str, int]:
     return dict(sorted(Counter(str(v.get("severity", "?")) for v in violations).items()))
 
 
-def check_project(sch_path: str, root_sch: str | None, checks: Any, connectivity: Callable[[str], dict]) -> dict[str, Any]:
+def check_project(sch_path: str, root_sch: str | None, checks: Any, connectivity: Callable[[str], dict], detail: bool = False) -> dict[str, Any]:
     """Read-only: connectivity and ERC findings of every sheet of the project, grouped per sheet file."""
     try:
         wanted = _checks(checks)
@@ -124,7 +145,7 @@ def check_project(sch_path: str, root_sch: str | None, checks: Any, connectivity
     with tempfile.TemporaryDirectory(prefix="boardproof-check-project-") as scratch:
         scratch_root = sheet_authoring._copy_project(tree, [], Path(scratch))
         library_problems = _copy_project_libraries(tree.project_dir, Path(scratch))
-        return _check_tree(wanted, root_file, scratch_root, tree, connectivity, library_problems)
+        return _check_tree(wanted, root_file, scratch_root, tree, connectivity, library_problems, detail)
 
 
 _LIB_TABLES = ("sym-lib-table", "fp-lib-table")
@@ -243,7 +264,7 @@ def _copy_libraries(project_dir: Path, scratch: Path, problems: list[str]) -> No
                 shutil.copyfile(member, dest)
 
 
-def _check_tree(wanted: list[str], root_file: Path, scratch_root: Path, tree: Any, connectivity: Callable[[str], dict], library_problems: list[str]) -> dict[str, Any]:
+def _check_tree(wanted: list[str], root_file: Path, scratch_root: Path, tree: Any, connectivity: Callable[[str], dict], library_problems: list[str], detail: bool = False) -> dict[str, Any]:
     root_rel = tree.rel(root_file)
     rels = [tree.rel(f) for f in tree.files]
     uses_by_path = {path: tree.rel(f) for f, path in tree.uses}
@@ -265,7 +286,8 @@ def _check_tree(wanted: list[str], root_file: Path, scratch_root: Path, tree: An
                 grouped, unattributed = _group_connectivity(result, tree, root_rel)
                 for rel, lists in grouped.items():
                     sheets[rel]["connectivity"] = {
-                        **lists, "unconnected_count": len(lists["unconnected_pins"]), "no_connect_count": len(lists["no_connect_pins"]),
+                        **lists,
+                        "unconnected_count": len(lists["unconnected_pins"]), "no_connect_count": len(lists["no_connect_pins"]),
                         "connection_issue_count": len(lists["connection_issues"]), "missing_from_netlist_count": len(lists["missing_from_netlist"])}
                 totals.update({
                     "unconnected_pins": len(result.get("unconnected_pins", [])), "no_connect_pins": len(result.get("no_connect_pins", [])),
@@ -325,12 +347,17 @@ def _check_tree(wanted: list[str], root_file: Path, scratch_root: Path, tree: An
         reasons.append(f"{len(erc_unmapped)} ERC sheet(s) could not be matched to a sheet file (listed under erc_unmapped)")
     if erc_unreported:
         reasons.append(f"{len(erc_unreported)} sheet use(s) are not in the ERC report (marked reported: false)")
+    # an incomplete answer (a sheet or check missing) lists every finding: nothing is then summarised away
+    cut = not detail and complete
+    if cut:
+        _cut_sheets(list(sheets.values()))
     return {
         "status": "ok" if complete else "incomplete", "ok": complete, "written": False, "root": root_rel,
         "checks_requested": wanted, "library_problems": library_problems, "checks_not_run": not_run, "covered": complete,
         **({"reason": "; ".join(reasons)} if reasons else {}),
         "totals": totals, "no_findings": complete and len(wanted) == len(CHECKS) and not has_findings and not unattributed_count,
         "sheets": list(sheets.values()),
+        **({"detail_note": "no_connect_pins are counted only, error violations are never cut; " + output_detail.DETAIL_NOTE} if cut else {}),
         "connectivity_unattributed": unattributed, "erc_unmapped": erc_unmapped, "erc_unreported_paths": erc_unreported,
         **{k: v for k, v in tree.report().items() if k != "sheets"},
     }

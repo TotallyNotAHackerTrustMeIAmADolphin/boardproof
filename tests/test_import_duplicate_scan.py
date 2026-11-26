@@ -92,7 +92,7 @@ def test_a_stale_instance_entry_is_not_a_duplicate(kicad_demo, tmp_path: Path) -
     _add_stale_entry(sub, "C201", project="complex_hierarchy", path=stale)
     assert sorted(_instance_paths(sub, "C201")) == sorted([live, stale])  # the setup holds
 
-    result = si.propose_schematic_import(project / "complex_hierarchy.kicad_pcb", output_dir=tmp_path / "out")
+    result = si.propose_schematic_import(project / "complex_hierarchy.kicad_pcb", output_dir=tmp_path / "out", detail=True)
 
     assert "duplicate" not in str(result.get("reason", "")), result.get("reason")
     assert result["status"] == "proposed", result

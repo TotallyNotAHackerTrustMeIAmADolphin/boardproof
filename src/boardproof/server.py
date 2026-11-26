@@ -324,13 +324,16 @@ def _register_layout_tools(mcp: MCPServer) -> None:
         annotations=_READ_ONLY,
         description=(
             "Dry run of importing footprints and nets from the project's schematic into the "
-            "board (Update PCB from Schematic): lists every footprint and net that would be "
+            "board (Update PCB from Schematic): lists the footprints and nets that would be "
             "added and where new footprints are staged; writes nothing and returns a "
             "revision_token. Any footprint that cannot be resolved through the project "
             "fp-lib-table / installed libraries blocks the proposal (status blocked, no token) "
             "and is named. Staged footprints are not placed: placement is a separate step. "
             "schematic_path defaults to the board's own .kicad_sch; staging_origin is [x, y] "
-            "in page mm (default: right of the Edge.Cuts box). " + schematic_import.STALE_NETS_SENTENCE + " "
+            "in page mm (default: right of the Edge.Cuts box). The answer lists at most the first 20 footprints and nets "
+            "(footprints_count, net_count, footprints_truncated, nets_truncated) and counts already_present; detail=true "
+            "lists every one. unresolved, footprint_mismatches, orphans, renetted and stale_nets_removed are always full. "
+            + schematic_import.STALE_NETS_SENTENCE + " "
             + _LAYOUT_ORDER
         ),
     )
@@ -341,6 +344,7 @@ def _register_layout_tools(mcp: MCPServer) -> None:
         staging_origin: tuple[float, float] | None = None,
         columns: int = 5,
         spacing: float = 10.0,
+        detail: bool = False,
     ) -> dict:
         from boardproof import schematic_import
 
@@ -351,6 +355,7 @@ def _register_layout_tools(mcp: MCPServer) -> None:
             staging_origin=staging_origin,
             columns=columns,
             spacing=spacing,
+            detail=detail,
         )
 
     @mcp.tool(

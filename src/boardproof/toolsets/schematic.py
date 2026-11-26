@@ -32,7 +32,7 @@ from typing import Any
 
 from mcp.server.mcpserver import MCPServer
 
-from boardproof import connectivity_check, pin_wiring, symbol_libs, write_layer
+from boardproof import connectivity_check, output_detail, pin_wiring, symbol_libs, write_layer
 from boardproof.kicad_cli import ensure_kicad_cli_on_path, find_kicad_cli
 
 _symbol_dir_checked = False
@@ -1428,7 +1428,7 @@ def _read_only(tool_fn):
 def build(mcp: MCPServer) -> list[str]:
     """Register the schematic toolset. See toolsets/registry.py for the contract."""
 
-    def add_symbols(sch_path: str, specs: list[dict], dry_run: bool = False) -> dict:
+    def add_symbols(sch_path: str, specs: list[dict], dry_run: bool = False, detail: bool = False) -> dict:
         """Place one or more symbols onto an existing schematic in one call.
 
         Each spec: lib_id, x, y, ref (required); value, rotation, footprint,
@@ -1463,9 +1463,16 @@ def build(mcp: MCPServer) -> list[str]:
         Positions are placed as given (issue 86): the origin is NOT rounded to the 1.27 mm grid
         unless a spec carries "snap": true, because existing callers place at arbitrary
         coordinates. The result reads back every symbol and unit that was written, from the raw
-        sheet: `symbols` ({reference, uuid, lib_id, unit, at, rotation, mirror, asked, pins [{number,
-        name, x, y}], pin_count, off_grid_pins}), `snapped` (what "snap": true moved), `grid`.
-        Use those pin points, or wire by pin with connect_pins, and do not compute them.
+        sheet: `symbols` ({reference, uuid, lib_id, unit, at, rotation, mirror, asked, pin_count,
+        off_grid_pins}, and pins [{number, name, x, y}] ONLY with detail=true), `snapped` (what "snap": true
+        moved), `grid`. The default answer carries no pin points: with detail=true use them, or wire by pin with
+        connect_pins, or read them with get_symbol_pins, and do not compute them.
+
+        Size (issue 230): without detail (the default) the answer lists placed and symbols for the first 20 symbols only
+        (placed_count and symbols_count are the full counts, `*_truncated: true` says a list was cut) and a symbol entry
+        has pin_count and off_grid_pins but not its pins list; every symbol with an off-grid pin is listed in full under
+        off_grid_symbols ({reference, off_grid_pins}), snapped, stale_instance_symbols and nets are never cut. detail=true
+        gives every symbol with its pins ({number, name, x, y}).
 
         A lib_id's library nickname is resolved as KiCad does: the project's sym-lib-table
         first (${KIPRJMOD} is the project folder), then the user's global sym-lib-table, then
@@ -1584,15 +1591,23 @@ def build(mcp: MCPServer) -> list[str]:
             entry["spec"] = index if by_spec else None
             entry["asked"] = [specs[index]["x"], specs[index]["y"]] if by_spec else None
             entry["snapped"] = index in moved if by_spec else None
-        result = {"status": "ok", "placed": placed, "count": len(placed), "symbols": symbols, "grid": grid,
+        shown = symbols if detail else [{k: v for k, v in e.items() if k != "pins"} for e in symbols[:output_detail.LIMIT]]
+        result = {"status": "ok", **output_detail.listing("placed", placed, detail), "count": len(placed),
+                  "symbols": shown, "symbols_count": len(symbols),
+                  **({"symbols_truncated": True} if len(shown) < len(symbols) else {}),
+                  **({} if detail else {"off_grid_symbols": [{"reference": e["reference"], "off_grid_pins": e["off_grid_pins"]}
+                                                             for e in symbols if e["off_grid_pins"]],
+                                        "detail_note": "symbols lack their pins list. " + output_detail.DETAIL_NOTE}),
+                  "grid": grid,
                   "snapped": snapped_refs,
                   "stale_instance_symbols": _stale_instance_refs(path, before_uuids),
                   "instance_data": instance_data,
                   "grid_note": "Positions are NOT snapped to the grid unless a spec says \"snap\": true; "
                                "off_grid_pins lists the pin numbers whose point is off the grid. "
-                               "Wire by pin with connect_pins.",
+                               "Wire by pin with connect_pins." + ("" if detail else " This answer carries no pin points: "
+                               "use connect_pins, get_symbol_pins or detail=true; do not compute them."),
                   "nets": stage["nets"], "written": not dry_run, **notice}
-        return _as_dry_run(result, {"placed": "would_place"}) if dry_run else result
+        return _as_dry_run(result, {"placed": "would_place", "placed_count": "would_place_count", "placed_truncated": "would_place_truncated"}) if dry_run else result
 
     def add_wires(sch_path: str, specs: list[dict], dry_run: bool = False) -> dict:
         """Add one or more wires to an existing schematic in one call,
@@ -3937,7 +3952,7 @@ def build(mcp: MCPServer) -> list[str]:
         }
 
     @_read_only
-    def check_project(sch_path: str, root_sch: str | None = None, checks: list[str] | None = None) -> dict:
+    def check_project(sch_path: str, root_sch: str | None = None, checks: list[str] | None = None, detail: bool = False) -> dict:
         """Read-only, in one call over the whole sheet tree: check_connectivity and KiCad's ERC of every sheet,
         grouped per sheet, with counts per sheet and in total. It writes nothing and takes no write lock (the connectivity engine, which writes a
         netlist beside its input, and kicad-cli ERC, which writes a .kicad_prl there, both run on a scratch copy of the
@@ -3958,7 +3973,7 @@ def build(mcp: MCPServer) -> list[str]:
         erc (violations, each with its sheet_path such as "/Connectors/" and the KiCad severity and type, count and
         by_severity; a sheet file used twice lists the violations of every use, as KiCad reports them);
         totals (sheets, unconnected_pins, no_connect_pins, connection_issues, missing_from_netlist,
-        erc_violations, erc_by_severity); root and unreferenced_sheets. Nothing is truncated.
+        erc_violations, erc_by_severity); root and unreferenced_sheets. Totals and every count are always the full numbers. Without detail (the default) a status ok answer cuts, per sheet, unconnected_pins, connection_issues, missing_from_netlist and the non-error ERC violations to the first 20 (name_truncated: true says so), counts no_connect_pins only (no_connect_count), and never cuts an error-severity violation; detail=true lists every item. A status incomplete answer is never cut.
 
         Nothing is dropped silently. A sheet that cannot be loaded (missing, unparseable, cyclic or outside
         the project) is listed in sheet_problems and makes covered false and status incomplete: with such a
@@ -3985,7 +4000,7 @@ def build(mcp: MCPServer) -> list[str]:
         """
         from boardproof import project_check
 
-        return project_check.check_project(sch_path, root_sch, checks, check_connectivity)
+        return project_check.check_project(sch_path, root_sch, checks, check_connectivity, detail)
 
     @_read_only
     def diff_schematic(

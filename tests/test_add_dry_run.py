@@ -51,7 +51,7 @@ def base(tmp_path_factory) -> dict:
     sheet = Path(project_toolset._project_create(str(folder), "demo")["schematic_path"])
     placed = _tools()["add_symbols"](str(sheet), [
         {"lib_id": "Device:R", "x": 101.6, "y": 50.8, "ref": "R1", "value": "1k"},
-        {"lib_id": "Device:R", "x": 127.0, "y": 50.8, "ref": "R2", "value": "2k"}])
+        {"lib_id": "Device:R", "x": 127.0, "y": 50.8, "ref": "R2", "value": "2k"}], detail=True)
     assert placed["status"] == "ok", placed
     pins = {(s["reference"], p["number"]): (p["x"], p["y"]) for s in placed["symbols"] for p in s["pins"]}
     return {"folder": folder, "sheet": sheet.name, "pins": pins}
@@ -122,7 +122,7 @@ def test_add_symbols_creates_the_nets_of_the_new_pins(work):
 
 def test_add_symbols_dry_run_lists_the_symbols_that_would_be_written(work):
     _folder, sheet, pins = work
-    result = _run(_tools(), "add_symbols", sheet, pins, dry_run=True)
+    result = _run(_tools(), "add_symbols", sheet, pins, dry_run=True, detail=True)
     assert result["would_place"] == ["R3"] and "placed" not in result
     assert [s["reference"] for s in result["symbols"]] == ["R3"] and result["symbols"][0]["pins"]
 
@@ -293,7 +293,7 @@ def test_on_a_sub_sheet_the_net_change_says_it_is_read_with_the_sheet_as_root(tm
     assert sheet_authoring.add_sheet_symbols(
         str(root), [{"file": "sub.kicad_sch", "name": "S", "x": 101.6, "y": 101.6, "pins": PIN}])["status"] == "ok"
     sub = root.parent / "sub.kicad_sch"
-    placed = tools["add_symbols"](str(sub), [{"lib_id": "Device:R", "x": 101.6, "y": 50.8, "ref": "R5"}])
+    placed = tools["add_symbols"](str(sub), [{"lib_id": "Device:R", "x": 101.6, "y": 50.8, "ref": "R5"}], detail=True)
     assert placed["status"] == "ok", placed
     assert placed["nets"]["scope"] == "sheet" and "parent" in placed["nets"]["scope_note"]
     pin = next(p for p in placed["symbols"][0]["pins"] if p["number"] == "1")
@@ -412,7 +412,7 @@ def _two_subs(tmp_path) -> tuple[Path, Path, list]:
         assert sheet_authoring.add_sheet_symbols(
             str(root), [{"file": name, "name": name[:3].upper(), "x": 101.6, "y": y, "pins": PIN}])["status"] == "ok"
     sub = root.parent / "sub.kicad_sch"
-    placed = tools["add_symbols"](str(sub), [{"lib_id": "Device:R", "x": 101.6, "y": 50.8, "ref": "R5"}])
+    placed = tools["add_symbols"](str(sub), [{"lib_id": "Device:R", "x": 101.6, "y": 50.8, "ref": "R5"}], detail=True)
     pin = next(p for p in placed["symbols"][0]["pins"] if p["number"] == "1")
     return root, sub, [{"kind": "global", "text": "GG", "x": pin["x"], "y": pin["y"]}]
 

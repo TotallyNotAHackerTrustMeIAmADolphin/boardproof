@@ -60,8 +60,8 @@ def _node(sheet: Path, ref: str):
 
 
 def test_mirror_y_puts_the_pins_on_the_other_side_and_keeps_the_pin_order(tools, sch):
-    plain = tools["add_symbols"](str(sch), [_spec("J1")])
-    mirrored = tools["add_symbols"](str(sch), [_spec("J2", x=150.0, mirror="y")])
+    plain = tools["add_symbols"](str(sch), [_spec("J1")], detail=True)
+    mirrored = tools["add_symbols"](str(sch), [_spec("J2", x=150.0, mirror="y")], detail=True)
     assert plain["status"] == mirrored["status"] == "ok", (plain, mirrored)
     a, b = plain["symbols"][0], mirrored["symbols"][0]
     pa, pb = _pins(a), _pins(b)
@@ -84,8 +84,8 @@ def test_mirror_y_puts_the_pins_on_the_other_side_and_keeps_the_pin_order(tools,
 
 
 def test_mirror_x_negates_the_sheet_y_offset(tools, sch):
-    a = tools["add_symbols"](str(sch), [_spec("J1")])["symbols"][0]
-    b = tools["add_symbols"](str(sch), [_spec("J2", x=150.0, mirror="x")])["symbols"][0]
+    a = tools["add_symbols"](str(sch), [_spec("J1")], detail=True)["symbols"][0]
+    b = tools["add_symbols"](str(sch), [_spec("J2", x=150.0, mirror="x")], detail=True)["symbols"][0]
     pa, pb = _pins(a), _pins(b)
     for number, (x, y) in pa.items():
         assert pb[number][0] - 150.0 == pytest.approx(x - 100.33, abs=1e-3)
@@ -97,7 +97,7 @@ def test_mirror_pins_agree_with_the_netlist_for_rotation_and_mirror(tools, sch):
     variants = [(rot, m) for rot in (0, 90, 180, 270) for m in ("x", "y")]
     specs = [_spec(f"J{i + 1}", x=50.8 + 63.5 * (i % 4), y=60.96 + 63.5 * (i // 4), rotation=rot, mirror=m)
              for i, (rot, m) in enumerate(variants)]
-    res = tools["add_symbols"](str(sch), specs)
+    res = tools["add_symbols"](str(sch), specs, detail=True)
     assert res["status"] == "ok", res
     labels = []
     for entry in res["symbols"]:
@@ -124,7 +124,7 @@ def test_the_netlist_is_unchanged_by_placing_a_mirrored_symbol_next_to_existing_
 
 
 def test_a_mirrored_symbol_drags_its_wires_when_moved(tools, sch):
-    res = tools["add_symbols"](str(sch), [_spec("J1", mirror="y")])["symbols"][0]
+    res = tools["add_symbols"](str(sch), [_spec("J1", mirror="y")], detail=True)["symbols"][0]
     pins = _pins(res)
     for number in ("1", "2"):
         x, y = pins[number]

@@ -225,7 +225,7 @@ def test_second_import_into_the_result_adds_nothing(pcb: Path, tmp_path: Path) -
     again = si.propose_schematic_import(tmp_path / "out" / pcb.name, output_dir=tmp_path / "out2")
     assert again["status"] == "proposed"
     assert again["footprints"] == []
-    assert len(again["already_present"]) == 13
+    assert again["already_present_count"] == 13 and "already_present" not in again
 
 
 # --- slice 3: failure, cleanup, checkpoint -------------------------------------------

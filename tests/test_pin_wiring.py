@@ -439,7 +439,7 @@ def test_add_symbols_lists_every_placed_symbol_and_unit_with_its_pin_points(tmp_
              {"lib_id": "Amplifier_Operational:LM324", "x": 127, "y": 101.6, "ref": "U1", "value": "LM324", "unit": 1},
              {"lib_id": "Amplifier_Operational:LM324", "x": 167.64, "y": 101.6, "ref": "U1", "value": "LM324", "unit": 2},
              {"lib_id": "Amplifier_Operational:LM324", "x": 208.28, "y": 101.6, "ref": "U1", "value": "LM324", "unit": 5}]
-    result = tools["add_symbols"](str(sch), specs)
+    result = tools["add_symbols"](str(sch), specs, detail=True)
     assert result["status"] == "ok" and result["placed"] == ["R1", "R2", "U1", "U1", "U1"], result
     assert result["count"] == 5 and len(result["symbols"]) == 5
     assert [(s["reference"], s["unit"]) for s in result["symbols"]] == [("R1", 1), ("R2", 1), ("U1", 1), ("U1", 2), ("U1", 5)]

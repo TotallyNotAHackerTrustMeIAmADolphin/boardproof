@@ -49,7 +49,7 @@ from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any
 
-from boardproof import checkpoint, write_layer
+from boardproof import checkpoint, output_detail, write_layer
 from boardproof.board_view import OUTLINE_SHAPES, read_board_view
 from boardproof import verify_board as gate
 from boardproof.raw_geometry import RawGeometryError, net_name, net_node_name, net_table
@@ -1018,6 +1018,31 @@ def _output_dir_problem(src: Path, out_dir: Path) -> str | None:
     return checkpoint.output_dir_problem(src, out_dir, what="the import")
 
 
+def _proposal_lists(plan: dict, detail: bool) -> dict:
+    """The lists of a proposal (issue 230, slice 2). What the caller decides on (unresolved, mismatches,
+    orphans, renetted, stale nets, unreferenced sheets) is always full, each with its ``*_count``. The
+    footprints and nets that would be added are cut to the first 20 without ``detail``; the stored plan
+    (the token's payload and plan_hash) is not this answer and stays full."""
+    out: dict[str, Any] = {
+        **output_detail.listing("footprints", plan["footprints"], detail),
+        **output_detail.counted("already_present", plan["already_present"], detail),
+    }
+    for key in ("unresolved", "footprint_mismatches", "orphans", "renetted"):
+        out.update(output_detail.listing(key, plan[key], True))
+    # declared on the board, used by no pad or copper, absent from the netlist (issue 69)
+    out.update(output_detail.listing("stale_nets_removed", sorted(plan["stale_nets"]), True))
+    nets = plan["nets"]
+    shown = nets if detail else dict(list(nets.items())[: output_detail.LIMIT])
+    out.update(staging=plan["staging"], nets=shown, net_count=len(nets))
+    if not detail and len(nets) > output_detail.LIMIT:
+        out["nets_truncated"] = True
+    # never read: kicad-cli and the walks start at the root (build ticket 26)
+    out["unreferenced_sheets"] = plan["unreferenced_sheets"]
+    if not detail:
+        out["detail_note"] = "already_present is counted only. " + output_detail.DETAIL_NOTE
+    return out
+
+
 def propose_schematic_import(
     pcb_path: str | Path,
     schematic_path: str | Path | None = None,
@@ -1028,6 +1053,7 @@ def propose_schematic_import(
     spacing: float = _DEFAULT_SPACING,
     footprint_dirs: Sequence[str | Path] | None = None,
     netlist_exporter: NetlistExporter | None = None,
+    detail: bool = False,
 ) -> dict:
     """Dry run. Exports the kicad-cli netlist (to a temp file), resolves every
     footprint, plans the staging grid and the nets. Writes nothing. With any
@@ -1051,21 +1077,7 @@ def propose_schematic_import(
     except Exception as exc:  # noqa: BLE001
         return {"status": "incomplete", "reason": f"could not plan the import: {exc}"}
 
-    base = {
-        "footprints": plan["footprints"],
-        "unresolved": plan["unresolved"],
-        "already_present": plan["already_present"],
-        "footprint_mismatches": plan["footprint_mismatches"],
-        "orphans": plan["orphans"],
-        "renetted": plan["renetted"],
-        # declared on the board, used by no pad or copper, absent from the netlist (issue 69)
-        "stale_nets_removed": sorted(plan["stale_nets"]),
-        "staging": plan["staging"],
-        "nets": plan["nets"],
-        "net_count": len(plan["nets"]),
-        # never read: kicad-cli and the walks start at the root (build ticket 26)
-        "unreferenced_sheets": plan["unreferenced_sheets"],
-    }
+    base = _proposal_lists(plan, detail)
     if plan["unresolved"]:
         return {"status": "blocked", "revision_token": None, "reason": _unresolved_reason(plan["unresolved"]), **base}
 
