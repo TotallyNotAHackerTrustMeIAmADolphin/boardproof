@@ -116,7 +116,7 @@ def test_orphan_nets_are_listed_by_the_proposal_and_removed_by_the_confirm(board
 
 def test_confirm_result_netlist_check_still_compares_every_net(board: Path, tmp_path: Path) -> None:
     proposal = _propose(board, tmp_path)
-    result = si.confirm_schematic_import(board, proposal["revision_token"])
+    result = si.confirm_schematic_import(board, proposal["revision_token"], detail=True)
     nets = {n for n in _table(tmp_path / "out" / board.name) if n}
     assert nets == set(result["nets"])  # the board net table equals the kicad-cli netlist
 

@@ -1425,6 +1425,18 @@ def _read_only(tool_fn):
     return tool_fn
 
 
+def _nets_shown(nets: dict, detail: bool) -> dict:
+    """The net change of add_symbols (issue 261): the new pins' nets (``created``) are expected and cut to the
+    first 20 without ``detail``; extended (a new pin landing on an existing net can be accidental), merged, renamed,
+    split and removed change existing connectivity and stay in full. The counts are of the lists as sheet_editing bounds them
+    (at most 50 each; its ``truncated`` says more exist)."""
+    if detail:
+        return nets
+    out = dict(nets)
+    out.update(output_detail.listing("created", nets.get("created", []), False))
+    return out
+
+
 def build(mcp: MCPServer) -> list[str]:
     """Register the schematic toolset. See toolsets/registry.py for the contract."""
 
@@ -1471,7 +1483,9 @@ def build(mcp: MCPServer) -> list[str]:
         Size (issue 230): without detail (the default) the answer lists placed and symbols for the first 20 symbols only
         (placed_count and symbols_count are the full counts, `*_truncated: true` says a list was cut) and a symbol entry
         has pin_count and off_grid_pins but not its pins list; every symbol with an off-grid pin is listed in full under
-        off_grid_symbols ({reference, off_grid_pins}), snapped, stale_instance_symbols and nets are never cut. detail=true
+        off_grid_symbols ({reference, off_grid_pins}), snapped and stale_instance_symbols are never cut. In nets, created
+        (the nets of the new pins) lists its first 20 entries with created_count and created_truncated; extended,
+        merged, renamed, split, removed and the counts stay in full. detail=true
         gives every symbol with its pins ({number, name, x, y}).
 
         A lib_id's library nickname is resolved as KiCad does: the project's sym-lib-table
@@ -1606,7 +1620,7 @@ def build(mcp: MCPServer) -> list[str]:
                                "off_grid_pins lists the pin numbers whose point is off the grid. "
                                "Wire by pin with connect_pins." + ("" if detail else " This answer carries no pin points: "
                                "use connect_pins, get_symbol_pins or detail=true; do not compute them."),
-                  "nets": stage["nets"], "written": not dry_run, **notice}
+                  "nets": _nets_shown(stage["nets"], detail), "written": not dry_run, **notice}
         return _as_dry_run(result, {"placed": "would_place", "placed_count": "would_place_count", "placed_truncated": "would_place_truncated"}) if dry_run else result
 
     def add_wires(sch_path: str, specs: list[dict], dry_run: bool = False) -> dict:

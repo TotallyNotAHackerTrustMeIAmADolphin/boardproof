@@ -364,16 +364,19 @@ def _register_layout_tools(mcp: MCPServer) -> None:
             "Apply a propose_schematic_import proposal: writes a NEW board revision with the "
             "schematic's footprints and every pad net, verified by a fresh reload against the "
             "kicad-cli netlist; an unresolved footprint fails the whole confirm and nothing is "
-            "written. The revision_token is single use. " + schematic_import.STALE_NETS_SENTENCE + " "
+            "written. The revision_token is single use. The answer lists the first 20 footprints_added and nets "
+            "(footprints_added_count, net_count, nets_truncated) and counts already_present; footprint_mismatches, orphans, "
+            "renetted and stale_nets_removed are always full; the optional detail=true lists everything. "
+            + schematic_import.STALE_NETS_SENTENCE + " "
             + _LAYOUT_ORDER
             + " "
             + write_layer.LOCK_SENTENCE
         ),
     )
-    def confirm_schematic_import(pcb_path: str, revision_token: str) -> dict:
+    def confirm_schematic_import(pcb_path: str, revision_token: str, detail: bool = False) -> dict:
         from boardproof import schematic_import
 
-        result = schematic_import.confirm_schematic_import(pcb_path, revision_token)
+        result = schematic_import.confirm_schematic_import(pcb_path, revision_token, detail=detail)
         return _as_revision(result, pcb_path)
 
     @mcp.tool(

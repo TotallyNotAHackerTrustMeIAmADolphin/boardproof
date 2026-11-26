@@ -1398,12 +1398,34 @@ def _verify_revision(tmp: Path, state: dict) -> dict:
     return {"plan": state["plan"]}
 
 
+def _confirm_lists(plan: dict, detail: bool) -> dict:
+    """The lists of a confirm answer (issue 261): ``footprints_added`` and ``nets`` are cut to the first 20
+    without ``detail`` (``*_count`` says how many), ``already_present`` is counted only; mismatches, orphans,
+    renetted and the removed stale nets stay full. The verification already ran on the full plan."""
+    added = [{k: f[k] for k in ("reference", "library_id", "source", "staging_at")} for f in plan["footprints"]]
+    nets = plan["nets"]
+    out: dict[str, Any] = {
+        **output_detail.listing("footprints_added", added, detail),
+        **output_detail.counted("already_present", plan["already_present"], detail),
+    }
+    for key in ("footprint_mismatches", "orphans", "renetted"):
+        out.update(output_detail.listing(key, plan[key], True))
+    out.update(output_detail.listing("stale_nets_removed", sorted(plan["stale_nets"]), True))
+    out.update(staging=plan["staging"], nets=nets if detail else dict(list(nets.items())[: output_detail.LIMIT]), net_count=len(nets))
+    if not detail and len(nets) > output_detail.LIMIT:
+        out["nets_truncated"] = True
+    if not detail:
+        out["detail_note"] = "already_present is counted only. " + output_detail.DETAIL_NOTE
+    return out
+
+
 def confirm_schematic_import(
     pcb_path: str | Path,
     revision_token: str,
     *,
     footprint_dirs: Sequence[str | Path] | None = None,
     netlist_exporter: NetlistExporter | None = None,
+    detail: bool = False,
 ) -> dict:
     """Apply a proposal: build the revision, reload it fresh, verify footprints,
     raw positions and every pad net against the kicad-cli netlist, then rename
@@ -1430,17 +1452,7 @@ def confirm_schematic_import(
     return {
         "status": "imported",
         "output_pcb": str(out_dir / src.name),
-        "footprints_added": [
-            {k: f[k] for k in ("reference", "library_id", "source", "staging_at")} for f in plan["footprints"]
-        ],
-        "already_present": plan["already_present"],
-        "footprint_mismatches": plan["footprint_mismatches"],
-        "orphans": plan["orphans"],
-        "renetted": plan["renetted"],
-        "stale_nets_removed": sorted(plan["stale_nets"]),
-        "staging": plan["staging"],
-        "nets": plan["nets"],
-        "net_count": len(plan["nets"]),
+        **_confirm_lists(plan, detail),
         "verified": "reloaded from disk: footprint set, raw positions, every pad net equals the kicad-cli netlist",
         "note": (
             "footprints are staged, not placed; placement, rules and outline are separate steps. "

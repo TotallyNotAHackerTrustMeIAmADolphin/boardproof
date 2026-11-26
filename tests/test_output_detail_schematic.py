@@ -163,8 +163,10 @@ def test_add_symbols_default_is_short_and_detail_has_pins(tmp_path: Path, need_k
     assert all("pins" not in e and e["pin_count"] == 2 for e in short["symbols"])
     assert len(full["would_place"]) == N and len(full["symbols"]) == N and all(e["pins"] for e in full["symbols"])
     assert "symbols_truncated" not in full and "off_grid_symbols" not in full
-    assert len(json.dumps(short)) < len(json.dumps(full)) * 0.7  # measured 8950 vs 14854 characters; the nets block (own cap) stays
-    for key in ("nets", "snapped", "stale_instance_symbols", "instance_data", "grid", "count", "written"):
+    assert len(json.dumps(short)) < len(json.dumps(full)) * 0.7  # measured 8950 vs 14854 characters; the nets block is cut separately (issue 261)
+    assert len(short["nets"]["created"]) == 20 and short["nets"]["created_count"] == len(full["nets"]["created"])  # issue 261
+    assert {k: v for k, v in short["nets"].items() if not k.startswith(("created", "extended"))} == {k: v for k, v in full["nets"].items() if k not in ("created", "extended")}
+    for key in ("snapped", "stale_instance_symbols", "instance_data", "grid", "count", "written"):
         assert key in short and short[key] == full[key], key
 
 

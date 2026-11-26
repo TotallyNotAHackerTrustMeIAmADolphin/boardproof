@@ -66,6 +66,17 @@ def _ensure_kicad_footprint_dir_set() -> None:
         os.environ["KICAD_FOOTPRINT_DIR"] = str(footprint_dir)
 
 
+_MOVED_RULE = (
+    "The answer lists the first 20 footprints under moved with moved_count (moved_truncated when more were moved); "
+    "the optional detail=true lists every one. locked_skipped, not_measured and every refusal are never cut."
+)
+
+
+def _moved_lists(moved: list[dict], detail: bool) -> dict:
+    """The footprints a call moved: the first 20 with ``moved_count`` without ``detail`` (issue 261)."""
+    return output_detail.listing("moved", moved, detail)
+
+
 def _hull_boxes(path: Path, refs: list[str]) -> tuple[dict[str, tuple[tuple[float, float, float, float], bool]], dict | None]:
     """({reference: (box, has_courtyard)}, refusal): the hull of each footprint's courtyard and
     pads, read from the raw tokens (issue 228: pads can reach outside the courtyard of an adopted
@@ -895,7 +906,7 @@ def build(mcp: MCPServer) -> list[str]:
 
     @_with_frame
     @_fail_closed
-    def align_footprints(pcb_path: str, refs: list[str], axis: str, edge: str) -> dict:
+    def align_footprints(pcb_path: str, refs: list[str], axis: str, edge: str, detail: bool = False) -> dict:
         """Align a batch of footprints' edges or centers along a shared X/Y
         coordinate (like a design tool's align-left/right/top/bottom/center).
         Takes references and works on relative offsets (no coordinates are passed in); it
@@ -904,6 +915,9 @@ def build(mcp: MCPServer) -> list[str]:
         axis: "x" or "y". edge: "min"/"max"/"center" of the bounding box on that axis of the
         hull of the courtyard and the pads (read from the raw footprint tokens; the pads alone
         when the footprint has no courtyard, reported per footprint via "used_courtyard").
+
+        The answer lists the first 20 footprints under moved with moved_count (and moved_truncated when more were
+        moved); detail=true lists every one. locked_skipped is never cut.
 
         Refuses with file_open_in_kicad, naming the lock file, while KiCad holds a lock file for a file
         it would write; close the file in KiCad, then retry.
@@ -969,17 +983,20 @@ def build(mcp: MCPServer) -> list[str]:
                 if (refusal := write_layer.as_lock_refusal(exc)) is not None:
                     return refusal
                 return {"status": "incomplete", "reason": f"aligned in-memory but failed to save: {exc}"}
-        return {"status": "ok", "axis": axis, "edge": edge, "anchor": anchor_ref, "moved": moved,
+        return {"status": "ok", "axis": axis, "edge": edge, "anchor": anchor_ref, **_moved_lists(moved, detail),
                 "locked_skipped": locked_skipped}
 
     @_with_frame
     @_fail_closed
-    def distribute_footprints(pcb_path: str, refs: list[str], axis: str) -> dict:
+    def distribute_footprints(pcb_path: str, refs: list[str], axis: str, detail: bool = False) -> dict:
         """Evenly space a batch of footprints (by the centre of the hull of courtyard and pads,
         not the footprint origin) along an axis
         between the first and last ref in the list (used as anchors).
         Takes references and works on relative offsets (no coordinates are passed in); it
         reports local positions, relative to origin_mm (see frame in the result).
+
+        The answer lists the first 20 footprints under moved with moved_count (and moved_truncated when more were
+        moved); detail=true lists every one. locked_skipped is never cut.
 
         Refuses with file_open_in_kicad, naming the lock file, while KiCad holds a lock file for a file
         it would write; close the file in KiCad, then retry.
@@ -1038,11 +1055,11 @@ def build(mcp: MCPServer) -> list[str]:
                 if (refusal := write_layer.as_lock_refusal(exc)) is not None:
                     return refusal
                 return {"status": "incomplete", "reason": f"distributed in-memory but failed to save: {exc}"}
-        return {"status": "ok", "axis": axis, "moved": moved, "locked_skipped": locked_skipped}
+        return {"status": "ok", "axis": axis, **_moved_lists(moved, detail), "locked_skipped": locked_skipped}
 
     @_with_frame
     @_fail_closed
-    def snap_footprints_to_grid(pcb_path: str, refs: list[str], grid_mm: float, anchor: str = "outline") -> dict:
+    def snap_footprints_to_grid(pcb_path: str, refs: list[str], grid_mm: float, anchor: str = "outline", detail: bool = False) -> dict:
         """Snap a batch of footprints' positions to the nearest multiple of
         grid_mm, in one call. The grid is anchored at the outline corner, so snapped
         parts are not on the editor's absolute grid unless the corner is.
@@ -1057,6 +1074,9 @@ def build(mcp: MCPServer) -> list[str]:
         polygon, a legacy arc without a mid point, Edge.Cuts graphics inside a footprint,
         a malformed or unsupported Edge.Cuts item); without any outline coordinates are
         page coordinates.
+
+        The answer lists the first 20 footprints under moved with moved_count (and moved_truncated when more were
+        moved); detail=true lists every one. locked_skipped is never cut.
 
         Refuses with file_open_in_kicad, naming the lock file, while KiCad holds a lock file for a file
         it would write; close the file in KiCad, then retry.
@@ -1127,7 +1147,7 @@ def build(mcp: MCPServer) -> list[str]:
                 if (refusal := write_layer.as_lock_refusal(exc)) is not None:
                     return refusal
                 return {"status": "incomplete", "reason": f"snapped in-memory but failed to save: {exc}"}
-        return {"status": "ok", "grid_mm": grid_mm, "anchor": anchor, "grid_anchor_mm": grid_anchor, "moved": moved,
+        return {"status": "ok", "grid_mm": grid_mm, "anchor": anchor, "grid_anchor_mm": grid_anchor, **_moved_lists(moved, detail),
                 "locked_skipped": locked_skipped}
 
     @_fail_closed
@@ -1323,7 +1343,7 @@ def build(mcp: MCPServer) -> list[str]:
         return _named_revision(group_edit.confirm_create_group(pcb_path, revision_token), pcb_path)
 
     @_with_frame
-    def place_footprints_at_edge(pcb_path: str, specs: list[dict]) -> dict:
+    def place_footprints_at_edge(pcb_path: str, specs: list[dict], detail: bool = False) -> dict:
         """Place a batch of existing footprints at an edge of the board outline, a given distance
         in from it (banana sockets, connectors, mounting parts). Never call this once per
         footprint -- pass the whole batch.
@@ -1351,6 +1371,9 @@ def build(mcp: MCPServer) -> list[str]:
         The result reports each footprint's position and gap read back from the reloaded file;
         the reload must hold exactly the intended positions and nothing else changed, else
         write_not_verified and the board file is untouched.
+
+        The answer lists the first 20 footprints under moved with moved_count (and moved_truncated when more were
+        moved); detail=true lists every one. locked_skipped is never cut.
 
         Refuses with file_open_in_kicad, naming the lock file, while KiCad holds a lock file for a file
         it would write; close the file in KiCad, then retry.
@@ -1412,7 +1435,7 @@ def build(mcp: MCPServer) -> list[str]:
                                  round(part.box[2] - ox, 6), round(part.box[3] - oy, 6)],
                 "box_source": part.box_source,
             })
-        return {"status": "ok", "moved": moved, **({"not_measured": sorted(not_measured)} if not_measured else {})}
+        return {"status": "ok", **_moved_lists(moved, detail), **({"not_measured": sorted(not_measured)} if not_measured else {})}
 
     @_with_frame
     def propose_autoplacement(
@@ -2025,7 +2048,7 @@ def build(mcp: MCPServer) -> list[str]:
     mcp.add_tool(
         place_footprints_at_edge,
         name="place_footprints_at_edge",
-        description=("Place a batch of existing footprints at an edge of the board outline, offset_mm in from it (connectors, banana sockets), optionally along_mm along the edge; the box measured is the hull of the courtyard and the pads (a custom pad counts by its anchor size), from the raw footprint tokens, and the file is read back after the write. Needs an outline that is one axis-aligned rectangle, its corners optionally rounded by quarter arcs. All or nothing: an unknown or locked footprint, a courtyard that would leave the outline, overlap a slot or a rounded corner (in_cutout) or overlap another one refuses the whole call and writes nothing. Rotation and layer are kept." + " " + _NOT_MEASURED_RULE + " " + _FRAME_RULE + " " + write_layer.LOCK_SENTENCE),
+        description=("Place a batch of existing footprints at an edge of the board outline, offset_mm in from it (connectors, banana sockets), optionally along_mm along the edge; the box measured is the hull of the courtyard and the pads (a custom pad counts by its anchor size), from the raw footprint tokens, and the file is read back after the write. Needs an outline that is one axis-aligned rectangle, its corners optionally rounded by quarter arcs. All or nothing: an unknown or locked footprint, a courtyard that would leave the outline, overlap a slot or a rounded corner (in_cutout) or overlap another one refuses the whole call and writes nothing. Rotation and layer are kept." + " " + _NOT_MEASURED_RULE + " " + _FRAME_RULE + " " + _MOVED_RULE + " " + write_layer.LOCK_SENTENCE),
         annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
     )
     mcp.add_tool(
@@ -2111,19 +2134,19 @@ def build(mcp: MCPServer) -> list[str]:
     mcp.add_tool(
         align_footprints,
         name="align_footprints",
-        description=("Align a batch of footprints' edges or centers (of the hull of courtyard and pads; a custom pad counts by its anchor size) along a shared X/Y coordinate; locked footprints stay (locked_skipped)." + " " + _RELATIVE_RULE + " " + write_layer.LOCK_SENTENCE),
+        description=("Align a batch of footprints' edges or centers (of the hull of courtyard and pads; a custom pad counts by its anchor size) along a shared X/Y coordinate; locked footprints stay (locked_skipped)." + " " + _RELATIVE_RULE + " " + _MOVED_RULE + " " + write_layer.LOCK_SENTENCE),
         annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
     )
     mcp.add_tool(
         distribute_footprints,
         name="distribute_footprints",
-        description=("Evenly space a batch of footprints along an axis between the first and last given ref, by the centres of the hull of courtyard and pads (not the footprint origins; a custom pad counts by its anchor size); locked footprints stay (locked_skipped)." + " " + _RELATIVE_RULE + " " + write_layer.LOCK_SENTENCE),
+        description=("Evenly space a batch of footprints along an axis between the first and last given ref, by the centres of the hull of courtyard and pads (not the footprint origins; a custom pad counts by its anchor size); locked footprints stay (locked_skipped)." + " " + _RELATIVE_RULE + " " + _MOVED_RULE + " " + write_layer.LOCK_SENTENCE),
         annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
     )
     mcp.add_tool(
         snap_footprints_to_grid,
         name="snap_footprints_to_grid",
-        description=("Snap a batch of footprints' positions to the nearest grid point in one call; locked footprints stay (locked_skipped)." + " " + _FRAME_RULE + " The grid is anchored at the outline corner, so snapped parts are not on the editor's absolute grid unless the corner is." + ' Optional anchor (default "outline", unchanged): anchor="absolute" snaps the page coordinate to a grid whose origin is the grid origin KiCad stores in the board (setup grid_origin, honoured; page (0, 0) when none); a malformed grid_origin or any other anchor value refuses and writes nothing. The result carries anchor and grid_anchor_mm.' + " " + write_layer.LOCK_SENTENCE),
+        description=("Snap a batch of footprints' positions to the nearest grid point in one call; locked footprints stay (locked_skipped)." + " " + _FRAME_RULE + " The grid is anchored at the outline corner, so snapped parts are not on the editor's absolute grid unless the corner is." + ' Optional anchor (default "outline", unchanged): anchor="absolute" snaps the page coordinate to a grid whose origin is the grid origin KiCad stores in the board (setup grid_origin, honoured; page (0, 0) when none); a malformed grid_origin or any other anchor value refuses and writes nothing. The result carries anchor and grid_anchor_mm.' + " " + _MOVED_RULE + " " + write_layer.LOCK_SENTENCE),
         annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
     )
     mcp.add_tool(
