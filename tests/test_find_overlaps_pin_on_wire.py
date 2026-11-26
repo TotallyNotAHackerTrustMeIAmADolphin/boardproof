@@ -203,12 +203,26 @@ def test_pin_on_wire_on_a_turned_and_a_mirrored_part_lands_on_each_raw_pin(tmp_p
         assert [f["pin"] for f in found] == [pytest.approx(list(pin))]
 
 
-def test_a_rail_split_at_the_pin_is_not_pin_on_wire(tmp_path, tools):
+def test_a_rail_split_at_the_pin_is_pin_on_wire(tmp_path, tools):
+    """Issue 265 reverses 262 here: two wire ends meeting on the pin are a rail with no stub of its own (the peer's owner rule),
+    one finding for the pin with split true."""
     sch = _sheet(tmp_path)
     _place(tools, sch, [CAP])
     pin = _top_pin(sch)
     _wires(tools, sch, [([90.0, pin[1]], list(pin)), (list(pin), [110.0, pin[1]])])
-    assert _kind(tools, sch, "pin_on_wire") == []
+    found = _kind(tools, sch, "pin_on_wire")
+    assert len(found) == 1 and found[0]["split"] is True and found[0]["pin"] == pytest.approx(list(pin))
+
+
+@pytest.mark.parametrize("stub,reported", [(1.0, True), (1.26, True), (1.27, False), (3.0, False)])
+def test_a_stub_to_the_rail_needs_one_grid_pitch(tmp_path, tools, stub, reported):
+    sch = _sheet(tmp_path)
+    _place(tools, sch, [CAP])
+    pin = _top_pin(sch)
+    rail_y = round(pin[1] - stub, 2)
+    _wires(tools, sch, [(list(pin), [pin[0], rail_y]), ([90.0, rail_y], [110.0, rail_y])])
+    found = _kind(tools, sch, "pin_on_wire")
+    assert bool(found) is reported and (not reported or found[0]["stub"] == pytest.approx(stub))
 
 
 def test_the_pin_test_is_within_a_micrometre():

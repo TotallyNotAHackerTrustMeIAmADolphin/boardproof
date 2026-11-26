@@ -42,10 +42,21 @@ numbers behind it:
     read here (labels are ``label_over_own_symbol`` or ``text_symbol``). Every such pair is ALSO reported
     as ``text_symbol``; this kind adds the share and the DNP flag.
 ``pin_on_wire``
-    A visible pin of a symbol or sheet symbol (not a power symbol) that lies on the interior of a wire, with or without a
-    junction there (issue 262): the pin has no stub of its own, the rail runs straight through it. ``junction`` says whether a
-    junction sits on the pin. With no junction the pair is also a ``wire_through_pin``. Pins on a wire END, wire stubs shorter
-    than 1.27 mm and the pins of power symbols are not read.
+    A visible pin of a symbol or sheet symbol (not a power symbol) that has no stub of its own of at least ``MIN_STUB_MM``
+    (1.27 mm) to the rail (issues 262 and 265): the pin lies on the interior of a wire, with or without a junction (the rail runs
+    straight through it), or two or more wire ends meet on it (a rail split at the pin, ``split`` true; ``shape`` is branch for 3 or more ends, straight for two collinear ends, corner for two at an angle), or its only wire is
+    shorter than 1.27 mm and ends on a rail (``stub`` in mm). ``junction`` says whether a junction sits on the pin. An interior pin
+    with no junction is also a ``wire_through_pin``. A pin with a single wire of at least 1.27 mm and the pins of power symbols are
+    not read (a power symbol on a short stub is ``short_stub_to_power``).
+``short_stub_to_power``
+    A visible pin of a symbol or sheet symbol (not a power symbol) joined to the pin of a power symbol (GND, +5V, ...) by wire
+    shorter than ``MIN_STUB_MM`` (1.27 mm), or by no wire at all (the power symbol sits on the pin; ``length`` 0): ``length`` is the
+    wire length along the connection, ``pin`` the part's pin. Wire length is summed along wires that meet end to end; a pin with
+    no wire path to a power symbol is not read (issue 265).
+``pin_on_pin``
+    A visible pin of one symbol or sheet symbol (not a power symbol) on the very point of a visible pin of ANOTHER such part, with
+    no wire touching the point (issue 265). Two pins of one part on one point are not read. A junction on the point is a
+    ``pin_on_wire`` (the wires there), and a power symbol on a pin is ``short_stub_to_power`` with length 0.
 ``outside_page``
     A symbol, sheet symbol, label, free text or visible property text whose box reaches beyond the drawing
     frame (``FRAME_MARGIN_MM`` inside the page edge) of the sheet's own page, with how many mm over the
@@ -85,7 +96,10 @@ from boardproof.sheet_authoring import SheetAuthoringError
 from boardproof.sheet_property_arrange import drawn_box
 
 KINDS = ("symbol_symbol", "text_text", "text_symbol", "text_wire", "wire_through_pin", "outside_page",
-         "label_over_own_symbol", "text_hidden_behind_symbol", "text_over_pin_text", "pin_on_wire")
+         "label_over_own_symbol", "text_hidden_behind_symbol", "text_over_pin_text", "pin_on_wire", "short_stub_to_power", "pin_on_pin")
+# One schematic grid pitch: the shortest wire the peer who asked for issue 265 accepts between a pin and its power symbol
+# (KiCad's default schematic grid is 50 mil = 1.27 mm).
+MIN_STUB_MM = 1.27
 # The default drawing sheet's frame lies 10 mm inside the page on every side. Measured: the SVG that kicad-cli 10.0.7
 # exports draws the outer frame line 10 mm from each edge of A4 landscape and A3 portrait
 # (tests/test_find_overlaps_outside_page.py reads it back).
@@ -363,6 +377,43 @@ def _strictly_inside(a: tuple[float, float], b: tuple[float, float], p: tuple[fl
 # --------------------------------------------------------------------------- the finder
 
 
+def _wire_item(w: tuple[Any, tuple, tuple]) -> dict[str, Any]:
+    return {"kind": "wire", "uuid": se._uuid(w[0]), "points": [se._round_pt(*w[1]), se._round_pt(*w[2])]}
+
+
+def _is_flag(node: Any) -> bool:
+    """The power flag (``power:PWR_FLAG``) marks a net as driven; it is not a power symbol to draw a stub to."""
+    lib = node.find_children("lib_id")
+    return bool(lib) and (lib[0].get_string(0) or "").split(":")[-1] == "PWR_FLAG"
+
+
+def _split_shape(pin: tuple[float, float], ends: list) -> str:
+    """How the wire ends meeting on ``pin`` lie: branch (3 or more), straight (two collinear) or corner (two at an angle)."""
+    if len(ends) >= 3:
+        return "branch"
+    vecs = [(far[0] - pin[0], far[1] - pin[1]) for _n, a, b in ends for far in [b if se._same(a, pin) else a]]
+    (x1, y1), (x2, y2) = vecs
+    norm = math.hypot(x1, y1) * math.hypot(x2, y2)
+    return "straight" if norm == 0 or abs(x1 * y2 - x2 * y1) / norm < 1e-3 else "corner"
+
+
+def _stub_length(pin: tuple[float, float], wires: list, power_pins: list[tuple[float, float]]) -> tuple[float, tuple[float, float]] | None:
+    """Shortest wire length (below MIN_STUB_MM) from ``pin`` along wires meeting end to end to a power pin, with that power pin."""
+    best: tuple[float, tuple[float, float]] | None = None
+    todo = [(pin, 0.0)]
+    while todo:
+        at, length = todo.pop()
+        for pp in power_pins:
+            if se._same(at, pp) and (best is None or length < best[0]):
+                best = (length, pp)
+        for _node, a, b in wires:
+            for near, far in ((a, b), (b, a)):
+                step = math.hypot(far[0] - near[0], far[1] - near[1])
+                if se._same(at, near) and step > 0 and length + step < (best[0] if best else MIN_STUB_MM - se.TOL):
+                    todo.append((far, length + step))
+    return best
+
+
 def _frame_margin(root_file: Path) -> float | None:
     """The frame margin of the default drawing sheet unless the project names its own one; None
     (unknown) when it does, or when the project file cannot be read as that."""
@@ -466,11 +517,50 @@ def _findings(sheet: str, root: Any, margin: float | None, page_check: bool) -> 
     for body in solid:  # issue 262: a pin on the middle of a wire has no stub of its own, with or without a junction
         for pin in body.pins:
             on_junction = any(se._same(pin, j) for j in junctions)
+            inside = False
             for node, a, b in wires:
                 if _strictly_inside(a, b, pin):
                     add("pin_on_wire", pin, [body.item(), {"kind": "wire", "uuid": se._uuid(node), "points": [se._round_pt(*a), se._round_pt(*b)]}],
                         "give the pin a stub: end the rail's wire at a short wire from the pin (at least 1.27 mm), or move the part off the rail",
                         False, pin=se._round_pt(*pin), junction=on_junction)
+                    inside = True
+            if inside:
+                continue
+            # issue 265: a rail split at the pin (two or more wire ends meet on it) is the same case, and so is a single stub
+            # shorter than MIN_STUB_MM that ends on a rail (the middle of another wire, or a node of two or more other wire ends)
+            ends = [(node, a, b) for node, a, b in wires if se._same(a, pin) or se._same(b, pin)]
+            if len(ends) >= 2:
+                add("pin_on_wire", pin, [body.item(), _wire_item(ends[0])],
+                    "give the pin a stub: a wire of at least 1.27 mm from the pin to the rail, or move the part off the rail",
+                    False, pin=se._round_pt(*pin), junction=on_junction, split=True, shape=_split_shape(pin, ends))
+            elif len(ends) == 1:
+                _n, a, b = ends[0]
+                far = b if se._same(a, pin) else a
+                length = math.hypot(far[0] - pin[0], far[1] - pin[1])
+                others = [w for w in wires if w is not ends[0]]
+                on_rail = any(_strictly_inside(w[1], w[2], far) for w in others) or sum(1 for w in others if se._same(w[1], far) or se._same(w[2], far)) >= 2
+                if length < MIN_STUB_MM - se.TOL and on_rail:
+                    add("pin_on_wire", pin, [body.item(), _wire_item(ends[0])],
+                        "lengthen the pin's stub to at least 1.27 mm before it meets the rail",
+                        False, pin=se._round_pt(*pin), junction=on_junction, stub=se._r(length))
+    power_pins = [(b, (p["x"], p["y"])) for b in bodies if b.power and b.kind == "symbol" and not _is_flag(b.node)
+                  for p in se.pin_positions(root, b.node, with_hidden=True)]  # power pins are usually hidden
+    for body in solid:  # issue 265: the wire between a pin and its power symbol is shorter than one grid pitch
+        for pin in body.pins:
+            hit = _stub_length(pin, wires, [pt for _b, pt in power_pins])
+            if hit is not None:
+                power = next(b for b, pt in power_pins if se._same(pt, hit[1]))
+                add("short_stub_to_power", pin, [body.item(), power.item()],
+                    "draw the power symbol at least 1.27 mm from the pin (move_items on the power symbol, then connect_pins), so the pin has a visible stub",
+                    False, pin=se._round_pt(*pin), length=se._r(hit[0]))
+    for i, first in enumerate(solid):  # issue 265: two parts' pins on one point with no wire (a junction there is a pin_on_wire)
+        for second in solid[i + 1:]:
+            for pin in first.pins:
+                touched = any(se._same(pin, a) or se._same(pin, b) or _strictly_inside(a, b, pin) for _n, a, b in wires)
+                if any(se._same(pin, q) for q in second.pins) and not touched:
+                    add("pin_on_pin", pin, [first.item(), second.item()],
+                        "move one of the two parts so that their pins do not lie on one point, or join them with a wire of at least 1.27 mm",
+                        False, pin=se._round_pt(*pin))
     for body in bodies:
         for pin in body.pins:
             if any(se._same(pin, j) for j in junctions):

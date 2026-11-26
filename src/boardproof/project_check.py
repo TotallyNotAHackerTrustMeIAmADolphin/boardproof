@@ -304,16 +304,18 @@ def _check_tree(wanted: list[str], root_file: Path, scratch_root: Path, tree: An
     if page_unchecked:
         totals["outside_page_unchecked_sheets"] = page_unchecked
 
-    # issue 262: the count of pins that sit on the middle of a wire (the findings are find_overlaps' kind pin_on_wire)
+    # issues 262 and 265: counts of pins on the middle of a wire and of pins with a power symbol under 1.27 mm of wire away
+    # (the findings are find_overlaps' kinds pin_on_wire and short_stub_to_power)
     from boardproof import sheet_overlaps
 
-    pins = sheet_overlaps.find_overlaps(str(root_file), ["pin_on_wire"], max_findings=sheet_overlaps.MAX_MAX)
-    if pins.get("status") != "ok":
-        not_run["pin_on_wire"] = str(pins.get("reason", "find_overlaps did not complete"))
-    else:
-        for rel in rels:
-            sheets[rel]["pin_on_wire"] = {"severity": "warning", "count": sum(1 for f in pins["findings"] if f["sheet"] == rel)}
-        totals["pin_on_wire"] = pins["counts"]["pin_on_wire"]
+    for kind in ("pin_on_wire", "short_stub_to_power", "pin_on_pin"):
+        pins = sheet_overlaps.find_overlaps(str(root_file), [kind], max_findings=sheet_overlaps.MAX_MAX)
+        if pins.get("status") != "ok":
+            not_run[kind] = str(pins.get("reason", "find_overlaps did not complete"))
+        else:
+            for rel in rels:
+                sheets[rel][kind] = {"severity": "warning", "count": sum(1 for f in pins["findings"] if f["sheet"] == rel)}
+            totals[kind] = pins["counts"][kind]
 
     erc_unreported: list[str] = []
     if "erc" in wanted:
@@ -347,7 +349,7 @@ def _check_tree(wanted: list[str], root_file: Path, scratch_root: Path, tree: An
     unattributed_count = sum(len(v) for v in unattributed.values())
     has_findings = bool(
         totals.get("unconnected_pins") or totals.get("connection_issues") or totals.get("missing_from_netlist") or totals.get("erc_violations")
-        or page_total or page_unchecked or totals.get("pin_on_wire"))
+        or page_total or page_unchecked or totals.get("pin_on_wire") or totals.get("short_stub_to_power") or totals.get("pin_on_pin"))
     reasons = []
     if tree.problems:
         reasons.append("sheets that cannot be loaded: " + "; ".join(tree.problems))
