@@ -1669,17 +1669,36 @@ def _round_point(x: float, y: float, ndigits: int = 4) -> tuple[float, float]:
     return (round(x, ndigits), round(y, ndigits))
 
 
-def _segment_key(seg: Any, origin: tuple[float, float]) -> tuple:
+def _copper_nets(board: Any, root: Any) -> tuple[list[str], list[str]]:
+    """Net names of ``board.segments`` and ``board.vias`` (model order), read from the raw
+    ``root`` through the shared reader (hard rule 2; the model's ``net_name`` is not trusted).
+    An unknown net form or an object the raw board lacks raises ``RawGeometryError``."""
+    from boardproof import raw_geometry
+
+    table = raw_geometry.net_table(root)
+
+    def nets(models: list, name: str, same: Any = None) -> list[str]:
+        raws = [c for c in root.children if not c.is_atom and c.name == name]
+        return [raw_geometry.net_name(raw, table) for raw in raw_geometry.align_raw(models, raws, name, same)]
+
+    def same_layer(model: Any, raw: Any) -> bool:
+        layer, raw_layer = getattr(model, "layer", "") or "", raw.find("layer")
+        return not (layer and raw_layer is not None and raw_layer.values and layer != str(raw_layer.values[0]))
+
+    return nets(list(board.segments), "segment", same_layer), nets(list(board.vias), "via")
+
+
+def _segment_key(seg: Any, origin: tuple[float, float], net: str) -> tuple:
     ox, oy = origin
     a = _round_point(seg.start[0] + ox, seg.start[1] + oy)
     b = _round_point(seg.end[0] + ox, seg.end[1] + oy)
     lo, hi = (a, b) if a <= b else (b, a)
-    return (seg.layer, lo, hi, round(float(seg.width), 4), seg.net_name or "")
+    return (seg.layer, lo, hi, round(float(seg.width), 4), net)
 
 
-def _via_key(via: Any, origin: tuple[float, float]) -> tuple:
+def _via_key(via: Any, origin: tuple[float, float], net: str) -> tuple:
     ox, oy = origin
-    return (_round_point(via.position[0] + ox, via.position[1] + oy), via.net_name or "")
+    return (_round_point(via.position[0] + ox, via.position[1] + oy), net)
 
 
 def route_delta(original_pcb: str | Path, routed_pcb: str | Path) -> dict:
@@ -1700,16 +1719,18 @@ def route_delta(original_pcb: str | Path, routed_pcb: str | Path) -> dict:
     orig_origin = tuple(original.board_origin)
     routed_origin = tuple(routed.board_origin)
 
-    original_segments = {_segment_key(s, orig_origin) for s in original.segments}
-    original_vias = {_via_key(v, orig_origin) for v in original.vias}
+    orig_seg_nets, orig_via_nets = _copper_nets(original, write_layer.load(original_pcb))
+    routed_seg_nets, routed_via_nets = _copper_nets(routed, write_layer.load(routed_pcb))
+    original_segments = {_segment_key(s, orig_origin, n) for s, n in zip(original.segments, orig_seg_nets, strict=True)}
+    original_vias = {_via_key(v, orig_origin, n) for v, n in zip(original.vias, orig_via_nets, strict=True)}
     routed_segments: set[tuple] = set()
     routed_vias: set[tuple] = set()
 
     ox, oy = orig_origin
     rx, ry = routed_origin
     trace_specs: list[dict] = []
-    for seg in routed.segments:
-        key = _segment_key(seg, routed_origin)
+    for seg, net in zip(routed.segments, routed_seg_nets, strict=True):
+        key = _segment_key(seg, routed_origin, net)
         routed_segments.add(key)
         if key in original_segments:
             continue
@@ -1719,12 +1740,12 @@ def route_delta(original_pcb: str | Path, routed_pcb: str | Path) -> dict:
                 "end": [seg.end[0] + rx - ox, seg.end[1] + ry - oy],
                 "width_mm": float(seg.width),
                 "layer": seg.layer,
-                "net": seg.net_name or None,
+                "net": net or None,
             }
         )
     via_specs: list[dict] = []
-    for via in routed.vias:
-        key = _via_key(via, routed_origin)
+    for via, net in zip(routed.vias, routed_via_nets, strict=True):
+        key = _via_key(via, routed_origin, net)
         routed_vias.add(key)
         if key in original_vias:
             continue
@@ -1732,7 +1753,7 @@ def route_delta(original_pcb: str | Path, routed_pcb: str | Path) -> dict:
             {
                 "x": via.position[0] + rx - ox,
                 "y": via.position[1] + ry - oy,
-                "net": via.net_name or None,
+                "net": net or None,
                 "size_mm": float(via.size),
                 "drill_mm": float(via.drill),
                 "layers": list(via.layers) if getattr(via, "layers", None) else ["F.Cu", "B.Cu"],

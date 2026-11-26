@@ -537,6 +537,35 @@ def _is_int(value: Any) -> bool:
     return isinstance(value, int)  # the parser yields no bool
 
 
+def direct_uuid(node: Any) -> str:
+    """The node's own ``(uuid ...)``; ``find`` would also return a descendant's, so look at children."""
+    for child in node.children:
+        if not child.is_atom and child.name == "uuid" and child.values:
+            return str(child.values[0])
+    return ""
+
+
+def align_raw(models: list, raws: list, what: str, same: Any = None) -> list:
+    """The raw node of each model object. By uuid where the model's uuid names exactly one raw
+    node's own uuid, else by file order; the counts must agree, a uuid both sides carry must
+    match and ``same(model, raw)`` (a second key: reference, layer) must hold, otherwise
+    RawGeometryError (some boards have objects with no own uuid)."""
+    if len(models) != len(raws):
+        raise RawGeometryError(f"the model has {len(models)} {what}s, the raw board {len(raws)}")
+    own = [direct_uuid(r) for r in raws]
+    out = []
+    for model, raw, ru in zip(models, raws, own, strict=True):
+        mu = getattr(model, "uuid", "") or ""
+        if mu and ru and mu != ru:
+            if own.count(mu) != 1:
+                raise RawGeometryError(f"{what} {mu!r} is not in the raw board at its place")
+            raw = raws[own.index(mu)]
+        if same is not None and not same(model, raw):
+            raise RawGeometryError(f"a {what} of the model does not match the raw {what} it was paired with")
+        out.append(raw)
+    return out
+
+
 def net_table(root: Any) -> dict[int, str]:
     """The top-level ``(net N "name")`` declarations of a parsed ``kicad_pcb``; ``{}`` for KiCad 10
     (file version 20260206), which writes none. A declaration of any other shape raises

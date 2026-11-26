@@ -42,7 +42,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from boardproof import write_layer
+from boardproof import raw_geometry, write_layer
 from boardproof import rung_runner
 from boardproof.routers import kicad_routing_tools as krt_tools
 from boardproof.toolsets import routing as routing_toolset
@@ -889,7 +889,7 @@ def _neck_pads(root: Any, copper: list[str]) -> list[_NeckPad]:
             angle = float(at.values[2]) if at is not None and len(at.values) > 2 else 0.0
             box = None if flipped else _pad_local_box(pad)
             pads.append(_NeckPad(ref, str(pad.values[0]) if pad.values else "",
-                                 pour_step._resolved_net(pad, table) or "", on, (fx + rx, fy + ry), angle, box))
+                                 raw_geometry.net_name(pad, table), on, (fx + rx, fy + ry), angle, box))
     return pads
 
 
@@ -937,8 +937,6 @@ def _neck_network(root: Any, table: dict, pads: list[_NeckPad], project: dict, n
     along the tracks (the part of a track inside the pad does not count; full-width copper counts)."""
     import heapq
 
-    from boardproof import pour_step
-
     class_width = _requirement(project, net, "track_width", "min_track_width")[0]
     nodes: list[tuple[float, float]] = []
 
@@ -955,7 +953,7 @@ def _neck_network(root: Any, table: dict, pads: list[_NeckPad], project: dict, n
             continue
         layer_node = child.find("layer")
         if (layer_node is None or not layer_node.values or str(layer_node.values[0]) != layer
-                or pour_step._resolved_net(child, table) != net):
+                or raw_geometry.net_name(child, table) != net):
             continue
         a, b = _raw_xy(child, "start"), _raw_xy(child, "end")
         if a is None or b is None:

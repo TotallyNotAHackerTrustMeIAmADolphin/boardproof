@@ -975,8 +975,8 @@ def import_ses_with_kicad(snapshot: dict, ses_path: str | Path, work_dir: str | 
             f"export, {live[:12]} now): the routed copper was made for the board as it was; route it again"
         )
 
-    delta = krt_backend.route_delta(base, routed)
     try:
+        delta = krt_backend.route_delta(base, routed)
         raw = raw_copper_delta(write_layer.load(base), write_layer.load(routed))
     except raw_geometry.RawGeometryError as exc:
         raise KicadSpecctraError(f"a net of the board or of the routed copy is unreadable: {exc}") from exc
@@ -1343,14 +1343,6 @@ def _read_board_constraints(pcb_path: str | Path) -> dict:
         return {}
 
 
-def _direct_uuid(node: Any) -> str:
-    """The node's own ``(uuid ...)``; ``find`` would also return a descendant's, so look at children."""
-    for child in node.children:
-        if not child.is_atom and child.name == "uuid" and child.values:
-            return str(child.values[0])
-    return ""
-
-
 def _raw_reference(node: Any) -> str:
     """A raw footprint's reference: ``(property "Reference" "R1")`` or ``(fp_text reference "R1")``; "" if none."""
     for child in node.children:
@@ -1378,25 +1370,8 @@ def _same_zone(model: Any, raw: Any) -> bool:
     return not (layer and raw_layer and layer != raw_layer)
 
 
-def _align_raw(models: list, raws: list, what: str, same: Any = None) -> list:
-    """The raw node of each model object. By uuid where the model's uuid names exactly one raw
-    node's own uuid, else by file order; the counts must agree, a uuid both sides carry must
-    match and ``same(model, raw)`` (a second key: reference, layer) must hold, otherwise
-    RawGeometryError (some boards have objects with no own uuid)."""
-    if len(models) != len(raws):
-        raise raw_geometry.RawGeometryError(f"the model has {len(models)} {what}s, the raw board {len(raws)}")
-    own = [_direct_uuid(r) for r in raws]
-    out = []
-    for model, raw, ru in zip(models, raws, own, strict=True):
-        mu = getattr(model, "uuid", "") or ""
-        if mu and ru and mu != ru:
-            if own.count(mu) != 1:
-                raise raw_geometry.RawGeometryError(f"{what} {mu!r} is not in the raw board at its place")
-            raw = raws[own.index(mu)]
-        if same is not None and not same(model, raw):
-            raise raw_geometry.RawGeometryError(f"a {what} of the model does not match the raw {what} it was paired with")
-        out.append(raw)
-    return out
+_direct_uuid = raw_geometry.direct_uuid
+_align_raw = raw_geometry.align_raw
 
 
 def _pre_existing_filled_zone_report(board: Any, root: Any) -> dict | None:
