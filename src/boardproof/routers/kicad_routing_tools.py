@@ -346,7 +346,11 @@ def check_availability(*, timeout: int = 120) -> dict:
     except KicadRoutingToolsError as exc:
         return {"status": "incomplete", "reason": str(exc), "checkout": str(checkout)}
 
-    base = {"checkout": str(checkout), "python": str(python), "route_script": str(checkout / ROUTE_SCRIPT)}
+    version = router_version(checkout)
+    base = {"checkout": str(checkout), "python": str(python), "route_script": str(checkout / ROUTE_SCRIPT),
+            "router_version": version}
+    if (too_old := min_version_problem(version)) is not None:
+        return {"status": "incomplete", "reason": too_old, **base}
     try:
         proc = subprocess.run(
             [str(python), "-c", _PROBE_SCRIPT, str(checkout)],
@@ -805,6 +809,26 @@ def router_version(checkout: str | Path) -> str | None:
     except OSError:
         return None
     return text or None
+
+
+# The oldest KRT whose parser reads the board's unquoted pad names (KRT 0.23.1 read them as zero pads,
+# build ticket 112). Issue 263, from the decision of issue 5 (minimum 0.23.7).
+MIN_ROUTER_VERSION = (0, 23, 7)
+
+
+def min_version_problem(version: str | None) -> str | None:
+    """None when ``version`` (the checkout's `VERSION` text) is a plain ``major.minor.patch`` at or above
+    ``MIN_ROUTER_VERSION``, else one sentence saying why not. An unknown or unparsable version is a
+    problem, never a pass."""
+    minimum = ".".join(map(str, MIN_ROUTER_VERSION))
+    if version is None:
+        return f"KiCadRoutingTools version unknown (no readable VERSION file); the minimum is {minimum}"
+    # ASCII digits only, no leading zeros, at most 6 digits a part (int() of a longer text can raise).
+    if not re.fullmatch(r"(0|[1-9][0-9]{0,5})(\.(0|[1-9][0-9]{0,5})){2}", version):
+        return f"KiCadRoutingTools version {version!r} is not major.minor.patch; the minimum is {minimum}"
+    if tuple(int(n) for n in version.split(".")) < MIN_ROUTER_VERSION:
+        return f"KiCadRoutingTools {version} is older than the minimum {minimum}"
+    return None
 
 
 _SHA_RE = re.compile(r"[0-9a-f]{40}")
@@ -1820,6 +1844,8 @@ __all__ = [
     "ENV_PATH",
     "ENV_PYTHON",
     "KicadRoutingToolsError",
+    "MIN_ROUTER_VERSION",
+    "min_version_problem",
     "VALID_ESCALATIONS",
     "board_floor_overrides",
     "build_route_args",

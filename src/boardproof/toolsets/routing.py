@@ -2329,7 +2329,7 @@ def _propose_with_kicad_routing_tools(
             "KiCadRoutingTools' rewritten .kicad_pro was discarded on every attempt; all DRC numbers above are "
             "against the board's ORIGINAL rules, and confirm_route applies only traces/vias through kicad_tools."
         ),
-        "router_availability": {k: availability.get(k) for k in ("checkout", "python", "grid_router_version")},
+        "router_availability": {k: availability.get(k) for k in ("checkout", "python", "grid_router_version", "router_version")},
         "attempts": attempts,
         "warning": (
             "Autorouted output -- review before trusting, even the best-scoring attempt. "

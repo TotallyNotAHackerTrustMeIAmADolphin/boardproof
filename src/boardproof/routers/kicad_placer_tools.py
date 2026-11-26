@@ -38,6 +38,7 @@ from boardproof.routers.kicad_routing_tools import (
     find_kicad_routing_tools,
     find_kicad_routing_tools_python,
     load_cli_snapshot,
+    min_version_problem,
     router_version,
 )
 
@@ -103,6 +104,8 @@ def placer_problem() -> str | None:
         python = find_kicad_routing_tools_python()
         pinned = load_cli_snapshot().get("router_version")
         installed = router_version(checkout)
+        if (too_old := min_version_problem(installed)) is not None:
+            return f"unavailable: {too_old} ({checkout}). Nothing was changed."
         if not (checkout / PLACER_SCRIPT).is_file() or not (checkout / FLOORPLAN_SCRIPT).is_file():
             return (f"unavailable: {PLACER_SCRIPT.as_posix()} or {FLOORPLAN_SCRIPT.as_posix()} is missing in the installed "
                     f"KiCadRoutingTools {installed or 'unknown version'} ({checkout}). Nothing was changed.")
@@ -158,7 +161,8 @@ def run_place_simple(board_copy: Path, run_dir: Path, refs: list[str], *, seed: 
         summary: Any = json.loads(report.read_text(encoding="utf-8")) if report.is_file() else {}
     except (OSError, ValueError):
         summary = {}
-    return {"output_pcb": str(output), "elapsed_s": round(time.time() - started, 2), "exit_code": 0, "report": summary}
+    return {"output_pcb": str(output), "elapsed_s": round(time.time() - started, 2), "exit_code": 0, "report": summary,
+            "router_version": router_version(checkout)}
 
 
 def _raw_board_origin(root: Any) -> tuple[float, float]:

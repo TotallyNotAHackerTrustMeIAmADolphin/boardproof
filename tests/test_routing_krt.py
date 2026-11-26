@@ -101,6 +101,7 @@ def test_availability_probe_names_missing_binary_and_install_command(tmp_path, m
     """A checkout without the prebuilt grid_router binary must come back as
     an actionable incomplete naming `build_router.py`, never raise."""
     checkout = _fake_checkout(tmp_path / "krt")
+    (checkout / "VERSION").write_text("0.23.8\n", encoding="utf-8")  # issue 263: the version is read first
     monkeypatch.setenv(krt.ENV_PATH, str(checkout))
     monkeypatch.delenv(krt.ENV_PYTHON, raising=False)
     result = krt.check_availability()

@@ -1696,7 +1696,8 @@ def build(mcp: MCPServer) -> list[str]:
         Returns a proposal with a revision_token (poses are BOARD-LOCAL millimetres, the frame of
         propose_autoplacement). Call confirm_placement_optimization to apply it, then run pcb_check_placement
         and pcb_run_drc on the board. Unavailable (status error, code placer_unavailable) when the script, the
-        pinned KiCadRoutingTools version or numpy, scipy or shapely are missing.
+        pinned KiCadRoutingTools version (never older than 0.23.7) or numpy, scipy or shapely are missing;
+        the answer's placer block names the KiCadRoutingTools version that ran.
         """
         import tempfile
 
@@ -1746,7 +1747,7 @@ def build(mcp: MCPServer) -> list[str]:
         elapsed = run.get("elapsed_s")
         locked_skipped = sorted(r for r in delta if r in locked_now)
         delta = {r: v for r, v in delta.items() if r not in locked_now}
-        base = {"seed": seed, "locked_skipped": locked_skipped, "placer": {"script": "place_simple", "elapsed_s": elapsed}}
+        base = {"seed": seed, "locked_skipped": locked_skipped, "placer": {"script": "place_simple", "elapsed_s": elapsed, "router_version": run.get("router_version")}}
         if not delta:
             return {"status": "complete", "changed": False, "proposed_positions": {}, **base,
                     "reason": "the placer left every unlocked footprint where it is"
