@@ -3861,7 +3861,8 @@ def build(mcp: MCPServer) -> list[str]:
         estimated text box overlaps that part's box by more than 0.5 mm in both axes: the text runs into
         the part it names. The box of a local label follows its stored justification and angle as KiCad draws them
         (measured with kicad-cli): 180 is drawn as 0 and 270 as 90, with no half-turn flip, so left runs
-        right or up and right runs left or down (a global or hierarchical label: see above); a label on a pin whose text runs away from the part is
+        right or up and right runs left or down, and bottom puts the text above the anchor (left of it when turned), top below it
+        (right of it) and no vertical word centres it (a global or hierarchical label: see above); a label on a pin whose text runs away from the part is
         not reported. Items: the label, the part; overlap in mm.
         It replaces text_symbol for that pair (a label on a pin of a part is not a text_symbol finding).
         text_hidden_behind_symbol: the visible Reference, Value or other property text of another symbol, or

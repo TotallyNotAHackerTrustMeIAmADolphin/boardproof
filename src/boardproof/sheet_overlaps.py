@@ -315,11 +315,15 @@ def _read(root: Any) -> tuple[list[_Body], list[_Text], list[tuple[Any, tuple, t
         text = node.get_string(0) or ""
         at = se._at(node)
         effects = node.find("effects")
-        h, _v = readability._justify(effects)
-        # KiCad draws a label with the stored justify at the stored angle taken modulo 180 (180 as 0, 270 as 90), no half-turn flip
-        # (measured with kicad-cli 10.0.7, tests/test_find_overlaps_label_hidden.py); _text_box flips from 180 on, so hand it angle % 180.
+        h, v = readability._justify(effects)
+        # KiCad draws a label with BOTH stored justify words at the stored angle taken modulo 180 (180 as 0, 270 as 90), no half-turn
+        # flip (measured with kicad-cli 10.0.7, tests/test_find_overlaps_label_justify.py and _label_hidden.py): in the text frame left
+        # starts at the anchor, right ends there, none centres on it; bottom lies above the anchor, top below, none centred (turned 90:
+        # up is the page's left). The rule is the measured one (36 cases); the KiCad source (eeschema/sch_label.cpp, SCH_LABEL_BASE, at
+        # https://gitlab.com/kicad/code/kicad/-/blob/master/eeschema/sch_label.cpp) is not installed here and was not read.
+        # _text_box flips from 180 on, so hand it angle % 180.
         if node.name == "label":
-            box = readability._text_box(text, (at[0], at[1], at[2] % 180.0), readability._font_size(effects), "left" if h == "center" else h, "center", above=True)
+            box = readability._text_box(text, (at[0], at[1], at[2] % 180.0), readability._font_size(effects), h, v)
         else:  # issue 225: a global or hierarchical label is its shape and its text, which KiCad places by other rules
             box = _shape_label_box(node, text, at, effects)
         texts.append(_Text("label", node, None, node.name, text, (at[0], at[1]), box))
