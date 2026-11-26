@@ -48,8 +48,9 @@ MOVE_GROUP_SENTENCE = (
     "footprint (track, via, text), a locked member footprint, a locked group, or a footprint whose reference is empty or "
     "shared is refused and listed with the reason, never partly moved. The confirm reloads the written copy and checks "
     "that only the member footprints' (at) changed, by exactly dx, dy. No collision, cutout or board-edge check is made: "
-    "run pcb_check_placement on the new revision after a move. A board with a footprint that has neither courtyard nor "
-    "pad is reported incomplete, nothing is moved."
+    "run pcb_check_placement on the new revision after a move. A footprint on the board with neither courtyard nor pad "
+    "(a logo) is listed under not_measured and does not stop the move; a member footprint with neither is refused and "
+    "listed, never moved."
 )
 CREATE_GROUP_SENTENCE = (
     "Adds one new group with a fresh uuid whose members are the footprints named by reference. An empty name, a name "
@@ -168,6 +169,8 @@ def _move_refusal(g: dict, refs: Counter) -> str:
 def _plan_move(pcb: Path, a: dict) -> dict:
     root = write_layer.load(pcb)
     refs = Counter(raw_geometry._reference(f) for f in _top(root, "footprint"))
+    not_measured: list[str] = []
+    placement_anchor.read_parts(root, unmeasured=not_measured)  # the shape a move needs; those without are listed
     entries = board_groups.resolve(root)
     plan: list[dict] = []
     refused: list[dict] = []
@@ -175,6 +178,8 @@ def _plan_move(pcb: Path, a: dict) -> dict:
     for ident in dict.fromkeys(a["groups"]):
         g, why = _find(entries, ident)
         why = why or _move_refusal(g, refs) if g else why
+        if g and not why and (blind := sorted(n for n in (raw_geometry._reference(f) for f in g["footprint_nodes"]) if n in not_measured)):
+            why = f"member footprint(s) {blind} have neither courtyard nor pad to measure: not moved"
         if why:
             refused.append({"group": ident, "reason": why})
         elif g["uuid"] not in seen:
@@ -186,13 +191,13 @@ def _plan_move(pcb: Path, a: dict) -> dict:
                             "to": [round(x + a["dx"], 6), round(y + a["dy"], 6)]})
             plan.append({"group": g["name"], "uuid": g["uuid"], "footprints": sorted(fps, key=lambda p: p["reference"])})
     key = (a["dx"], a["dy"], [(g["uuid"], [(p["uuid"], p["from"]) for p in g["footprints"]]) for g in plan])
-    return {"groups": plan, "refused": refused, "changes": bool(plan), "digest": _hash(key)}
+    return {"groups": plan, "refused": refused, "changes": bool(plan), "digest": _hash(key), "not_measured": sorted(not_measured)}
 
 
 def _move_public(plan: dict) -> dict:
     groups = [{"group": g["group"], "uuid": g["uuid"], "footprints": [{k: v for k, v in p.items() if k != "uuid"} for p in g["footprints"]]}
               for g in plan["groups"]]
-    return {"groups": groups, "refused": plan["refused"]}
+    return {"groups": groups, "refused": plan["refused"], "not_measured": plan["not_measured"]}
 
 
 def propose_move_group(pcb_path: str | Path, groups: list[str], dx: float, dy: float, output_dir: str | Path | None = None) -> dict:

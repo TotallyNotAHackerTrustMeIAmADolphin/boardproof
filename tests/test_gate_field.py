@@ -193,7 +193,7 @@ _SWEEP_SKIP = {
 _SWEEP_ARGUMENTS = {
     "propose_route_with_retry": {"max_attempts": 1, "timeout_seconds": 60},
     "propose_route_with_freerouting": {"max_passes": 1, "timeout_seconds": 60},
-    "propose_placement_optimization": {"rounds": 1, "timeout_seconds": 60},
+    "propose_placement_optimization": {"seed": 0, "timeout_seconds": 60},
     "copilot_propose_moves": {"moves": [{"reference": "R1", "x_mm": 1.0, "y_mm": 1.0}]},
     "copilot_highlight": {"references": ["R1"]},
     "copilot_get_board_state": {"mode": "autopilot"},

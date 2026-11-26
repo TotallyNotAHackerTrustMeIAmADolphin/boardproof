@@ -136,7 +136,7 @@ FROZEN_WITHOUT_PROVEN_SELF_CHECK = frozenset(
         # return-value (2)
         "move_reference_designators_to_layer", "fetch_part_assets",
         # reload-observe (3; confirm_route became reload-verify with a proof, build ticket 46)
-        "fix_annotation", "pack_footprints_densely", "confirm_placement_optimization",
+        "fix_annotation", "pack_footprints_densely",
         # reload-verify, no test yet proves the check fires (1; build ticket 31 proved two,
         # build ticket 25 assign_footprints)
         "panelize_board",

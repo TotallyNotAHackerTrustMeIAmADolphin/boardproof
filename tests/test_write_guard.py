@@ -508,6 +508,7 @@ NON_KICAD_RAW = {
     ("usage_log.py", "UsageLog._open"): "opens the local usage log for appending, never a KiCad file (issue 45)",
     ("routers/kicad_routing_tools.py", "write_fab_overrides"): "KRT --fab-overrides text file in a scratch dir",
     ("routers/kicad_routing_tools.py", "request_graceful_stop"): "a stop-request marker file for a router run",
+    ("routers/kicad_placer_tools.py", "run_place_simple"): "groups.json for the placer in its own scratch run folder (issue 257)",
     ("rung_runner.py", "_write_json"): "run records (JSON) in the ladder's own run directory",
     ("sourcing/jlcpcb_basic.py", "write_index"): "the JLCPCB parts index (JSON), not a KiCad file",
     ("toolsets/routing.py", "_patch_dsn_with_pair_rules"): "the router's scratch DSN (Specctra text) in the trial copy directory, never a KiCad file (issue 212)",

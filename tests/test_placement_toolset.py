@@ -272,54 +272,28 @@ def test_confirm_placement_optimization_unknown_token():
     assert result["status"] == "error"
 
 
-# ---------------------------------------------------------------------------
-# propose_placement_optimization / confirm_placement_optimization: real
-# KiCadRoutingTools placer (krt-capability-suite ticket 08), gated behind a
-# real install (the needs_krt marker, build ticket 53) -- skips with the probe's
-# own reason otherwise and fails in the gate run, never fakes a repair. Uses the real stress fixture (ticket 05 of the same map),
-# NOT the golden-path board -- see that ticket for why it's too simple to
-# exercise this at all.
-# ---------------------------------------------------------------------------
-
-STRESS_PCB = Path(__file__).parent / "fixtures" / "krt_stress_congestion.kicad_pcb"
-
-
 @pytest.mark.needs_krt
-class TestRealPlacementOptimizationOnStressFixture:
-    def test_propose_reports_real_before_after_drc_evidence(self, tmp_path, krt_checkout):
-        import shutil
+def test_real_placer_propose_then_confirm_writes_exactly_the_proposed_poses(tmp_path):
+    """End to end with the real place_simple on a fixture copy (a few seconds)."""
+    from boardproof.routers import kicad_placer_tools as placer
+    from tests import _krt
+    from tests._fixture_copy import copy_fixture
 
-        board = tmp_path / STRESS_PCB.name
-        shutil.copy(STRESS_PCB, board)
-        for suffix in (".kicad_pro", ".kicad_prl"):
-            sibling = STRESS_PCB.with_suffix(suffix)
-            if sibling.is_file():
-                shutil.copy(sibling, board.with_suffix(suffix))
-
-        mcp = MCPServer("test")
-        tools = _build_and_get_fns(mcp)
-
-        result = tools["propose_placement_optimization"](str(board), rounds=2, timeout_seconds=120)
-
-        from boardproof.routers import kicad_placer_tools
-        from boardproof.routers.kicad_routing_tools import router_version
-
-        checkout = krt_checkout
-        if not (checkout / kicad_placer_tools.PLACER_SCRIPT).is_file():
-            # Issue 232: the pinned KRT (0.23.8) ships no place_route_loop.py -- an error, never "complete".
-            assert result["status"] == "error", result
-            assert "place_route_loop.py" in result["reason"], result
-            assert (router_version(checkout) or "unknown version") in result["reason"], result
-            return
-        assert result["status"] in ("pending_confirmation", "complete"), result
-        assert "before_drc" in result
-        if result["status"] == "pending_confirmation":
-            assert "after_drc" in result
-            assert result["footprints_moved"] == len(result["proposed_positions"])
-            # The real board file must be untouched by propose -- only confirm mutates it.
-            from kicad_tools.schema import PCB
-
-            reloaded = PCB.load(board)
-            original = PCB.load(STRESS_PCB)
-            for fp in original.footprints:
-                assert reloaded.get_footprint(fp.reference).position == fp.position
+    if placer.placer_problem() is not None:
+        _krt.missing(placer.placer_problem())
+    work = tmp_path / "board"
+    copy_fixture(Path(__file__).parent / "fixtures" / "golden_attiny1616_board", work)
+    pcb = work / "golden_attiny1616_board.kicad_pcb"
+    tools = _build_and_get_fns(MCPServer("test"))
+    before = pcb.read_bytes()
+    proposal = tools["propose_placement_optimization"](str(pcb))
+    assert proposal["status"] == "pending_confirmation", proposal
+    assert pcb.read_bytes() == before  # propose never touches the source
+    ox, oy = proposal["origin_mm"]
+    assert tools["confirm_placement_optimization"](proposal["revision_token"])["status"] == "confirmed"
+    written, _ = placer._raw_poses(pcb)
+    for ref, pose in proposal["proposed_positions"].items():
+        x, y, a = written[ref]
+        assert (x - ox, y - oy) == pytest.approx((pose["x"], pose["y"]), abs=1e-3), ref
+        turn = (a - pose["rotation"]) % 360.0
+        assert min(turn, 360.0 - turn) < 1e-3, ref

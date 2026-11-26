@@ -169,10 +169,12 @@ def _box(points: list[Point]) -> Box:
     return (min(p[0] for p in points), min(p[1] for p in points), max(p[0] for p in points), max(p[1] for p in points))
 
 
-def read_parts(root: Any, only: set[str] | None = None) -> list[Part]:
+def read_parts(root: Any, only: set[str] | None = None, unmeasured: list[str] | None = None) -> list[Part]:
     """Every footprint (or only those whose reference is in ``only``), in file order, with its raw
     box. Raises ``RawGeometryError`` naming a measured footprint with no courtyard and no pad, or a
-    token that is not a number; a footprint left out by ``only`` is not measured."""
+    token that is not a number; a footprint left out by ``only`` is not measured. With a list passed
+    as ``unmeasured`` a footprint with no courtyard and no pad is left out of the result and its name
+    appended to that list instead (it is absent from every box check, never a pass of one)."""
     geometry = raw_geometry.read_footprints(root, only)
     nodes = [c for c in root.children if not c.is_atom and c.name == "footprint"]
     if only is not None:
@@ -184,7 +186,11 @@ def read_parts(root: Any, only: set[str] | None = None) -> list[Part]:
         source = "courtyard" if points else "pads"
         points = points + _pad_points(geo.pads)
         if not points:
-            raise RawGeometryError(f"footprint {geo.reference or geo.lib_id or '?'} has no courtyard and no pad to measure")
+            name = geo.reference or f"lib_id {geo.lib_id or '?'}"  # never a bare id that could equal a reference
+            if unmeasured is None:
+                raise RawGeometryError(f"footprint {name} has no courtyard and no pad to measure")
+            unmeasured.append(name)
+            continue
         parts.append(Part(
             geo.reference, node, geo.at_mm, geo.angle_deg, is_locked(node), geo.side,
             any(p.kind == "thru_hole" for p in geo.pads), _box(points), source, geo.pads,
@@ -545,19 +551,27 @@ def save_footprint_edits(
     path: Path,
     edit: Callable[[Any, list[Part]], list[Any]],
     check: Callable[[Any, list[Part]], list[str]],
+    needed: frozenset[str] = frozenset(),
 ) -> dict:
     """Load ``path`` twice (the source and a copy to edit), call ``edit(root, parts)`` (it changes
     footprint nodes in place and returns them), save through the write layer, and on the temporary
     sibling refuse unless (a) every top-level node other than the changed footprints equals the
     source and the changed ones equal what was saved, and (b) ``check(reloaded_root, parts)``, the
     tool's own raw re-measurement of the intended facts, returns no complaint. Returns
-    ``{"changed": n}``. Raises ``NotVerified`` (the file is untouched) or a write-layer error."""
+    ``{"changed": n}``, plus ``"not_measured"`` (names) when footprints with no courtyard and no pad
+    stand on the board: they are left out of ``parts`` and of the checks, and the "every other node
+    equals the source" proof still covers them. A footprint in ``needed`` with no shape is refused
+    (``RawGeometryError``). Raises ``NotVerified`` (the file is untouched) or a write-layer error."""
     source = write_layer.load(path)
     root = write_layer.load(path)
-    parts = read_parts(root)
+    skipped: list[str] = []
+    parts = read_parts(root, unmeasured=skipped)
+    if bad := sorted(needed & set(skipped)):
+        raise RawGeometryError(f"footprint(s) {bad} have no courtyard and no pad to measure: not changed")
+    extra = {"not_measured": sorted(skipped)} if skipped else {}
     changed = edit(root, parts)
     if not changed:
-        return {"changed": 0}
+        return {"changed": 0, **extra}
     before = [n for n in source.children if not n.is_atom and n.name == "footprint"]
     index = {id(n): i for i, n in enumerate(c for c in root.children if not c.is_atom and c.name == "footprint")}
     removed = [before[index[id(n)]] for n in changed]
@@ -570,12 +584,12 @@ def save_footprint_edits(
             raise NotVerified("the reloaded file does not hold the intended placement: " + "; ".join(complaints[:5]), complaints)
 
     write_layer.save(root, path, verify=verify)
-    return {"changed": len(changed)}
+    return {"changed": len(changed), **extra}
 
 
 def raw_at(root: Any, reference: str) -> Point | None:
     """The page ``(at x y)`` of the footprint with ``reference`` in ``root``, read raw."""
-    for part in read_parts(root):
+    for part in read_parts(root, unmeasured=[]):
         if part.reference == reference:
             return part.at
     return None
@@ -593,11 +607,11 @@ def write_lock_state(path: Path, wanted: dict[str, bool]) -> dict:
         return nodes
 
     def check(reloaded: Any, parts: list[Part]) -> list[str]:
-        after = {p.reference: p.locked for p in read_parts(reloaded)}
+        after = {p.reference: p.locked for p in read_parts(reloaded, unmeasured=[])}
         return [f"{ref} is {'locked' if after.get(ref) else 'unlocked'}, intended {'locked' if want else 'unlocked'}"
                 for ref, want in wanted.items() if after.get(ref) != want]
 
-    return save_footprint_edits(path, edit, check)
+    return save_footprint_edits(path, edit, check, frozenset(wanted))
 
 
 def write_positions(
@@ -617,7 +631,7 @@ def write_positions(
 
     def check(reloaded: Any, parts: list[Part]) -> list[str]:
         complaints = []
-        after = {p.reference: p for p in read_parts(reloaded)}
+        after = {p.reference: p for p in read_parts(reloaded, unmeasured=[])}
         for part in parts:
             now = after.get(part.reference)
             if now is None:
@@ -630,7 +644,7 @@ def write_positions(
                 complaints.append(f"{part.reference} changed its angle or lock")
         return complaints + (extra(reloaded, parts) if extra is not None else [])
 
-    return save_footprint_edits(path, edit, check)
+    return save_footprint_edits(path, edit, check, frozenset(targets))
 
 
 class PoseRefused(Exception):
@@ -740,7 +754,7 @@ def write_poses(path: Path, targets: dict[str, tuple[float, float, float]]) -> d
 
     def check(reloaded: Any, parts: list[Part]) -> list[str]:
         complaints = []
-        after = {p.reference: p for p in read_parts(reloaded)}
+        after = {p.reference: p for p in read_parts(reloaded, unmeasured=[])}
         for part in parts:
             if part.reference not in frames:
                 continue
@@ -770,7 +784,7 @@ def write_poses(path: Path, targets: dict[str, tuple[float, float, float]]) -> d
                 complaints.append(f"{part.reference}: something other than the pose changed inside the footprint")
         return complaints
 
-    return save_footprint_edits(path, edit, check)
+    return save_footprint_edits(path, edit, check, frozenset(targets))
 
 
 # --------------------------------------------------------------------------- edge anchoring

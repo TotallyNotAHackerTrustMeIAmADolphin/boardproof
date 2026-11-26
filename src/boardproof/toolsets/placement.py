@@ -13,7 +13,6 @@ from __future__ import annotations
 import logging
 import math
 import os
-import re
 import time
 import uuid
 from pathlib import Path
@@ -88,6 +87,7 @@ def _hull_boxes(path: Path, refs: list[str]) -> tuple[dict[str, tuple[tuple[floa
 # first tool in this codebase to actually implement the dry-run +
 # revision-token pattern for a real mutating operation, not just describe
 # it (docs/ARCHITECTURE.md's "Status honesty" note on this).
+_MAX_REPORTED_ILLEGAL = 50  # the placer's own 'illegal' list is passed on only up to this many entries, with the full count beside it
 _PENDING_PLACEMENTS: dict[str, tuple[str, dict[str, tuple[float, float, float]], float]] = {}
 _PENDING_PLACEMENT_TTL_SECONDS = 60 * 60
 _PENDING_PLACEMENT_MAX_ENTRIES = 1000
@@ -311,6 +311,10 @@ _REFUSAL = (
 _FOOTPRINT_REFUSAL = (
     "the board-local frame cannot be stated exactly: Edge.Cuts graphics inside footprints "
     "are not measured yet"
+)
+_NOT_MEASURED_RULE = (
+    "A footprint on the board with neither courtyard nor pad (a logo) is listed under not_measured and left out of the "
+    "collision check; that check says nothing about it."
 )
 _FRAME_RULE = (
     "Coordinates are BOARD-LOCAL millimetres: local (0,0) is the top-left corner of the "
@@ -634,7 +638,6 @@ def _fail_closed(fn):
     return wrapper
 
 
-_BASELINE_BUDGET_SECONDS = 300  # hard limit of the baseline routing; a graceful stop is asked at 80% of it
 _LOG = logging.getLogger("boardproof.placement")
 
 
@@ -655,33 +658,21 @@ def _error_on_failure(fn):
     return wrapper
 
 
-def _open_net_names(report: dict) -> list[str]:
-    """Net names in the `[NET]` of each unconnected item's description of a kicad-cli DRC report."""
-    names = set()
-    for entry in report.get("unconnected_items", []):
-        for item in entry.get("items", []) if isinstance(entry, dict) else []:
-            names.update(re.findall(r"\[([^\]]+)\]", str(item.get("description", ""))))
-    return sorted(names)
+def _drc_counts(path: Path) -> dict:
+    """One kicad-cli DRC run as counts, a measurement and not a verdict; a run that cannot happen says so."""
+    from boardproof import kicad_cli
 
-
-def _baseline_route(run, baseline_input: Path, baseline_output: Path):
-    """Run the baseline routing; at 80% of its limit ask for a graceful stop so a partial board is
-    written (and DRC can name the open nets) instead of a bare kill. Returns (run result, stopped_early)."""
-    import threading
-
-    from boardproof.routers.kicad_routing_tools import request_graceful_stop, stop_file_for
-
-    timer = threading.Timer(
-        _BASELINE_BUDGET_SECONDS * 0.8, request_graceful_stop,
-        args=(baseline_output, "baseline routing cannot finish within its limit"),
-    )
-    timer.daemon = True
-    timer.start()
     try:
-        result = run(baseline_input, baseline_output, timeout=_BASELINE_BUDGET_SECONDS)
-    finally:
-        timer.cancel()
-    return result, stop_file_for(baseline_output).exists()
+        kicad_cli.ensure_kicad_cli_on_path()
+        report = kicad_cli.run_drc(path)
+        violations = report.get("violations", [])
+        return {
+            "violation_count": len(violations),
+            "error_count": sum(1 for v in violations if str(v.get("severity", "")).lower() == "error"),
+            "unconnected_count": len(report.get("unconnected_items", [])),
+        }
+    except Exception as exc:  # noqa: BLE001 - a missing measurement is reported, never replaced by zero
+        return {"status": "incomplete", "reason": f"DRC could not run: {exc}"}
 
 
 class _SlotsUnreadable(Exception):
@@ -1342,6 +1333,8 @@ def build(mcp: MCPServer) -> list[str]:
         written; every problem is listed under problems. Coordinates are BOARD-LOCAL
         millimetres: local (0,0) is the top-left corner of the Edge.Cuts bounding box.
 
+        A footprint on the board with neither courtyard nor pad (a logo) is listed under not_measured and left out of the collision check; that check says nothing about it.
+
         The result reports each footprint's position and gap read back from the reloaded file;
         the reload must hold exactly the intended positions and nothing else changed, else
         write_not_verified and the board file is untouched.
@@ -1356,7 +1349,8 @@ def build(mcp: MCPServer) -> list[str]:
             return {"status": "incomplete", "reason": f"file not found: {pcb_path}"}
         try:
             root = write_layer.load(path)
-            parts = placement_anchor.read_parts(root)
+            not_measured: list[str] = []
+            parts = placement_anchor.read_parts(root, unmeasured=not_measured)
             outline, problem = placement_anchor.outline_rect(root)
         except Exception as exc:  # noqa: BLE001
             return {"status": "error", "code": "unreadable_geometry", "reason": f"{exc}: nothing was moved"}
@@ -1371,7 +1365,7 @@ def build(mcp: MCPServer) -> list[str]:
                     "reason": f"{len(problems)} problem(s), nothing was moved"}
 
         def gaps(reloaded: Any, before: list[placement_anchor.Part]) -> list[str]:
-            after = {p.reference: p for p in placement_anchor.read_parts(reloaded)}
+            after = {p.reference: p for p in placement_anchor.read_parts(reloaded, unmeasured=[])}
             out = []
             for ref, facts in info.items():
                 gap = placement_anchor.gap_to_edge(after[ref].box, outline.box, facts["edge"])
@@ -1390,7 +1384,7 @@ def build(mcp: MCPServer) -> list[str]:
                 return refusal
             return {"status": "incomplete", "reason": f"failed to write the positions: {exc}"}
         try:
-            reloaded = {p.reference: p for p in placement_anchor.read_parts(write_layer.load(path))}
+            reloaded = {p.reference: p for p in placement_anchor.read_parts(write_layer.load(path), unmeasured=[])}
         except Exception as exc:  # noqa: BLE001
             return {"status": "incomplete", "reason": f"written, but the file could not be read back: {exc}"}
         ox, oy = outline.origin
@@ -1405,7 +1399,7 @@ def build(mcp: MCPServer) -> list[str]:
                                  round(part.box[2] - ox, 6), round(part.box[3] - oy, 6)],
                 "box_source": part.box_source,
             })
-        return {"status": "ok", "moved": moved}
+        return {"status": "ok", "moved": moved, **({"not_measured": sorted(not_measured)} if not_measured else {})}
 
     @_with_frame
     def propose_autoplacement(
@@ -1436,7 +1430,8 @@ def build(mcp: MCPServer) -> list[str]:
         Placement quality is a best-effort heuristic (first-fit row packing by courtyard
         size, lowest then leftmost free position, not a real simulated-annealing solver). Always requires
         the checkpoint per docs/ARCHITECTURE.md's human-in-the-loop policy for
-        autoplacement output -- never trust this without review.
+        autoplacement output -- never trust this without review. A footprint on the board with neither courtyard nor pad (a logo) is listed under not_measured and left out of the collision check; that check says nothing about it. Naming such a footprint in refs is
+        refused as footprint_unmeasurable.
         """
 
         for name, value in (("edge_clearance_mm", edge_clearance_mm), ("spacing_mm", spacing_mm)):
@@ -1454,7 +1449,8 @@ def build(mcp: MCPServer) -> list[str]:
             return refusal
         try:
             root = write_layer.load(path)
-            parts = placement_anchor.read_parts(root)
+            not_measured = []
+            parts = placement_anchor.read_parts(root, unmeasured=not_measured)
             outline, problem = placement_anchor.outline_rect(root)
         except Exception as exc:  # noqa: BLE001
             return {"status": "error", "code": "unreadable_geometry", "reason": f"{exc}: nothing was proposed"}
@@ -1467,6 +1463,9 @@ def build(mcp: MCPServer) -> list[str]:
         target_refs = list(dict.fromkeys(refs)) if refs is not None else [p.reference for p in parts if p.reference]
         if not target_refs:
             return {"status": "error", "reason": "no footprints to place"}
+        if named := [r for r in target_refs if r in not_measured]:
+            return {"status": "error", "code": "footprint_unmeasurable", "not_measured": sorted(not_measured),
+                    "reason": f"{named} have no courtyard and no pad to measure: nothing was proposed"}
         missing = [r for r in target_refs if r not in by_ref]
         if missing:
             return {"status": "error", "reason": f"unknown references: {missing}"}
@@ -1530,6 +1529,7 @@ def build(mcp: MCPServer) -> list[str]:
             "revision_token": token,
             "proposed_positions": {ref: {"x": x, "y": y, "rotation": r} for ref, (x, y, r) in proposed.items()},
             "locked_skipped": locked_skipped,
+            "not_measured": sorted(not_measured),
             "inside_outline": outline is not None,
             "region_mm": [round(v, 6) for v in region] if outline is not None else None,
             "note": "heuristic first-fit packing, not a real autoplacer -- review before confirming, per docs/ARCHITECTURE.md's human-in-the-loop policy for autoplacement output",
@@ -1547,6 +1547,7 @@ def build(mcp: MCPServer) -> list[str]:
         locked_footprint) and the token stays valid. Only each footprint's (at x y) is
         written; the reloaded file must hold exactly those positions and nothing else changed,
         else write_not_verified and the board is untouched.
+        A footprint on the board with neither courtyard nor pad (a logo) is listed under not_measured and left out of the collision check; that check says nothing about it.
 
         Refuses with file_open_in_kicad, naming the lock file, while KiCad holds a lock file for a file
         it would write; close the file in KiCad, then retry.
@@ -1566,7 +1567,8 @@ def build(mcp: MCPServer) -> list[str]:
             if refusal is not None:
                 return refusal
             root = write_layer.load(path)
-            parts = placement_anchor.read_parts(root)
+            not_measured = []
+            parts = placement_anchor.read_parts(root, unmeasured=not_measured)
             outline, problem = placement_anchor.outline_rect(root)
             if problem is not None:
                 return {"status": "error", "code": "outline_not_rectangular", "reason": f"{problem}: nothing was moved", **fields}
@@ -1615,270 +1617,185 @@ def build(mcp: MCPServer) -> list[str]:
                 _PENDING_PLACEMENTS[revision_token] = entry  # nothing was written: the token stays valid
                 return locked
             return {"status": "incomplete", "reason": f"failed to apply proposal: {exc}", **fields}
-        return {"status": "confirmed", "applied": list(proposed.keys()), **fields}
+        return {"status": "confirmed", "applied": list(proposed.keys()), "not_measured": sorted(not_measured), **fields}
 
     @_fail_closed
+    @_with_frame
     @_error_on_failure
-    def propose_placement_optimization(
-        pcb_path: str,
-        rounds: int = 2,
-        route_args: str = "--escalation board",
-        timeout_seconds: int = 1800,
-    ) -> dict:
-        """Propose a real, KiCadRoutingTools-driven placement repair
-        (`py_placer/place_route_loop.py`, `krt-capability-suite` ticket 08)
-        -- router-in-the-loop: it routes the board, sees which nets actually
-        fail, relocates just those (or their blockers), and re-routes,
-        iterating across `rounds`. Unlike `propose_autoplacement`'s naive
-        row-packing heuristic, this is a real optimizer with a real
-        feedback loop. Returns a proposal + revision_token -- does NOT
-        modify the board. Call confirm_placement_optimization with the
-        token to apply it.
-
-        `route_args` is passed through verbatim to the loop's own internal
-        `route.py` invocations (a quoted string, e.g.
-        `"--escalation board --clearance 0.2"`) -- KRT's own
-        `place_route_loop.py` REQUIRES this flag be non-empty (confirmed by
-        two real invocations: omitting it, and passing `""`, both fail the
-        same argparse error, "--route-args is required (except with
-        --suggest-locks)"), so this function always passes a real value,
-        defaulting to `"--escalation board"` to match this project's own
-        router-wrapper default. `--relocate` is never passed (ticket 04 of
-        `krt-capability-suite`: measured net-negative by KRT's own authors).
-
-        Real evidence, not the placer's own self-report: this function runs
-        this project's own `run_kicad_routing_tools` (already real-DRC-scored
-        elsewhere in this codebase) TWICE -- once on the board as-is
-        (baseline), once on a fresh trial copy with the placer's proposed
-        positions applied (nothing else) -- and reports independent
-        `kicad-cli pcb drc` numbers for both, so the caller can judge whether
-        the proposed placement actually helps before confirming it, not just
-        whether the placer claims it does.
-
-        No graceful-stop exists for the underlying tool (verified directly,
-        see `kicad_placer_tools`'s module docstring) -- `timeout_seconds` is
-        a hard kill with no softer option.
+    def propose_placement_optimization(pcb_path: str, seed: int = 0, timeout_seconds: int = 300) -> dict:
+        """Propose new poses (position and angle) for the unlocked footprints from an external placer, the
+        KiCadRoutingTools place_simple script, run as a subprocess on a throw-away copy of the board under a
+        timeout with the given seed (the same board and seed give the same poses). Only the poses are read
+        back, from the raw (at x y angle) tokens of the copy's output board; that board is never adopted and
+        the board file is not changed. Locked footprints are never moved: they are left out and listed in
+        locked_skipped. The placer's own claims of legality are not trusted: before offering a proposal the
+        tool measures each proposed courtyard against the outline and the other courtyards and refuses the
+        proposal, listing the problems, when one is outside the outline or overlaps another (try another seed).
+        Returns a proposal with a revision_token (poses are BOARD-LOCAL millimetres, the frame of
+        propose_autoplacement). Call confirm_placement_optimization to apply it, then run pcb_check_placement
+        and pcb_run_drc on the board. Unavailable (status error, code placer_unavailable) when the script, the
+        pinned KiCadRoutingTools version or numpy, scipy or shapely are missing.
         """
         import tempfile
 
-        from boardproof import kicad_cli
         from boardproof.routers import kicad_placer_tools
-        from boardproof.routers.kicad_placer_tools import placement_delta, run_placement_repair
-        from boardproof.routers.kicad_routing_tools import (
-            KicadRoutingToolsError,
-            KicadRoutingToolsTimeout,
-            krt_run_progress,
-            run_kicad_routing_tools,
-        )
+        from boardproof.routers.kicad_routing_tools import KicadRoutingToolsError
         from boardproof.toolsets.routing import _trial_copy
 
+        if isinstance(seed, bool) or not isinstance(seed, int) or not 0 <= seed < 2**31:
+            return {"status": "error", "code": "invalid_argument", "reason": f"seed must be an integer from 0 to 2147483647, got {seed!r}"}
+        if isinstance(timeout_seconds, bool) or not isinstance(timeout_seconds, int) or not 10 <= timeout_seconds <= 1800:
+            return {"status": "error", "code": "invalid_argument", "reason": f"timeout_seconds must be an integer from 10 to 1800, got {timeout_seconds!r}"}
         path = Path(pcb_path)
         if not path.is_file():
             return {"status": "incomplete", "reason": f"file not found: {pcb_path}"}
-        _locked_references(path)  # fail closed before the long run if the lock state cannot be read
-        try:  # issue 240 (d): no routing time is spent when the pinned KRT cannot place at all
-            problem = kicad_placer_tools.placer_script_problem()
-        except KicadRoutingToolsError as exc:
-            problem = str(exc)
-        if problem is not None:
-            return {"status": "error", "reason": problem}
-
-        def _drc(target: Path) -> dict:
-            try:
-                kicad_cli.ensure_kicad_cli_on_path()
-                report = kicad_cli.run_drc(target)
-                return {
-                    "violation_count": len(report.get("violations", [])),
-                    "unconnected_count": len(report.get("unconnected_items", [])),
-                    "open_nets": _open_net_names(report),
-                    "short_count": sum(
-                        1 for v in report.get("violations", []) if "short" in str(v.get("type", "")).lower()
-                    ),
-                }
-            except Exception as exc:  # noqa: BLE001 - evidence-gated verdict
-                return {"status": "incomplete", "reason": str(exc)}
+        locked_now = _locked_references(path)  # fail closed before the run if the lock state cannot be read
+        if (problem := kicad_placer_tools.placer_problem()) is not None:
+            return {"status": "error", "code": "placer_unavailable", "reason": problem}
+        try:
+            board = write_layer.load_pcb(path)
+        except Exception as exc:  # noqa: BLE001
+            return {"status": "incomplete", "reason": f"failed to load board: {exc}"}
+        if (refusal := _frame_gate(path, board, strict=True)) is not None:
+            return refusal
+        root = write_layer.load(path)
+        parts = placement_anchor.read_parts(root)
+        outline, outline_problem = placement_anchor.outline_rect(root)
+        if outline_problem is not None:
+            return {"status": "error", "code": "outline_not_rectangular", "reason": f"{outline_problem}: nothing was proposed"}
+        refs = [p.reference for p in parts]
+        if not refs:
+            return {"status": "error", "reason": "no footprints to place"}
+        if len(set(refs)) != len(refs):
+            return {"status": "error", "code": "ambiguous_reference",
+                    "reason": "several footprints carry the same reference: nothing was proposed"}
+        origin = outline.origin if outline is not None else (0.0, 0.0)
+        by_ref = {p.reference: p for p in parts}
 
         with tempfile.TemporaryDirectory() as tmp_dir:
             tmp = Path(tmp_dir)
             try:
-                baseline_input = _trial_copy(path, tmp / "baseline")
-            except Exception as exc:  # noqa: BLE001 - evidence-gated verdict
-                return {"status": "incomplete", "reason": f"could not build trial copy: {exc}"}
-
-            baseline_output = tmp / "baseline" / (path.stem + "_routed" + path.suffix)
-            try:
-                _baseline_run, stopped_early = _baseline_route(run_kicad_routing_tools, baseline_input, baseline_output)
-                before_drc = _drc(baseline_output)
-                if stopped_early:
-                    nets = before_drc.get("open_nets") or []
-                    before_drc = {**before_drc, "status": "incomplete", "reason": (
-                        f"baseline routing was stopped early: it could not finish within {_BASELINE_BUDGET_SECONDS} s; "
-                        f"nets left open: {', '.join(nets) if nets else 'none could be named from the DRC report'}")}
-            except KicadRoutingToolsTimeout as exc:
-                where = krt_run_progress(baseline_output).get("net") or {}
-                at = f" while routing {where['net_name']} (net {where['net_index']} of {where['net_total']})" if where else ""
-                before_drc = {"status": "incomplete", "reason": f"baseline routing hit its {_BASELINE_BUDGET_SECONDS} s limit{at} "
-                              f"and was killed before it could write a partial board: {exc}"}
-            except KicadRoutingToolsError as exc:
-                before_drc = {"status": "incomplete", "reason": f"baseline routing failed: {exc}"}
-            _LOG.info("placement optimisation: baseline routing done (%s)", before_drc.get("status", "complete"))
-
-            try:
-                placer_input = _trial_copy(path, tmp / "placer")
-            except Exception as exc:  # noqa: BLE001 - evidence-gated verdict
-                return {"status": "incomplete", "reason": f"could not build trial copy: {exc}"}
-            placer_output = tmp / "placer" / (path.stem + "_optimized" + path.suffix)
-
-            try:
-                repair_run = run_placement_repair(
-                    placer_input, placer_output, rounds=rounds, route_args=route_args, timeout=timeout_seconds,
-                    progress=lambda rs: _LOG.info(
-                        "placement optimisation: round %s, %s open net(s)",
-                        rs[-1]["round"] if rs else "starting", rs[-1]["open_nets"] if rs else "?"),
-                )
-            except KicadRoutingToolsError as exc:
-                return {"status": "error", "reason": f"placement repair failed: {exc}"}
-
-            if repair_run.get("exit_code") != 0:  # a crashed placer is never "no repair found"
-                return {
-                    "status": "error",
-                    "reason": f"placement repair failed: place_route_loop.py exit code {repair_run.get('exit_code')}; "
-                              f"stderr tail: {repair_run.get('stderr_tail', '')}",
-                    "run": repair_run,
-                }
-
-            if not repair_run.get("output_produced"):
-                return {
-                    "status": "complete",
-                    "changed": False,
-                    "reason": "placer produced no output -- no repair found worth keeping",
-                    "run": repair_run,
-                    "before_drc": before_drc,
-                }
-
-            delta = placement_delta(placer_input, placer_output)
-            locked_now = _locked_references(path)
-            locked_skipped = sorted(r for r in delta if r in locked_now)
-            delta = {r: v for r, v in delta.items() if r not in locked_now}  # a locked part stays an obstacle
-            if not delta:
-                return {
-                    "status": "complete",
-                    "changed": False,
-                    "reason": "placer ran but found no beneficial repositioning"
-                              + (" (locked footprints were left out)" if locked_skipped else ""),
-                    "locked_skipped": locked_skipped,
-                    "run": repair_run,
-                    "before_drc": before_drc,
-                }
-
-            # Real "after" evidence: apply ONLY the position delta (never the
-            # placer's own routing/copper) to a fresh trial copy, then score
-            # it with THIS project's own already-verified router+DRC path --
-            # never the placer's internal route.py result, which used
-            # different parameters (route_args) than the caller may want for
-            # a real attempt, and is exactly the kind of self-report this
-            # project's standing rule says never to trust as the signal.
-            try:
-
-                verify_input = _trial_copy(path, tmp / "verify")
-                verify_board = write_layer.load_pcb(verify_input)
-                for ref, (x, y, rotation) in delta.items():
-                    verify_board.update_footprint_position(ref, x, y, rotation)
-                write_layer.save_pcb(verify_board, verify_input)
-            except Exception as exc:  # noqa: BLE001 - evidence-gated verdict
-                after_drc = {"status": "incomplete", "reason": f"could not apply delta for verification: {exc}"}
-            else:
-                verify_output = tmp / "verify" / (path.stem + "_routed" + path.suffix)
-                try:
-                    run_kicad_routing_tools(verify_input, verify_output, timeout=300)
-                    after_drc = _drc(verify_output)
-                except KicadRoutingToolsError as exc:
-                    after_drc = {"status": "incomplete", "reason": f"verification routing failed: {exc}"}
-
+                trial = _trial_copy(path, tmp / "in")
+                run = kicad_placer_tools.run_place_simple(trial, tmp / "run", refs, seed=seed, timeout=timeout_seconds)
+                delta = kicad_placer_tools.placement_delta(trial, run["output_pcb"])
+            except (KicadRoutingToolsError, ValueError) as exc:
+                return {"status": "error", "reason": f"place_simple failed: {exc}; nothing was proposed"}
+            report = run.get("report") if isinstance(run.get("report"), dict) else {}
+        elapsed = run.get("elapsed_s")
+        locked_skipped = sorted(r for r in delta if r in locked_now)
+        delta = {r: v for r, v in delta.items() if r not in locked_now}
+        base = {"seed": seed, "locked_skipped": locked_skipped, "placer": {"script": "place_simple", "elapsed_s": elapsed}}
+        if not delta:
+            return {"status": "complete", "changed": False, "proposed_positions": {}, **base,
+                    "reason": "the placer left every unlocked footprint where it is"
+                              + (" (locked footprints were left out)" if locked_skipped else "")}
+        new_boxes = {r: placement_anchor.box_at(by_ref[r], (x, y), a) for r, (x, y, a) in delta.items()}
+        problems = [f"{r} would lie outside the outline" for r, b in new_boxes.items()
+                    if outline is not None and not placement_anchor.inside(b, outline.box)]
+        problems += [f"{r} would overlap a slot of the outline" for r, b in new_boxes.items()
+                     if outline is not None and any(placement_anchor.overlap(b, cut) for cut in outline.cutouts)]
+        problems += [f"courtyards of {c['between']} would overlap" for c in placement_anchor.collisions(new_boxes, parts)]
+        if problems:
+            return {"status": "error", "code": "placer_result_illegal", "problems": problems, **base,
+                    "reason": "the placer's poses fail this tool's own measurement (its own legality claim is not trusted): "
+                              + "; ".join(problems[:8]) + "; nothing was proposed, another seed may give other poses"}
+        proposed = {r: (round(x - origin[0], 6), round(y - origin[1], 6), round(a, 6)) for r, (x, y, a) in delta.items()}
         _evict_stale_pending_placements()
         token = uuid.uuid4().hex
-        _PENDING_PLACEMENTS[token] = (pcb_path, delta, time.time() + _PENDING_PLACEMENT_TTL_SECONDS)
+        _PENDING_PLACEMENTS[token] = (pcb_path, proposed, time.time() + _PENDING_PLACEMENT_TTL_SECONDS)
+        reported_illegal = report.get("illegal") if isinstance(report.get("illegal"), list) else []
         return {
             "status": "pending_confirmation",
             "revision_token": token,
             "changed": True,
-            "proposed_positions": {ref: {"x": x, "y": y, "rotation": r} for ref, (x, y, r) in delta.items()},
-            "footprints_moved": len(delta),
-            "locked_skipped": locked_skipped,
-            "before_drc": before_drc,
-            "after_drc": after_drc,
-            "comparison": (
-                "available: before_drc against after_drc"
-                if "status" not in before_drc and "status" not in after_drc else
-                "missing: the before/after comparison is incomplete (before_drc or after_drc has status "
-                "incomplete); do not read this proposal as an improvement"),
-            "repair_run": repair_run,
+            "proposed_positions": {r: {"x": x, "y": y, "rotation": a} for r, (x, y, a) in proposed.items()},
+            "previous_positions": {r: {"x": round(by_ref[r].at[0] - origin[0], 6), "y": round(by_ref[r].at[1] - origin[1], 6),
+                                       "rotation": by_ref[r].angle} for r in proposed},
+            "footprints_moved": len(proposed),
+            "placer_reported_illegal": reported_illegal[:_MAX_REPORTED_ILLEGAL],
+            "placer_reported_illegal_count": len(reported_illegal),
+            **base,
             "warning": (
-                "Placement proposal from a real optimizer, compared by an independent routing+DRC pass on "
-                "trial copies (before_drc vs after_drc; single DRC runs, not the gate) -- review them yourself "
-                "before confirming. Call confirm_placement_optimization with this revision_token to apply it, "
-                "then re-run your own routing attempt on the real board (this proposal's after_drc used a "
-                "bounded 300s pass, not necessarily the same parameters you'd want for a real attempt) and run "
-                "verify_board on it: only its PASS is a verdict."
-            ),
+                "A proposal from an external placer (KiCadRoutingTools place_simple); its own legality claim is not "
+                "trusted. This tool measured the courtyards against the outline and each other, which is not the "
+                "acceptance gate. Call confirm_placement_optimization with this revision_token to apply it, then run "
+                "pcb_check_placement and pcb_run_drc. Only a verify_board PASS is a verdict on the board."),
         }
 
     @_fail_closed
     def confirm_placement_optimization(revision_token: str) -> dict:
-        """Apply a previously-proposed placement-optimization result by its
-        revision_token. Consumes the token -- a second confirm with the same
-        token fails rather than re-applying. Runs the real `pcb_run_drc`
-        against the result before returning (same pattern as `confirm_route`),
-        so the caller immediately knows the applied placement's real
-        courtyard/clearance state, not just "some footprints got moved".
+        """Apply a previously proposed placement optimization by its revision_token. Consumes the token. Measures
+        the proposal again against the board as it is now (a footprint locked since, outside the outline,
+        in a slot or overlapping another courtyard refuses the call, the token stays valid), writes each
+        footprint's position and angle (pad, text and property angles turn with it) and checks the reloaded
+        file, then reports kicad-cli DRC counts before and after as measurements (drc_before, drc_after).
+        Those two runs are not the acceptance gate.
 
         Refuses with file_open_in_kicad, naming the lock file, while KiCad holds a lock file for a file
         it would write; close the file in KiCad, then retry.
         """
+        from boardproof.toolsets.routing import GATE_NOTE
 
         _evict_stale_pending_placements()
         entry = _PENDING_PLACEMENTS.get(revision_token)
         if entry is None:
             return {"status": "error", "reason": "unknown or expired revision_token"}
         pcb_path, proposed, _ = entry
-
         path = Path(pcb_path)
-        locked_now = sorted(r for r in proposed if r in _locked_references(path))
-        if locked_now:
-            return {"status": "error", "code": "locked_footprint", "locked": locked_now,
-                    "reason": f"{locked_now} are locked since the proposal: nothing was moved, the token stays valid"}
-        _PENDING_PLACEMENTS.pop(revision_token, None)
+        fields = _frame_fields(path)
         try:
             board = write_layer.load_pcb(path)
+            if (refusal := _frame_gate(path, board, strict=True)) is not None:
+                return refusal
+            root = write_layer.load(path)
+            parts = placement_anchor.read_parts(root)
+            outline, problem = placement_anchor.outline_rect(root)
+            if problem is not None:
+                return {"status": "error", "code": "outline_not_rectangular", "reason": f"{problem}: nothing was moved", **fields}
+            origin = outline.origin if outline is not None else (0.0, 0.0)
+            by_ref = {p.reference: p for p in parts}
+            problems: list[str] = []
+            targets: dict[str, tuple[float, float, float]] = {}
+            boxes: dict[str, placement_anchor.Box] = {}
+            locked_refs = False
             for ref, (x, y, rotation) in proposed.items():
-                board.update_footprint_position(ref, x, y, rotation)
-            write_layer.save_pcb(board, path)
-        except Exception as exc:  # noqa: BLE001 - evidence-gated verdict
+                part = by_ref.get(ref)
+                if part is None:
+                    problems.append(f"{ref} is no longer on the board")
+                elif part.locked:
+                    locked_refs = True
+                    problems.append(f"{ref} is locked now")
+                else:
+                    targets[ref] = (x + origin[0], y + origin[1], rotation)
+                    boxes[ref] = placement_anchor.box_at(part, targets[ref][:2], rotation)
+                    if outline is not None and not placement_anchor.inside(boxes[ref], outline.box):
+                        problems.append(f"{ref} would lie outside the outline")
+                    if outline is not None and any(placement_anchor.overlap(boxes[ref], cut) for cut in outline.cutouts):
+                        problems.append(f"{ref} would overlap a slot of the outline")
+            if not problems and (overlaps := placement_anchor.collisions(boxes, parts)):
+                problems.append("courtyards would overlap: " + str(overlaps[:5]))
+            if problems:
+                return {"status": "error", "code": "locked_footprint" if locked_refs else "proposal_stale",
+                        "reason": "the board changed since the proposal: " + "; ".join(problems) + "; nothing was moved, the token stays valid",
+                        **fields}
+            write_layer.check_writable(path)  # before the token is spent: closing KiCad makes it usable again
+            drc_before = _drc_counts(path)
+            _PENDING_PLACEMENTS.pop(revision_token, None)
+            try:
+                placement_anchor.write_poses(path, targets)
+            except placement_anchor.PoseRefused as exc:
+                _PENDING_PLACEMENTS[revision_token] = entry
+                return {"status": "error", "code": "pose_refused", "problems": exc.problems, "reason": str(exc), **fields}
+            except placement_anchor.NotVerified as exc:
+                _PENDING_PLACEMENTS[revision_token] = entry
+                return {**_not_verified(exc), **fields}
+        except Exception as exc:  # noqa: BLE001
             if (locked := write_layer.as_lock_refusal(exc)) is not None:
                 _PENDING_PLACEMENTS[revision_token] = entry  # nothing was written: the token stays valid
                 return locked
-            return {"status": "incomplete", "reason": f"failed to apply proposal: {exc}"}
-
-        from boardproof import kicad_cli
-
-        try:
-            kicad_cli.ensure_kicad_cli_on_path()
-            drc_report = kicad_cli.run_drc(path)
-            drc_summary = {
-                "violation_count": len(drc_report.get("violations", [])),
-                "unconnected_count": len(drc_report.get("unconnected_items", [])),
-            }
-        except Exception as exc:  # noqa: BLE001 - evidence-gated: applying succeeded even if the verify step didn't
-            drc_summary = {"status": "incomplete", "reason": f"applied but DRC could not run: {exc}"}
-
-        from boardproof.toolsets.routing import GATE_NOTE
-
-        return {
-            "status": "confirmed",
-            "applied": list(proposed.keys()),
-            "drc_after": drc_summary,
-            "note": GATE_NOTE,
-        }
+            return {"status": "incomplete", "reason": f"failed to apply proposal: {exc}", **fields}
+        return {"status": "confirmed", "applied": list(proposed.keys()), "drc_before": drc_before,
+                "drc_after": _drc_counts(path), "note": GATE_NOTE, **fields}
 
     def propose_remove_graphic_items(pcb_path: str, filters: list[dict]) -> dict:
         """Propose removing a batch of board-level graphic items
@@ -2095,7 +2012,7 @@ def build(mcp: MCPServer) -> list[str]:
     mcp.add_tool(
         place_footprints_at_edge,
         name="place_footprints_at_edge",
-        description=("Place a batch of existing footprints at an edge of the board outline, offset_mm in from it (connectors, banana sockets), optionally along_mm along the edge; the box measured is the hull of the courtyard and the pads (a custom pad counts by its anchor size), from the raw footprint tokens, and the file is read back after the write. Needs an outline that is one axis-aligned rectangle, its corners optionally rounded by quarter arcs. All or nothing: an unknown or locked footprint, a courtyard that would leave the outline, overlap a slot or a rounded corner (in_cutout) or overlap another one refuses the whole call and writes nothing. Rotation and layer are kept." + " " + _FRAME_RULE + " " + write_layer.LOCK_SENTENCE),
+        description=("Place a batch of existing footprints at an edge of the board outline, offset_mm in from it (connectors, banana sockets), optionally along_mm along the edge; the box measured is the hull of the courtyard and the pads (a custom pad counts by its anchor size), from the raw footprint tokens, and the file is read back after the write. Needs an outline that is one axis-aligned rectangle, its corners optionally rounded by quarter arcs. All or nothing: an unknown or locked footprint, a courtyard that would leave the outline, overlap a slot or a rounded corner (in_cutout) or overlap another one refuses the whole call and writes nothing. Rotation and layer are kept." + " " + _NOT_MEASURED_RULE + " " + _FRAME_RULE + " " + write_layer.LOCK_SENTENCE),
         annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
     )
     mcp.add_tool(
@@ -2205,25 +2122,25 @@ def build(mcp: MCPServer) -> list[str]:
     mcp.add_tool(
         propose_autoplacement,
         name="propose_autoplacement",
-        description="Propose an automated placement for a set of footprints. Returns a proposal + revision_token; does not modify the board. Call confirm_autoplacement to apply." + " " + _FRAME_RULE + " With an outline (one axis-aligned rectangle, its corners optionally rounded by quarter arcs, else outline_not_rectangular; slots and rounded corners are obstacles) every proposed footprint box (the hull of its courtyard and pads; a custom pad counts by its anchor size) lies inside it, edge_clearance_mm (default 0.5) from its edge and spacing_mm (default 2) from other boxes; footprints not in refs and locked ones stay and are obstacles (locked_skipped); parts that fit nowhere refuse the proposal as does_not_fit. Without an outline rows start at local (0,0), 50 mm wide. Rotations are kept.",
+        description="Propose an automated placement for a set of footprints. Returns a proposal + revision_token; does not modify the board. Call confirm_autoplacement to apply." + " " + _FRAME_RULE + " With an outline (one axis-aligned rectangle, its corners optionally rounded by quarter arcs, else outline_not_rectangular; slots and rounded corners are obstacles) every proposed footprint box (the hull of its courtyard and pads; a custom pad counts by its anchor size) lies inside it, edge_clearance_mm (default 0.5) from its edge and spacing_mm (default 2) from other boxes; footprints not in refs and locked ones stay and are obstacles (locked_skipped); parts that fit nowhere refuse the proposal as does_not_fit. Without an outline rows start at local (0,0), 50 mm wide. Rotations are kept." + " " + _NOT_MEASURED_RULE + " Naming such a footprint in refs is refused as footprint_unmeasurable.",
         annotations={"readOnlyHint": True, "destructiveHint": False, "idempotentHint": False, "openWorldHint": False},
     )
     mcp.add_tool(
         confirm_autoplacement,
         name="confirm_autoplacement",
-        description=("Apply a previously proposed autoplacement by its revision_token. Consumes the token. Measures the proposal again against the board as it is now (a footprint locked since, rotated, outside the outline or overlapping refuses with the token kept) and writes only each footprint's (at x y), which the reloaded file must hold exactly (else the write is refused and the board file is untouched)." + " " + _RELATIVE_RULE + " " + write_layer.LOCK_SENTENCE),
+        description=("Apply a previously proposed autoplacement by its revision_token. Consumes the token. Measures the proposal again against the board as it is now (a footprint locked since, rotated, outside the outline or overlapping refuses with the token kept) and writes only each footprint's (at x y), which the reloaded file must hold exactly (else the write is refused and the board file is untouched)." + " " + _NOT_MEASURED_RULE + " " + _RELATIVE_RULE + " " + write_layer.LOCK_SENTENCE),
         annotations={"readOnlyHint": False, "destructiveHint": True, "idempotentHint": False, "openWorldHint": False},
     )
     mcp.add_tool(
         propose_placement_optimization,
         name="propose_placement_optimization",
-        description="Propose a real router-in-the-loop placement repair (KiCadRoutingTools' place_route_loop.py) -- routes the board, relocates only footprints on nets that actually failed (never a locked footprint: those are left out and listed in locked_skipped), re-routes, iterating. Compared with independent before/after kicad-cli DRC on trial copies after routing, not the tool's own self-report; those counts only compare the two placements and are not the acceptance gate. Returns a proposal + revision_token; does not modify the board. Needs a KiCadRoutingTools release that ships py_placer/place_route_loop.py (0.23.1 does, 0.23.8 does not); without it, or when the placer exits non-zero, the status is error and the reason names the script and the installed version. Call confirm_placement_optimization to apply (it applies footprint positions only, not the trial routing). Only a verify_board PASS may be reported as routed or done.",
+        description="Propose new poses (position and angle, board-local mm) for the unlocked footprints from an external placer, KiCadRoutingTools place_simple, run as a subprocess on a throw-away copy under a timeout with a fixed seed (the same board and seed give the same poses). Only the poses are read back from the copy's output board, which is never adopted; the board file is not changed. A locked footprint is never moved: it is left out and listed in locked_skipped. The placer's own legality claim is not trusted: a proposal whose courtyards fall outside the outline or overlap each other is refused with the problems listed (another seed may differ). Returns a proposal with a revision_token. Call confirm_placement_optimization to apply it, then run pcb_check_placement and pcb_run_drc. Unavailable (code placer_unavailable) when place_simple, the pinned KiCadRoutingTools version, numpy, scipy or shapely are missing. Only a verify_board PASS is a verdict on a board.",
         annotations={"readOnlyHint": True, "destructiveHint": False, "idempotentHint": False, "openWorldHint": False},
     )
     mcp.add_tool(
         confirm_placement_optimization,
         name="confirm_placement_optimization",
-        description=("Apply a previously proposed placement-optimization result by its revision_token. Consumes the token. Refuses a proposal that contains a footprint locked since (locked_footprint, token kept). Applies footprint positions only, then runs one kicad-cli DRC on the result and reports its counts (drc_after); that single run is not the acceptance gate. Only a verify_board PASS may be reported as routed or done." + " " + write_layer.LOCK_SENTENCE),
+        description=("Apply a previously proposed placement optimization by its revision_token. Consumes the token. Measures the proposal again against the board as it is now (a footprint locked since, outside the outline, in a slot or overlapping another courtyard refuses with the token kept), writes each footprint's position and angle (pad, text and property angles turn with it; the reloaded file must hold exactly that, else the write is refused and the board file is untouched), then reports kicad-cli DRC counts before and after (drc_before, drc_after) as measurements; those two runs are not the acceptance gate. Run pcb_check_placement afterwards. Only a verify_board PASS is a verdict on a board." + " " + write_layer.LOCK_SENTENCE),
         annotations={"readOnlyHint": False, "destructiveHint": True, "idempotentHint": False, "openWorldHint": False},
     )
     mcp.add_tool(

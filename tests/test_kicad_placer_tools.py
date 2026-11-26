@@ -1,14 +1,12 @@
-"""Tests for KiCadRoutingTools' py_placer/place_route_loop.py wrapper
-(krt-capability-suite ticket 08).
-
-Unit tests need no real KRT install: argument construction, the log
-streaming/timeout behavior (fake stand-in script, same pattern
-test_routing_krt.py uses), and placement_delta's real round-trip through
-kicad_tools on real small boards built via its own object model.
-"""
+"""Tests for the KiCadRoutingTools py_placer/place_simple.py wrapper (issue 257): the availability gate,
+the groups file, the subprocess steps (a stand-in for the one process-starting function, never reachable
+from a tool), the poses read back from raw tokens, and one real run on a small fixture copy."""
 
 from __future__ import annotations
 
+import json
+import shutil
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -16,215 +14,150 @@ import pytest
 from boardproof import write_layer
 from boardproof.routers import kicad_placer_tools as placer
 from boardproof.routers import kicad_routing_tools as krt
+from tests import _krt
+from tests._fixture_copy import copy_fixture
+
+FIXTURE = Path(__file__).parent / "fixtures" / "golden_attiny1616_board"
 
 
-def _fake_checkout(root: Path, place_route_loop_body: str) -> Path:
+def _fake_checkout(root: Path, version: str = "0.23.8") -> Path:
     (root / "py_router").mkdir(parents=True)
-    (root / "py_router" / "route.py").write_text("# stub, only discovery reads this path exists\n", encoding="utf-8")
-    (root / "py_placer").mkdir(parents=True)
-    (root / "py_placer" / "place_route_loop.py").write_text(place_route_loop_body, encoding="utf-8")
+    (root / "py_router" / "route.py").write_text("# stub\n", encoding="utf-8")
+    (root / "py_placer").mkdir()
+    (root / "py_placer" / "place_simple.py").write_text("# stub\n", encoding="utf-8")
+    (root / "py_tools").mkdir()
+    (root / "py_tools" / "check_floorplan.py").write_text("# stub\n", encoding="utf-8")
+    (root / "VERSION").write_text(version + "\n", encoding="utf-8")
+    return root
+
+
+@pytest.fixture
+def checkout(tmp_path, monkeypatch):
+    root = _fake_checkout(tmp_path / "krt")
+    monkeypatch.setenv(krt.ENV_PATH, str(root))
+    monkeypatch.setattr(placer, "_probe_imports", lambda python: [])
     return root
 
 
 # ---------------------------------------------------------------------------
-# Argument construction
+# Availability: unavailable is said, never invented
 # ---------------------------------------------------------------------------
 
 
-def test_build_placer_args_defaults_include_sheet_in_group_by(tmp_path):
-    args = placer.build_placer_args(tmp_path / "in.kicad_pcb", tmp_path / "out.kicad_pcb")
-    assert "sheet" in " ".join(args[args.index("--group-by") + 1 : args.index("--group-by") + 2])
-    assert "--relocate" not in args  # ticket 04: measured net-negative, never passed
-    assert "--movie" in args
-    assert "--verbose" in args
+def test_the_placer_is_available_with_the_pinned_version_and_packages(checkout):
+    assert placer.placer_problem() is None
 
 
-def test_build_placer_args_no_movie_when_disabled(tmp_path):
-    args = placer.build_placer_args(tmp_path / "in.kicad_pcb", tmp_path / "out.kicad_pcb", movie=False)
-    assert "--no-movie" in args
-    assert "--movie" not in args
+def test_a_missing_script_is_unavailable_naming_the_script(checkout):
+    (checkout / "py_placer" / "place_simple.py").unlink()
+    problem = placer.placer_problem()
+    assert problem and problem.startswith("unavailable") and "place_simple.py" in problem, problem
 
 
-def test_build_placer_args_always_includes_a_nonempty_route_args_flag(tmp_path):
-    """Real bug found via two actual KRT invocations: place_route_loop.py's
-    --route-args is REQUIRED and must be non-empty -- both omitting it and
-    passing "" hit the same argparse error ("--route-args is required
-    (except with --suggest-locks)"), since the tool's own check is
-    `if not args.route_args`. Pin the default to always pass a real value."""
-    args = placer.build_placer_args(tmp_path / "in.kicad_pcb", tmp_path / "out.kicad_pcb")
-    assert "--route-args" in args
-    idx = args.index("--route-args")
-    assert args[idx + 1]  # must be truthy/non-empty
+def test_a_version_other_than_the_pinned_one_is_unavailable_naming_both(tmp_path, monkeypatch):
+    root = _fake_checkout(tmp_path / "krt", version="0.99.0")
+    monkeypatch.setenv(krt.ENV_PATH, str(root))
+    monkeypatch.setattr(placer, "_probe_imports", lambda python: [])
+    pinned = krt.load_cli_snapshot()["router_version"]
+    problem = placer.placer_problem()
+    assert problem and "0.99.0" in problem and pinned in problem and "pinned" in problem, problem
 
 
-def test_build_placer_args_passes_route_args_through_verbatim(tmp_path):
-    args = placer.build_placer_args(
-        tmp_path / "in.kicad_pcb", tmp_path / "out.kicad_pcb", route_args="--escalation board --clearance 0.2"
-    )
-    idx = args.index("--route-args")
-    assert args[idx + 1] == "--escalation board --clearance 0.2"
+def test_a_missing_package_is_unavailable_naming_it(checkout, monkeypatch):
+    monkeypatch.setattr(placer, "_probe_imports", lambda python: ["shapely"])
+    problem = placer.placer_problem()
+    assert problem and "shapely" in problem and problem.startswith("unavailable"), problem
 
 
-def test_build_placer_args_lock_repeats_flag_per_ref(tmp_path):
-    args = placer.build_placer_args(
-        tmp_path / "in.kicad_pcb", tmp_path / "out.kicad_pcb", lock=("J1", "U1")
-    )
-    assert args.count("--lock") == 2
-    assert "J1" in args and "U1" in args
+def test_no_checkout_is_unavailable(tmp_path, monkeypatch):
+    monkeypatch.setenv(krt.ENV_PATH, str(tmp_path / "nowhere"))
+    problem = placer.placer_problem()
+    assert problem and problem.startswith("unavailable"), problem
 
 
 # ---------------------------------------------------------------------------
-# run_placement_repair: fake stand-in script, no real KRT/placer needed.
+# The groups file and the subprocess steps
 # ---------------------------------------------------------------------------
 
-_FAKE_PLACER_SUCCESS = """\
-import sys
-from pathlib import Path
-sys.stdout.write("Round 0: 3 target parts, 2 failed nets\\n")
-sys.stdout.flush()
-sys.stderr.write("fake placer warning\\n")
-sys.stderr.flush()
-Path(sys.argv[2]).write_text("(kicad_pcb fake-repaired)\\n", encoding="utf-8")
-sys.stdout.write("FAKE_PLACER_DONE\\n")
-"""
 
-_FAKE_PLACER_HANGS = """\
-import sys, time
-sys.stdout.write("fake placer starting, about to hang\\n")
-sys.stdout.flush()
-time.sleep(30)
-"""
+def test_the_groups_file_is_one_group_of_every_reference_and_sets_nothing_else():
+    doc = placer.groups_document(["U1", "C1", "J1"])
+    assert doc["schema"] == 1 and len(doc["groups"]) == 1
+    group = doc["groups"][0]
+    assert group["name"] == "all" and group["refs"] == ["U1", "C1", "J1"]
+    assert set(group) <= {"name", "refs", "why"}  # no edge, side, anchor, near, apart, templates, flippable
 
 
-def test_run_placement_repair_streams_log_and_reports_output(tmp_path, monkeypatch):
-    checkout = _fake_checkout(tmp_path / "krt", _FAKE_PLACER_SUCCESS)
-    monkeypatch.setenv(krt.ENV_PATH, str(checkout))
-    monkeypatch.delenv(krt.ENV_PYTHON, raising=False)
+def _stand_in(calls, *, fail_step=None, write_output=True):
+    def run(args, *, cwd, env, timeout):
+        calls.append({"args": args, "cwd": cwd, "env": env, "timeout": timeout})
+        script = Path(args[1]).name
+        if script == fail_step:
+            return subprocess.CompletedProcess(args, 3, "", "boom")
+        if script == "check_floorplan.py":
+            Path(args[args.index("--emit-intent") + 1]).write_text("{}", encoding="utf-8")
+        elif write_output:
+            shutil.copyfile(FIXTURE / "golden_attiny1616_board.kicad_pcb", args[3])
+            Path(args[args.index("--json") + 1]).write_text(json.dumps({"illegal": []}), encoding="utf-8")
+        return subprocess.CompletedProcess(args, 0, "", "")
 
-    input_pcb = tmp_path / "board.kicad_pcb"
-    input_pcb.write_text("(kicad_pcb)", encoding="utf-8")
-    output_pcb = tmp_path / "out" / "board_optimized.kicad_pcb"
-
-    result = placer.run_placement_repair(input_pcb, output_pcb, timeout=30)
-
-    assert result["exit_code"] == 0
-    assert result["output_produced"] is True
-    stdout_log = Path(result["stdout_log"])
-    assert stdout_log.is_file()
-    assert stdout_log.name == "board_optimized.placer_repair.log"
-    assert "FAKE_PLACER_DONE" in stdout_log.read_text(encoding="utf-8")
-    assert "fake placer warning" in Path(result["stderr_log"]).read_text(encoding="utf-8")
-    assert result["movie_path"] is None  # fake script never wrote placement.mp4
+    return run
 
 
-def test_run_placement_repair_timeout_preserves_log_and_raises(tmp_path, monkeypatch):
-    checkout = _fake_checkout(tmp_path / "krt", _FAKE_PLACER_HANGS)
-    monkeypatch.setenv(krt.ENV_PATH, str(checkout))
-    monkeypatch.delenv(krt.ENV_PYTHON, raising=False)
+def test_run_place_simple_runs_two_steps_with_seed_manifest_and_minimal_environment(checkout, tmp_path, monkeypatch):
+    calls: list[dict] = []
+    monkeypatch.setattr(placer, "_run_process", _stand_in(calls))
+    board = tmp_path / "b.kicad_pcb"  # never read: the stand-in does not open it
+    run_dir = tmp_path / "run"
+    result = placer.run_place_simple(board, run_dir, ["R1", "R2"], seed=7, timeout=100)
+    assert [Path(c["args"][1]).name for c in calls] == ["check_floorplan.py", "place_simple.py"]
+    placed = calls[1]["args"]
+    assert placed[placed.index("--seed") + 1] == "7"
+    assert json.loads((run_dir / "groups.json").read_text())["groups"][0]["refs"] == ["R1", "R2"]
+    for call in calls:
+        assert Path(call["env"]["PLACEMENT_MANIFEST"]).parent == run_dir  # the run record stays in the folder
+        assert set(call["env"]) <= {*placer._ENV_PASSED_THROUGH, "PYTHONUTF8", "PYTHONIOENCODING", "PLACEMENT_MANIFEST"}
+        assert call["timeout"] <= 100
+    assert Path(result["output_pcb"]).parent == run_dir and result["exit_code"] == 0
 
-    input_pcb = tmp_path / "board.kicad_pcb"
-    input_pcb.write_text("(kicad_pcb)", encoding="utf-8")
-    output_pcb = tmp_path / "out" / "board_optimized.kicad_pcb"
 
+@pytest.mark.parametrize("step", ["check_floorplan.py", "place_simple.py"])
+def test_a_failing_step_raises_with_its_stderr(checkout, tmp_path, monkeypatch, step):
+    monkeypatch.setattr(placer, "_run_process", _stand_in([], fail_step=step))
+    with pytest.raises(krt.KicadRoutingToolsError, match=r"code 3.*boom"):
+        placer.run_place_simple(tmp_path / "b.kicad_pcb", tmp_path / "run", ["R1"])
+
+
+def test_a_timeout_raises_and_adopts_nothing(checkout, tmp_path, monkeypatch):
+    def run(args, **kwargs):
+        raise subprocess.TimeoutExpired(args, kwargs["timeout"])
+
+    monkeypatch.setattr(placer, "_run_process", run)
     with pytest.raises(krt.KicadRoutingToolsError, match="timed out"):
-        placer.run_placement_repair(input_pcb, output_pcb, timeout=1)
-
-    stdout_log = output_pcb.with_name("board_optimized.placer_repair.log")
-    assert stdout_log.is_file()
-    assert "fake placer starting, about to hang" in stdout_log.read_text(encoding="utf-8")
-    assert not output_pcb.is_file()
+        placer.run_place_simple(tmp_path / "b.kicad_pcb", tmp_path / "run", ["R1"], timeout=5)
 
 
-def test_missing_placer_script_raises_naming_script_and_krt_version(tmp_path, monkeypatch):
-    """Issue 232: KRT 0.23.8 ships no py_placer/place_route_loop.py."""
-    checkout = _fake_checkout(tmp_path / "krt", _FAKE_PLACER_SUCCESS)
-    (checkout / "py_placer" / "place_route_loop.py").unlink()
-    (checkout / "VERSION").write_text("0.23.8\n", encoding="utf-8")
-    monkeypatch.setenv(krt.ENV_PATH, str(checkout))
-    monkeypatch.delenv(krt.ENV_PYTHON, raising=False)
-    input_pcb = tmp_path / "board.kicad_pcb"
-    input_pcb.touch()  # content is never read: the script check comes first
-
-    with pytest.raises(krt.KicadRoutingToolsError, match=r"place_route_loop\.py.*0\.23\.8"):
-        placer.run_placement_repair(input_pcb, tmp_path / "out" / "o.kicad_pcb", timeout=30)
+def test_exit_zero_without_an_output_board_is_an_error(checkout, tmp_path, monkeypatch):
+    monkeypatch.setattr(placer, "_run_process", _stand_in([], write_output=False))
+    with pytest.raises(krt.KicadRoutingToolsError, match="wrote no board"):
+        placer.run_place_simple(tmp_path / "b.kicad_pcb", tmp_path / "run", ["R1"])
 
 
-_FAKE_PLACER_SLOW = """\
-import sys, time
-from pathlib import Path
-sys.stdout.write("Round 1: 3 target parts, 7 failed nets\\n")
-sys.stdout.flush()
-time.sleep(1.5)
-Path(sys.argv[2]).write_text("(kicad_pcb fake-repaired)\\n", encoding="utf-8")
-"""
-
-
-def test_round_summary_carries_the_number_of_open_nets():
-    rounds = placer._parse_round_summary("Round 1: 3 target parts, 7 failed nets\n")
-    assert rounds[0]["round"] == 1 and rounds[0]["open_nets"] == 7, rounds
-
-
-def test_run_placement_repair_reports_progress_while_it_runs(tmp_path, monkeypatch):
-    """Issue 240: a long run is never silent; the callback sees round and open nets before the run ends."""
-    checkout = _fake_checkout(tmp_path / "krt", _FAKE_PLACER_SLOW)
-    monkeypatch.setenv(krt.ENV_PATH, str(checkout))
-    monkeypatch.delenv(krt.ENV_PYTHON, raising=False)
-    input_pcb = tmp_path / "board.kicad_pcb"
-    input_pcb.touch()  # the stand-in placer never reads it
-    seen: list[list[dict]] = []
-
-    placer.run_placement_repair(
-        input_pcb, tmp_path / "out" / "o.kicad_pcb", timeout=30, progress=seen.append, poll_seconds=0.2,
-    )
-    assert any(r and r[-1]["round"] == 1 and r[-1]["open_nets"] == 7 for r in seen), seen
-
-
-def test_a_raising_progress_callback_leaves_no_placer_process_running(tmp_path, monkeypatch):
-    checkout = _fake_checkout(tmp_path / "krt", _FAKE_PLACER_HANGS)
-    monkeypatch.setenv(krt.ENV_PATH, str(checkout))
-    monkeypatch.delenv(krt.ENV_PYTHON, raising=False)
-    input_pcb = tmp_path / "board.kicad_pcb"
-    input_pcb.touch()
-    procs = []
-    real_popen = placer.subprocess.Popen
-
-    def _spy(*a, **k):
-        procs.append(real_popen(*a, **k))
-        return procs[-1]
-
-    monkeypatch.setattr(placer.subprocess, "Popen", _spy)
-
-    def _boom(_rounds):
-        raise ValueError("callback failed")
-
-    with pytest.raises(ValueError, match="callback failed"):
-        placer.run_placement_repair(input_pcb, tmp_path / "out" / "o.kicad_pcb", timeout=30, progress=_boom,
-                                    poll_seconds=0.2)
-    assert procs and procs[0].poll() is not None, "the placer child is still running"
-
-
-def test_placer_script_problem_names_script_installed_and_pinned_versions(tmp_path, monkeypatch):
-    checkout = _fake_checkout(tmp_path / "krt", _FAKE_PLACER_SUCCESS)
-    (checkout / "VERSION").write_text("0.23.8\n", encoding="utf-8")
-    monkeypatch.setenv(krt.ENV_PATH, str(checkout))
-    monkeypatch.delenv(krt.ENV_PYTHON, raising=False)
-    assert placer.placer_script_problem() is None
-    (checkout / "py_placer" / "place_route_loop.py").unlink()
-    problem = placer.placer_script_problem()
-    assert problem and "place_route_loop.py" in problem and "0.23.8" in problem and "pinned" in problem, problem
-
-
-def test_no_graceful_stop_mechanism_exists_for_the_placer(tmp_path):
-    """Confirmed by direct source reading (ticket 08): neither
-    place_route_loop.py nor place_optimize.py reference KICAD_STOP_FILE or
-    any equivalent -- unlike route.py's real one. This test just pins that
-    run_placement_repair's signature has no stop_after/graceful-stop
-    parameter, so a future edit that silently adds one gets caught by an
-    honest module-docstring update, not a stale claim."""
-    import inspect
-
-    sig = inspect.signature(placer.run_placement_repair)
-    assert "stop_after" not in sig.parameters
+@pytest.mark.needs_krt
+def test_the_real_placer_places_a_fixture_copy_and_only_poses_are_read_back(tmp_path):
+    """One real run (a few seconds): needs the pinned KiCadRoutingTools and numpy, scipy, shapely."""
+    if placer.placer_problem() is not None:
+        _krt.missing(placer.placer_problem())  # skips, or fails under KICAD_ROUTING_TOOLS_REQUIRED
+    work = tmp_path / "in"
+    copy_fixture(FIXTURE, work)
+    board = work / "golden_attiny1616_board.kicad_pcb"
+    refs = sorted(placer._raw_poses(board)[0])
+    first = placer.run_place_simple(board, tmp_path / "run0", refs, seed=0, timeout=120)
+    again = placer.run_place_simple(board, tmp_path / "run1", refs, seed=0, timeout=120)
+    delta = placer.placement_delta(board, first["output_pcb"])
+    assert delta, "the placer moved nothing on a board it was asked to place"
+    assert delta == placer.placement_delta(board, again["output_pcb"])  # same seed, same poses
+    assert Path(first["output_pcb"]).parent == tmp_path / "run0"
 
 
 # ---------------------------------------------------------------------------
@@ -257,8 +190,7 @@ def test_placement_delta_finds_exactly_the_moved_footprints(tmp_path):
     delta = placer.placement_delta(original, repaired)
 
     assert set(delta.keys()) == {"R2"}
-    x, y, rotation = delta["R2"]
-    assert (x, y, rotation) == pytest.approx((22.5, 12.0, 90.0))
+    assert delta["R2"] == pytest.approx(placer._raw_poses(repaired)[0]["R2"])  # the file's own page frame
 
 
 def test_placement_delta_on_identical_boards_is_empty(tmp_path):
@@ -310,7 +242,7 @@ def test_placement_delta_does_not_use_footprint_convenience_properties(
     delta = placer.placement_delta(original, repaired)
 
     assert set(delta) == {"R2"}
-    assert delta["R2"] == pytest.approx((22.5, 12.0, 90.0))
+    assert delta["R2"] == pytest.approx(placer._raw_poses(repaired)[0]["R2"])
 
 
 @pytest.mark.parametrize("rotation", [0.0, 90.0, 180.0, 270.0])
@@ -322,15 +254,14 @@ def test_placement_delta_reports_each_right_angle_rotation(tmp_path, rotation):
 
     delta = placer.placement_delta(original, repaired)
 
-    assert delta["R1"] == pytest.approx((10.0, 10.0, rotation))
+    assert delta["R1"][2] == pytest.approx(rotation)
+    assert delta["R1"] == pytest.approx(placer._raw_poses(repaired)[0]["R1"])
 
 
-def test_placement_delta_applied_through_kicad_tools_reproduces_the_repaired_raw_positions(tmp_path):
-    """The delta is the contract `confirm_autoplacement` applies via
-    update_footprint_position; applying it to the original must land every
-    footprint on the repaired board's raw (at) values."""
-    from kicad_tools.schema import PCB
-    from kicad_tools.sexp import parse_file
+def test_placement_delta_applied_through_write_poses_reproduces_the_placed_raw_poses(tmp_path):
+    """The delta is what write_poses takes: applying it to the original lands every footprint on the
+    placed board's raw (at) values."""
+    from boardproof import placement_anchor
 
     original = tmp_path / "original.kicad_pcb"
     repaired = tmp_path / "repaired.kicad_pcb"
@@ -338,25 +269,11 @@ def test_placement_delta_applied_through_kicad_tools_reproduces_the_repaired_raw
     _tiny_board(repaired, {"R1": (14.0, 11.0, 270.0), "R2": (20.0, 10.0, 0.0)})
 
     delta = placer.placement_delta(original, repaired)
-    board = PCB.load(original)
-    for ref, (x, y, rotation) in delta.items():
-        assert board.update_footprint_position(ref, x, y, rotation)
-    applied = tmp_path / "applied.kicad_pcb"
-    write_layer.save_pcb(board, applied)
+    placement_anchor.write_poses(original, delta)
 
-    def raw_at(path, ref):
-        for fp in parse_file(str(path)).find_all("footprint"):
-            if any(
-                p.values[:2] == ["Reference", ref] or str(p.values[:2]) == str(["Reference", ref])
-                for p in fp.find_all("property")
-            ):
-                return [float(v) for v in fp.find("at").values]
-        raise AssertionError(f"{ref} not found")
-
+    got, want = placer._raw_poses(original)[0], placer._raw_poses(repaired)[0]
     for ref in ("R1", "R2"):
-        got = raw_at(applied, ref) + [0.0] * (3 - len(raw_at(applied, ref)))
-        want = raw_at(repaired, ref) + [0.0] * (3 - len(raw_at(repaired, ref)))
-        assert got == pytest.approx(want)
+        assert got[ref] == pytest.approx(want[ref])
 
 
 def test_placement_delta_treats_equivalent_rotations_as_unchanged(tmp_path):
@@ -367,3 +284,47 @@ def test_placement_delta_treats_equivalent_rotations_as_unchanged(tmp_path):
     _tiny_board(repaired, {"R1": (10.0, 10.0, -90.0), "R2": (20.0, 10.0, 360.0)})
 
     assert placer.placement_delta(original, repaired) == {}
+
+
+def test_a_placer_board_with_other_footprints_is_refused(tmp_path):
+    original = tmp_path / "original.kicad_pcb"
+    placed = tmp_path / "placed.kicad_pcb"
+    _tiny_board(original, {"R1": (10.0, 10.0, 0.0), "R2": (20.0, 10.0, 0.0)})
+    _tiny_board(placed, {"R1": (10.0, 10.0, 0.0)})
+    with pytest.raises(ValueError, match="R2"):
+        placer.placement_delta(original, placed)
+
+
+def test_a_timeout_kills_the_child_and_its_own_children(tmp_path):
+    import os
+    import subprocess
+    import sys
+    import time
+
+    pidfile = tmp_path / "grandchild.pid"
+    code = (
+        "import subprocess,sys,time;"
+        "g=subprocess.Popen([sys.executable,'-c','import time;time.sleep(60)']);"
+        f"open(r'{pidfile}','w').write(str(g.pid));time.sleep(60)"
+    )
+    with pytest.raises(subprocess.TimeoutExpired):
+        placer._run_process([sys.executable, "-c", code], cwd=str(tmp_path), env=dict(os.environ), timeout=4)
+    pid = int(pidfile.read_text())
+    deadline = time.time() + 10
+    while time.time() < deadline and _alive(pid):
+        time.sleep(0.2)
+    assert not _alive(pid), "the grandchild survived the timeout"
+
+
+def _alive(pid: int) -> bool:
+    import subprocess
+    import os
+
+    if os.name == "nt":
+        out = subprocess.run(["tasklist", "/FI", f"PID eq {pid}", "/NH"], capture_output=True, text=True, errors="replace").stdout
+        return str(pid) in out
+    try:
+        os.kill(pid, 0)
+    except OSError:
+        return False
+    return True

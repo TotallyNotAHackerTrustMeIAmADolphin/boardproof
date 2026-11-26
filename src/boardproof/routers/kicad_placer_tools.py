@@ -1,60 +1,36 @@
-"""KiCadRoutingTools' `py_placer/` package as a real placement-optimization
-backend -- ticket 08 of the `krt-capability-suite` Wayfinder map.
+"""KiCadRoutingTools' `py_placer/place_simple.py` as the placement-optimisation backend (issue 257).
 
-Built on the real survey findings from tickets 02/03/04/06 of that map (see
-each ticket's `## Answer` for full detail):
+It replaces the retired router-in-the-loop `place_route_loop.py` (upstream removed it, issue 247). The
+placer runs as a subprocess on a throw-away copy of the board; nothing it writes is ever adopted. Only
+the footprint poses are read back, from the raw ``(at x y angle)`` tokens (hard rule 2), and applied
+through ``placement_anchor.write_poses``.
 
-- `place_route_loop.py` ("router-in-the-loop placement repair") is the real
-  entry point: it runs `route.py`, reads which nets actually failed, moves
-  just those (or their blockers), and re-routes, iterating across
-  `--rounds`. This automates exactly the manual "fix one bottleneck, retry,
-  find the next" loop this project did by hand on openMPPT (tickets 05/12,
-  `openmppt-ship`).
-- `--route-args` is REQUIRED by `place_route_loop.py` itself unless
-  `--suggest-locks` is also given (confirmed by a real invocation: omitting
-  it entirely is an argparse error, "--route-args is required (except with
-  --suggest-locks)" -- `--help`'s square brackets around it are misleading).
-  An empty string does NOT satisfy this either (`place_route_loop.py`'s own
-  check is `if not args.route_args`, and `""` is falsy) -- confirmed by a
-  second real invocation after the first fix attempt still failed the same
-  way. This module defaults to `"--escalation board"`, matching
-  `run_kicad_routing_tools`'s own default escalation policy so behavior is
-  consistent between the two wrappers.
-- `--group-by` needs `sheet` in the list or it derives zero rigid blocks on
-  a real board (ticket 02's finding, confirmed again on `place_route_loop`
-  by ticket 04) -- this module defaults to `"auto,sheet,netprefix,decap"`,
-  never bare `"auto"`.
-- `--relocate` is measured NET-NEGATIVE by KRT's own authors' corpus study
-  (ticket 04) -- left off by default here, never silently enabled.
-- `--ratsnest-screen` is a real, free pre-route regression filter (skip a
-  candidate placement's routing attempt if its airwire crossings/HPWL
-  regressed) that ticket 04 found unused by any of this project's prior
-  invocations -- defaulted ON here (15% threshold, a conservative middle
-  value; not independently tuned, revisit if it screens out real wins).
-- `--movie` is ON by default in the underlying tool and genuinely works
-  (ticket 04 verified a real rendered output) -- left on, its path surfaced
-  in the return dict as a human-review aid, never treated as evidence.
-- No graceful-stop mechanism exists here (checked directly: neither
-  `place_route_loop.py` nor `place_optimize.py` reference `KICAD_STOP_FILE`
-  or any equivalent env var/flag, unlike `route.py`'s real one -- see
-  `kicad_routing_tools.stop_file_for`/`request_graceful_stop`). `timeout`
-  is therefore the ONLY way to bound a run; say so plainly rather than
-  silently omitting the capability ticket 08 asked to check for.
+Inputs `place_simple` needs and what this module sets in each:
 
-Discovery is shared with the router (same checkout, same interpreter
-requirements) -- this module does not re-implement `find_kicad_routing_tools`/
-`find_kicad_routing_tools_python`, it imports them.
+- ``groups.json`` (schema 1): ONE group named ``all`` listing every footprint reference of the board
+  (locked ones included: they are fixed members). No ``edge``, ``side``, ``anchor``, ``near``,
+  ``apart``, ``templates`` or ``flippable`` is set, so no face changes and no judgement about
+  functional groups is invented; the placer then minimises wirelength, crossings and decap distance
+  over one group.
+- ``intent.json``: the starter intent READ OFF the copy by ``check_floorplan.py --emit-intent`` with
+  its default flags: the envelope and the legality budget observed on the board, no blocks, no
+  proximity claims, no keep-outs, no decap limit. It is observation only, so it declares no
+  requirement the placer could steer toward.
+- ``--seed N`` (default 0): one seed, so the same board and seed give the same poses.
+- ``PLACEMENT_MANIFEST``: pointed into the run folder, so the placer's run record never leaves it.
+
+Never reachable from the MCP surface: ``_run_process`` and ``_probe_imports`` are module-level
+functions that tests replace; no tool parameter names them.
 """
 
 from __future__ import annotations
 
 import json
 import os
-import re
 import subprocess
 import time
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from boardproof import write_layer
 from boardproof.routers.kicad_routing_tools import (
@@ -65,214 +41,129 @@ from boardproof.routers.kicad_routing_tools import (
     router_version,
 )
 
-PLACER_SCRIPT = Path("py_placer") / "place_route_loop.py"
-
-# Bare "auto" alone derives zero rigid blocks on a real board (ticket 02's
-# finding) -- "sheet" must be present for --group-by to do anything useful.
-DEFAULT_GROUP_BY = "auto,sheet,netprefix,decap"
-# A conservative middle value, not independently tuned against a corpus the
-# way KRT's own defaults are -- revisit if it turns out to screen out real
-# improvements on a board this project actually cares about.
-DEFAULT_RATSNEST_SCREEN_PERCENT = 15.0
+PLACER_SCRIPT = Path("py_placer") / "place_simple.py"
+FLOORPLAN_SCRIPT = Path("py_tools") / "check_floorplan.py"
+_REQUIRED_PACKAGES = ("numpy", "scipy", "shapely")
+GROUP_NAME = "all"
 
 
-def build_placer_args(
-    input_pcb: str | Path,
-    output_pcb: str | Path,
-    *,
-    route_args: str = "--escalation board",
-    rounds: int | None = None,
-    group_by: str | None = DEFAULT_GROUP_BY,
-    ratsnest_screen: float | None = DEFAULT_RATSNEST_SCREEN_PERCENT,
-    lock: tuple[str, ...] = (),
-    work_dir: str | Path | None = None,
-    movie: bool = True,
-    verbose: bool = True,
-) -> list[str]:
-    """The argument list after the interpreter and `place_route_loop.py`.
-
-    `--relocate` is never passed (ticket 04: measured net-negative by KRT's
-    own authors). `--target-select` is left at its default (`pins`) --
-    ticket 04 found `diagnosis` mode needs an explicit `--group-by` to do
-    anything and is not proven better than the default in KRT's own docs.
-    """
-    args = [str(input_pcb), str(output_pcb), "--route-args", route_args]
-    if rounds is not None:
-        args += ["--rounds", str(int(rounds))]
-    if group_by is not None:
-        args += ["--group-by", group_by]
-    if ratsnest_screen is not None:
-        args += ["--ratsnest-screen", f"{ratsnest_screen:g}"]
-    for ref in lock:
-        args += ["--lock", ref]
-    if work_dir is not None:
-        args += ["--work-dir", str(work_dir)]
-    args.append("--movie" if movie else "--no-movie")
-    if verbose:
-        args.append("--verbose")
-    return args
+def _kill_tree(proc: subprocess.Popen) -> None:
+    """Kill the child and everything it started (the placer spawns workers that outlive a plain kill)."""
+    try:
+        if os.name == "nt":
+            subprocess.run(["taskkill", "/T", "/F", "/PID", str(proc.pid)], capture_output=True, check=False, timeout=30)
+        else:
+            os.killpg(proc.pid, 9)
+    except (OSError, subprocess.SubprocessError):
+        pass
+    proc.kill()
 
 
-def placer_script_problem() -> str | None:
-    """None when the installed KiCadRoutingTools ships `place_route_loop.py`, else a plain sentence
-    naming the script, the installed version and the pinned one (issue 240: asked before any routing
-    time is spent). Contract decision: this project does not adopt `place_simple.py` and does not move
-    the pin; with the pinned release the optimisation tool answers with this error."""
-    checkout = find_kicad_routing_tools()
-    if (checkout / PLACER_SCRIPT).is_file():
-        return None
-    pinned = load_cli_snapshot().get("router_version") or "unknown version"
-    return (
-        f"placer script {PLACER_SCRIPT.as_posix()} is missing in the installed KiCadRoutingTools "
-        f"{router_version(checkout) or 'unknown version'} ({checkout}); the pinned version is {pinned}, which "
-        f"ships no router-in-the-loop placement script (0.23.1 does). Nothing was changed."
-    )
+def _run_process(args: list[str], *, cwd: str, env: dict[str, str], timeout: float) -> subprocess.CompletedProcess:
+    """The one place a child process starts (tests replace it). On a timeout the whole process tree is killed."""
+    group = {"start_new_session": True} if os.name != "nt" else {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP}
+    with subprocess.Popen(args, cwd=cwd, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+                          encoding="utf-8", errors="replace", **group) as proc:
+        try:
+            out, err = proc.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            _kill_tree(proc)
+            proc.communicate()
+            raise
+    return subprocess.CompletedProcess(args, proc.returncode, out, err)
 
 
-def run_placement_repair(
-    input_pcb: str | Path,
-    output_pcb: str | Path,
-    *,
-    route_args: str = "--escalation board",
-    rounds: int | None = None,
-    group_by: str | None = DEFAULT_GROUP_BY,
-    ratsnest_screen: float | None = DEFAULT_RATSNEST_SCREEN_PERCENT,
-    lock: tuple[str, ...] = (),
-    movie: bool = True,
-    timeout: int = 1800,
-    progress: Callable[[list[dict]], None] | None = None,
-    poll_seconds: float = 30.0,
-) -> dict:
-    """Run KRT's `place_route_loop.py` as a local subprocess on `input_pcb`
-    (a disposable trial copy -- same discipline as `run_kicad_routing_tools`,
-    the caller must have already copied the sibling `.kicad_pro`/`.kicad_dru`/
-    lib-tables alongside it, since the loop's own internal `route.py`
-    sub-invocations need them for the same reason archived backlog P4-09 found).
+def _probe_imports(python: Path) -> list[str]:
+    """The required packages the interpreter cannot import (tests replace it)."""
+    code = "import importlib.util as u,sys;print(' '.join(m for m in sys.argv[1:] if u.find_spec(m) is None))"
+    done = _run_process([str(python), "-c", code, *_REQUIRED_PACKAGES], cwd=str(Path(python).parent),
+                        env=_minimal_env(), timeout=60)
+    if done.returncode != 0:
+        raise KicadRoutingToolsError(f"the interpreter {python} could not be probed: {done.stderr[-300:]}")
+    return done.stdout.split()
 
-    No graceful-stop exists for this tool (see module docstring) --
-    `timeout` is a hard `proc.kill()` backstop with no softer option, and a
-    killed run's partial state is whatever `--work-dir` already has on disk
-    (this function does not guarantee `output_pcb` exists after a timeout).
 
-    Streams stdout/stderr to real files next to `output_pcb`, same pattern
-    as `run_kicad_routing_tools` (ticket 08 of `openmppt-ship`) -- survives
-    a kill, and this tool is genuinely verbose per-round.
+_ENV_PASSED_THROUGH = ("SystemRoot", "SYSTEMROOT", "TEMP", "TMP", "TMPDIR", "HOME", "USERPROFILE")
 
-    Raises `KicadRoutingToolsError` on discovery failure or a hard timeout.
-    Returns a dict describing the run otherwise -- `output_pcb` may still
-    not exist if every round failed to improve on the input (check
-    `Path(result["output_pcb"]).is_file()` before treating it as usable).
-    """
+
+def _minimal_env(manifest: Path | None = None) -> dict[str, str]:
+    env = {k: os.environ[k] for k in _ENV_PASSED_THROUGH if k in os.environ}
+    env["PYTHONUTF8"] = "1"
+    env["PYTHONIOENCODING"] = "utf-8"
+    if manifest is not None:
+        env["PLACEMENT_MANIFEST"] = str(manifest)
+    return env
+
+
+def placer_problem() -> str | None:
+    """None when `place_simple` can run, else one plain sentence saying what is unavailable. Nothing is invented:
+    a missing script, a version other than the pinned one, or a missing package all answer here."""
+    try:
+        checkout = find_kicad_routing_tools()
+        python = find_kicad_routing_tools_python()
+        pinned = load_cli_snapshot().get("router_version")
+        installed = router_version(checkout)
+        if not (checkout / PLACER_SCRIPT).is_file() or not (checkout / FLOORPLAN_SCRIPT).is_file():
+            return (f"unavailable: {PLACER_SCRIPT.as_posix()} or {FLOORPLAN_SCRIPT.as_posix()} is missing in the installed "
+                    f"KiCadRoutingTools {installed or 'unknown version'} ({checkout}). Nothing was changed.")
+        if not pinned or installed != pinned:
+            return (f"unavailable: the installed KiCadRoutingTools is {installed or 'of unknown version'}, the pinned version "
+                    f"is {pinned or 'unknown'}; the placer is only run on the pinned version. Nothing was changed.")
+        missing = _probe_imports(python)
+    except KicadRoutingToolsError as exc:
+        return f"unavailable: {exc}. Nothing was changed."
+    if missing:
+        return f"unavailable: the placer's interpreter {python} lacks the package(s) {', '.join(missing)}. Nothing was changed."
+    return None
+
+
+def groups_document(refs: list[str]) -> dict:
+    """The groups file: one group holding every footprint (see the module docstring)."""
+    return {"schema": 1, "groups": [{"name": GROUP_NAME, "refs": list(refs),
+                                     "why": "one group: no functional grouping is judged here"}]}
+
+
+def place_simple_args(board: Path, out: Path, groups: Path, intent: Path, seed: int) -> list[str]:
+    return [str(board), str(out), "--groups", str(groups), "--intent", str(intent), "--seed", str(int(seed))]
+
+
+def run_place_simple(board_copy: Path, run_dir: Path, refs: list[str], *, seed: int = 0, timeout: int = 300) -> dict:
+    """Run `check_floorplan --emit-intent` then `place_simple` on ``board_copy`` (a disposable copy inside
+    ``run_dir``). Raises ``KicadRoutingToolsError`` on a timeout, a non-zero exit or a missing output; returns
+    ``{"output_pcb", "elapsed_s", "exit_code", "report"}`` otherwise. The output board is only a source of poses."""
     checkout = find_kicad_routing_tools()
     python = find_kicad_routing_tools_python()
-    if (problem := placer_script_problem()) is not None:
-        raise KicadRoutingToolsError(problem)
-    input_pcb = Path(input_pcb)
-    output_pcb = Path(output_pcb)
-    output_pcb.parent.mkdir(parents=True, exist_ok=True)
-    work_dir = output_pcb.parent
-
-    args = [
-        str(python),
-        str(checkout / PLACER_SCRIPT),
-        *build_placer_args(
-            input_pcb, output_pcb,
-            route_args=route_args, rounds=rounds, group_by=group_by,
-            ratsnest_screen=ratsnest_screen, lock=lock, work_dir=work_dir, movie=movie,
-        ),
-    ]
-    env = dict(os.environ)
-    env.setdefault("PYTHONIOENCODING", "utf-8")
-    env.setdefault("PYTHONUTF8", "1")
-
-    stdout_log = output_pcb.with_name(output_pcb.stem + ".placer_repair.log")
-    stderr_log = output_pcb.with_name(output_pcb.stem + ".placer_repair.stderr.log")
+    run_dir.mkdir(parents=True, exist_ok=True)
+    groups, intent = run_dir / "groups.json", run_dir / "intent.json"
+    output, report = run_dir / "placed.kicad_pcb", run_dir / "report.json"
+    groups.write_text(json.dumps(groups_document(refs)), encoding="utf-8")
+    env = _minimal_env(run_dir / "placement_manifest.json")
     started = time.time()
-    returncode: int | None = None
+    steps = [
+        ("check_floorplan --emit-intent", [str(python), str(checkout / FLOORPLAN_SCRIPT), str(board_copy), "--emit-intent", str(intent)]),
+        ("place_simple", [str(python), str(checkout / PLACER_SCRIPT), *place_simple_args(board_copy, output, groups, intent, seed), "--json", str(report)]),
+    ]
+    for name, args in steps:
+        try:
+            done = _run_process(args, cwd=str(checkout), env=env, timeout=max(1.0, timeout - (time.time() - started)))
+        except subprocess.TimeoutExpired as exc:
+            raise KicadRoutingToolsError(f"{name} timed out after {timeout} s and was killed; nothing was adopted") from exc
+        except OSError as exc:
+            raise KicadRoutingToolsError(f"could not start {name} via {python}: {exc}") from exc
+        if done.returncode != 0:
+            raise KicadRoutingToolsError(f"{name} exited with code {done.returncode}; stderr tail: {(done.stderr or '')[-600:]}")
+    if not output.is_file():
+        raise KicadRoutingToolsError("place_simple exited 0 but wrote no board; nothing was adopted")
     try:
-        with open(stdout_log, "w", encoding="utf-8", errors="replace") as out_f, \
-             open(stderr_log, "w", encoding="utf-8", errors="replace") as err_f:
-            # place_route_loop.py, like route.py, bootstraps its own sys.path
-            # relative to itself -- run from the checkout root.
-            try:
-                proc = subprocess.Popen(args, cwd=str(checkout), stdout=out_f, stderr=err_f, env=env)
-            except OSError as exc:
-                raise KicadRoutingToolsError(f"could not start place_route_loop.py via {python}: {exc}") from exc
-            deadline = started + timeout
-            try:
-                while True:
-                    try:
-                        returncode = proc.wait(timeout=max(0.0, min(poll_seconds, deadline - time.time())))
-                        break
-                    except subprocess.TimeoutExpired:
-                        if time.time() >= deadline:
-                            break  # the finally below kills the child
-                        if progress is not None:  # a long run is never silent (issue 240)
-                            out_f.flush()
-                            progress(_parse_round_summary(stdout_log.read_text(encoding="utf-8", errors="replace")))
-            finally:  # every exit (timeout, a raising callback, an unreadable log) leaves no child running
-                if proc.poll() is None:
-                    proc.kill()
-                    proc.wait()
-    except OSError as exc:
-        raise KicadRoutingToolsError(f"could not follow the placer run (log files): {exc}") from exc
-    elapsed = time.time() - started
-
-    stdout_text = stdout_log.read_text(encoding="utf-8", errors="replace") if stdout_log.is_file() else ""
-    stderr_text = stderr_log.read_text(encoding="utf-8", errors="replace") if stderr_log.is_file() else ""
-
-    if returncode is None:
-        tail = "\n".join(stdout_text.splitlines()[-25:])
-        raise KicadRoutingToolsError(
-            f"place_route_loop.py timed out after {timeout}s (process killed) -- no graceful-stop "
-            f"mechanism exists for this tool.\nstdout log ({stdout_log}) tail:\n{tail}\n"
-            f"stderr log ({stderr_log}) tail:\n{stderr_text[-2000:]}"
-        )
-
-    movie_path = work_dir / "placement.mp4"
-    return {
-        "exit_code": returncode,
-        "elapsed_s": round(elapsed, 2),
-        "args": args[2:],
-        "output_pcb": str(output_pcb),
-        "output_produced": output_pcb.is_file(),
-        "stdout_log": str(stdout_log),
-        "stderr_log": str(stderr_log),
-        "stderr_tail": stderr_text[-1000:],
-        "movie_path": str(movie_path) if movie_path.is_file() else None,
-        "rounds_summary": _parse_round_summary(stdout_text),
-    }
-
-
-_ROUND_LINE_RE = re.compile(r"^Round\s+(\d+)\D.*?(\d+)\s+(?:failed|target)", re.MULTILINE | re.IGNORECASE)
-
-
-def _parse_round_summary(stdout_text: str) -> list[dict]:
-    """Best-effort per-round progress lines for human review -- NOT used as
-    a scoring signal anywhere (real `kicad-cli` DRC before/after is, per
-    this project's standing rule). If the real log format doesn't match
-    this pattern, returns an empty list rather than guessing -- the raw log
-    file is always there to read directly."""
-    rounds: list[dict] = []
-    for match in _ROUND_LINE_RE.finditer(stdout_text):
-        line_end = stdout_text.find("\n", match.start())
-        line = stdout_text[match.start(): line_end if line_end >= 0 else None]
-        failed = _FAILED_RE.search(line)
-        rounds.append({"round": int(match.group(1)), "raw": match.group(0),
-                       "open_nets": int(failed.group(1)) if failed else None})
-    return rounds
-
-
-_FAILED_RE = re.compile(r"(\d+)\s+failed")
+        summary: Any = json.loads(report.read_text(encoding="utf-8")) if report.is_file() else {}
+    except (OSError, ValueError):
+        summary = {}
+    return {"output_pcb": str(output), "elapsed_s": round(time.time() - started, 2), "exit_code": 0, "report": summary}
 
 
 def _raw_board_origin(root: Any) -> tuple[float, float]:
     """The board origin from the raw Edge.Cuts geometry: the first ``gr_rect``'s
-    start, otherwise the minimum corner of the Edge.Cuts ``gr_line`` segments.
-
-    This is the same rule ``update_footprint_position`` applies when it adds the
-    origin back, read from the file so no convenience property is involved.
-    """
+    start, otherwise the minimum corner of the Edge.Cuts ``gr_line`` segments."""
     for rect in root.find_all("gr_rect"):
         layer = rect.find("layer")
         start = rect.find("start")
@@ -295,8 +186,7 @@ def _raw_board_origin(root: Any) -> tuple[float, float]:
 
 
 def _raw_reference(footprint: Any) -> str | None:
-    """Reference designator of a raw footprint node (KiCad 8+ ``property`` or
-    the older ``fp_text reference``)."""
+    """Reference designator of a raw footprint node (KiCad 8+ ``property`` or the older ``fp_text reference``)."""
     for prop in footprint.find_all("property"):
         if len(prop.values) >= 2 and str(prop.values[0]) == "Reference":
             return str(prop.values[1])
@@ -307,9 +197,8 @@ def _raw_reference(footprint: Any) -> str | None:
 
 
 def _raw_poses(path: str | Path) -> tuple[dict[str, tuple[float, float, float]], tuple[float, float]]:
-    """``{ref: (x, y, rotation)}`` straight from each footprint's raw ``(at X Y rot)``
-    node (rotation is omitted by KiCad when it is 0), plus the raw board origin."""
-
+    """``{ref: (x, y, rotation)}`` straight from each footprint's raw ``(at X Y rot)`` node (rotation is
+    omitted by KiCad when it is 0), plus the raw board origin."""
     root = write_layer.load(path)
     poses: dict[str, tuple[float, float, float]] = {}
     for footprint in [*root.find_all("footprint"), *root.find_all("module")]:
@@ -322,40 +211,29 @@ def _raw_poses(path: str | Path) -> tuple[dict[str, tuple[float, float, float]],
     return poses, _raw_board_origin(root)
 
 
-def placement_delta(original_pcb: str | Path, repaired_pcb: str | Path) -> dict[str, tuple[float, float, float]]:
-    """Diff footprint poses between the original board and a placer-repaired
-    trial copy. Returns `{ref: (x, y, rotation)}` for every footprint whose
-    position or rotation actually changed -- the exact shape `placement.py`'s
-    `_PENDING_PLACEMENTS`/`confirm_autoplacement` already use, so a caller can
-    register this delta the same way.
-
-    Every pose is read from the raw ``(at X Y rot)`` S-expression, never from
-    ``Footprint.position`` / ``.rotation`` (CLAUDE.md hard rule 2: those have
-    returned wrong board-absolute coordinates). Change detection compares raw
-    values directly, so it is independent of any origin. The returned
-    coordinates are board-local mm (raw minus the original board's origin),
-    the frame ``update_footprint_position`` expects.
-    """
-    original, origin = _raw_poses(original_pcb)
-    repaired, _ = _raw_poses(repaired_pcb)
-    ox, oy = origin
-
+def placement_delta(original_pcb: str | Path, placed_pcb: str | Path) -> dict[str, tuple[float, float, float]]:
+    """``{ref: (x, y, rotation)}`` for every footprint whose raw pose differs between the copy that went into
+    the placer and the board it wrote. The poses are in the file's own page frame (what ``write_poses``
+    takes); the caller subtracts the outline origin for the local frame it shows. Raises ``ValueError`` when the
+    two boards do not hold the same footprints: a placer that adds or drops one is not trusted."""
+    original, _ = _raw_poses(original_pcb)
+    placed, _ = _raw_poses(placed_pcb)
+    if set(original) != set(placed):
+        diff = sorted(set(original) ^ set(placed))
+        raise ValueError(f"the placer's board and the input hold different footprints: {diff}")
     delta: dict[str, tuple[float, float, float]] = {}
-    for ref, (rx, ry, rrot) in repaired.items():
-        before = original.get(ref)
-        if before is None:
-            continue  # placer doesn't add/remove footprints; a mismatch here is a different problem
-        bx, by, brot = before
-        if abs(bx - rx) > 1e-6 or abs(by - ry) > 1e-6 or abs(brot - rrot) > 1e-6:
-            delta[ref] = (rx - ox, ry - oy, rrot)
+    for ref, (rx, ry, rrot) in placed.items():
+        bx, by, brot = original[ref]
+        if abs(bx - rx) > 1e-6 or abs(by - ry) > 1e-6 or min(abs(brot - rrot), 360.0 - abs(brot - rrot)) > 1e-6:
+            delta[ref] = (rx, ry, rrot)
     return delta
 
 
 __all__ = [
-    "DEFAULT_GROUP_BY",
-    "DEFAULT_RATSNEST_SCREEN_PERCENT",
+    "GROUP_NAME",
     "PLACER_SCRIPT",
-    "build_placer_args",
+    "groups_document",
     "placement_delta",
-    "run_placement_repair",
+    "placer_problem",
+    "run_place_simple",
 ]

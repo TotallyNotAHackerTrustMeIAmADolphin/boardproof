@@ -15,9 +15,6 @@
     "src/boardproof/pour_step.py": {
       "B905": 4
     },
-    "src/boardproof/routers/kicad_placer_tools.py": {
-      "F401": 1
-    },
     "src/boardproof/routers/kicad_routing_tools.py": {
       "F401": 1
     },

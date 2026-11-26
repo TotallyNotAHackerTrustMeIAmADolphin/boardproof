@@ -189,7 +189,7 @@ def _confirm_placement_optimization(tmp_path):
     pcb = _led(tmp_path)
     token = "issue68-optimization-token"
     placement_toolset._PENDING_PLACEMENTS[token] = (
-        str(pcb), {"R1": (148.5, 85.5, 0.0)}, time.time() + 3600)  # what propose_placement_optimization parks
+        str(pcb), {"R1": (13.5, 8.0, 0.0)}, time.time() + 3600)  # what propose_placement_optimization parks (board-relative; R1 is at 12.5, 8.0)
     return Scenario(pcb, lambda: _tools(placement_toolset)["confirm_placement_optimization"](token))
 
 

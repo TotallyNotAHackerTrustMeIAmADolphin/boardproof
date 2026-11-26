@@ -131,19 +131,11 @@ note = "KRT stdout log."
 
 [[raw_write]]
 file = "routers/kicad_placer_tools.py"
-function = "run_placement_repair"
-kind = "open"
-code = '''open(stderr_log, 'w', encoding='utf-8', errors='replace')'''
+function = "run_place_simple"
+kind = "write_text"
+code = '''groups.write_text(json.dumps(groups_document(refs)), encoding='utf-8')'''
 kicad_file = false
-note = "KRT placer stderr log."
-
-[[raw_write]]
-file = "routers/kicad_placer_tools.py"
-function = "run_placement_repair"
-kind = "open"
-code = '''open(stdout_log, 'w', encoding='utf-8', errors='replace')'''
-kicad_file = false
-note = "KRT placer stdout log."
+note = "groups.json (JSON, not a KiCad file) for place_simple, in the scratch run folder of one propose_placement_optimization call."
 
 [[raw_write]]
 file = "rung_runner.py"
@@ -799,8 +791,11 @@ self_check = "reload-observe"
 note = "Reloads and runs the collision DRC; positions never compared with the plan."
 
 [writing_tool.confirm_placement_optimization]
-self_check = "reload-observe"
-note = "kicad-cli DRC counts on the saved file."
+self_check = "reload-verify"
+note = "Issue 257: writes each footprint's raw (at x y angle) and the pad, text and property angles that turn with it through placement_anchor.write_poses (write_layer.set_number on the tree, saved by write_layer.save), whose verify reloads the temporary sibling and refuses (write_not_verified, token kept, board file untouched) unless every other node equals the source and each footprint holds the intended pose with its pads at the hand-turned offsets. Before writing it re-measures the proposal against the board as it is (locked since, outside the outline, in a slot, overlapping: refused, token kept); kicad-cli DRC counts before and after are measurements."
+proof = [
+    "tests/test_placement_anchor_guards.py::test_optimization_confirm_self_check_fires_on_a_corrupted_write_and_keeps_the_token",
+]
 
 [writing_tool.confirm_route]
 self_check = "reload-verify"
@@ -1171,16 +1166,10 @@ reason = "One DRC run on a scratch copy of the project (snapshot_rules)."
 reaches = ["verify_board.py | _copy_project | shutil.copytree"]
 
 [read_only_tool_writes.propose_placement_optimization]
-reason = "Trial copies, placer and router logs and the KRT .kicad_pro restore, all inside a TemporaryDirectory; graded by kicad-cli DRC. The write layer saves only the trial copy (verify_input, build ticket 42)."
+reason = "A copy of the board and the placer's groups.json, intent and output board, all inside a TemporaryDirectory; only the poses of the output board are read, the caller's board is never written."
 reaches = [
-    "routers/kicad_placer_tools.py | run_placement_repair | open",
-    "routers/kicad_routing_tools.py | _restore_original_project | write_bytes",
-    "routers/kicad_routing_tools.py | run_router_script | open",
+    "routers/kicad_placer_tools.py | run_place_simple | write_text",
     "toolsets/routing.py | _trial_copy | shutil.copy",
-    "write_layer.py | _check_sub_sheets | shutil.copyfile",
-    "write_layer.py | _write_temp | open",
-    "write_layer.py | parse_check | shutil.copyfile",
-    "write_layer.py | _commit | os.replace",
 ]
 
 [read_only_tool_writes.propose_route_with_freerouting]
@@ -1424,22 +1413,6 @@ kind = "write_text"
 count = 1
 use = "serialised"
 note = "Symbol library built with kicad_tools' object model and serialize_sexp; debt: write_layer.save (kicad_symbol_lib kind exists)."
-
-[[test_kicad_write]]
-file = "test_kicad_placer_tools.py"
-function = "test_run_placement_repair_streams_log_and_reports_output"
-kind = "write_text"
-count = 1
-use = "stub"
-note = "Input board for a faked placer subprocess: never parsed."
-
-[[test_kicad_write]]
-file = "test_kicad_placer_tools.py"
-function = "test_run_placement_repair_timeout_preserves_log_and_raises"
-kind = "write_text"
-count = 1
-use = "stub"
-note = "Input board for a faked placer subprocess: never parsed."
 
 [[test_kicad_write]]
 file = "test_library_toolset.py"

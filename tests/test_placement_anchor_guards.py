@@ -4,6 +4,7 @@ the one guard it names is removed (the mutant list is in the ticket's Answer).""
 from __future__ import annotations
 
 import math
+from pathlib import Path
 
 import pytest
 from kicad_tools.sexp import SExp, parse_string
@@ -47,17 +48,29 @@ def _part(ref, box, side="front", through_hole=False, locked=False):
     return pa.Part(ref, None, (0.0, 0.0), 0.0, locked, side, through_hole, box, "courtyard")
 
 
-# --------------------------------------------------------------------------- the optimizer honours the lock
+# --------------------------------------------------------------------------- the optimizer (issue 257)
+
+ORIGIN = (98.5, 75.0)  # the outline corner of the _board fixture, page frame
 
 
-def _fake_optimizer(monkeypatch, delta):
+def _page(x, y, rot=0.0):
+    return (x + ORIGIN[0], y + ORIGIN[1], rot)
+
+
+def _fake_optimizer(monkeypatch, delta, *, calls=None, report=None):
+    """Stand in for the placer subprocess (module-level functions, never a tool parameter): the poses are
+    given in LOCAL mm and reach the tool as page poses, the way the raw reader returns them."""
     from boardproof import kicad_cli
-    from boardproof.routers import kicad_placer_tools, kicad_routing_tools
+    from boardproof.routers import kicad_placer_tools
 
-    monkeypatch.setattr(kicad_placer_tools, "placer_script_problem", lambda: None)
-    monkeypatch.setattr(kicad_placer_tools, "run_placement_repair", lambda *a, **k: {"exit_code": 0, "output_produced": True})
-    monkeypatch.setattr(kicad_placer_tools, "placement_delta", lambda *a, **k: dict(delta))
-    monkeypatch.setattr(kicad_routing_tools, "run_kicad_routing_tools", lambda *a, **k: {})
+    def run(trial, run_dir, refs, *, seed=0, timeout=300):
+        if calls is not None:
+            calls.append({"trial": trial, "refs": list(refs), "seed": seed, "timeout": timeout})
+        return {"output_pcb": str(run_dir / "placed.kicad_pcb"), "elapsed_s": 0.1, "exit_code": 0, "report": report or {}}
+
+    monkeypatch.setattr(kicad_placer_tools, "placer_problem", lambda: None)
+    monkeypatch.setattr(kicad_placer_tools, "run_place_simple", run)
+    monkeypatch.setattr(kicad_placer_tools, "placement_delta", lambda *a, **k: {r: _page(*v) for r, v in delta.items()})
     monkeypatch.setattr(kicad_cli, "run_drc", lambda *a, **k: {"violations": [], "unconnected_items": []})
     monkeypatch.setattr(kicad_cli, "ensure_kicad_cli_on_path", lambda *a, **k: None)
 
@@ -72,7 +85,60 @@ def test_a_locked_part_survives_optimizer_propose_and_confirm(tmp_path, chips, t
     assert proposal["locked_skipped"] == ["R1"] and set(proposal["proposed_positions"]) == {"R2"}
     assert tools["confirm_placement_optimization"](proposal["revision_token"])["status"] == "confirmed"
     assert _raw_at(pcb, "R1") == before
-    assert _raw_at(pcb, "R2")[:2] != (30.0 + 98.5, 10.0 + 75.0)  # the unlocked one did move
+    assert _raw_at(pcb, "R2")[:2] == pytest.approx((60.0 + ORIGIN[0], 20.0 + ORIGIN[1]))  # the unlocked one did move
+
+
+def test_propose_leaves_the_board_untouched_and_proposes_position_and_angle_per_footprint(tmp_path, chips, tools, monkeypatch):
+    pcb = _board(tmp_path, chips, [("R1", "1206", 10, 10), ("R2", "1206", 30, 10)])
+    before = pcb.read_bytes()
+    calls: list[dict] = []
+    _fake_optimizer(monkeypatch, {"R2": (60.0, 20.0, 90.0)}, calls=calls)
+    proposal = tools["propose_placement_optimization"](str(pcb), seed=5, timeout_seconds=60)
+    assert pcb.read_bytes() == before
+    assert proposal["proposed_positions"] == {"R2": {"x": 60.0, "y": 20.0, "rotation": 90.0}}
+    assert proposal["previous_positions"]["R2"] == {"x": 30.0, "y": 10.0, "rotation": 0.0}
+    assert proposal["seed"] == 5
+    assert calls[0]["seed"] == 5 and calls[0]["timeout"] == 60 and calls[0]["refs"] == ["R1", "R2"]
+    assert Path(calls[0]["trial"]) != pcb  # the placer works on a copy, never on the board
+
+
+def test_confirm_applies_position_and_angle_and_reports_drc_counts_before_and_after(tmp_path, chips, tools, monkeypatch):
+    from boardproof import kicad_cli
+
+    pcb = _board(tmp_path, chips, [("R1", "1206", 10, 10), ("R2", "1206", 30, 10)])
+    _fake_optimizer(monkeypatch, {"R2": (60.0, 20.0, 90.0)})
+    seen: list[bool] = []
+    original = pcb.read_bytes()
+
+    def drc(path, *a, **k):
+        seen.append(Path(path).read_bytes() == original)  # first run before the write, second after
+        return {"violations": [{"severity": "error"}, {"severity": "warning"}], "unconnected_items": []}
+
+    monkeypatch.setattr(kicad_cli, "run_drc", drc)
+    proposal = tools["propose_placement_optimization"](str(pcb))
+    confirmed = tools["confirm_placement_optimization"](proposal["revision_token"])
+    assert confirmed["status"] == "confirmed" and confirmed["applied"] == ["R2"], confirmed
+    assert _raw_at(pcb, "R2") == pytest.approx((60.0 + ORIGIN[0], 20.0 + ORIGIN[1], 90.0))
+    assert seen == [True, False]
+    assert confirmed["drc_before"] == {"violation_count": 2, "error_count": 1, "unconnected_count": 0}
+    assert confirmed["drc_after"] == confirmed["drc_before"]
+    assert tools["confirm_placement_optimization"](proposal["revision_token"])["status"] == "error"  # token consumed
+
+
+def test_a_drc_that_cannot_run_is_reported_incomplete_not_zero(tmp_path, chips, tools, monkeypatch):
+    from boardproof import kicad_cli
+
+    pcb = _board(tmp_path, chips, [("R1", "1206", 10, 10)])
+    _fake_optimizer(monkeypatch, {"R1": (50.0, 20.0, 0.0)})
+
+    def boom(*a, **k):
+        raise RuntimeError("no kicad-cli")
+
+    monkeypatch.setattr(kicad_cli, "run_drc", boom)
+    proposal = tools["propose_placement_optimization"](str(pcb))
+    confirmed = tools["confirm_placement_optimization"](proposal["revision_token"])
+    assert confirmed["status"] == "confirmed" and confirmed["drc_after"]["status"] == "incomplete", confirmed
+    assert "violation_count" not in confirmed["drc_before"]
 
 
 def test_an_optimizer_proposal_for_a_part_locked_since_is_refused_and_keeps_its_token(tmp_path, chips, tools, monkeypatch):
@@ -89,126 +155,78 @@ def test_an_optimizer_proposal_for_a_part_locked_since_is_refused_and_keeps_its_
     assert tools["confirm_placement_optimization"](proposal["revision_token"])["status"] == "confirmed"
 
 
-def test_a_missing_placer_script_or_nonzero_exit_is_an_error_never_complete(tmp_path, chips, tools, monkeypatch):
-    """Issue 232."""
+def test_a_proposal_gone_stale_by_another_part_moving_in_is_refused_and_keeps_its_token(tmp_path, chips, tools, monkeypatch):
+    pcb = _board(tmp_path, chips, [("R1", "1206", 10, 10), ("R2", "1206", 30, 10)])
+    _fake_optimizer(monkeypatch, {"R1": (50.0, 20.0, 0.0)})
+    proposal = tools["propose_placement_optimization"](str(pcb))
+    assert tools["place_footprints"](str(pcb), [{"reference": "R2", "x": 50.0, "y": 20.0}])["status"] != "error"
+    before = pcb.read_bytes()
+    refused = tools["confirm_placement_optimization"](proposal["revision_token"])
+    assert refused["status"] == "error" and refused["code"] == "proposal_stale", refused
+    assert pcb.read_bytes() == before
+
+
+@pytest.mark.parametrize("poses, word", [
+    ({"R1": (30.5, 10.0, 0.0)}, "overlap"),  # on top of R2
+    ({"R1": (500.0, 10.0, 0.0)}, "outside the outline"),
+])
+def test_a_placer_result_that_fails_our_own_measurement_is_refused_with_the_problems_listed(
+        tmp_path, chips, tools, monkeypatch, poses, word):
+    pcb = _board(tmp_path, chips, [("R1", "1206", 10, 10), ("R2", "1206", 30, 10)])
+    _fake_optimizer(monkeypatch, poses, report={"illegal": []})  # the placer itself claims nothing is illegal
+    result = tools["propose_placement_optimization"](str(pcb))
+    assert result["status"] == "error" and result["code"] == "placer_result_illegal", result
+    assert any(word in p for p in result["problems"]) and "revision_token" not in result, result
+
+
+def test_an_unavailable_placer_is_an_error_before_anything_runs(tmp_path, chips, tools, monkeypatch):
+    from boardproof.routers import kicad_placer_tools
+
+    pcb = _board(tmp_path, chips, [("R1", "1206", 10, 10)])
+    _fake_optimizer(monkeypatch, {"R1": (50.0, 20.0, 0.0)})
+    monkeypatch.setattr(kicad_placer_tools, "placer_problem", lambda: "unavailable: scipy is missing")
+
+    def _never(*a, **k):
+        raise AssertionError("the placer must not run when it is unavailable")
+
+    monkeypatch.setattr(kicad_placer_tools, "run_place_simple", _never)
+    result = tools["propose_placement_optimization"](str(pcb))
+    assert result["status"] == "error" and result["code"] == "placer_unavailable" and "scipy" in result["reason"], result
+
+
+def test_a_failed_or_unexpectedly_raising_placer_is_an_error_never_a_proposal(tmp_path, chips, tools, monkeypatch):
     from boardproof.routers import kicad_placer_tools, kicad_routing_tools
 
     pcb = _board(tmp_path, chips, [("R1", "1206", 10, 10)])
     _fake_optimizer(monkeypatch, {"R1": (50.0, 20.0, 0.0)})
 
-    def _missing(*a, **k):
-        raise kicad_routing_tools.KicadRoutingToolsError("py_placer/place_route_loop.py is missing (KiCadRoutingTools 0.23.8)")
+    def _failed(*a, **k):
+        raise kicad_routing_tools.KicadRoutingToolsError("place_simple exited with code 4; stderr tail: boom")
 
-    monkeypatch.setattr(kicad_placer_tools, "run_placement_repair", _missing)
+    monkeypatch.setattr(kicad_placer_tools, "run_place_simple", _failed)
     result = tools["propose_placement_optimization"](str(pcb))
-    assert result["status"] == "error" and "place_route_loop.py" in result["reason"] and "0.23.8" in result["reason"], result
+    assert result["status"] == "error" and "code 4" in result["reason"] and "boom" in result["reason"], result
 
-    monkeypatch.setattr(
-        kicad_placer_tools, "run_placement_repair",
-        lambda *a, **k: {"exit_code": 2, "output_produced": False, "stderr_tail": "boom"},
-    )
+    def _boom(*a, **k):
+        raise ValueError("kaboom")
+
+    monkeypatch.setattr(kicad_placer_tools, "run_place_simple", _boom)
     result = tools["propose_placement_optimization"](str(pcb))
-    assert result["status"] == "error" and "exit code 2" in result["reason"] and "boom" in result["reason"], result
+    assert result["status"] == "error" and "kaboom" in result["reason"] and "revision_token" not in result, result
 
 
-def test_a_missing_placer_script_is_reported_before_any_routing_time_is_spent(tmp_path, chips, tools, monkeypatch):
-    """Issue 240 (d): the pinned KRT ships no router-in-the-loop script; no baseline run first."""
-    from boardproof.routers import kicad_placer_tools, kicad_routing_tools
-
-    pcb = _board(tmp_path, chips, [("R1", "1206", 10, 10)])
-    _fake_optimizer(monkeypatch, {"R1": (50.0, 20.0, 0.0)})
-    monkeypatch.setattr(kicad_placer_tools, "placer_script_problem", lambda: "placer script X is missing; pinned 0.23.8")
-
-    def _no_routing(*a, **k):
-        raise AssertionError("the baseline must not run when the placer script is missing")
-
-    monkeypatch.setattr(kicad_routing_tools, "run_kicad_routing_tools", _no_routing)
-    result = tools["propose_placement_optimization"](str(pcb))
-    assert result["status"] == "error" and "pinned 0.23.8" in result["reason"], result
-
-
-def test_a_baseline_that_cannot_finish_is_stopped_early_and_names_the_open_nets(tmp_path, chips, tools, monkeypatch):
-    """Issue 240 (a, b): graceful stop before the hard limit; the comparison is stated missing."""
-    import time
-
-    from boardproof import kicad_cli
-    from boardproof.routers import kicad_routing_tools
-
-    pcb = _board(tmp_path, chips, [("R1", "1206", 10, 10)])
-    _fake_optimizer(monkeypatch, {"R1": (50.0, 20.0, 0.0)})
-    monkeypatch.setattr(placement_toolset, "_BASELINE_BUDGET_SECONDS", 1)
-    calls = []
-
-    def _router(inp, out, **k):
-        calls.append(out.name)
-        if len(calls) == 1:  # the baseline: waits for the stop request, writes a partial board
-            end = time.time() + 5
-            while time.time() < end and not kicad_routing_tools.stop_file_for(out).exists():
-                time.sleep(0.05)
-            assert kicad_routing_tools.stop_file_for(out).exists(), "no graceful stop was requested"
-        return {}
-
-    drc = {"violations": [], "unconnected_items": [{"items": [{"description": "Pad 1 [VBUS] of J1"}]},
-                                                   {"items": [{"description": "Pad 2 [GND] of R1"}]}]}
-    monkeypatch.setattr(kicad_routing_tools, "run_kicad_routing_tools", _router)
-    monkeypatch.setattr(kicad_cli, "run_drc", lambda *a, **k: drc)
-    result = tools["propose_placement_optimization"](str(pcb))
-    before = result["before_drc"]
-    assert before["status"] == "incomplete" and before["open_nets"] == ["GND", "VBUS"], before
-    assert "stopped early" in before["reason"] and "GND" in before["reason"], before
-    assert result["comparison"].startswith("missing"), result  # the before/after comparison is stated absent
-
-
-def test_a_failed_verification_route_makes_the_comparison_missing(tmp_path, chips, tools, monkeypatch):
-    from boardproof.routers import kicad_routing_tools
-
-    pcb = _board(tmp_path, chips, [("R1", "1206", 10, 10)])
-    _fake_optimizer(monkeypatch, {"R1": (50.0, 20.0, 0.0)})
-    calls = []
-
-    def _router(inp, out, **k):
-        calls.append(out)
-        if len(calls) == 2:  # the verification route after the placer's delta
-            raise kicad_routing_tools.KicadRoutingToolsError("verify route failed")
-        return {}
-
-    monkeypatch.setattr(kicad_routing_tools, "run_kicad_routing_tools", _router)
-    result = tools["propose_placement_optimization"](str(pcb))
-    assert result["after_drc"]["status"] == "incomplete", result
-    assert result["comparison"].startswith("missing"), result
-
-
-def test_the_graceful_stop_is_asked_at_80_percent_of_the_baseline_limit(tmp_path, monkeypatch):
-    import threading
-
-    intervals = []
-
-    class _Timer:
-        def __init__(self, interval, *a, **k):
-            intervals.append(interval)
-            self.daemon = False
-
-        def start(self): ...
-        def cancel(self): ...
-
-    monkeypatch.setattr(threading, "Timer", _Timer)
-    monkeypatch.setattr(placement_toolset, "_BASELINE_BUDGET_SECONDS", 100)
-    placement_toolset._baseline_route(lambda *a, **k: {}, tmp_path / "in.kicad_pcb", tmp_path / "out.kicad_pcb")
-    assert intervals == [80.0]
-
-
-def test_an_unexpected_failure_of_the_optimizer_is_an_error_message_never_silence(tmp_path, chips, tools, monkeypatch):
+def test_a_placer_board_with_other_footprints_is_an_error(tmp_path, chips, tools, monkeypatch):
     from boardproof.routers import kicad_placer_tools
 
     pcb = _board(tmp_path, chips, [("R1", "1206", 10, 10)])
     _fake_optimizer(monkeypatch, {})
 
-    def _boom(*a, **k):
-        raise ValueError("kaboom")
+    def _differs(*a, **k):
+        raise ValueError("the placer's board and the input hold different footprints: ['R9']")
 
-    monkeypatch.setattr(kicad_placer_tools, "run_placement_repair", _boom)
+    monkeypatch.setattr(kicad_placer_tools, "placement_delta", _differs)
     result = tools["propose_placement_optimization"](str(pcb))
-    assert result["status"] == "error" and "kaboom" in result["reason"], result
+    assert result["status"] == "error" and "R9" in result["reason"], result
 
 
 def test_an_optimizer_that_only_moves_locked_parts_proposes_nothing(tmp_path, chips, tools, monkeypatch):
@@ -219,14 +237,25 @@ def test_an_optimizer_that_only_moves_locked_parts_proposes_nothing(tmp_path, ch
     assert result.get("changed") is False and "revision_token" not in result, result
 
 
+@pytest.mark.parametrize("kwargs", [{"seed": -1}, {"seed": 1.5}, {"seed": True}, {"timeout_seconds": 0}, {"timeout_seconds": 99999}])
+def test_invalid_seed_or_timeout_is_refused_before_anything_runs(tmp_path, chips, tools, monkeypatch, kwargs):
+    pcb = _board(tmp_path, chips, [("R1", "1206", 10, 10)])
+    calls: list[dict] = []
+    _fake_optimizer(monkeypatch, {"R1": (50.0, 20.0, 0.0)}, calls=calls)
+    result = tools["propose_placement_optimization"](str(pcb), **kwargs)
+    assert result["status"] == "error" and result["code"] == "invalid_argument" and not calls, result
+
+
 def test_the_optimizer_descriptions_say_so():
     from mcp.server.mcpserver import MCPServer
 
     mcp = MCPServer("t")
     placement_toolset.build(mcp)
     text = {t.name: t.description for t in mcp._tool_manager.list_tools()}  # type: ignore[attr-defined]
-    assert "locked_skipped" in text["propose_placement_optimization"] and "never a locked footprint" in text["propose_placement_optimization"]
-    assert "locked since" in text["confirm_placement_optimization"]
+    propose, confirm = text["propose_placement_optimization"], text["confirm_placement_optimization"]
+    assert "place_simple" in propose and "locked_skipped" in propose and "not trusted" in propose and "pcb_check_placement" in propose
+    assert "place_route_loop" not in propose and "router-in-the-loop" not in propose
+    assert "drc_before" in confirm and "drc_after" in confirm and "not the acceptance gate" in confirm
     assert "propose_placement_optimization" in text["lock_footprints"] and "confirm_placement_optimization" in text["lock_footprints"]
 
 
@@ -466,14 +495,14 @@ def test_lock_check_alone_fires_when_the_edit_locks_the_part(tmp_path, chips, to
     before = pcb.read_bytes()
     real_save = pa.save_footprint_edits
 
-    def locking(path, edit, check):
+    def locking(path, edit, check, needed=frozenset()):
         def both(root, parts):
             nodes = edit(root, parts)
             for node in nodes:
                 pa.set_locked(node, True)
             return nodes
 
-        return real_save(path, both, check)
+        return real_save(path, both, check, needed)
 
     monkeypatch.setattr(pa, "save_footprint_edits", locking)
     result = tools["place_footprints_at_edge"](str(pcb), [{"reference": "J1", "edge": "left", "offset_mm": 3.0}])
@@ -518,3 +547,28 @@ def test_position_check_alone_fires_when_confirm_autoplacement_writes_a_wrong_po
     assert result.get("ok") is False and result["code"] == "write_not_verified", result
     assert "intended" in " ".join(result["mismatches"])
     assert pcb.read_bytes() == before
+
+
+def test_optimization_confirm_self_check_fires_on_a_corrupted_write_and_keeps_the_token(tmp_path, chips, tools, monkeypatch):
+    from tests.test_placement_anchor import _corrupt_write, _shift_first_footprint_at
+
+    pcb = _board(tmp_path, chips, [("R1", "1206", 10, 10), ("R2", "1206", 30, 10)])
+    _fake_optimizer(monkeypatch, {"R2": (60.0, 20.0, 90.0)})
+    proposal = tools["propose_placement_optimization"](str(pcb))
+    before = pcb.read_bytes()
+    _corrupt_write(monkeypatch, _shift_first_footprint_at)
+    result = tools["confirm_placement_optimization"](proposal["revision_token"])
+    assert result.get("ok") is False and result["code"] == "write_not_verified", result
+    assert pcb.read_bytes() == before
+    monkeypatch.undo()
+    _fake_optimizer(monkeypatch, {})  # the DRC stub again
+    assert tools["confirm_placement_optimization"](proposal["revision_token"])["status"] == "confirmed"
+
+
+def test_the_placers_illegal_list_is_bounded_and_counted(tmp_path, chips, tools, monkeypatch):
+    pcb = _board(tmp_path, chips, [("R1", "1206", 10, 10), ("R2", "1206", 30, 10)])
+    _fake_optimizer(monkeypatch, {"R2": (60.0, 20.0, 0.0)}, report={"illegal": [f"X{i}" for i in range(500)]})
+    proposal = tools["propose_placement_optimization"](str(pcb))
+    assert proposal["status"] == "pending_confirmation", proposal
+    assert proposal["placer_reported_illegal"] == [f"X{i}" for i in range(50)]
+    assert proposal["placer_reported_illegal_count"] == 500
