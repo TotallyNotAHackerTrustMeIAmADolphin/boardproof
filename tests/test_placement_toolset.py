@@ -85,11 +85,12 @@ def test_place_footprints_adds_and_moves(tmp_path, chip_footprint):
     result = tools["place_footprints"](
         str(pcb_path),
         [{"reference": "R1", "library_id": str(chip_footprint), "x": 10.0, "y": 10.0}],
+        detail=True,
     )
     assert result["status"] == "ok", result
     assert result["placed"] == ["R1"]
 
-    move_result = tools["place_footprints"](str(pcb_path), [{"reference": "R1", "x": 20.0, "y": 20.0}])
+    move_result = tools["place_footprints"](str(pcb_path), [{"reference": "R1", "x": 20.0, "y": 20.0}], detail=True)
     assert move_result["status"] == "ok"
     assert move_result["moved"] == ["R1"]
 

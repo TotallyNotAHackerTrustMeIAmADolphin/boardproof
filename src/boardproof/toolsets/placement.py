@@ -20,7 +20,7 @@ from typing import Any
 
 from mcp.server.mcpserver import MCPServer
 
-from boardproof import placement_anchor, raw_geometry, write_layer
+from boardproof import output_detail, placement_anchor, raw_geometry, write_layer
 from boardproof.group_edit import CREATE_GROUP_SENTENCE, MOVE_GROUP_SENTENCE
 from boardproof.group_lock import GROUP_LOCK_SENTENCE
 
@@ -746,7 +746,7 @@ def _not_verified(exc: placement_anchor.NotVerified) -> dict:
 def build(mcp: MCPServer) -> list[str]:
     @_with_frame
     @_fail_closed
-    def place_footprints(pcb_path: str, specs: list[dict]) -> dict:
+    def place_footprints(pcb_path: str, specs: list[dict], detail: bool = False) -> dict:
         """Place or move a batch of footprints on a board in one call.
         Coordinates are BOARD-LOCAL millimetres: local (0,0) is the top-left corner of the
         bounding box of the Edge.Cuts outline (arc bulges and circles included); the
@@ -766,6 +766,10 @@ def build(mcp: MCPServer) -> list[str]:
         update_footprint_position); one that doesn't and has a "library_id"
         is added (via add_footprint). Never call this once per footprint --
         pass the whole batch.
+
+        The answer carries counts (placed_count, moved_count, rotation_kept_count) and every error;
+        detail=true adds the lists placed, moved and rotation_kept, which a partial or error answer
+        always carries.
 
         Refuses with file_open_in_kicad, naming the lock file, while KiCad holds a lock file for a file
         it would write; close the file in KiCad, then retry.
@@ -794,7 +798,7 @@ def build(mcp: MCPServer) -> list[str]:
             return {"status": "error", "code": exc.code, "reason": f"{exc}: nothing was moved"}
         if in_slot:
             code = "in_cutout" if any(p["code"] == "in_cutout" for p in in_slot) else in_slot[0]["code"]
-            return {"status": "error", "code": code, "errors": in_slot,
+            return {"status": "error", "code": code, **output_detail.listing("errors", in_slot, True),  # per-item refusals decide the retry: never cut
                     "reason": "a courtyard would overlap a slot or a rounded corner of the outline, or cannot be measured: nothing was moved"}
         for spec in specs:
             ref = spec.get("reference")
@@ -844,9 +848,16 @@ def build(mcp: MCPServer) -> list[str]:
                 return {"status": "incomplete", "reason": f"placed in-memory but failed to save: {exc}"}
 
         status = "ok" if not errors else ("partial" if (placed or moved) else "error")
+        # which specs succeeded and which failed decides the retry: a partial or error answer
+        # lists every item; only the plain success is counted without detail
+        full = detail or status != "ok"
         return {
-            "status": status, "placed": placed, "moved": moved, "errors": errors,
-            "rotation_kept": rotation_kept,
+            "status": status,
+            **output_detail.counted("placed", placed, full),
+            **output_detail.counted("moved", moved, full),
+            **output_detail.listing("errors", errors, True),
+            **output_detail.counted("rotation_kept", rotation_kept, full),
+            **({} if full else {"detail_note": "placed, moved and rotation_kept are counted only; " + output_detail.DETAIL_NOTE}),
         }
 
     def move_reference_designators_to_layer(pcb_path: str, refs: list[str], layer: str) -> dict:
@@ -1212,7 +1223,7 @@ def build(mcp: MCPServer) -> list[str]:
         }
 
     @_with_frame
-    def lock_footprints(pcb_path: str, refs: list[str], locked: bool = True) -> dict:
+    def lock_footprints(pcb_path: str, refs: list[str], locked: bool = True, detail: bool = False) -> dict:
         """Lock (locked=true, the default) or unlock (locked=false) a batch of footprints in one
         call. A locked footprint carries the raw token (locked yes), the one KiCad's editor shows
         as a lock and refuses to drag; place_footprints, align_footprints, distribute_footprints,
@@ -1220,7 +1231,8 @@ def build(mcp: MCPServer) -> list[str]:
         propose_autoplacement and propose_placement_optimization never move it, and the two confirm
         tools refuse a proposal for a footprint locked since. Nothing else on the board changes. A reference that is not on the
         board, or carried by two footprints, refuses the whole call and nothing is written.
-        Locking an already locked footprint is not an error (it is listed in unchanged).
+        Locking an already locked footprint is not an error (it is counted in unchanged_count).
+        The answer carries changed_count and unchanged_count; detail=true adds the lists changed and unchanged.
 
         The reloaded file must hold exactly the requested lock state on those footprints and
         every other node unchanged; otherwise write_not_verified and the board file is untouched.
@@ -1263,7 +1275,8 @@ def build(mcp: MCPServer) -> list[str]:
                 if (refusal := write_layer.as_lock_refusal(exc)) is not None:
                     return refusal
                 return {"status": "incomplete", "reason": f"failed to write the lock state: {exc}"}
-        return {"status": "ok", "locked": locked, "changed": changing, "unchanged": unchanged}
+        return {"status": "ok", "locked": locked, **output_detail.counted("changed", changing, detail),
+                **output_detail.counted("unchanged", unchanged, detail)}
 
     def list_footprint_groups(pcb_path: str) -> dict:
         """List the KiCad groups of a board, read only. Per group: name, uuid, locked, member count,
@@ -2006,7 +2019,7 @@ def build(mcp: MCPServer) -> list[str]:
     mcp.add_tool(
         place_footprints,
         name="place_footprints",
-        description=("Place or move a batch of footprints on a board in one call (add new ones with a library_id, move existing ones by reference; a locked footprint is refused per spec; a move of an existing footprint whose courtyard would overlap a slot or a rounded corner of the outline refuses the whole call as in_cutout, nothing written; a footprint that already overlaps a cut-out is refused for any move whose new courtyard still overlaps one; also refused: outline_arcs_unreadable, slots_unreadable, footprint_unmeasurable; an outer loop of lines and arcs, or a gr_poly, that is neither a plain rectangle nor a rectangle with quarter-circle corner arcs is refused for the whole call, nothing written (outline_arcs_unreadable when it has any arc, such as a bite, a notch or a corner built from several arcs; outline_not_rectangular when it is lines only or a gr_poly, such as an L shape); circles, stadiums and well-formed slots are not refused; any other Edge.Cuts problem (a stray or open item, a slot that touches the outline or another slot, a duplicate outer loop, an item the tool cannot read) is refused as slots_unreadable; a board with no Edge.Cuts at all is not checked)." + " " + _FRAME_RULE + " " + write_layer.LOCK_SENTENCE),
+        description=("Place or move a batch of footprints on a board in one call (add new ones with a library_id, move existing ones by reference; a locked footprint is refused per spec; a move of an existing footprint whose courtyard would overlap a slot or a rounded corner of the outline refuses the whole call as in_cutout, nothing written; a footprint that already overlaps a cut-out is refused for any move whose new courtyard still overlaps one; also refused: outline_arcs_unreadable, slots_unreadable, footprint_unmeasurable; an outer loop of lines and arcs, or a gr_poly, that is neither a plain rectangle nor a rectangle with quarter-circle corner arcs is refused for the whole call, nothing written (outline_arcs_unreadable when it has any arc, such as a bite, a notch or a corner built from several arcs; outline_not_rectangular when it is lines only or a gr_poly, such as an L shape); circles, stadiums and well-formed slots are not refused; any other Edge.Cuts problem (a stray or open item, a slot that touches the outline or another slot, a duplicate outer loop, an item the tool cannot read) is refused as slots_unreadable; a board with no Edge.Cuts at all is not checked). The answer carries counts (placed_count, moved_count, rotation_kept_count) and every error; the optional detail=true adds the lists placed, moved and rotation_kept, which a partial or error answer always carries." + " " + _FRAME_RULE + " " + write_layer.LOCK_SENTENCE),
         annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
     )
     mcp.add_tool(
@@ -2018,7 +2031,7 @@ def build(mcp: MCPServer) -> list[str]:
     mcp.add_tool(
         lock_footprints,
         name="lock_footprints",
-        description=("Lock or unlock a batch of footprints (the raw (locked yes) token KiCad shows as a lock). The placement tools never move a locked footprint: place_footprints, place_footprints_at_edge, align, distribute, snap, pack, propose_autoplacement and propose_placement_optimization skip or refuse it, and confirm_autoplacement and confirm_placement_optimization refuse a proposal for one locked since. Nothing else on the board changes." + " " + write_layer.LOCK_SENTENCE),
+        description=("Lock or unlock a batch of footprints (the raw (locked yes) token KiCad shows as a lock). The placement tools never move a locked footprint: place_footprints, place_footprints_at_edge, align, distribute, snap, pack, propose_autoplacement and propose_placement_optimization skip or refuse it, and confirm_autoplacement and confirm_placement_optimization refuse a proposal for one locked since. Nothing else on the board changes. The answer carries changed_count and unchanged_count; the optional detail=true adds the lists changed and unchanged." + " " + write_layer.LOCK_SENTENCE),
         annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
     )
     mcp.add_tool(

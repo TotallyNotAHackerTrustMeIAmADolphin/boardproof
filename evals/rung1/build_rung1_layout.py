@@ -389,7 +389,7 @@ async def flow() -> dict:
             layout = {**LAYOUT, DECOUPLING["cap"]: (c3["x"], c3["y"])}
             rotation = {DECOUPLING["cap"]: c3["rotation"]}
             specs = [{"reference": r, "x": x, "y": y, "rotation": rotation.get(r, 0.0)} for r, (x, y) in layout.items()]
-            pr = await _call(c, "place_footprints", pcb_path=str(pboard), specs=specs)
+            pr = await _call(c, "place_footprints", pcb_path=str(pboard), specs=specs, detail=True)
             raw = raw_positions(pboard)
             want = {r: (round(OX + x, 3), round(OY + y, 3)) for r, (x, y) in layout.items()}
             wrong = {r: {"raw_at": raw.get(r), "want": w} for r, w in want.items() if raw.get(r) != w}

@@ -506,6 +506,9 @@ def _register_layout_tools(mcp: MCPServer) -> None:
             "coordinates, default) or \"aux_axis\" (relative to the board's aux axis origin). "
             "allow_overlap: a hole whose keepout touches footprints, tracks, vias, zones or "
             "another hole is refused unless this is true; " + _FLAG_RULE + ". "
+            "detail (default false): outside_outline, overlaps and zone_overlaps list their first 20 "
+            "items with the whole count in outside_outline_count, overlaps_count and zone_overlaps_count "
+            "(*_truncated is true when items were cut); true lists every item. "
             + _LAYOUT_ORDER
         ),
     )
@@ -516,6 +519,7 @@ def _register_layout_tools(mcp: MCPServer) -> None:
         origin: Literal["page", "aux_axis"] = "page",
         output_dir: str | None = None,
         allow_overlap: bool = False,
+        detail: bool = False,
     ) -> dict:
         from boardproof import board_outline
 
@@ -526,6 +530,7 @@ def _register_layout_tools(mcp: MCPServer) -> None:
             origin=origin,
             output_dir=output_dir,
             allow_overlap=allow_overlap,
+            detail=detail,
         )
 
     @mcp.tool(
@@ -534,15 +539,17 @@ def _register_layout_tools(mcp: MCPServer) -> None:
             "Apply a propose_board_outline proposal: writes a NEW board revision with the "
             "outline and mounting holes, verified by a fresh reload and a kicad-cli outline "
             "check; copper pours under a new keepout need refilling before any pour or DRC "
-            "figure means anything. The revision_token is single use. " + _LAYOUT_ORDER
+            "figure means anything. The revision_token is single use. detail (default false): "
+            "outside_outline, overlaps and zone_overlaps list their first 20 items with the whole count "
+            "in *_count (*_truncated is true when cut); true lists every item. " + _LAYOUT_ORDER
             + " "
             + write_layer.LOCK_SENTENCE
         ),
     )
-    def confirm_board_outline(pcb_path: str, revision_token: str) -> dict:
+    def confirm_board_outline(pcb_path: str, revision_token: str, detail: bool = False) -> dict:
         from boardproof import board_outline
 
-        result = board_outline.confirm_board_outline(pcb_path, revision_token)
+        result = board_outline.confirm_board_outline(pcb_path, revision_token, detail=detail)
         return _as_revision(result, pcb_path)
 
     @mcp.tool(

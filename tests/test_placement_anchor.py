@@ -126,11 +126,11 @@ def _refs(path):
 def test_lock_sets_the_raw_token_and_touches_nothing_else(tmp_path, chips, tools):
     pcb = _board(tmp_path, chips, [("R1", "0805", 10, 10), ("R2", "0805", 30, 10)])
     before = {ref: _raw_at(pcb, ref) for ref in ("R1", "R2")}
-    result = tools["lock_footprints"](str(pcb), ["R1"])
+    result = tools["lock_footprints"](str(pcb), ["R1"], detail=True)
     assert result["status"] == "ok" and result["changed"] == ["R1"] and result["locked"] is True, result
     assert _is_locked(pcb, "R1") and not _is_locked(pcb, "R2")
     assert {ref: _raw_at(pcb, ref) for ref in ("R1", "R2")} == before
-    again = tools["lock_footprints"](str(pcb), ["R1", "R2"])
+    again = tools["lock_footprints"](str(pcb), ["R1", "R2"], detail=True)
     assert again["changed"] == ["R2"] and again["unchanged"] == ["R1"], again
     assert _is_locked(pcb, "R2")
 
@@ -138,7 +138,7 @@ def test_lock_sets_the_raw_token_and_touches_nothing_else(tmp_path, chips, tools
 def test_unlock_removes_the_token(tmp_path, chips, tools):
     pcb = _board(tmp_path, chips, [("R1", "0805", 10, 10)])
     tools["lock_footprints"](str(pcb), ["R1"])
-    result = tools["lock_footprints"](str(pcb), ["R1"], locked=False)
+    result = tools["lock_footprints"](str(pcb), ["R1"], locked=False, detail=True)
     assert result["status"] == "ok" and result["changed"] == ["R1"], result
     assert not _is_locked(pcb, "R1")
     assert "(locked" not in pcb.read_text(encoding="utf-8")
@@ -489,7 +489,7 @@ def test_the_other_placement_tools_leave_a_locked_part_alone(tmp_path, chips, to
     snapped = tools["snap_footprints_to_grid"](str(pcb), ["R1", "R2", "R3"], 2.54)
     assert snapped["status"] == "ok" and snapped["locked_skipped"] == ["R2"], snapped
     assert _raw_at(pcb, "R2") == before
-    placed = tools["place_footprints"](str(pcb), [{"reference": "R2", "x": 1.0, "y": 1.0}, {"reference": "R3", "x": 60.0, "y": 40.0}])
+    placed = tools["place_footprints"](str(pcb), [{"reference": "R2", "x": 1.0, "y": 1.0}, {"reference": "R3", "x": 60.0, "y": 40.0}], detail=True)
     assert placed["status"] == "partial" and placed["moved"] == ["R3"], placed
     assert placed["errors"][0]["code"] == "locked_footprint"
     assert _raw_at(pcb, "R2") == before

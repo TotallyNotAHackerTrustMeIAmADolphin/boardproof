@@ -41,7 +41,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
-from boardproof import _self_check, checkpoint, input_prep, raw_geometry, write_layer
+from boardproof import _self_check, checkpoint, input_prep, output_detail, raw_geometry, write_layer
 from boardproof import verify_board as gate
 
 for _name in ("_top_level", "_parse"):
@@ -859,6 +859,13 @@ def _plan(
 # --- checkpoint -------------------------------------------------------------------------
 
 
+def _attention(plan: dict, detail: bool) -> dict:
+    out: dict = {}
+    for key in ("outside_outline", "overlaps", "zone_overlaps"):
+        out.update(output_detail.listing(key, plan[key], detail))
+    return out
+
+
 def _default_output_dir(pcb_path: Path) -> Path:
     resolved = pcb_path.resolve()
     return resolved.parent.parent / f"{resolved.parent.name}_outlined"
@@ -871,6 +878,7 @@ def propose_board_outline(
     origin: str = "page",
     output_dir: str | Path | None = None,
     allow_overlap: bool = False,
+    detail: bool = False,
 ) -> dict:
     """Dry run: validate the outline and every mounting hole, list what would be replaced and
     which footprints fall outside the new outline; write nothing. Returns a revision token.
@@ -885,6 +893,9 @@ def propose_board_outline(
     Re-applying: calling this on an output revision with only a new ``outline`` (no holes) works;
     holes and keepouts from a previous run cannot be redeclared there (a reference that is
     already a hole is refused naming its ``KEEPOUT_`` zone): start again from the original board.
+
+    ``detail`` false (the default) lists at most 20 items of ``outside_outline``, ``overlaps`` and
+    ``zone_overlaps`` (the ``*_count`` fields always give the whole count); true lists every item.
     """
     src = Path(pcb_path)
     if not src.is_file():
@@ -913,9 +924,7 @@ def propose_board_outline(
         "origin": plan["origin"],
         "replaces": plan["replaces"],
         "holes": plan["holes"],
-        "outside_outline": plan["outside_outline"],
-        "overlaps": plan["overlaps"],
-        "zone_overlaps": plan["zone_overlaps"],
+        **_attention(plan, detail),
         **({"pour_note": _POUR_NOTE} if plan["zone_overlaps"] else {}),
         "note": (
             "creates a new board revision; the original is untouched. Footprints listed under "
@@ -1134,7 +1143,7 @@ def _outline_drc(pcb: Path, drc: Any) -> dict:
     return {"status": "errors" if found else "clean", "violations": found}
 
 
-def confirm_board_outline(pcb_path: str | Path, revision_token: str, *, drc: Any = None) -> dict:
+def confirm_board_outline(pcb_path: str | Path, revision_token: str, *, drc: Any = None, detail: bool = False) -> dict:
     """Apply a proposal: build the revision, verify it from a fresh reload, run kicad-cli DRC for
     outline errors, move it into place. ``drc`` replaces the kicad-cli call (tests only). The token
     is consumed only by success or by detected source drift."""
@@ -1175,9 +1184,7 @@ def confirm_board_outline(pcb_path: str | Path, revision_token: str, *, drc: Any
         "origin": plan["origin"],
         "replaced": plan["replaces"],
         "holes": plan["holes"],
-        "outside_outline": plan["outside_outline"],
-        "overlaps": plan["overlaps"],
-        "zone_overlaps": plan["zone_overlaps"],
+        **_attention(plan, detail),
         **({"pour_note": _POUR_NOTE} if plan["zone_overlaps"] else {}),
         "outline_drc": built["outline_drc"],
         "write_check": built["write_check"],

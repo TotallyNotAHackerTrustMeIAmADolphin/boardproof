@@ -77,10 +77,10 @@ def _no_outline_drc(path, **_kw):
 
 def _apply(board: Path, tmp_path: Path, outline, holes=None, origin="page", drc=_no_outline_drc, name="out"):
     proposal = board_outline.propose_board_outline(
-        board, outline, mounting_holes=holes, origin=origin, output_dir=tmp_path / name
+        board, outline, mounting_holes=holes, origin=origin, output_dir=tmp_path / name, detail=True
     )
     assert proposal["status"] == "proposed", proposal
-    return proposal, board_outline.confirm_board_outline(board, proposal["revision_token"], drc=drc)
+    return proposal, board_outline.confirm_board_outline(board, proposal["revision_token"], drc=drc, detail=True)
 
 
 RECT = {"x": 100.0, "y": 70.0, "width": 100.0, "height": 70.0}

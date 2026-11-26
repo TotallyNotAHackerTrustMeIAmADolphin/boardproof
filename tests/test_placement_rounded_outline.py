@@ -322,7 +322,7 @@ def test_place_footprints_refuses_a_courtyard_in_a_slot_and_writes_nothing(tmp_p
 
 
 def test_place_footprints_moves_a_part_beside_the_slot(tmp_path, tools, slotted):
-    result = tools["place_footprints"](str(slotted), [{"reference": "R1", "x": 30.0, "y": 20.0}])
+    result = tools["place_footprints"](str(slotted), [{"reference": "R1", "x": 30.0, "y": 20.0}], detail=True)
     assert result["status"] == "ok" and result["moved"] == ["R1"], result
     assert _at(slotted, "R1")[:2] == pytest.approx([X0 + 30.0, Y0 + 20.0], abs=1e-6)
 
@@ -354,7 +354,7 @@ def test_place_footprints_keeps_the_locked_refusal_and_a_locked_part_is_not_a_cu
 
 def test_place_footprints_on_a_board_without_slots_is_unchanged(tmp_path, tools):
     pcb = _golden(tmp_path)
-    result = tools["place_footprints"](str(pcb), [{"reference": "R1", "x": 45.0, "y": 20.0}])
+    result = tools["place_footprints"](str(pcb), [{"reference": "R1", "x": 45.0, "y": 20.0}], detail=True)
     assert result["status"] == "ok" and result["moved"] == ["R1"], result
 
 
@@ -447,7 +447,7 @@ def _strip_measure(pcb: Path, ref: str) -> None:
 def test_a_graphic_only_footprint_elsewhere_does_not_block_place_footprints(tmp_path, tools):
     pcb = _rounded(tmp_path, 3.0)
     _strip_measure(pcb, "U1")
-    ok = tools["place_footprints"](str(pcb), [{"reference": "C1", "x": 20.0, "y": 20.0}])
+    ok = tools["place_footprints"](str(pcb), [{"reference": "C1", "x": 20.0, "y": 20.0}], detail=True)
     assert ok["status"] == "ok" and ok["moved"] == ["C1"], ok
     before = pcb.read_bytes()
     corner = tools["place_footprints"](str(pcb), [{"reference": "C1", "x": 0.5, "y": 0.5}])
