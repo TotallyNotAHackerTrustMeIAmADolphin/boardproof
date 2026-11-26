@@ -26,7 +26,7 @@ As of 2026-10-29 no board has passed the acceptance gate as a plain PASS. The fi
 | `sourcing/`, `manufacturing_profiles/`, `ipc/` | Part search and assets, fab capability profiles, the live-IPC adapter. `sourcing/data/jlcpcb_basic_index.json` is the JLCPCB part-tier index; the library it was built from is the optional submodule `third_party/JLCPCB-Kicad-Library` (see the README) |
 | `schematic_readability.py` | A read-only schematic readability checker, run as `python -m boardproof.schematic_readability` |
 
-The server starts with 23 tools and the remaining 123 sit in ten toolsets that load on demand (146 in total).
+The server starts with 23 tools and the remaining 125 sit in ten toolsets that load on demand (148 in total).
 
 ## Life of a tool call
 

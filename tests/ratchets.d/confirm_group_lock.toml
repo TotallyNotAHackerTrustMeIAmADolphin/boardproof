@@ -1,0 +1,8 @@
+[writing_tool.confirm_group_lock]
+self_check = "reload-verify"
+proof = [
+    "tests/test_group_lock.py::test_a_moved_member_is_caught_by_the_stripped_check_alone",
+    "tests/test_group_lock.py::test_a_lock_that_is_not_written_is_caught_by_the_lock_state_check_alone",
+    "tests/test_group_lock.py::test_a_changed_node_outside_the_group_is_caught_by_the_other_nodes_check_alone",
+]
+note = "Issue 254; group_lock reloads the saved revision: every top-level node outside the listed footprints and groups is identical, each listed node is identical but for its locked token and carries exactly the requested lock state."

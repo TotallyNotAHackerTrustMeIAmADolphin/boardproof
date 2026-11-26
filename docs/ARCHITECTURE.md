@@ -37,7 +37,7 @@ The design changed twice by review: the paradigm review of the 2026-10-11 pivot,
 
 ## What exists (`src/boardproof/`)
 
-The server (`server.py`) starts with 23 tools and keeps 123 more in ten lazy toolsets, 146 in total (counted from a running server on 2026-11-18; `tests/test_docs_tool_counts.py` keeps these counts equal to the live registry).
+The server (`server.py`) starts with 23 tools and keeps 125 more in ten lazy toolsets, 148 in total (counted from a running server on 2026-11-18; `tests/test_docs_tool_counts.py` keeps these counts equal to the live registry).
 
 **Always loaded (21 tools):** the `project` toolset (`project_create`, `project_open`); the toolset tools `list_toolsets`, `load_toolset` and `unload_toolset`; the gate `verify_board` with `pin_rule_baseline` (`verify_board.py`, decision 14); and the checkpointed propose/confirm pairs for input preparation, the pour step, schematic import, board rules, the board outline, keepout zones with slots (issue 132) and silkscreen minimums (`input_prep.py`, `pour_step.py`, `schematic_import.py`, `board_rules.py`, `board_outline.py`, `isolation.py`, `silk_minimums.py`, registered in `server.py`; `edge_loops.py` is the raw Edge.Cuts loop reader the keepout and slot pair and the placement tools share). The pour step (build tickets 04 and 15) carries a gate-graded plane zone from KRT's plane script; it is not a general zone-editing tool.
 
@@ -45,7 +45,7 @@ The server (`server.py`) starts with 23 tools and keeps 123 more in ten lazy too
 - `verification` (12): `pcb_run_drc` is the real `kicad-cli` DRC but not the gate; `pcb_check_placement` and `pcb_check_collisions` are faster checks that are not DRC; `pcb_check_manufacturability`; `report_clearance_coverage` (which clearance rule holds every net pair apart, and whether KiCad loads the custom rules file at all; issue 131); `check_decoupling_placement` (every capacitor on a supply net against the IC supply pins of that net, by raw pad-edge gap; issue 26, not a layout-quality verdict); ERC.
 - `sourcing` (17) and `library` (8).
 - `schematic` (47).
-- `placement` (15), including `place_footprints_at_edge` and `lock_footprints` (issue 133), `list_footprint_groups` (build ticket 231), `propose_remove_graphic_items` and `propose_placement_optimization` via KRT's placer.
+- `placement` (17), including `place_footprints_at_edge` and `lock_footprints` (issue 133), `list_footprint_groups` (build ticket 231), `propose_group_lock` and `confirm_group_lock` (issue 254), `propose_remove_graphic_items` and `propose_placement_optimization` via KRT's placer.
 - `routing` (8): `propose_route_with_retry` with `backend="freerouting"|"kicad_routing_tools"`, `confirm_route`, `diagnose_placement_congestion`, and the pair `propose_dangling_copper_removal` / `confirm_dangling_copper_removal` (KiCad DRC `track_dangling` and `via_dangling` items, removed into a new revision, issue 246).
 - `diagnostics` (3): renders, `authoritative: false`.
 - `manufacturing` (2): `export_manufacturing_package`, `panelize_board`.

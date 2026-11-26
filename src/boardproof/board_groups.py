@@ -29,14 +29,8 @@ def _members(group: Any) -> list[str]:
     return list(seen)
 
 
-def list_groups(pcb_path: str | Path) -> dict:
-    path = Path(pcb_path)
-    if not path.is_file():
-        return {"status": "incomplete", "reason": f"file not found: {pcb_path}"}
-    try:
-        root = write_layer.load(path)
-    except Exception as exc:  # noqa: BLE001
-        return {"status": "incomplete", "reason": f"failed to load board: {exc}"}
+def resolve(root: Any) -> list[dict]:
+    """Every top-level group with its members resolved (raw nodes kept for the lock tool)."""
     kinds: dict[str, str] = {}  # uuid of a top-level node -> its node name
     for node in root.children:
         if not node.is_atom:
@@ -49,7 +43,6 @@ def list_groups(pcb_path: str | Path) -> dict:
     for g in _top(root, "group"):
         name = str(g.children[0].value) if g.children and g.children[0].is_atom else ""
         uuids = _members(g)
-        fps = [footprints[u] for u in uuids if u in footprints]
         other: dict[str, int] = {}
         for u in uuids:
             if u in kinds and u not in footprints and u not in group_ids:
@@ -58,13 +51,39 @@ def list_groups(pcb_path: str | Path) -> dict:
             {
                 "name": name,
                 "uuid": raw_geometry.direct_uuid(g),
-                "locked": placement_anchor.is_locked(g),
+                "node": g,
                 "members": len(uuids),
-                "footprints": sorted(raw_geometry._reference(f) for f in fps),
-                "locked_footprints": sorted(raw_geometry._reference(f) for f in fps if placement_anchor.is_locked(f)),
+                "footprint_nodes": [footprints[u] for u in uuids if u in footprints],
                 "nested_groups": [u for u in uuids if u in group_ids],
                 "other_members": other,
                 "unresolved": [u for u in uuids if u not in kinds],
+            }
+        )
+    return groups
+
+
+def list_groups(pcb_path: str | Path) -> dict:
+    path = Path(pcb_path)
+    if not path.is_file():
+        return {"status": "incomplete", "reason": f"file not found: {pcb_path}"}
+    try:
+        root = write_layer.load(path)
+    except Exception as exc:  # noqa: BLE001
+        return {"status": "incomplete", "reason": f"failed to load board: {exc}"}
+    groups = []
+    for r in resolve(root):
+        fps = r["footprint_nodes"]
+        groups.append(
+            {
+                "name": r["name"],
+                "uuid": r["uuid"],
+                "locked": placement_anchor.is_locked(r["node"]),
+                "members": r["members"],
+                "footprints": sorted(raw_geometry._reference(f) for f in fps),
+                "locked_footprints": sorted(raw_geometry._reference(f) for f in fps if placement_anchor.is_locked(f)),
+                "nested_groups": r["nested_groups"],
+                "other_members": r["other_members"],
+                "unresolved": r["unresolved"],
             }
         )
     result = {"status": "ok", "group_count": len(groups), "groups": groups}

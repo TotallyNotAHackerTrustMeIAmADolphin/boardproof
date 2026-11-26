@@ -22,6 +22,7 @@ from typing import Any
 from mcp.server.mcpserver import MCPServer
 
 from boardproof import placement_anchor, raw_geometry, write_layer
+from boardproof.group_lock import GROUP_LOCK_SENTENCE
 
 _footprint_dir_checked = False
 
@@ -1275,6 +1276,20 @@ def build(mcp: MCPServer) -> list[str]:
 
         return board_groups.list_groups(pcb_path)
 
+    def propose_group_lock(pcb_path: str, groups: list[str], locked: bool = True, output_dir: str | None = None) -> dict:
+        from boardproof import group_lock
+
+        return group_lock.propose_group_lock(pcb_path, groups, locked, output_dir)
+
+    def confirm_group_lock(pcb_path: str, revision_token: str) -> dict:
+        from boardproof import group_lock
+
+        result = group_lock.confirm_group_lock(pcb_path, revision_token)
+        output = result.get("output_pcb")
+        if isinstance(output, str):  # the gate field marks the source and the revision
+            return {**result, "pcb_path": output, "source_pcb": pcb_path}
+        return result
+
     @_with_frame
     def place_footprints_at_edge(pcb_path: str, specs: list[dict]) -> dict:
         """Place a batch of existing footprints at an edge of the board outline, a given distance
@@ -2068,6 +2083,27 @@ def build(mcp: MCPServer) -> list[str]:
         annotations={"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
     )
     mcp.add_tool(
+        propose_group_lock,
+        name="propose_group_lock",
+        description=(
+            "Dry run: for a list of KiCad groups (names or uuids, see list_footprint_groups) list the member footprints whose "
+            "lock flag would change and whether the group's own flag changes, for locked true (lock) or false (unlock). "
+            "Writes nothing; returns a revision_token for confirm_group_lock. " + GROUP_LOCK_SENTENCE
+        ),
+        annotations={"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
+    )
+    mcp.add_tool(
+        confirm_group_lock,
+        name="confirm_group_lock",
+        description=(
+            "Apply a propose_group_lock proposal onto a new board revision (output_pcb; the source stays untouched), reload it, "
+            "check it and only then move it into place. " + GROUP_LOCK_SENTENCE + " A failed check returns ok false and leaves "
+            "the source as it was. The revision_token is single use and is refused if the board changed since the proposal. "
+            + write_layer.LOCK_SENTENCE
+        ),
+        annotations={"readOnlyHint": False, "destructiveHint": False, "idempotentHint": False, "openWorldHint": False},
+    )
+    mcp.add_tool(
         move_reference_designators_to_layer,
         name="move_reference_designators_to_layer",
         description=("Move a batch of footprints' reference-designator silkscreen TEXT to a different layer (e.g. F.Fab) in one call -- does not change which side the footprint itself is mounted on." + " " + write_layer.LOCK_SENTENCE),
@@ -2138,6 +2174,8 @@ def build(mcp: MCPServer) -> list[str]:
         "place_footprints_at_edge",
         "lock_footprints",
         "list_footprint_groups",
+        "propose_group_lock",
+        "confirm_group_lock",
         "move_reference_designators_to_layer",
         "align_footprints",
         "distribute_footprints",

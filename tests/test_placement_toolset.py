@@ -52,6 +52,8 @@ def test_build_registers_expected_tools():
         "place_footprints_at_edge",
         "lock_footprints",
         "list_footprint_groups",
+        "propose_group_lock",
+        "confirm_group_lock",
         "move_reference_designators_to_layer",
         "align_footprints",
         "distribute_footprints",

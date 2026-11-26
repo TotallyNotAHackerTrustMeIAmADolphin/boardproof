@@ -55,7 +55,7 @@ RESULT_WORDS = frozenset(
      "not_connected", "not_loaded", "not_published_by_fab", "not_queried", "not_run",
      "nothing_to_do", "ok", "opened", "partial", "partly_compared", "pass", "pending_confirmation",
      "planned", "poured", "prepared", "present", "probe_failed", "proposed", "ready", "refreshed",
-     "refused", "rejected", "rewritten", "selected",
+     "refused", "rejected", "rewritten", "selected", "locked", "unlocked",
      # issue 26: check_decoupling_placement; fixed literals, no free text reaches the log
      "nothing_checked", "too_far", "different_side",
      "stale", "timeout", "unavailable", "undetermined", "unhandled_only", "unknown", "unloaded",
