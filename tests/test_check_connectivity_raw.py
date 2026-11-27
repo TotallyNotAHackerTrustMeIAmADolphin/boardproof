@@ -390,8 +390,79 @@ def test_a_power_library_symbol_with_open_pins_is_not_listed():
     assert len(found) == 1
 
 
-def test_a_do_not_place_symbol_with_open_pins_is_not_listed():
+def test_a_do_not_place_symbol_with_open_pins_is_listed_and_says_dnp():
+    """kicad-cli's ERC flags the open pins of a do-not-place part (measured for issue 184, former issue 119,
+    in test_erc_flags_the_open_pins_of_a_dnp_part), so they are findings, marked dnp."""
     found, marked = connectivity_check.unconnected_pins(_open_pin_sheet("L:U", "(dnp yes)"), "", [])
-    assert found == [] and marked == []
+    assert marked == [] and [(p["reference"], p.get("dnp")) for p in found] == [("U1", True)]
     found, _ = connectivity_check.unconnected_pins(_open_pin_sheet("L:U", "(dnp no)"), "", [])
-    assert len(found) == 1
+    assert len(found) == 1 and "dnp" not in found[0]
+
+
+def test_a_no_connect_marker_on_a_wired_pin_says_the_pin_is_attached():
+    """A marked pin is listed apart whether or not something else lies on it; the entry shows which."""
+    wired = "(no_connect (at 10 10)) (wire (pts (xy 10 10) (xy 20 10)))"
+    _, marked = connectivity_check.unconnected_pins(_one_pin_sheet(wired), "", [])
+    assert [(m["via"], m["attached"]) for m in marked] == [("no_connect_marker", True)]
+    _, marked = connectivity_check.unconnected_pins(_one_pin_sheet("(no_connect (at 10 10))"), "", [])
+    assert [(m["via"], m["attached"]) for m in marked] == [("no_connect_marker", False)]
+
+
+def _erc_counts(sch: Path, tmp_path: Path) -> dict[str, int]:
+    out = tmp_path / "erc.json"
+    subprocess.run([str(kicad_cli.find_kicad_cli()), "sch", "erc", "--format", "json", "-o", str(out), str(sch)],
+                   check=True, capture_output=True)
+    counts: dict[str, int] = {}
+    for sh in json.loads(out.read_text(encoding="utf-8"))["sheets"]:
+        for violation in sh["violations"]:
+            counts[violation["type"]] = counts.get(violation["type"], 0) + 1
+    return counts
+
+
+def _checked(tools, sch: Path, tmp_path: Path) -> dict:
+    copy = tmp_path / "copy"
+    copy_fixture(sch.parent, copy)  # the netlist cross-check writes beside its input
+    got = tools["check_connectivity"](str(copy / sch.name))
+    assert got["status"] == "ok", got
+    return got
+
+
+def test_erc_flags_the_open_pins_of_a_dnp_part(tools, tmp_path):
+    """Measured with kicad-cli 10.0.7: a do-not-place part's open pins are pin_not_connected, as a part's."""
+    made = project_toolset._project_create(str(tmp_path / "proj"), "demo")
+    sch = Path(made["schematic_path"])
+    assert tools["add_symbols"](str(sch), [
+        {"lib_id": "Device:R", "x": 50.8, "y": 50.8, "ref": "R1", "value": "1k", "dnp": True},
+        {"lib_id": "Device:R", "x": 76.2, "y": 50.8, "ref": "R2", "value": "1k"},
+    ])["status"] == "ok"
+    assert _erc_counts(sch, tmp_path)["pin_not_connected"] == 4
+    got = _checked(tools, sch, tmp_path)
+    assert sorted((p["reference"], bool(p.get("dnp"))) for p in got["unconnected_pins"]) == [
+        ("R1", True), ("R1", True), ("R2", False), ("R2", False)]
+
+
+def test_wire_ends_on_lone_junctions_match_erc_unconnected_wire_endpoint(tools, tmp_path):
+    """Measured with kicad-cli 10.0.7: a junction on a wire end takes that end out of
+    unconnected_wire_endpoint (a wire with junctions on both ends has none, one junction leaves one, none
+    leaves two); the tool's possible_floating_wire count equals ERC's count. ERC also reports wire_dangling
+    for all three wires (nothing real lies on them); the tool has no such finding, so that count is not compared."""
+    made = project_toolset._project_create(str(tmp_path / "proj"), "demo")
+    sch = Path(made["schematic_path"])
+    assert tools["add_wires"](str(sch), [_wire((152.4, 30.48), (162.56, 30.48)), _wire((152.4, 40.64), (162.56, 40.64)),
+                                         _wire((152.4, 50.8), (162.56, 50.8))])["status"] == "ok"
+    assert tools["add_junctions"](str(sch), [[152.4, 30.48], [162.56, 30.48], [152.4, 40.64]])["status"] == "ok"
+    assert _erc_counts(sch, tmp_path)["unconnected_wire_endpoint"] == 3
+    got = _checked(tools, sch, tmp_path)
+    assert len(got["connection_issues"]) == 3
+    assert {(round(i["position"][0], 2), round(i["position"][1], 2)) for i in got["connection_issues"]} == {
+        (162.56, 40.64), (152.4, 50.8), (162.56, 50.8)}
+
+
+def test_the_tool_text_states_the_limits_of_the_raw_reading(tools):
+    import inspect
+
+    text = " ".join(inspect.getdoc(tools["check_connectivity"]).split())
+    assert "library symbol is not embedded in its sheet file" in text and "kicad_tools records" in text
+    assert "do-not-place" in text and "dnp" in text  # listed, as ERC lists them
+    assert "leave out do-not-place symbols" in text and "not listed although ERC flags them" in text
+    assert 'attached: true' in text  # a marked pin with something else on it

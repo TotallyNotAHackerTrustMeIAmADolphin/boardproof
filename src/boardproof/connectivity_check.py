@@ -165,21 +165,25 @@ class Points:
 def unconnected_pins(root: SExp, sheet_name: str, fallback: list[Any]) -> tuple[list[dict], list[dict]]:
     """The unconnected pins of one sheet and the pins left out because they are marked no-connect.
 
-    Skips what ``analyze_schematic`` skips by default: ``power:`` symbols and symbols marked do not
-    place. A pin counts as connected when a wire end, another symbol's pin, a label, a sheet pin or a
-    junction with a wire passing over it lies on it, or when it is an invisible ``power_in`` pin whose
-    global power net name has another member on the same sheet (``Points.global_names``, issue 118;
-    kicad-cli's ERC counts the members of the sheet only, even though the netlist joins the sheets). It is left out of the findings (and listed apart, with ``via``) when a
-    no-connect marker lies on it, or its electrical type is ``no_connect`` and nothing is attached
-    (KiCad's ERC accepts both). A symbol whose library symbol is not embedded in the sheet cannot be
-    read here, so the ``kicad_tools`` records for it (``fallback``) stand."""
+    Skips ``power:`` symbols (``analyze_schematic`` skips them by default). A do-not-place symbol whose
+    library symbol is embedded is read like any other and its entries say ``dnp`` (kicad-cli's ERC flags
+    its open pins). A pin counts as connected when a wire end, another symbol's pin, a label, a sheet pin
+    or a junction with a wire passing over it lies on it, or when it is an invisible ``power_in`` pin
+    whose global power net name has another member on the same sheet (``Points.global_names``, issue 118;
+    kicad-cli's ERC counts the members of the sheet only, even though the netlist joins the sheets). It is
+    left out of the findings (and listed apart, with ``via``) when a no-connect marker lies on it, or its
+    electrical type is ``no_connect`` and nothing is attached (KiCad's ERC accepts both); a marked pin
+    that also has something else on it says ``attached`` true. A symbol whose library symbol is not
+    embedded in the sheet cannot be read here, so the ``kicad_tools`` records for it (``fallback``) stand;
+    ``analyze_schematic`` drops do-not-place symbols, so the open pins of such a symbol are not listed
+    although ERC flags them."""
     points = Points(root)
     global_names = points.global_names(sheet_name)
     found: list[dict] = []
     marked: list[dict] = []
     for symbol in _placed(root):
         lib_id = symbol.find_children("lib_id")[0].get_string(0) or ""
-        if lib_id.startswith("power:") or _dnp(symbol):
+        if lib_id.startswith("power:"):
             continue
         reference = se._ref(symbol)
         if se._lib_symbol(root, symbol) is None:
@@ -192,8 +196,10 @@ def unconnected_pins(root: SExp, sheet_name: str, fallback: list[Any]) -> tuple[
                 "pin_type": pin["type"], "symbol_value": _value(symbol), "lib_id": lib_id,
                 "position": [pin["x"], pin["y"]], "sheet": sheet_name,
             }
+            if _dnp(symbol):
+                record["dnp"] = True  # ERC flags the open pins of a do-not-place part like any other (measured, issue 184)
             if _any(point, points.no_connects):
-                marked.append({**record, "via": "no_connect_marker"})
+                marked.append({**record, "via": "no_connect_marker", "attached": points.pin_attached(point, reference, pin["number"])})
             elif points.pin_attached(point, reference, pin["number"]):
                 continue
             elif _hidden_power_in(pin) and global_names[pin["name"]] >= 2:

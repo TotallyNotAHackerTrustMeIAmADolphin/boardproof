@@ -4069,7 +4069,11 @@ def build(mcp: MCPServer) -> list[str]:
         is not listed when that name has another member on the same sheet: another such pin (wired or not), an attached power
         symbol of that value or a label of that text on that sheet; a lone one is listed, as ERC does.
         A pin with a no-connect marker on it (or an electrical type no_connect) is not a finding and is listed
-        apart in no_connect_pins (via says which). connection_issues has possible_floating_wire for a wire end
+        apart in no_connect_pins (via says which; attached: true says something else, such as a wire end, also lies on
+        a marked pin). A do-not-place symbol (dnp) whose library symbol is embedded is read like any other and its entries say
+        dnp: true, because ERC flags its open pins. A symbol whose library symbol is not embedded in its sheet file cannot
+        be read raw: its pins are the kicad_tools records, without the readings above, and those records leave out
+        do-not-place symbols, so their open pins are not listed although ERC flags them. connection_issues has possible_floating_wire for a wire end
         that touches no pin, sheet pin, label, junction, no-connect marker or second wire end; its description
         says whether the end lies on the middle of another wire (a junction is missing there). Power symbols
         (library symbol flagged power, whatever the library's name) are never in missing_from_netlist.
