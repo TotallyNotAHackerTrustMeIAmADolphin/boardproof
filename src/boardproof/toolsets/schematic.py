@@ -1672,7 +1672,7 @@ def build(mcp: MCPServer) -> list[str]:
                   "nets": _nets_shown(stage["nets"], detail), "written": not dry_run, **notice}
         return _as_dry_run(result, {"placed": "would_place", "placed_count": "would_place_count", "placed_truncated": "would_place_truncated"}) if dry_run else result
 
-    def add_wires(sch_path: str, specs: list[dict], dry_run: bool = False) -> dict:
+    def add_wires(sch_path: str, specs: list[dict], dry_run: bool = False, auto_junction: bool = False) -> dict:
         """Add one or more wires to an existing schematic in one call,
         drawn with right-angle corners (no diagonals) by default.
 
@@ -1712,6 +1712,12 @@ def build(mcp: MCPServer) -> list[str]:
         an L or Z derive from the two end points. With "snap": false NOTHING is moved or rounded,
         not even next to a pin (for a free wire end that is off the grid on purpose). Take a pin's coordinates from get_symbol_pins, or better wire by pin with
         connect_pins.
+
+        auto_junction (default false: nothing changes by itself): true adds a junction at each end of a wire
+        this call draws that lands on the middle of a wire already on the sheet or drawn by this call (KiCad
+        joins such an end only with a junction), unless a junction is already there; the points are listed
+        under `junctions_added` ([x, y] each, empty when none was needed). Wire ends on a wire end or a pin
+        need none and get none.
 
         Returns `count` (specs drawn), `segments` (wire segments actually
         emitted, >= count once any spec takes an L or Z path), `grid`, `snapped`
@@ -1758,12 +1764,21 @@ def build(mcp: MCPServer) -> list[str]:
         try:
             from kicad_tools.schematic.models.schematic import Schematic
 
+            from boardproof import sheet_editing
+
             sch = write_layer.load_model(Schematic, path)
             pin_axes = _pin_axis_index(sch)
-            pins = pin_wiring.connector_points(write_layer.load(path))
+            raw = write_layer.load(path)
+            pins = pin_wiring.connector_points(raw)
         except Exception as exc:  # noqa: BLE001 - evidence-gated verdict
             return _incomplete(f"could not load schematic: {exc}")
+        if not isinstance(auto_junction, bool):
+            return _incomplete("auto_junction must be true or false")
         grid = float(getattr(sch, "grid", 1.27) or 1.27)
+        # the wires and junctions the sheet already has, read from the raw tree (hard rule 2), for auto_junction
+        old_wires = [sheet_editing._wire_ends(w) for w in raw.find_children("wire")]
+        have_junctions = [sheet_editing._at(j)[:2] for j in raw.find_children("junction")]
+        drawn: list[list[tuple[float, float]]] = []
 
         added, segments = 0, 0
         errors: list[dict] = []
@@ -1801,11 +1816,26 @@ def build(mcp: MCPServer) -> list[str]:
                 # route corners derive from them, so kicad_tools must not snap again: it would move a
                 # pin-exact end off an off-grid pin. Do NOT pass snap=True here.
                 sch.add_wire_path(*points, snap=False)
+                drawn.append(list(points))
                 segments += len(points) - 1
                 added += 1
             except Exception as exc:  # noqa: BLE001 - evidence-gated, per-spec
                 errors.append({"index": i, "reason": str(exc)})
 
+        junctions_added: list[list[float]] = []
+        if auto_junction:
+            segs = [(a, b) for ends in old_wires for a, b in zip(ends, ends[1:], strict=False)]
+            segs += [(a, b) for pts in drawn for a, b in zip(pts, pts[1:], strict=False)]
+            for pt in dict.fromkeys(pt for pts in drawn for pt in (pts[0], pts[-1])):
+                inside = any(not (sheet_editing._same(a, pt) or sheet_editing._same(b, pt)) and sheet_editing._segment_contains(a, b, pt)
+                             for a, b in segs)
+                if inside and not any(sheet_editing._same(pt, j) for j in have_junctions):
+                    try:
+                        sch.add_junction(pt[0], pt[1])
+                    except Exception as exc:  # noqa: BLE001 - evidence-gated, nothing is written yet
+                        return _incomplete(f"could not add the junction at {list(pt)}: {exc}")
+                    have_junctions.append(pt)
+                    junctions_added.append([round(pt[0], 4), round(pt[1], 4)])
         stage: dict = {}
         notice: dict = {}
         if added:
@@ -1825,6 +1855,8 @@ def build(mcp: MCPServer) -> list[str]:
             return _incomplete("no wires could be added", errors=errors, count=0, segments=0)
         result = {"status": "partial" if errors else "ok", "count": added, "segments": segments,
                   "grid": grid, "snapped": snapped, "landed_on_pin": landed, "nets": stage["nets"], "written": not dry_run, **notice}
+        if auto_junction:
+            result["junctions_added"] = junctions_added
         if errors:
             result["errors"] = errors
         if dry_run:
@@ -2687,7 +2719,7 @@ def build(mcp: MCPServer) -> list[str]:
 
     def move_symbols(
         sch_path: str, moves: list[dict], move_wires: bool = True, snap: bool = True, grid: float = 1.27,
-        allow_connectivity_change: bool = False, dry_run: bool = False, root_sch: str | None = None,
+        allow_connectivity_change: bool = False, dry_run: bool = False, root_sch: str | None = None, wire_mode: str = "drag",
     ) -> dict:
         """Move placed symbols on a sheet in one call, absolute or relative.
 
@@ -2706,6 +2738,16 @@ def build(mcp: MCPServer) -> list[str]:
         rotation and mirror applied, so the wires on them follow; the mirror itself is kept. With
         move_wires false nothing attached moves (and the connectivity comparison below will usually
         refuse the call).
+
+        wire_mode (default "drag", which is the behaviour above; needs move_wires true for the other two):
+        "elbow" drags the same wire ends but turns a wire that would be slanted into a right-angle jog: the
+        moved end keeps the fixed end's direction to a corner and a new wire runs from the corner to the
+        moved pin (listed under elbows: wire, corner, added; a wire that was not horizontal or vertical
+        before, or whose two ends both move, stays as in drag and is listed under slanted). "stub" leaves
+        every wire, junction and label where it is and draws one new wire from each moved pin's old
+        position to its new one, for a pin that had a wire end, junction or label there (listed under
+        stubs: reference, pin, from, to, uuid); a stub needs that pin's move to run along x or y, else the
+        call is refused as invalid_spec. Both modes go through the same connectivity comparison.
 
         snap (default true) and grid (default 1.27 mm): the new position of each symbol's origin is
         rounded to the grid; moved lists what was asked and what it became (snapped), and snapped lists
@@ -2738,7 +2780,7 @@ def build(mcp: MCPServer) -> list[str]:
         from boardproof import sheet_editing
 
         return sheet_editing.move("symbol", sch_path, moves, root_sch, move_wires=move_wires, snap=snap, grid=grid,
-                                  allow_connectivity_change=allow_connectivity_change, dry_run=dry_run)
+                                  allow_connectivity_change=allow_connectivity_change, dry_run=dry_run, wire_mode=wire_mode)
 
     def move_labels(
         sch_path: str, moves: list[dict], move_wires: bool = True, snap: bool = True, grid: float = 1.27,

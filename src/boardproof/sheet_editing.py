@@ -105,6 +105,10 @@ def _wire_ends(wire: SExp) -> list[tuple[float, float]]:
     return [(xy.get_float(0), xy.get_float(1)) for xy in pts.find_children("xy")]
 
 
+def _diagonal(ends: list[tuple[float, float]]) -> bool:
+    return len(ends) >= 2 and abs(ends[0][0] - ends[-1][0]) > TOL and abs(ends[0][1] - ends[-1][1]) > TOL
+
+
 def _set_wire_end(wire: SExp, index: int, x: float, y: float) -> None:
     xy = wire.find_children("pts")[0].find_children("xy")[index]
     write_layer.set_number(xy, 0, _r(x))
@@ -1179,16 +1183,19 @@ def _plan_moves(kind: str, moves: Any, sheet: Sheet, snap: bool, grid: float) ->
     return planned
 
 
+WIRE_MODES = ("drag", "elbow", "stub")
+
+
 def move(kind: str, path: str, moves: list[dict], root_sch: str | None, *, move_wires: bool, snap: bool, grid: float,
-         allow_connectivity_change: bool, dry_run: bool) -> dict[str, Any]:
+         allow_connectivity_change: bool, dry_run: bool, wire_mode: str = "drag") -> dict[str, Any]:
     """Move symbols or labels (``kind`` "symbol" or "label")."""
     return move_pipeline(kind, lambda sheet: (_plan_moves(kind, moves, sheet, snap, float(grid)), {}), path, root_sch,
                          move_wires=move_wires, snap=snap, grid=grid,
-                         allow_connectivity_change=allow_connectivity_change, dry_run=dry_run)
+                         allow_connectivity_change=allow_connectivity_change, dry_run=dry_run, wire_mode=wire_mode)
 
 
 def move_pipeline(kind: str, planner, path: str, root_sch: str | None, *, move_wires: bool, snap: bool, grid: float,
-                  allow_connectivity_change: bool, dry_run: bool) -> dict[str, Any]:
+                  allow_connectivity_change: bool, dry_run: bool, wire_mode: str = "drag") -> dict[str, Any]:
     """The move machinery shared by ``move`` and the align and distribute tools (issue 90):
     ``planner(sheet)`` returns ``(planned, extra_report)`` where ``planned`` is the list of
     ``(node, dx, dy, record)`` of ``_plan_moves``; everything after that (drag of wire ends,
@@ -1197,14 +1204,18 @@ def move_pipeline(kind: str, planner, path: str, root_sch: str | None, *, move_w
 
     def mutate(sheet: Sheet, root: SExp) -> Outcome:
         _check_move_args(snap, grid, move_wires)
+        if wire_mode not in WIRE_MODES or (wire_mode != "drag" and (kind != "symbol" or not move_wires)):
+            raise SheetAuthoringError("invalid_spec", f"wire_mode must be one of {list(WIRE_MODES)}; elbow and stub are for symbols and need move_wires true, got {wire_mode!r}")
         planned, extra = planner(sheet)
         outcome = Outcome(dangling_before=dangling(sheet), no_change=not planned)
         anchors: dict[tuple[float, float], tuple[float, float]] = {}
         listed = []
         label_justify: list[tuple[SExp, str]] = []
+        pins_before: list[tuple[SExp, list[dict]]] = []
         for node, dx, dy, record in planned:
             x, y, a = _at(node)
             moved_pins_before: list[dict] = pin_positions(root, node) if kind == "symbol" else []
+            pins_before.append((node, moved_pins_before))
             entry: dict[str, Any] = {"uuid": _uuid(node), "from": _round_pt(x, y), "to": _round_pt(x + dx, y + dy), **record}
             if kind == "symbol":
                 entry["reference"] = _ref(node)
@@ -1235,7 +1246,28 @@ def move_pipeline(kind: str, planner, path: str, root_sch: str | None, *, move_w
         _check_label_justify(label_justify)
         followed: dict[str, list] = {"wires": [], "junctions": [], "labels": [], "no_connects": []}
         slanted = []
-        if move_wires and anchors:
+        elbows: list[dict] = []
+        stubs: list[dict] = []
+        if wire_mode == "stub":
+            from boardproof import pin_wiring
+
+            # the wiring stays where it is; a wire from each old pin position to the moved pin joins the two (issue 269)
+            attached = [*(e for w in sheet.wires for e in (_wire_ends(w)[0], _wire_ends(w)[-1])), *(_at(n)[:2] for n in (*sheet.junctions, *sheet.labels))]
+            for node, old_pins in pins_before:
+                new_pins = {p["number"]: p for p in pin_positions(root, node)}
+                for old in old_pins:
+                    new = new_pins[old["number"]]
+                    a_pt, b_pt = (old["x"], old["y"]), (new["x"], new["y"])
+                    if _same(a_pt, b_pt) or not any(_same(a_pt, pt) for pt in attached):
+                        continue
+                    if abs(a_pt[0] - b_pt[0]) > TOL and abs(a_pt[1] - b_pt[1]) > TOL:
+                        raise SheetAuthoringError("invalid_spec", f"wire_mode stub needs the move of pin {old['number']} of {_ref(node)} to run along one axis, "
+                                                  f"it goes from {_round_pt(*a_pt)} to {_round_pt(*b_pt)}; move in x or in y, or use wire_mode elbow")
+                    wire = pin_wiring.wire_node(a_pt, b_pt)
+                    root.children.append(wire)
+                    outcome.added.add(_uuid(wire))
+                    stubs.append({"reference": _ref(node), "pin": old["number"], "from": _round_pt(*a_pt), "to": _round_pt(*b_pt), "uuid": _uuid(wire)})
+        if move_wires and anchors and wire_mode != "stub":
             def delta_at(px: float, py: float):
                 return anchors.get(_key(px, py))
 
@@ -1247,6 +1279,20 @@ def move_pipeline(kind: str, planner, path: str, root_sch: str | None, *, move_w
                     d = delta_at(*ends[idx])
                     if d is not None and (abs(d[0]) > TOL / 10 or abs(d[1]) > TOL / 10):
                         new_ends[idx] = (ends[idx][0] + d[0], ends[idx][1] + d[1])
+                changed_idx = [i for i in (0, len(ends) - 1) if new_ends[i] != ends[i]]
+                if (wire_mode == "elbow" and len(ends) == 2 and len(changed_idx) == 1 and _diagonal(new_ends)
+                        and not _diagonal(ends)):
+                    # a right-angle jog instead of a slant: the leg at the fixed end keeps its direction (issue 269)
+                    m = changed_idx[0]
+                    fixed = ends[1 - m]
+                    corner = (fixed[0], new_ends[m][1]) if abs(ends[0][0] - ends[1][0]) <= TOL else (new_ends[m][0], fixed[1])
+                    from boardproof import pin_wiring
+
+                    jog = pin_wiring.wire_node(corner, new_ends[m])
+                    root.children.append(jog)
+                    outcome.added.add(_uuid(jog))
+                    elbows.append({"wire": _uuid(wire), "corner": _round_pt(*corner), "added": _uuid(jog)})
+                    new_ends[m] = corner
                 if new_ends != ends:
                     outcome.changed.add(_uuid(wire))
                     for idx in (0, len(ends) - 1):
@@ -1254,7 +1300,7 @@ def move_pipeline(kind: str, planner, path: str, root_sch: str | None, *, move_w
                             _set_wire_end(wire, idx, *new_ends[idx])
                     rec = {"uuid": _uuid(wire), "was": [_round_pt(*e) for e in ends], "now": [_round_pt(*e) for e in new_ends]}
                     followed["wires"].append(rec)
-                    if len(new_ends) >= 2 and abs(new_ends[0][0] - new_ends[-1][0]) > TOL and abs(new_ends[0][1] - new_ends[-1][1]) > TOL:
+                    if _diagonal(new_ends):
                         slanted.append(_uuid(wire))
             for group, nodes in (("junctions", sheet.junctions), ("labels", sheet.labels), ("no_connects", sheet.no_connects)):
                 for node in nodes:
@@ -1270,7 +1316,7 @@ def move_pipeline(kind: str, planner, path: str, root_sch: str | None, *, move_w
             "moved": listed, "count": len(listed),
             "grid": float(grid) if snap else None,
             "snapped": [e["uuid"] for e in listed if e.get("snapped")],
-            "move_wires": move_wires, "followed": followed, "slanted": slanted,
+            "move_wires": move_wires, "wire_mode": wire_mode, "followed": followed, "slanted": slanted, "elbows": elbows, "stubs": stubs,
             "move_wires_note": ("wire ends, junctions, labels and no-connect markers that sat exactly on a moved pin (or on a moved label) moved with it"
                                 if move_wires else "move_wires is false: nothing attached was moved; wires that ended on a moved pin now end where the pin was"),
             **extra,
