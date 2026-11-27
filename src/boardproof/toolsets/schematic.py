@@ -3692,7 +3692,10 @@ def build(mcp: MCPServer) -> list[str]:
         return sheet_rename.rename_ref(sch_path, renames, root_sch, dry_run=dry_run)
 
     @_read_only
-    def get_symbol_pins(sch_path: str, references: list[str] | None = None, uuids: list[str] | None = None) -> dict:
+    def get_symbol_pins(
+        sch_path: str, references: list[str] | None = None, uuids: list[str] | None = None,
+        with_connection: bool = False, compact: bool = False, detail: bool = False,
+    ) -> dict:
         """Read the pins of placed symbols: absolute sheet coordinates, name and electrical type, for
         wiring by pin instead of by hand-computed offsets. Read-only; writes nothing.
 
@@ -3713,10 +3716,26 @@ def build(mcp: MCPServer) -> list[str]:
         library symbol is missing from the sheet comes back with no pins and a warning. A pin sits on its
         listed point whether or not that point is on the 1.27 mm grid: pass snap false to add_wires and
         add_labels when using it.
+
+        with_connection=true keeps only the pins that have a wire, junction or label end on the pin (a wire
+        that runs over the pin counts) or a pin of another part on the same point (no wire needed); each such
+        pin carries attached, a list of wire, junction, label and pin. pin follows pin_on_pin of find_overlaps:
+        the other part's pin must be visible, a pin of the same symbol (unit) never counts, and a power
+        symbol's pin (usually hidden) on the point counts. A no-connect marker is not an attachment: such a
+        pin reads unattached and is dropped. Each symbol then carries pins_total, its pin count before the
+        filter, next to pin_count, the pins kept.
+        A pin whose position cannot be matched (a symbol without its library symbol, or a wire, junction or
+        label that cannot be read) is listed under not_measured, and a pin with no attachment found then
+        reads attached "not_measured"; it is never reported as having none. compact=true returns one flat
+        pins list of {reference, number, x, y} (plus attached with with_connection) and pins_count instead
+        of symbols. Without detail=true, symbols (pins with compact) that only a pattern such as "*"
+        selected are cut to the first 20 (count or pins_count is the total, symbols_truncated or
+        pins_truncated says so); detail=true lists every one. A symbol named by an exact reference or uuid
+        is always listed in full.
         """
         from boardproof import sheet_editing
 
-        return sheet_editing.get_symbol_pins(sch_path, references, uuids)
+        return sheet_editing.get_symbol_pins(sch_path, references, uuids, with_connection, compact, detail)
 
     def connect_pins(
         sch_path: str, connections: list[dict], snap: bool = True, grid: float = 1.27,

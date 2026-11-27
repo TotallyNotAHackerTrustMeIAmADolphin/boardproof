@@ -219,12 +219,61 @@ def pin_positions(
     return out
 
 
-def get_symbol_pins(path: str, references: Any = None, uuids: Any = None) -> dict[str, Any]:
+def _attachments(root: SExp) -> tuple[Any, int]:
+    """``(of, unreadable)``: ``of(point)`` lists the kinds (wire, junction, label) with an end or span on the
+    point (issue 268); ``own`` is the uuid of the symbol the pin belongs to, so another part's pin on the point adds ``pin``.
+    ``unreadable`` counts wire, junction and label nodes whose position could not be read."""
+    wires: list[tuple[tuple[float, float], tuple[float, float]]] = []
+    points: list[tuple[str, tuple[float, float]]] = []
+    unreadable = 0
+    for node in _kids(root, "wire"):
+        try:
+            ends = _wire_ends(node)
+            wires += list(zip(ends, ends[1:], strict=False)) if len(ends) >= 2 else []
+            unreadable += len(ends) < 2
+        except (IndexError, ValueError, TypeError):
+            unreadable += 1
+    for node in root.children:
+        kind = "junction" if not node.is_atom and node.name == "junction" else "label" if not node.is_atom and node.name in LABEL_TAGS else None
+        if kind:
+            try:
+                points.append((kind, _at(node)[:2]))
+            except (IndexError, ValueError, TypeError):
+                unreadable += 1
+
+    from boardproof import sheet_overlaps  # lazy: sheet_overlaps imports this module
+
+    others: list[tuple[str, tuple[float, float]]] = []  # pins another part could touch: visible pins (as pin_on_pin reads them), every power pin
+    for sym in (c for c in _kids(root, "symbol") if c.find_children("lib_id")):
+        power = sheet_overlaps._is_power(root, sym)
+        others += [(_uuid(sym), (p["x"], p["y"])) for p in pin_positions(root, sym, with_hidden=True) if power or not p["hidden"]]
+    for sheet in _kids(root, "sheet"):
+        try:
+            others += [(_uuid(sheet), _at(pin)[:2]) for pin in _kids(sheet, "pin")]
+        except (IndexError, ValueError, TypeError):
+            unreadable += 1
+
+    def of(point: tuple[float, float], own: str = "") -> list[str]:
+        found = ["wire"] if any(_segment_contains(a, b, point) for a, b in wires) else []
+        found += [k for k in ("junction", "label") if any(kk == k and _same(pt, point) for kk, pt in points)]
+        return found + (["pin"] if any(u != own and _same(pt, point) for u, pt in others) else [])  # a different part (unit), as pin_on_pin
+
+    return of, unreadable
+
+
+def get_symbol_pins(path: str, references: Any = None, uuids: Any = None, with_connection: bool = False,
+                    compact: bool = False, detail: bool = False) -> dict[str, Any]:
     """Read-only (issue 92): the pins of every placed symbol whose Reference property matches one
     of ``references`` (shell patterns allowed, ``"*"`` for all on this sheet) or whose uuid is in
     ``uuids`` (selectors are ORed; at least one must be non-empty), one entry per placed symbol,
     so a multi-unit part gives one entry per unit placed. Positions are the ``pin_positions``
-    maths on the raw ``(at ...)`` nodes; nothing is written and no lock is taken."""
+    maths on the raw ``(at ...)`` nodes; nothing is written and no lock is taken.
+
+    Issue 268: ``with_connection`` keeps the pins that have a wire (end or span), junction or label
+    on their point (each pin then carries ``attached``); ``compact`` returns a flat ``pins`` list of
+    reference, number, x, y; without ``detail`` the symbols (the pins, in compact mode) that only a
+    pattern selected are cut to the first 20, while a symbol named by an exact reference or uuid is
+    always listed in full."""
     try:
         file = Path(path)
         if not file.is_file():
@@ -244,7 +293,9 @@ def get_symbol_pins(path: str, references: Any = None, uuids: Any = None) -> dic
         missing += [u for u in uuids if not any(_uuid(s) == u for s in placed)]
         if missing:
             raise SheetAuthoringError("not_found", f"no placed symbol on this sheet matches: {', '.join(map(repr, missing))}", not_found=missing)
-        out = []
+        attached, unreadable = _attachments(root) if with_connection else (None, 0)
+        glob = [r for r in references if any(c in r for c in "*?[")]
+        out, named, not_measured = [], set(), []
         for symbol in placed:
             if not (_uuid(symbol) in uuids or any(fnmatch.fnmatchcase(_ref(symbol), r) for r in references)):
                 continue
@@ -252,11 +303,47 @@ def get_symbol_pins(path: str, references: Any = None, uuids: Any = None) -> dic
             unit = (symbol.find_children("unit")[0].get_int(0) if symbol.find_children("unit") else 1) or 1
             lib_id = symbol.find_children("lib_id")[0].get_string(0)
             pins = pin_positions(root, symbol, with_type=True)
-            out.append({"reference": _ref(symbol), "uuid": _uuid(symbol), "lib_id": lib_id, "unit": unit,
-                        "at": _round_pt(x, y), "rotation": rot, "mirror": _mirror(symbol), "pins": pins,
-                        "pin_count": len(pins), **({} if pins else {"warning": "the sheet holds no library symbol with pins for this lib_id"})})
+            entry = {"reference": _ref(symbol), "uuid": _uuid(symbol), "lib_id": lib_id, "unit": unit,
+                     "at": _round_pt(x, y), "rotation": rot, "mirror": _mirror(symbol), "pins": pins,
+                     "pin_count": len(pins), **({} if pins else {"warning": "the sheet holds no library symbol with pins for this lib_id"})}
+            if with_connection:
+                if not pins:
+                    not_measured.append({"reference": entry["reference"], "uuid": entry["uuid"], "reason": "no library symbol with pins on this sheet"})
+                for pin in pins:
+                    found = attached((pin["x"], pin["y"]), entry["uuid"])
+                    pin["attached"] = found or ("not_measured" if unreadable else [])
+                entry["pins"] = [p for p in pins if p["attached"]]
+                entry["pins_total"] = len(pins)
+                entry["pin_count"] = len(entry["pins"])
+            exact = _uuid(symbol) in uuids or any(fnmatch.fnmatchcase(_ref(symbol), r) for r in references if r not in glob)
+            if exact:
+                named.add(_uuid(symbol))
+            if not with_connection or entry["pins"]:
+                out.append(entry)
         out.sort(key=lambda e: (e["reference"], e["unit"], e["uuid"]))
-        return {"status": "ok", "ok": True, "count": len(out), "symbols": out}
+        result: dict[str, Any] = {"status": "ok", "ok": True}
+        if compact:
+            items = [({"reference": e["reference"], "number": p["number"], "x": p["x"], "y": p["y"],
+                       **({"attached": p["attached"]} if with_connection else {})}, e["uuid"] in named)
+                     for e in out for p in e["pins"]]
+            name, count = "pins", len(items)
+        else:
+            items = [(e, e["uuid"] in named) for e in out]
+            name, count = "symbols", len(items)
+        shown, cut = [], 0
+        for item, is_named in items:
+            if detail or is_named or cut < 20:
+                shown.append(item)
+                cut += not is_named
+        result["count" if name == "symbols" else "pins_count"] = count
+        result[name] = shown
+        if len(shown) < count:
+            result[f"{name}_truncated"] = True
+            result["note"] = "Pattern-selected lists are cut to the first 20 items; pass detail=true for every item. Symbols named by exact reference or uuid are always full."
+        if with_connection and (not_measured or unreadable):
+            result["not_measured"] = {"symbols": not_measured, "unreadable_items": unreadable,
+                                      "reason": "a symbol without pins, or a wire, junction or label whose position could not be read; a pin with no attachment found then reads not_measured, never unattached"}
+        return result
     except SheetAuthoringError as exc:
         return sheet_authoring.refusal(exc)
 
