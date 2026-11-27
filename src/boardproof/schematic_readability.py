@@ -560,10 +560,14 @@ def _read_sheet(root: Any, name: str) -> _Sheet:
             l_at = _at(label, f"{tag} {text!r}")
             sheet.labels.append((l_at[0], l_at[1]))
             effects = label.find("effects")
-            h, _v = _justify(effects)
-            sheet.texts.append(_Text("label", "", text,
-                                     _text_box(text, l_at, _font_size(effects), "left" if h == "center" else h,
-                                               "center", above=True), (l_at[0], l_at[1]), tag))
+            h, v = _justify(effects)
+            if tag == "label":
+                # issue 271, as find_overlaps since issue 266: KiCad draws a local label with both stored justify words at the stored
+                # angle modulo 180 (no half-turn flip), measured with kicad-cli 10.0.7 (tests/test_find_overlaps_label_justify.py)
+                box = _text_box(text, (l_at[0], l_at[1], l_at[2] % 180.0), _font_size(effects), h, v)
+            else:  # global and hierarchical labels: not measured here, the earlier box stays
+                box = _text_box(text, l_at, _font_size(effects), "left" if h == "center" else h, "center", above=True)
+            sheet.texts.append(_Text("label", "", text, box, (l_at[0], l_at[1]), tag))
     for free in root.find_children("text"):
         text = _str(free)
         if not text.strip():

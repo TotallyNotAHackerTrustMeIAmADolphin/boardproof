@@ -49,22 +49,25 @@ def sheet(tmp_path_factory):
     assert r.returncode == 0, r.stderr
     svg = next((tmp / "svg").glob("*.svg")).read_text(encoding="utf-8")
     drawn = {}
-    for m in re.finditer(r'(<g transform="rotate\(-90[^"]*"\s*>\s*)?<text x="([\d.-]+)" y="([\d.-]+)"[^>]*text-anchor="(\w+)"[^>]*>(L\d+J\d)', svg):
-        drawn[m.group(5)] = (m.group(1) is not None, float(m.group(2)), float(m.group(3)), m.group(4))
+    for m in re.finditer(r'(<g transform="rotate\(-90[^"]*"\s*>\s*)?<text x="([\d.-]+)" y="([\d.-]+)"([^>]*)>(L\d+J\d)', svg):
+        attrs = m.group(4)
+        drawn[m.group(5)] = (m.group(1) is not None, float(m.group(2)), float(m.group(3)), re.search(r'text-anchor="(\w+)"', attrs).group(1),
+                             float(re.search(r'textLength="([\d.]+)"', attrs).group(1)),
+                             float(re.search(r'rotate\(-90[\d.]*\s+[\d.-]+\s+([\d.-]+)\)', m.group(1)).group(1)) if m.group(1) else 0.0)
     boxes = {t.text: t.box for t in sheet_overlaps._read(write_layer.load(sch))[1]}
     assert len(drawn) == len(cases) and len(boxes) == len(cases)
-    return cases, drawn, boxes
+    return cases, drawn, boxes, sch
 
 
 def _case(sheet, name):
-    cases, drawn, boxes = sheet
+    cases, drawn, boxes, _sch = sheet
     _n, x, y, angle, words = next(c for c in cases if c[0] == name)
     return x, y, angle, words, drawn[name], boxes[name]
 
 
 @pytest.mark.parametrize("name", [f"L{a}J{j}" for a in ANGLES for j in range(len(JUSTIFY))])
 def test_the_label_box_lies_where_kicad_draws_the_text(sheet, name):
-    x, y, angle, words, (vertical, _sx, sy, anchor), box = _case(sheet, name)
+    x, y, angle, words, (vertical, _sx, sy, anchor, _length, _pivot_y), box = _case(sheet, name)
     assert vertical is (angle in (90, 270))
     off = sy - y  # the baseline offset: bottom -0.35 (0 turned), none 0.29 (0.64 turned), top 0.92 (1.27 turned)
     side = "bottom" if off < (0.3 if vertical else 0.0) else "top" if off > (1.0 if vertical else 0.6) else "centre"
