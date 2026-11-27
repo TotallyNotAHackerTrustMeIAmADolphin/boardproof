@@ -8,6 +8,7 @@ the ticket and docs/TESTING.md, not from re-deriving them with the code under te
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -17,11 +18,16 @@ from pathlib import Path
 import pytest
 from mcp.client.client import Client
 
+from boardproof import gate_state
 from boardproof.server import build_server
 from tests import _kicad_faults as faults
 
 FIXTURES = Path(__file__).parent / "fixtures"
-GATE_KEYS = {"verdict", "board_sha", "age_s", "stale"}
+GATE_KEYS = {"verdict", "stale", "line"}  # the default short form (issue 260)
+
+
+def _sha(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 @pytest.fixture
@@ -46,10 +52,10 @@ async def test_board_state_output_without_a_verdict_says_so(board: Path) -> None
         await _call(client, "load_toolset", name="verification")
         out = await _call(client, "pcb_run_drc", pcb_path=str(board))
 
-    assert out["gate"].keys() >= GATE_KEYS
+    assert out["gate"].keys() == GATE_KEYS
     assert out["gate"]["verdict"] == "NOT_RUN"
     assert out["gate"]["stale"] is True
-    assert out["gate"]["age_s"] is None
+    assert "no PASS" in out["gate"]["line"]
 
 
 async def _grade(client: Client, board: Path) -> dict:
@@ -81,8 +87,8 @@ async def test_recorded_verdict_is_shown_for_the_same_unchanged_file(board: Path
     gate = out["gate"]
     assert gate["verdict"] == "FAIL"
     assert gate["stale"] is False
-    assert gate["board_sha"] == graded["board_sha"] == gate["verdict_board_sha"]
-    assert isinstance(gate["age_s"], float) and gate["age_s"] >= 0
+    assert gate.keys() == GATE_KEYS
+    assert "FAIL" in gate["line"] and "not a PASS" in gate["line"]
 
 
 @pytest.mark.asyncio
@@ -114,8 +120,8 @@ async def test_mutation_through_any_tool_makes_the_next_output_stale(board: Path
     assert moved["gate"]["stale"] is True
     assert out["gate"]["verdict"] == "FAIL"  # the old verdict, honestly labelled
     assert out["gate"]["stale"] is True
-    assert out["gate"]["board_sha"] != graded["board_sha"]
-    assert out["gate"]["verdict_board_sha"] == graded["board_sha"]
+    assert _sha(board) != graded["board_sha"]
+    assert "stale" in out["gate"]["line"] and "no PASS" in out["gate"]["line"]
 
 
 @pytest.mark.asyncio
@@ -125,7 +131,6 @@ async def test_project_open_carries_the_gate_field(board: Path) -> None:
 
     assert out["pcb_path"] == str(board)
     assert out["gate"]["verdict"] == "NOT_RUN"
-    assert out["gate"]["board_sha"]
 
 
 @pytest.mark.asyncio
@@ -169,7 +174,7 @@ async def test_a_schematic_edit_makes_the_verdict_stale_even_if_board_bytes_matc
         await _call(client, "fix_annotation", sch_path=str(board.with_suffix(".kicad_sch")))
         out = await _call(client, "pcb_run_drc", pcb_path=str(board))
 
-    assert out["gate"]["board_sha"] == graded["board_sha"]
+    assert _sha(board) == graded["board_sha"]
     assert out["gate"]["stale"] is True
 
 
@@ -340,13 +345,14 @@ async def _pass_then_read(client: Client, board: Path) -> dict:
 @pytest.mark.asyncio
 async def test_external_edit_of_the_board_file_is_stale(board: Path, pass_verdict: None) -> None:
     async with Client(build_server(), mode="auto") as client:
-        before = await _pass_then_read(client, board)
+        await _pass_then_read(client, board)
+        sha_before = _sha(board)
         faults.drift(board)  # an editor outside any tool
         out = await _call(client, "pcb_check_collisions", pcb_path=str(board))
 
     assert out["gate"]["verdict"] == "PASS"
     assert out["gate"]["stale"] is True
-    assert out["gate"]["board_sha"] != before["gate"]["board_sha"]
+    assert _sha(board) != sha_before
 
 
 @pytest.mark.asyncio
@@ -354,11 +360,12 @@ async def test_rewriting_only_the_rules_file_is_stale(board: Path, pass_verdict:
     rules = board.with_suffix(".kicad_dru")
     rules.write_text("(version 1)\n", encoding="utf-8")
     async with Client(build_server(), mode="auto") as client:
-        before = await _pass_then_read(client, board)
+        await _pass_then_read(client, board)
+        sha_before = _sha(board)
         rules.write_text('(version 1)\n(rule "weaker" (condition "A.Type == \'via\'"))\n', encoding="utf-8")
         out = await _call(client, "pcb_check_collisions", pcb_path=str(board))
 
-    assert out["gate"]["board_sha"] == before["gate"]["board_sha"]  # board bytes untouched
+    assert _sha(board) == sha_before  # board bytes untouched
     assert out["gate"]["stale"] is True
 
 
@@ -366,11 +373,12 @@ async def test_rewriting_only_the_rules_file_is_stale(board: Path, pass_verdict:
 async def test_rewriting_only_the_schematic_file_is_stale(board: Path, pass_verdict: None) -> None:
     sch = board.with_suffix(".kicad_sch")
     async with Client(build_server(), mode="auto") as client:
-        before = await _pass_then_read(client, board)
+        await _pass_then_read(client, board)
+        sha_before = _sha(board)
         faults.drift(sch)
         out = await _call(client, "pcb_check_collisions", pcb_path=str(board))
 
-    assert out["gate"]["board_sha"] == before["gate"]["board_sha"]
+    assert _sha(board) == sha_before
     assert out["gate"]["stale"] is True
 
 
@@ -742,3 +750,52 @@ async def test_toolset_descriptions_do_not_call_a_drc_run_authoritative() -> Non
     assert "NOT the acceptance gate" in verification
     assert "verify_board" in verification
     assert "Authoritative" not in verification
+
+
+# -- the short default form (issue 260) -------------------------------------
+_LONG_KEYS = {"verdict", "board_sha", "project_sha", "verdict_board_sha", "age_s", "stale", "note"}
+
+
+def _long(verdict: str, stale: bool, **extra) -> dict:
+    return {"verdict": verdict, "stale": stale, "board_sha": "a" * 64, "project_sha": "b" * 64,
+            "verdict_board_sha": "a" * 64, "age_s": 1.0, "note": gate_state._NOTE, **extra}
+
+
+@pytest.mark.parametrize("verdict", ["PASS", "FAIL", "INCOMPLETE", "NOT_RUN"])
+@pytest.mark.parametrize("stale", [True, False])
+def test_short_line_carries_verdict_and_reads_as_a_pass_only_for_a_fresh_pass(verdict, stale) -> None:
+    short = gate_state.short_gate_field(_long(verdict, stale))
+    assert short["verdict"] == verdict and short["stale"] is stale
+    line = short["line"]
+    assert "verify_board" in line and verdict in line
+    if verdict == "PASS" and not stale:
+        assert line == "verify_board verdict PASS for this exact file."
+    else:
+        assert "no PASS" in line or "not a PASS" in line
+        assert "verdict PASS for this exact file" not in line
+
+
+def test_short_line_is_short_and_a_fingerprint_failure_is_said() -> None:
+    assert len(json.dumps(gate_state.short_gate_field(_long("FAIL", True)))) < 220
+    line = gate_state.short_gate_field(_long("PASS", True, fingerprint_note="x"))["line"]
+    assert "no PASS" in line and "could not be fingerprinted" in line
+    assert "detail" not in line  # only some tools take detail; the pointer must work for all
+
+
+@pytest.mark.asyncio
+async def test_detail_true_returns_the_long_form_unchanged(board: Path) -> None:
+    async with Client(build_server(), mode="auto") as client:
+        await _call(client, "load_toolset", name="verification")
+        await _call(client, "load_toolset", name="placement")
+        graded = await _grade(client, board)
+        out = await _call(
+            client, "place_footprints", pcb_path=str(board), detail=True,
+            specs=[{"reference": "R1", "x": 31.0, "y": 22.0}],
+        )
+        short = await _call(client, "place_footprints", pcb_path=str(board),
+                            specs=[{"reference": "R1", "x": 32.0, "y": 22.0}])
+
+    assert out["gate"].keys() == _LONG_KEYS
+    assert out["gate"]["note"] == gate_state._NOTE
+    assert out["gate"]["verdict_board_sha"] == graded["board_sha"]
+    assert short["gate"].keys() == GATE_KEYS

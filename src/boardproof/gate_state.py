@@ -13,6 +13,11 @@ last concluded about *exactly that file*:
      "note": "...",
      "fingerprint_note": "..."}        # only when the project could not be hashed
 
+That is the long form (``GateState.gate_field``). A tool answer carries it only with
+``detail=true`` on a tool that has that argument; by default the answer carries
+``short_gate_field`` (issue 260): ``{"verdict", "stale", "line"}``, where ``line`` always
+says whether there is a PASS for the file as it is now.
+
 Rules (docs/ARCHITECTURE.md decision 14, spec "Gate field"):
 
 * A verdict is keyed by the board's resolved path, its content hash and the
@@ -327,6 +332,25 @@ class GateState:
         return out
 
 
+def short_gate_field(field: dict[str, Any]) -> dict[str, Any]:
+    """The default form of the gate field (issue 260): ``verdict`` and ``stale`` as
+    in the long form, plus one ``line``; hashes, age and note only with detail=true.
+    The verdict is never dropped, and every line says whether it is a PASS."""
+    verdict, stale = field["verdict"], field["stale"]
+    if verdict == NOT_RUN:
+        line = "verify_board verdict: NOT_RUN for this file; no PASS exists; call verify_board."
+    elif stale:
+        line = (f"last verify_board verdict {verdict} is stale (file or project changed since, "
+                "or not fingerprinted); no PASS for the file now; call verify_board.")
+    elif verdict == "PASS":
+        line = "verify_board verdict PASS for this exact file."
+    else:
+        line = f"verify_board verdict {verdict} for this exact file; not a PASS."
+    if field.get("fingerprint_note"):
+        line += " Project could not be fingerprinted; call verify_board."
+    return {"verdict": verdict, "stale": stale, "line": line}
+
+
 # -- tool wrapping -----------------------------------------------------------
 _BOARD_ARGS = ("pcb_path",)
 _BOARD_LIST_ARGS = ("pcb_paths",)
@@ -378,6 +402,8 @@ def attach_gate_field(fn, annotations: Any, state: GateState):
 
     def _finish(arguments: dict, result: Any) -> Any:
         boards = _board_paths(arguments, result)
+        # Issue 260: the long form only where the tool has ``detail`` and it is true.
+        short = short_gate_field if arguments.get("detail") is not True else (lambda field: field)
         if isinstance(result, dict):
             token = result.get("revision_token")
             if isinstance(token, str) and boards:
@@ -386,9 +412,9 @@ def attach_gate_field(fn, annotations: Any, state: GateState):
             return result
         out = dict(result)
         if len(boards) == 1:
-            out["gate"] = state.gate_field(boards[0])
+            out["gate"] = short(state.gate_field(boards[0]))
         else:
-            out["gates"] = state.gate_fields(boards)
+            out["gates"] = {p: short(f) for p, f in state.gate_fields(boards).items()}
         return out
 
     def _write_serialised(arguments: dict):
