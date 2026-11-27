@@ -501,3 +501,27 @@ def test_two_pins_on_one_point_get_one_marker_and_both_entries_carry_its_uuid(bo
     assert result["ok"] is True and len(result["would_add"]) == 2, result
     first, second = result["would_add"]
     assert first["uuid"] and first["uuid"] == second["uuid"] and "shared" in second["marker"] and "marker" not in first, result
+
+
+def _descriptions() -> dict[str, str]:
+    from mcp.server.mcpserver import MCPServer
+
+    from boardproof.toolsets import schematic as schematic_toolset
+
+    mcp = MCPServer("test")
+    schematic_toolset.build(mcp)
+    return {t.name: t.description for t in mcp._tool_manager.list_tools()}  # type: ignore[attr-defined]
+
+
+def test_add_labels_text_names_add_no_connects_as_the_path_that_looks_at_pins():
+    # Issue 140: kind no_connect places a marker at a point without looking up a pin.
+    text = " ".join(_descriptions()["add_labels"].split())
+    assert "kind no_connect puts a marker at the given point and looks up no pin" in text
+    assert "add_no_connects" in text
+
+
+def test_delete_no_connects_text_does_not_promise_an_erc_run_it_does_not_make():
+    # Issue 140: the tool compares netlists only; "ERC reports them" was true through a test, not through the tool.
+    text = " ".join(_descriptions()["delete_no_connects"].split())
+    assert "ERC reports them" not in text
+    assert "does not run ERC" in text

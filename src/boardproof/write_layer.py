@@ -292,7 +292,11 @@ def path_lock(paths: Iterable[str | Path]) -> Iterator[None]:
     and other programs are the lock-file guard's business (``check_writable``). A lock that stays
     held for ``LOCK_TIMEOUT_S`` (a long call such as a Freerouting run holds it) makes this call
     give up before it starts: ``WriteLayerError("file_busy")`` with ``never_started`` set, the
-    locks already taken released, nothing read or written."""
+    locks already taken released, nothing read or written. The ``never_started`` claim holds only
+    for the outermost ``path_lock`` of a call: ``gate_state`` trusts it on a ``file_busy``
+    ``WriteLayerError`` whose details carry ``never_started``, so a nested ``path_lock`` inside a tool that has already written must
+    never time out on a lock of another call (no nested caller of that kind exists; add one only
+    with its own guard)."""
     originals = {_lock_key(p): os.fspath(p) for p in paths}
     with ExitStack() as stack:
         for key in sorted(originals):
@@ -333,15 +337,18 @@ def busy_refusal_result(exc: BaseException) -> dict[str, Any]:
     bare sharing-denial ``PermissionError`` that escaped a tool says only what is known: a
     multi-file tool may have written other files before it."""
     if isinstance(exc, WriteLayerError):
-        return {"status": "incomplete", "ok": False, "code": "file_busy", "reason": str(exc),
-                "file": exc.details.get("file")}
+        result = {"status": "incomplete", "ok": False, "code": "file_busy", "reason": str(exc),
+                  "file": exc.details.get("file")}
+        if exc.details.get("never_started"):  # the lock timeout: the machine-readable form of "never started"
+            result["never_started"] = True
+        return result
     return {
         "status": "incomplete",
         "ok": False,
         "code": "file_busy",
         "reason": (
-            f"file_busy: another program kept a file open for more than {COMMIT_RETRY_BUDGET_S:g} s, so a replace "
-            f"was refused ({exc}); other files this tool had already written may have changed, so check the files "
+            f"file_busy: a replace was refused with a sharing denial, usually because another program holds a file "
+            f"open ({exc}); this tool did not retry it for a set time; other files this tool had already written may have changed, so check the files "
             "before retrying."
         ),
     }

@@ -532,12 +532,17 @@ def test_the_staged_check_fires_when_the_mutation_touches_more_than_it_selected(
 
 
 def test_the_connectivity_check_fires_when_the_comparison_is_blind(sheet, monkeypatch):
-    """Mutation check of the guard: with the comparison disabled the unsafe delete would go through."""
+    """Mutation check of the guard (issue 100 item 5): the same delete is refused with the real comparison and
+    goes through with the comparison disabled, so the test names the one line it guards."""
+    before = _bytes(sheet)
+    args = ("label", str(sheet), [{"texts": ["NETA"]}], None)
+    kwargs = {"remove_dangling": False, "allow_connectivity_change": False, "dry_run": False}
+    refused = sheet_editing.delete(*args, **kwargs)
+    assert refused["ok"] is False and refused["code"] == "connectivity_changed", refused
+    assert _bytes(sheet) == before
     monkeypatch.setattr(sheet_editing, "compare_nets", lambda *a, **k: [])
-    result = sheet_editing.delete("label", str(sheet), [{"texts": ["NETA"]}], None, remove_dangling=False,
-                                  allow_connectivity_change=False, dry_run=False)
-    assert result["ok"] is True  # the guard is the comparison: this is what its absence looks like
-    monkeypatch.undo()
+    blind = sheet_editing.delete(*args, **kwargs)
+    assert blind["ok"] is True and _bytes(sheet) != before  # what the absence of the comparison looks like
 
 
 def test_a_lock_file_refuses_every_tool_before_anything_is_computed(sheet, tools):

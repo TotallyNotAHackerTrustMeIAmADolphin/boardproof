@@ -231,3 +231,72 @@ def test_concurrent_connect_pins_and_add_wires_both_land(tmp_path: Path) -> None
     root = write_layer.load(sch)
     ends = [e for w in root.children if not w.is_atom and w.name == "wire" for e in [tuple(xy.get_float(i) for i in (0, 1)) for xy in w.find_children("pts")[0].find_children("xy")]]
     assert (20.32, 20.32) in ends and (50.8, 46.99) in ends and (76.2, 46.99) in ends, "a wire was lost (lost update)"
+
+
+class _SlowLock:
+    """An RLock that pauses after each acquire, so two callers that take their locks in opposite order interleave."""
+
+    def __init__(self) -> None:
+        self._real = threading.RLock()
+
+    def acquire(self, timeout: float = -1) -> bool:
+        got = self._real.acquire(timeout=timeout)
+        time.sleep(0.3)
+        return got
+
+    def release(self) -> None:
+        self._real.release()
+
+
+def test_path_lock_takes_its_locks_in_sorted_order_so_opposite_orders_do_not_deadlock(tmp_path: Path, monkeypatch) -> None:
+    # Issue 91 item 1: without the sort, [a, b] and [b, a] each hold one lock and wait for the other.
+    a, b = tmp_path / "a.kicad_sch", tmp_path / "b.kicad_sch"
+    monkeypatch.setattr(write_layer, "LOCK_TIMEOUT_S", 3.0)
+    monkeypatch.setattr(write_layer, "_PATH_LOCKS", {write_layer._lock_key(p): _SlowLock() for p in (a, b)})
+    outcome: dict[str, str] = {}
+
+    def run(name: str, paths: list[Path]) -> None:
+        try:
+            with write_layer.path_lock(paths):
+                outcome[name] = "ok"
+        except write_layer.WriteLayerError as exc:
+            outcome[name] = exc.code
+
+    threads = [threading.Thread(target=run, args=("ab", [a, b])), threading.Thread(target=run, args=("ba", [b, a]))]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(20)
+    assert outcome == {"ab": "ok", "ba": "ok"}, outcome
+
+
+def test_the_lock_timeout_refusal_says_in_a_field_that_the_call_never_started(tmp_path: Path, monkeypatch) -> None:
+    # Issue 91 item 3: a machine-readable never_started, not only the words in reason.
+    sch = tmp_path / "a.kicad_sch"
+    monkeypatch.setattr(write_layer, "LOCK_TIMEOUT_S", 0.2)
+    held, release = threading.Event(), threading.Event()
+
+    def holder() -> None:
+        with write_layer.path_lock([sch]):
+            held.set()
+            release.wait(30)
+
+    t = threading.Thread(target=holder)
+    t.start()
+    assert held.wait(5)
+    try:
+        with pytest.raises(write_layer.WriteLayerError) as caught:
+            with write_layer.path_lock([sch]):
+                pass
+    finally:
+        release.set()
+        t.join(10)
+    result = write_layer.busy_refusal_result(caught.value)
+    assert result["never_started"] is True, result
+
+
+def test_a_bare_sharing_denial_text_does_not_claim_a_wait_it_did_not_make() -> None:
+    # Issue 91 item 2: a tool that calls os.replace itself is not retried, so the text must not say "for more than 3 s".
+    result = write_layer.busy_refusal_result(_denial())
+    assert "more than" not in result["reason"], result
+    assert "never_started" not in result, result

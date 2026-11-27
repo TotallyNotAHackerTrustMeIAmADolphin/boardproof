@@ -1916,7 +1916,9 @@ def build(mcp: MCPServer) -> list[str]:
         use path(s) on an attached sheet, and a reference #PWR01.. that is new in the whole sheet tree; a call with a
         power spec is refused as unproven_instance_data when the project's tree cannot prove where the sheet is used,
         and its result carries `instance_data` {reattached, reason, note} as add_symbols' does; labels, no-connects
-        and the other kinds hold no instance data and do not depend on the tree), rotation,
+        and the other kinds hold no instance data and do not depend on the tree; kind no_connect puts a marker at the
+        given point and looks up no pin: a marker off a pin silences nothing, and add_no_connects, which picks pins from
+        the netlist and compares ERC before and after, is the path that looks at pins), rotation,
         shape (global/hier label direction), justify (label, global and hier only: one or more of the words left, right, top, bottom, mirror, such as "right bottom",
         never both left and right or both top and bottom, never empty; written, its words in KiCad order (left or right, then top or bottom, then mirror: "bottom right" is stored as "right bottom"), into the raw (justify ..) of
         the label and read back from the text before the write, a mismatch refuses the call and writes nothing; without justify the
@@ -2507,9 +2509,8 @@ def build(mcp: MCPServer) -> list[str]:
         copy before and after the change and compared net by net. A split net, two nets merged, a pin left
         with nothing else on its net, a renamed net or a vanished named net refuses the call with
         connectivity_changed (nothing written; the changes are listed under connectivity). Pass
-        allow_connectivity_change true when that is meant; the result then lists the changes. The pins of
-        deleted symbols are not counted, only what their going does to the rest. dry_run true computes and
-        returns everything and writes nothing.
+        allow_connectivity_change true when that is meant; the result then lists the changes. dry_run true
+        computes and returns everything and writes nothing.
 
         Dangling items: the result lists under dangling_after the wires with an end that touches
         nothing, the junctions where fewer than three wire ends or pins meet, and the labels that
@@ -2552,9 +2553,8 @@ def build(mcp: MCPServer) -> list[str]:
         copy before and after the change and compared net by net. A split net, two nets merged, a pin left
         with nothing else on its net, a renamed net or a vanished named net refuses the call with
         connectivity_changed (nothing written; the changes are listed under connectivity). Pass
-        allow_connectivity_change true when that is meant; the result then lists the changes. The pins of
-        deleted symbols are not counted, only what their going does to the rest. dry_run true computes and
-        returns everything and writes nothing.
+        allow_connectivity_change true when that is meant; the result then lists the changes. dry_run true
+        computes and returns everything and writes nothing.
 
         Dangling items: the result lists under dangling_after the wires with an end that touches
         nothing, the junctions where fewer than three wire ends or pins meet, and the labels that
@@ -2597,9 +2597,8 @@ def build(mcp: MCPServer) -> list[str]:
         copy before and after the change and compared net by net. A split net, two nets merged, a pin left
         with nothing else on its net, a renamed net or a vanished named net refuses the call with
         connectivity_changed (nothing written; the changes are listed under connectivity). Pass
-        allow_connectivity_change true when that is meant; the result then lists the changes. The pins of
-        deleted symbols are not counted, only what their going does to the rest. dry_run true computes and
-        returns everything and writes nothing.
+        allow_connectivity_change true when that is meant; the result then lists the changes. dry_run true
+        computes and returns everything and writes nothing.
 
         Dangling items: the result lists under dangling_after the wires with an end that touches
         nothing, the junctions where fewer than three wire ends or pins meet, and the labels that
@@ -2695,8 +2694,8 @@ def build(mcp: MCPServer) -> list[str]:
 
         A marker joins nothing, so the netlist of the project does not change; it is still read from a
         scratch copy before and after and compared net by net (connectivity_changed unless
-        allow_connectivity_change). The pins become open again and ERC reports them as pin_not_connected.
-        dry_run true computes and returns everything (would_delete) and writes nothing.
+        allow_connectivity_change). The pins become open again; this tool does not run ERC, so run sch_run_erc
+        to see the pin_not_connected reports. dry_run true computes and returns everything (would_delete) and writes nothing.
 
         Refuses a failed self-check (write_not_verified, the sheet unchanged) and a project whose sheet tree
         cannot be read (sheet_tree_incomplete). root_sch names the project's root sheet when sch_path is a

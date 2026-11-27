@@ -676,3 +676,62 @@ def test_the_carriage_return_backstop_fires_on_any_kicad_tools_version(tmp_path,
 
     assert dest.read_bytes() == before
     assert sorted(p.name for p in tmp_path.iterdir()) == ["sch.kicad_sch"], "nothing written, no temporary file"
+
+
+def _spy_on_file_writes(monkeypatch, dest):
+    """Record every Path.write_text target and every write_layer.replace_file call (issue 60)."""
+    from boardproof import write_layer
+
+    written: list[Path] = []
+    replaced: list[tuple[Path, Path]] = []
+    real_write, real_replace = Path.write_text, write_layer.replace_file
+
+    def write_text(self, *a, **k):
+        written.append(Path(self))
+        return real_write(self, *a, **k)
+
+    def replace_file(temp, path):
+        replaced.append((Path(temp), Path(path)))
+        return real_replace(temp, path)
+
+    monkeypatch.setattr(Path, "write_text", write_text)
+    monkeypatch.setattr(write_layer, "replace_file", replace_file)
+    return written, replaced
+
+
+def test_a_schematic_write_goes_through_a_temporary_sibling_and_the_write_layer_move(tmp_path, monkeypatch, sch_tools):
+    # Issue 60: the text never lands on the sheet itself; it is staged beside it and moved by write_layer.replace_file.
+    dest = tmp_path / "sch.kicad_sch"
+    shutil.copy(FIXTURE, dest)
+    written, replaced = _spy_on_file_writes(monkeypatch, dest)
+
+    result = sch_tools["add_labels"](str(dest), [{"kind": "label", "text": "SPY", "x": 220, "y": 100}])
+
+    assert result.get("status") != "incomplete", result
+    assert dest not in written, "a writer wrote the sheet directly, bypassing the write layer"
+    assert [target for _temp, target in replaced] == [dest]
+    assert replaced[0][0] in written and replaced[0][0] != dest
+
+
+def test_the_carriage_return_backstop_writes_nothing_to_the_sheet_and_never_moves(tmp_path, monkeypatch):
+    from kicad_tools.schematic.models.schematic import Schematic
+
+    dest = tmp_path / "sch.kicad_sch"
+    shutil.copy(FIXTURE, dest)
+    sch = Schematic.load(dest)
+    written, replaced = _spy_on_file_writes(monkeypatch, dest)
+    monkeypatch.setattr(schematic_toolset, "_schematic_text", lambda _sch: '(kicad_sch (label "A\rB"))\n')
+    with pytest.raises(ValueError, match="carriage return"):
+        schematic_toolset._write_schematic_utf8(sch, dest)
+
+    assert written == [] and replaced == [], "the backstop must fire before any file write"
+
+
+@pytest.mark.parametrize("tool", ["delete_wires", "delete_labels", "delete_junctions"])
+def test_only_delete_symbols_talks_about_the_pins_of_deleted_symbols(tool):
+    # Issue 100 item 4: the sentence about deleted symbols' pins was copied into the three wire, label and junction tools.
+    mcp = MCPServer("test")
+    schematic_toolset.build(mcp)
+    text = {t.name: t.description for t in mcp._tool_manager.list_tools()}  # type: ignore[attr-defined]
+    assert "deleted symbols" in text["delete_symbols"]
+    assert "deleted symbols" not in text[tool]
