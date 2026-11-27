@@ -129,3 +129,50 @@ def test_a_short_wire_that_ends_on_no_rail_is_not_pin_on_wire(tmp_path, tools, e
     if end == "label":
         assert tools["add_labels"](str(sch), [{"kind": "label", "x": top[0], "y": top[1], "text": "NET", "snap": False}])["status"] == "ok"
     assert _kind(tools, sch, "pin_on_wire") == []
+
+
+def test_three_parts_on_one_point_are_one_finding(tmp_path, tools):
+    """Issue 270: one finding per point, listing every part there (it was one per pair: three findings for three parts)."""
+    sch = _sheet(tmp_path)
+    _add(tools, sch, [RES, {**RES, "ref": "R2", "y": 57.62}, {**RES, "ref": "R3", "y": 57.62}])
+    found = _kind(tools, sch, "pin_on_pin")  # R2 and R3 also share their lower pin: a second point with two parts
+    assert sorted(f["parts"] for f in found) == [2, 3], found
+    top = next(f for f in found if f["parts"] == 3)
+    assert sorted(i["reference"] for i in top["items"]) == ["R1", "R2", "R3"]
+
+
+def test_two_pins_of_one_part_on_one_point_count_the_part_once(tmp_path, tools, monkeypatch):
+    """Issue 270 review: R1 reads with its bottom pin twice (no library part has two coincident pins); alone it is no
+    finding, with R2 on the point it is one finding with parts 2, not 3."""
+    from boardproof import sheet_overlaps
+
+    real = sheet_overlaps._read
+
+    def doubled(root):
+        out = real(root)
+        for b in out[0]:
+            if sheet_overlaps.se._ref(b.node) == "R1":
+                b.pins = [*b.pins, *b.pins]
+        return out
+
+    monkeypatch.setattr(sheet_overlaps, "_read", doubled)
+    alone = _sheet(tmp_path / "a")
+    _add(tools, alone, [RES])
+    assert _kind(tools, alone, "pin_on_pin") == []
+    sch = _sheet(tmp_path / "b")
+    _add(tools, sch, [RES, {**RES, "ref": "R2", "y": 57.62}])
+    found = _kind(tools, sch, "pin_on_pin")
+    assert [f["parts"] for f in found] == [1 + 1], found
+
+
+def test_a_power_body_is_excluded_from_pin_on_pin(tmp_path, tools, monkeypatch):
+    """Issue 270: a power symbol with a visible pin on a part's pin is no pin_on_pin (the symbol library hides power pins,
+    so R2 stands in as a power symbol)."""
+    from boardproof import sheet_overlaps
+
+    sch = _sheet(tmp_path)
+    _add(tools, sch, [RES, {**RES, "ref": "R2", "y": 57.62}])
+    assert len(_kind(tools, sch, "pin_on_pin")) == 1
+    real = sheet_overlaps._is_power
+    monkeypatch.setattr(sheet_overlaps, "_is_power", lambda root, node: sheet_overlaps.se._ref(node) == "R2" or real(root, node))
+    assert _kind(tools, sch, "pin_on_pin") == []

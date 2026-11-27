@@ -55,7 +55,8 @@ numbers behind it:
     no wire path to a power symbol is not read (issue 265).
 ``pin_on_pin``
     A visible pin of one symbol or sheet symbol (not a power symbol) on the very point of a visible pin of ANOTHER such part, with
-    no wire touching the point (issue 265). Two pins of one part on one point are not read. A junction on the point is a
+    no wire touching the point (issue 265). One finding per point: ``items`` lists every part there and ``parts`` counts them (issue 270).
+    Two pins of one part on one point are not read. A junction on the point is a
     ``pin_on_wire`` (the wires there), and a power symbol on a pin is ``short_stub_to_power`` with length 0.
 ``outside_page``
     A symbol, sheet symbol, label, free text or visible property text whose box reaches beyond the drawing
@@ -557,14 +558,19 @@ def _findings(sheet: str, root: Any, margin: float | None, page_check: bool) -> 
                 add("short_stub_to_power", pin, [body.item(), power.item()],
                     "draw the power symbol at least 1.27 mm from the pin (move_items on the power symbol, then connect_pins), so the pin has a visible stub",
                     False, pin=se._round_pt(*pin), length=se._r(hit[0]))
-    for i, first in enumerate(solid):  # issue 265: two parts' pins on one point with no wire (a junction there is a pin_on_wire)
-        for second in solid[i + 1:]:
-            for pin in first.pins:
-                touched = any(se._same(pin, a) or se._same(pin, b) or _strictly_inside(a, b, pin) for _n, a, b in wires)
-                if any(se._same(pin, q) for q in second.pins) and not touched:
-                    add("pin_on_pin", pin, [first.item(), second.item()],
-                        "move one of the two parts so that their pins do not lie on one point, or join them with a wire of at least 1.27 mm",
-                        False, pin=se._round_pt(*pin))
+    spots: list[tuple[tuple[float, float], list[Any]]] = []  # issue 270: one finding per point, whatever the number of parts there
+    for body in solid:
+        for pin in body.pins:
+            spot = next((s for s in spots if se._same(pin, s[0])), None)
+            if spot is None:
+                spots.append((pin, [body]))
+            elif body not in spot[1]:
+                spot[1].append(body)
+    for pin, parts in spots:  # issue 265: pins of two or more parts on one point with no wire (a junction there is a pin_on_wire)
+        if len(parts) > 1 and not any(se._same(pin, a) or se._same(pin, b) or _strictly_inside(a, b, pin) for _n, a, b in wires):
+            add("pin_on_pin", pin, [p.item() for p in parts],
+                "move all but one of the parts so that their pins do not lie on one point, or join them with a wire of at least 1.27 mm",
+                False, pin=se._round_pt(*pin), parts=len(parts))
     for body in bodies:
         for pin in body.pins:
             if any(se._same(pin, j) for j in junctions):

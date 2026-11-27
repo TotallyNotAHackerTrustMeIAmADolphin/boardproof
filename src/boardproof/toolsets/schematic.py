@@ -3966,11 +3966,11 @@ def build(mcp: MCPServer) -> list[str]:
         meet on it (a rail split at the pin: split true, and shape: straight for two collinear ends, corner for two at an angle,
         branch for three or more, so a caller can filter signal corners from rail pass-throughs; every split is reported), or
         its only wire is shorter than 1.27 mm and ends on a rail (stub, in mm). Items: the part and the wire; pin (x, y),
-        junction (true or false). A pin on a junction is this kind. An interior pin without a junction is also a
-        wire_through_pin. A pin with one wire of at least 1.27 mm and the pins of power symbols are not read. check_project
+        junction (true or false: whether a junction sits on the pin). A pin on the inside of a wire is this kind with or without
+        a junction; without one it is also a wire_through_pin. A pin with one wire of at least 1.27 mm and the pins of power symbols are not read. check_project
         carries only its count (totals pin_on_wire).
         pin_on_pin (issue 265): a visible pin of one part on the very point of a visible pin of another part (neither a power
-        symbol), with no wire touching that point. Items: the two parts; pin (x, y). Two pins of one part are not read; a power
+        symbol), with no wire touching that point. One finding per point: items lists every part there, parts counts them; pin (x, y). Two pins of one part are not read; a power
         symbol on a pin is short_stub_to_power. check_project carries only its count (totals pin_on_pin).
         short_stub_to_power (issue 265): a visible pin of a symbol or sheet symbol (not a power symbol) joined to the pin of a
         power symbol by less than 1.27 mm of wire, or by no wire (the power symbol sits on the pin, length 0); a power flag (PWR_FLAG) is not a power symbol here. Items: the part
