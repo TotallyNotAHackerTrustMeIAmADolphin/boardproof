@@ -3846,7 +3846,8 @@ def build(mcp: MCPServer) -> list[str]:
                                        allow_connectivity_change=allow_connectivity_change, dry_run=dry_run)
 
     @_read_only
-    def check_symbol_fields(sch_path: str, required_fields: list[str] | None = None, root_sch: str | None = None) -> dict:
+    def check_symbol_fields(sch_path: str, required_fields: list[str] | None = None, root_sch: str | None = None,
+                            include: list[str] | None = None) -> dict:
         """Read-only, in one call over the whole sheet tree: list every placed symbol that has a gap in a
         required field, per sheet and by reference and uuid. Neither check_connectivity nor ERC reports an empty
         Footprint, a missing LCSC or a Datasheet of "~", so a wired schematic can still give an
@@ -3858,21 +3859,29 @@ def build(mcp: MCPServer) -> list[str]:
         folder names it) and follows the sheet symbols, so every sheet of the tree is read, each file once.
 
         A field is a gap when the symbol has no such property (problem missing), or its value is empty (empty),
-        only white space (blank) or "~" (placeholder). A missing property that exists under a name that differs
+        only white space (blank) or "~" (placeholder; a placeholder gap of Footprint or Datasheet carries meaning: KiCad reads
+        ~ as empty in a sheet file below file version 20250318 and keeps it as literal text from that version on; each sheet
+        entry states its file_version). A property named footprint (lowercase) is the Footprint field to KiCad: it is
+        not a gap when it holds a value (listed under the sheet entry's folded, with folded_count), and an empty one is
+        a gap that names the property. A missing property that exists under a name that differs
         only in case (for example "Lcsc") lists that name under case_variant. The result: sheets, one entry per
         sheet file (checked, symbols_with_gaps and symbols: reference, uuid, unit, lib_id, uses, gaps, each
-        {field, problem, value}); a sheet file used twice is listed once and reports the reference of its first
-        use; a multi-unit part is checked per placed unit, as each unit carries its own fields. Totals:
+        {field, problem, value}); a sheet file used twice is listed once, reports the reference of its first
+        use and lists the references of every use under use_references; a multi-unit part is checked per placed unit and each
+        entry names part_units (the netlist reads unit 1's copy when it holds a value; see
+        multi_unit_note), so fill the field on every unit. Totals:
         placed_symbols, checked, symbols_with_gaps, gap_count and no_gaps (true when no symbol has a gap). Nothing is truncated: every
         symbol with a gap is listed.
 
         Not checked, and listed apart under skipped with a count each (the first matching reason): power
         (a power symbol, or a reference starting with #), off_board (marked not on board) and dnp (marked do
-        not populate), plus no_lib_id (a symbol node without a library id). placed_symbols = checked + all skipped. To repair a gap use set_properties; no_gaps is not a verdict on the board.
+        not populate), plus no_lib_id (a symbol node without a library id). placed_symbols = checked + all skipped. include: a list drawn from dnp and off_board;
+        a dnp symbol is in the netlist, an off_board symbol is not in the netlist (kicad-cli leaves out parts marked off board);
+        both are checked on request only, each entry then carries flags, and neither is skipped. To repair a gap use set_properties; no_gaps is not a verdict on the board.
         """
         from boardproof import field_check
 
-        return field_check.check_symbol_fields(sch_path, required_fields, root_sch)
+        return field_check.check_symbol_fields(sch_path, required_fields, root_sch, include)
 
     @_read_only
     def get_properties(
@@ -3886,7 +3895,7 @@ def build(mcp: MCPServer) -> list[str]:
         write lock; the values are read from the raw property nodes of each sheet file.
 
         properties: the names to read (exact, case-sensitive); omitted, Value, Footprint, Datasheet, Description
-        and LCSC. references: exact references to select; uuids: exact symbol uuids to select; both given, a symbol
+        and LCSC. references: exact references to select; uuids: symbol uuids to select (uuids are matched without regard to case); both given, a symbol
         matching either is returned; neither given, every placed symbol is returned. sch_path: any sheet of the
         project; the read always starts at the project's root sheet (root_sch, optional when sch_path is the root
         or the only .kicad_pro of its folder names it) and follows the sheet symbols, so every sheet of the tree is
@@ -3899,7 +3908,12 @@ def build(mcp: MCPServer) -> list[str]:
         under a name that differs only in case, for example "Lcsc"), plus flags (power, off_board, dnp,
         no_lib_id: those symbols are returned too, not skipped) and, for a sheet file used more than once,
         use_references. A multi-unit part is returned per placed unit, as each unit carries its own copy of the
-        fields; KiCad's netlist reads one unit's copy. Totals: placed_symbols, returned, absent_count, and
+        fields; KiCad's netlist reads one unit's copy. The values are raw file text: "~" and ${...} are not interpreted,
+        and the netlist can differ from them. Measured differences: a literal ~ in Footprint or Datasheet reads as empty in a sheet
+        file below file version 20250318 and as the text ~ from it on; KiCad folds a lowercase footprint property into
+        Footprint (this tool lists it as absent, with case_variant); and when a multi-unit part has different values on its
+        units, the netlist reads unit 1's value when it is not empty, and when unit 1 is empty and other units hold different
+        values the order of the symbols in the file decides. Totals: placed_symbols, returned, absent_count, and
         not_found (the references and uuids that matched no symbol) with all_found. Nothing is truncated.
 
         A selection list must be non-empty and hold distinct strings, and a property name must have no white

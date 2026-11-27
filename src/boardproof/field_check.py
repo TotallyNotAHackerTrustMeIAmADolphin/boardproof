@@ -62,14 +62,39 @@ def _problem(value: str | None) -> str | None:
     return None
 
 
+def _reasons(root: Any, symbol: Any, refs: list[str]) -> list[str]:
+    """Every reason the symbol is not checked by default, in ``_SKIP_ORDER`` (no_lib_id is decided by the caller)."""
+    return [why for why, on in (
+        ("power", connectivity_check.is_power(root, symbol) or any(r.startswith("#") for r in refs)),
+        ("off_board", any(sheet_tree._atom(n, 0) == "no" for n in symbol.find_children("on_board"))),
+        ("dnp", connectivity_check._dnp(symbol))) if on]
+
+
 def _skip_reason(root: Any, symbol: Any, refs: list[str]) -> str | None:
-    if connectivity_check.is_power(root, symbol) or any(r.startswith("#") for r in refs):
-        return "power"
-    if any(sheet_tree._atom(n, 0) == "no" for n in symbol.find_children("on_board")):
-        return "off_board"
-    if connectivity_check._dnp(symbol):
-        return "dnp"
-    return None
+    return next(iter(_reasons(root, symbol, refs)), None)
+
+
+_INCLUDABLE = ("off_board", "dnp")  # power symbols are never components with fields to check
+PLACEHOLDER_MEANING = {
+    "old": "KiCad reads ~ as empty (file version below 20250318)",
+    "new": "KiCad keeps ~ as literal text (file version 20250318 or later)",
+}
+_MEASURED_PLACEHOLDER = ("Footprint", "Datasheet")  # the fields measured in tests/test_kicad_field_rules.py
+_MULTI_UNIT_NOTE = ("a part with several units on one sheet is checked per placed unit; the netlist of KiCad reads the Footprint or Datasheet of one "
+                    "unit copy: unit 1's when it holds a value, and when unit 1 is empty and other units hold different values, the order of the "
+                    "symbols in the file decides; so a gap on one unit may or may not show in the netlist; fill the field on every unit")
+
+
+def _include(value: Any) -> set[str]:
+    if value is None:
+        return set()
+    if not isinstance(value, list) or not value or any(v not in _INCLUDABLE for v in value) or len(set(value)) != len(value):
+        raise SheetAuthoringError("invalid_spec", "include must be a non-empty list of distinct names from " + ", ".join(_INCLUDABLE) + ", or omitted")
+    return set(value)
+
+
+def _file_version(parsed: Any) -> int | None:
+    return sheet_editing._root_version(parsed)
 
 
 class Placed(NamedTuple):
@@ -121,16 +146,24 @@ def _props(symbol: Any) -> dict[str, str]:
     return {sheet_tree._atom(p, 0): sheet_tree._atom(p, 1) for p in reversed(symbol.find_children("property"))}
 
 
-def check_symbol_fields(sch_path: str, required_fields: Any = None, root_sch: str | None = None) -> dict[str, Any]:
-    """Read-only: every placed symbol of the project with a gap in ``required_fields``, per sheet file."""
+def check_symbol_fields(sch_path: str, required_fields: Any = None, root_sch: str | None = None, include: Any = None) -> dict[str, Any]:
+    """Read-only: every placed symbol of the project with a gap in ``required_fields``, per sheet file.
+
+    ``include`` (issue 166 item 3): ``dnp`` and ``off_board`` symbols are checked too and carry ``flags``. A dnp symbol is in the netlist, an off_board symbol is not in the netlist
+    (kicad-cli leaves out parts marked off board), so an off_board symbol is checked on request only."""
     try:
         required = _fields(required_fields)
+        included = _include(include)
         root_file, tree = _resolve(sch_path, root_sch)
         sheets: list[dict[str, Any]] = []
         skipped: dict[str, list[dict[str, Any]]] = {reason: [] for reason in _SKIP_ORDER}
         placed = 0
         for rel, rows in _walk(tree):
-            entry: dict[str, Any] = {"sheet": rel, "checked": 0, "symbols_with_gaps": 0, "symbols": []}
+            version = _file_version(rows[0].parsed) if rows else None
+            entry: dict[str, Any] = {"sheet": rel, "file_version": version, "checked": 0, "symbols_with_gaps": 0, "symbols": [], "folded": []}
+            units: dict[tuple[str, str], set[str]] = {}
+            for sym in rows:
+                units.setdefault((sym.refs[0], sym.lib_id), set()).add(sym.unit)
             for sym in rows:
                 placed += 1
                 symbol, parsed, uuid = sym.node, sym.parsed, sym.uuid
@@ -139,22 +172,38 @@ def check_symbol_fields(sch_path: str, required_fields: Any = None, root_sch: st
                     continue
                 refs = sym.refs
                 head = {"reference": refs[0], "uuid": uuid, "unit": sym.unit, "lib_id": sym.lib_id, "sheet": rel}
-                if (why := _skip_reason(parsed, symbol, [*refs, sym.own])) is not None:
+                reasons = _reasons(parsed, symbol, [*refs, sym.own])
+                if (why := next((r for r in reasons if r not in included), None)) is not None:
                     skipped[why].append(head)
                     continue
                 props = _props(symbol)
                 entry["checked"] += 1
                 gaps = []
                 for name in required:
-                    if (problem := _problem(props.get(name))) is None:
+                    # KiCad reads a property named "footprint" as the Footprint field (measured; other names are not folded)
+                    held = "footprint" if name == "Footprint" and name not in props and "footprint" in props else name
+                    if (problem := _problem(props.get(held))) is None:
+                        if held != name:
+                            entry["folded"].append({"reference": refs[0], "uuid": uuid, "unit": sym.unit, "field": name, "property": held, "value": props[held]})
                         continue
-                    gap: dict[str, Any] = {"field": name, "problem": problem, "value": props.get(name)}
+                    gap: dict[str, Any] = {"field": name, "problem": problem, "value": props.get(held)}
+                    if held != name:
+                        gap["property"] = held
+                    if problem == "placeholder" and name in _MEASURED_PLACEHOLDER and version is not None:
+                        gap["meaning"] = PLACEHOLDER_MEANING["old" if version < 20250318 else "new"]
                     if problem == "missing" and (variants := sorted(p for p in props if p != name and p.lower() == name.lower())):
                         gap["case_variant"] = variants
                     gaps.append(gap)
                 if gaps:
                     entry["symbols_with_gaps"] += 1
-                    entry["symbols"].append({**{k: v for k, v in head.items() if k != "sheet"}, "uses": sym.uses, "gaps": gaps})
+                    row = {**{k: v for k, v in head.items() if k != "sheet"}, "uses": sym.uses, "gaps": gaps}
+                    if len(sym.refs) > 1:
+                        row["use_references"] = sym.refs
+                    if len(part := units[(refs[0], sym.lib_id)]) > 1:
+                        row["part_units"] = sorted(part, key=lambda u: (len(u), u))
+                    if included:
+                        row["flags"] = reasons
+                    entry["symbols"].append(row)
             entry["symbols"].sort(key=lambda s: (s["reference"], s["unit"], s["uuid"]))
             sheets.append(entry)
         checked = sum(e["checked"] for e in sheets)
@@ -164,6 +213,7 @@ def check_symbol_fields(sch_path: str, required_fields: Any = None, root_sch: st
         return {
             "status": "ok", "ok": True, "written": False, "root": tree.rel(root_file), "required_fields": required,
             "placed_symbols": placed, "checked": checked, "symbols_with_gaps": with_gaps, "no_gaps": with_gaps == 0,
+            "folded_count": sum(len(e["folded"]) for e in sheets), "multi_unit_note": _MULTI_UNIT_NOTE, "included": sorted(included),
             "gap_count": sum(len(s["gaps"]) for e in sheets for s in e["symbols"]),
             "sheets": sheets,
             "skipped": skipped, "skipped_counts": {reason: len(rows) for reason, rows in skipped.items()},

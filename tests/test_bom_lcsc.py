@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pytest
 
-from boardproof import bom_lcsc, kicad_cli
+from boardproof import bom_lcsc
 from boardproof.sourcing.models import PartResult
 from tests import _kicad_faults as _faults
 from tests import test_check_symbol_fields as _check
@@ -30,13 +30,7 @@ CAP0402 = "Capacitor_SMD:C_0402_1005Metric"
 
 @pytest.fixture(scope="module")
 def _template(tmp_path_factory) -> Path:
-    try:
-        kicad_cli.find_kicad_cli()
-    except Exception:  # noqa: BLE001
-        pytest.skip("kicad-cli not installed")
-    tools = _base._tools()
-    built = _base.root._get_wrapped_function()(tmp_path_factory.mktemp("template"), tools)
-    return _check.project._get_wrapped_function()(built, tools)
+    return _check.build_template(tmp_path_factory)
 
 
 @pytest.fixture

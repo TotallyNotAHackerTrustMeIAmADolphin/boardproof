@@ -1938,7 +1938,7 @@ def replace_symbols(path: str, replacements: Any, root_sch: str | None, *, allow
                     "so a wired pin whose counterpart lies elsewhere is reported as connectivity_changed"}
         outcome.compare = lambda before, after, removed: [*extras, *compare_nets(before, after, removed)]
         if taken_expected:  # the netlist must carry the adopted fields (issue 162, the check of set_properties)
-            outcome.post_netlist = _netlist_follows(taken_expected, _instance_records(sheet, path))
+            outcome.post_netlist = _netlist_follows(taken_expected, _instance_records(sheet, path), _root_version(root))
         return outcome
 
     result = run(path, root_sch, mutate, allow_connectivity_change=allow_connectivity_change, dry_run=dry_run)
@@ -2242,26 +2242,38 @@ _CAUSES = {
              "or a symbol that the netlist leaves out, for example a lib_name without a library symbol)",
     "space": "KiCad trims white space at the ends of Value, Datasheet, Description and Footprint",
     "variable": "KiCad expands a text variable such as ${REFERENCE} in the netlist",
-    "tilde": "KiCad writes the placeholder ~ as an empty field",
+    "tilde": "KiCad reads the placeholder ~ as an empty field in a sheet file below file version 20250318 (from 20250318 on ~ stays literal text)",
     "case": "a field name that differs from Footprint, Datasheet or Description only by case is one of those fields to KiCad",
     "elsewhere": "KiCad may read the part from a copy elsewhere (another sheet or another unit)",
 }
 
 
-def _cause(name: str, asked: str, got: str | None) -> str:
+_TILDE_LITERAL_FROM = 20250318  # measured, tests/test_kicad_field_rules.py
+
+
+def _cause(name: str, asked: str, got: str | None, version: int | None = None) -> str:
     """The class of the likeliest cause of a mismatch of one field (a key of ``_CAUSES``)."""
     if name.lower() in {f.lower() for f in _STANDARD_FIELDS} and name not in _STANDARD_FIELDS:
         return "case"
     if "${" in asked:
         return "variable"
-    if asked == "~" and got in (None, ""):
+    if asked == "~" and got in (None, "") and (version is not None and version < _TILDE_LITERAL_FROM):
         return "tilde"
     if asked != asked.strip() and got == asked.strip():
         return "space"
     return "elsewhere"
 
 
-def _netlist_follows(expected: list[dict], records: dict[str, list[dict]]):
+def _root_version(root: SExp) -> int | None:
+    """The file version of a sheet root, None when it is missing or not a number (an unknown version claims nothing)."""
+    nodes = root.find_children("version")
+    try:
+        return int(nodes[0].get_float(0)) if nodes else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _netlist_follows(expected: list[dict], records: dict[str, list[dict]], version: int | None = None):
     """The staged-netlist check (issue 120): kicad-cli's netlist of the edited project must carry the fields the call asked for.
 
     Whatever the reason (a unit KiCad reads from another sheet, a Reference text that differs from the instance
@@ -2292,7 +2304,7 @@ def _netlist_follows(expected: list[dict], records: dict[str, list[dict]]):
                     got = comp["value"] if name == "Value" else comp["fields"].get(name)
                     if got != value:
                         problems.append(f"{ref}: {name} asked {value!r}, netlist has " + (repr(got) if got is not None else "no such field"))
-                        causes.append(_cause(name, value, got))
+                        causes.append(_cause(name, value, got, version))
                 for name in item["remove"]:
                     got = comp["fields"].get(name)
                     if (got not in (None, "")) if name in _STANDARD_FIELDS else (got is not None):
@@ -2388,7 +2400,7 @@ def set_properties(path: str, items: list[dict], root_sch: str | None, *, allow_
                 expected.append({"uuid": _uuid(node), "set": {n: v for n, (v, _h) in item["set"].items() if v is not None}, "remove": list(item["remove"])})
                 listed.append({"reference": _ref(node), "uuid": _uuid(node), "unit": _unit(node), "properties": rows})
         outcome.report = {"updated": listed, "count": len(listed)}
-        outcome.post_netlist = _netlist_follows(expected, records)
+        outcome.post_netlist = _netlist_follows(expected, records, _root_version(root))
         if len(listed) > len(parts):
             notes.append("A reference shared by the units of one part is edited in every unit, because KiCad reads the fields "
                          "from one unit's copy; the units are listed with their unit numbers.")

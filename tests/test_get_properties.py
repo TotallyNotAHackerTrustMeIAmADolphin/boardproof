@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from boardproof import kicad_cli, write_layer
+from boardproof import write_layer
 from tests import test_check_symbol_fields as _check
 from tests import test_sheet_pins as _base
 from tests.test_check_symbol_fields import FULL, _sym, _uuid
@@ -24,13 +24,7 @@ from tests._fixture_copy import copy_fixture
 @pytest.fixture(scope="module")
 def _template(tmp_path_factory) -> Path:
     """The fixture project of tests/test_check_symbol_fields.py, built once per module (its tool calls run kicad-cli); every test gets a copy."""
-    try:
-        kicad_cli.find_kicad_cli()
-    except Exception:  # noqa: BLE001
-        pytest.skip("kicad-cli not installed")
-    tools = _base._tools()
-    built = _base.root._get_wrapped_function()(tmp_path_factory.mktemp("template"), tools)
-    return _check.project._get_wrapped_function()(built, tools)
+    return _check.build_template(tmp_path_factory)
 
 
 @pytest.fixture
@@ -109,6 +103,7 @@ def test_selection_by_uuids_and_the_union_with_references(project, tools) -> Non
     uuid = _uuid(project, "R33")
     by_uuid = tools["get_properties"](str(project), uuids=[uuid.upper()])
     assert by_uuid["selected_by"] == "uuids" and list(_by_ref(by_uuid)) == ["R33"]
+    assert by_uuid["not_found"] == {"references": [], "uuids": []} and by_uuid["all_found"] is True  # issue 180: an upper-case uuid is found
     both = tools["get_properties"](str(project), references=["R10"], uuids=[uuid])
     assert both["selected_by"] == "references and uuids" and sorted(_by_ref(both)) == ["R10", "R33"]
 
@@ -273,11 +268,21 @@ def test_the_tool_text_states_the_contract() -> None:
     text = " ".join(_listed()["get_properties"].description.split())
     for needle in ("Read-only", "whole sheet tree", "Value, Footprint, Datasheet, Description and LCSC", "absent", "case_variant", "Nothing is truncated",
                    "not_found", "all_found", "flags", "power, off_board, dnp", "returned too, not skipped", "set_properties", "check_symbol_fields",
-                   "no write lock", "raw property nodes", "use_references", "per placed unit"):
+                   "no write lock", "raw property nodes", "use_references", "per placed unit",
+                   "uuids are matched without regard to case", "raw file text", "are not interpreted", "the netlist can differ"):
         assert needle in text, needle
 
 
-def test_the_skill_and_the_tool_text_use_the_same_words() -> None:
+def test_the_tool_text_names_what_the_file_values_are_not() -> None:
+    """Issue 180: the values are file text, not the netlist-effective ones; the three measured differences are named."""
+    text = " ".join(_listed()["get_properties"].description.split())
+    for needle in ("a literal ~ in Footprint or Datasheet", "file version 20250318", "a lowercase footprint property", "the order of the symbols in the file"):
+        assert needle in text, needle
+    for word in ("routed", "done", "complete", "finished", "clean", "verified", "ready", "connected", "passes"):
+        assert word not in text.lower().replace("completely", "").split(), word
+
+
+def test_the_skill_and_the_tool_text_use_the_same_words_the_same_words() -> None:
     repo = Path(__file__).resolve().parents[1]
     skill = " ".join((repo / ".claude" / "skills" / "kicad-schematic" / "SKILL.md").read_text(encoding="utf-8").split())
     for phrase in ("`get_properties` (read-only, no lock;", "`references`, `uuids` and `properties`", "default Value, Footprint, Datasheet, Description and LCSC", "under `absent`"):

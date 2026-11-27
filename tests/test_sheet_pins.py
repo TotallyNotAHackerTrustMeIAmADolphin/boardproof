@@ -51,6 +51,11 @@ def _wire(p1, p2):
 
 @pytest.fixture
 def root(tmp_path, tools) -> Path:
+    return build_root(tmp_path, tools)
+
+
+def build_root(tmp_path, tools) -> Path:
+    """The fixture project as a plain function (a module-scoped template calls it; no private pytest API)."""
     made = project_toolset._project_create(str(tmp_path / "proj"), "demo")
     sch = Path(made["schematic_path"])
     folder = sch.parent

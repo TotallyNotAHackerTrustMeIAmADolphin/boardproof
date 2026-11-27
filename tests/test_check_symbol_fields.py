@@ -14,14 +14,17 @@ from pathlib import Path
 
 import pytest
 
-from boardproof import field_check, write_layer
+from boardproof import field_check, kicad_cli, write_layer
 from tests import test_sheet_pins as _base
 from tests.test_sheet_pins import _bytes
+from tests._fixture_copy import copy_fixture
 
 root = _base.root
 tools = _base.tools
 _need_kicad_cli = _base._need_kicad_cli
 
+OLD_MEANING = "KiCad reads ~ as empty (file version below 20250318)"
+NEW_MEANING = "KiCad keeps ~ as literal text (file version 20250318 or later)"
 FULL = {"Footprint": "Resistor_SMD:R_0603_1608Metric", "LCSC": "C25804", "Datasheet": "https://example.invalid/r.pdf"}
 
 
@@ -37,8 +40,28 @@ def _uuid(path: Path, ref: str) -> str:
     return _sym(path, ref)[1].find_children("uuid")[0].get_string(0)
 
 
+@pytest.fixture(scope="module")
+def _template(tmp_path_factory) -> Path:
+    return build_template(tmp_path_factory)
+
+
 @pytest.fixture
-def project(root, tools) -> Path:
+def project(_template, tmp_path) -> Path:
+    copy_fixture(_template.parent, tmp_path / "proj")
+    return tmp_path / "proj" / _template.name
+
+
+def build_template(tmp_path_factory) -> Path:
+    """The fixture project built once by a module-scoped fixture of any test module (its tool calls run kicad-cli)."""
+    try:
+        kicad_cli.find_kicad_cli()
+    except Exception:  # noqa: BLE001
+        pytest.skip("kicad-cli not installed")
+    tools = _base._tools()
+    return build_project(_base.build_root(tmp_path_factory.mktemp("template"), tools), tools)
+
+
+def build_project(root, tools) -> Path:
     folder = root.parent
     def r(ref, x, y):
         return {"lib_id": "Device:R", "x": x, "y": y, "ref": ref, "value": "1k"}
@@ -203,6 +226,8 @@ def test_a_sheet_file_used_twice_is_listed_once_with_two_uses_and_the_first_use_
     mcu_sheet = next(e for e in result["sheets"] if e["sheet"] == "mcu.kicad_sch")
     (row,) = mcu_sheet["symbols"]  # one file, listed once
     assert row["reference"] == "R20" and row["uses"] == 2 and mcu_sheet["checked"] == 1
+    assert row["use_references"] == ["R20", "R21"]  # issue 166 item 1: the references of every use, so a netlist reference of a further use is findable
+    assert all("use_references" not in r for e in result["sheets"] for r in e["symbols"] if r["uses"] == 1)
     assert result["placed_symbols"] == 9
 
 
@@ -223,7 +248,7 @@ def test_a_tilde_datasheet_on_a_placed_symbol_is_reported_as_a_placeholder(proje
     write_layer.set_string(next(p for p in node.find_children("property") if p.get_string(0) == "Datasheet"), 1, "~")
     write_layer.save(tree, project)
     gaps = next(s for e in tools["check_symbol_fields"](str(project))["sheets"] for s in e["symbols"] if s["reference"] == "R34")["gaps"]
-    assert gaps == [{"field": "Datasheet", "problem": "placeholder", "value": "~"}]
+    assert gaps == [{"field": "Datasheet", "problem": "placeholder", "value": "~", "meaning": OLD_MEANING}]
 
 
 def test_a_wrong_case_field_is_named_as_a_case_variant(project, tools) -> None:
@@ -329,3 +354,180 @@ def test_the_skill_and_the_tool_text_use_the_same_words() -> None:
         assert phrase in skill, phrase
     for phrase in ("(problem missing)", "case_variant", "listed apart under skipped", "set_properties", "no_gaps is not a verdict on the board"):
         assert phrase in doc, phrase
+
+
+# ---- issues 166 and 169 (issue 184): file version, folded names, units, includes ----------------------------
+
+def _set_tilde(project: Path, version: int | None = None) -> None:
+    tree, node = _sym(project, "R34")
+    write_layer.set_string(next(p for p in node.find_children("property") if p.get_string(0) == "Datasheet"), 1, "~")
+    if version is not None:
+        write_layer.set_number(tree.find_children("version")[0], 0, version)
+    write_layer.save(tree, project)
+
+
+def test_the_sheet_entry_states_the_file_version_and_the_placeholder_meaning_follows_it(project, tools) -> None:
+    _set_tilde(project)
+    first = tools["check_symbol_fields"](str(project))
+    assert next(e for e in first["sheets"] if e["sheet"] == project.name)["file_version"] == 20231120
+    _set_tilde(project, 20260306)
+    result = tools["check_symbol_fields"](str(project))
+    assert next(e for e in result["sheets"] if e["sheet"] == project.name)["file_version"] == 20260306
+    gaps = next(s for e in result["sheets"] for s in e["symbols"] if s["reference"] == "R34")["gaps"]
+    assert gaps == [{"field": "Datasheet", "problem": "placeholder", "value": "~", "meaning": NEW_MEANING}]
+
+
+def test_a_placeholder_of_a_field_that_was_not_measured_carries_no_meaning(project, tools) -> None:
+    tree, node = _sym(project, "R34")
+    write_layer.set_string(next(p for p in node.find_children("property") if p.get_string(0) == "LCSC"), 1, "~")
+    write_layer.save(tree, project)
+    gaps = next(s for e in tools["check_symbol_fields"](str(project))["sheets"] for s in e["symbols"] if s["reference"] == "R34")["gaps"]
+    assert gaps == [{"field": "LCSC", "problem": "placeholder", "value": "~"}]
+
+
+def test_the_tilde_cause_of_an_edit_mismatch_depends_on_the_file_version() -> None:
+    from boardproof import sheet_editing
+
+    assert sheet_editing._cause("Datasheet", "~", "", 20231120) == "tilde"
+    assert sheet_editing._cause("Datasheet", "~", "", 20260306) == "elsewhere"
+    assert sheet_editing._cause("Datasheet", "~", "", 20250318) == "elsewhere"
+    assert sheet_editing._cause("Datasheet", "~", None, 20250317) == "tilde"
+    assert "20250318" in sheet_editing._CAUSES["tilde"]
+
+
+def _rename(project: Path, ref: str, old: str, new: str, value: str | None = None) -> None:
+    tree, node = _sym(project, ref)
+    prop = next(p for p in node.find_children("property") if p.get_string(0) == old)
+    write_layer.set_string(prop, 0, new)
+    if value is not None:
+        write_layer.set_string(prop, 1, value)
+    write_layer.save(tree, project)
+
+
+def test_a_lowercase_footprint_property_is_the_footprint_field_as_kicad_folds_it(project, tools) -> None:
+    _rename(project, "R34", "Footprint", "footprint")
+    result = tools["check_symbol_fields"](str(project))
+    assert "R34" not in _gaps(result)  # present: the netlist carries it as Footprint
+    entry = next(e for e in result["sheets"] if e["sheet"] == project.name)
+    (folded,) = [f for f in entry["folded"] if f["reference"] == "R34"]
+    assert folded["field"] == "Footprint" and folded["property"] == "footprint" and folded["value"] == FULL["Footprint"]
+    assert result["folded_count"] == 1
+    # an empty folded value is still a gap, named by the property it sits in
+    _rename(project, "R34", "footprint", "footprint", "")
+    gap = next(s for e in tools["check_symbol_fields"](str(project))["sheets"] for s in e["symbols"] if s["reference"] == "R34")["gaps"][0]
+    assert gap == {"field": "Footprint", "problem": "empty", "value": "", "property": "footprint"}
+
+
+def test_only_footprint_is_folded_other_wrong_case_names_stay_missing(project, tools) -> None:
+    gaps = _gaps(tools["check_symbol_fields"](str(project), ["LCSC", "Footprint"]))
+    assert gaps["R32"] == {"LCSC": "missing"}  # "Lcsc" is a different field to KiCad (measured)
+
+
+def test_a_multi_unit_part_names_its_units_and_that_the_netlist_reads_one_copy(project, tools) -> None:
+    placed = tools["add_symbols"](str(project), [
+        {"lib_id": "Amplifier_Operational:LM324", "x": 150, "y": 60, "ref": "U9", "value": "LM324", "unit": 1},
+        {"lib_id": "Amplifier_Operational:LM324", "x": 150, "y": 90, "ref": "U9", "value": "LM324", "unit": 2}])
+    assert placed["status"] == "ok", placed
+    result = tools["check_symbol_fields"](str(project), ["LCSC"])
+    rows = [s for e in result["sheets"] for s in e["symbols"] if s["reference"] == "U9"]
+    assert [r["part_units"] for r in rows] == [["1", "2"], ["1", "2"]]
+    assert all("part_units" not in s for e in result["sheets"] for s in e["symbols"] if s["reference"] != "U9")
+    assert "order of the symbols in the file" in result["multi_unit_note"]
+
+
+def test_dnp_and_off_board_symbols_are_checked_when_asked_and_marked(project, tools) -> None:
+    result = tools["check_symbol_fields"](str(project), include=["dnp", "off_board"])
+    assert result["skipped_counts"]["dnp"] == 0 and result["skipped_counts"]["off_board"] == 0 and result["skipped_counts"]["power"] == 1
+    rows = {s["reference"]: s for e in result["sheets"] for s in e["symbols"]}
+    assert rows["R30"]["flags"] == ["dnp"] and rows["R31"]["flags"] == ["off_board"]
+    assert rows["R30"]["gaps"] and rows["R31"]["gaps"]
+    assert result["checked"] == 8 and result["placed_symbols"] == 9
+    only_dnp = tools["check_symbol_fields"](str(project), include=["dnp"])
+    assert only_dnp["skipped_counts"]["dnp"] == 0 and only_dnp["skipped_counts"]["off_board"] == 1
+    default = tools["check_symbol_fields"](str(project))
+    assert default["skipped_counts"]["dnp"] == 1 and all("flags" not in s for e in default["sheets"] for s in e["symbols"])
+
+
+@pytest.mark.parametrize("bad", [["power"], [], "dnp", ["dnp", "dnp"], ["nope"]])
+def test_invalid_include_is_refused(project, tools, bad) -> None:
+    result = tools["check_symbol_fields"](str(project), include=bad)
+    assert result["ok"] is False and result["code"] == "invalid_spec", result
+
+
+def test_the_tool_text_and_the_skill_state_the_file_version_fold_units_and_include() -> None:
+    from mcp.server.mcpserver import MCPServer
+
+    from boardproof.toolsets import schematic as schematic_toolset
+
+    mcp = MCPServer("test")
+    schematic_toolset.build(mcp)
+    text = " ".join(next(t for t in mcp._tool_manager.list_tools() if t.name == "check_symbol_fields").description.split())  # type: ignore[attr-defined]
+    for needle in ("file version 20250318", "file_version", "meaning", "folded_count", "property named footprint (lowercase)", "use_references",
+                   "part_units", "multi_unit_note", "unit 1's copy when it holds a value", "include: a list drawn from dnp and off_board"):
+        assert needle in text, needle
+    repo = Path(__file__).resolve().parents[1]
+    skill = " ".join((repo / ".claude" / "skills" / "kicad-schematic" / "SKILL.md").read_text(encoding="utf-8").split())
+    for phrase in ("`include` (a list of `dnp` and `off_board`)", "version 20250318", "`part_units`", "`folded`"):
+        assert phrase in skill, phrase
+    new = text[text.index("file version 20250318") - 60:]
+    for word in ("routed", "done", "complete", "finished", "clean", "verified", "ready", "connected", "passes"):
+        assert word not in new.lower().replace(".", " ").replace(",", " ").split(), word
+
+
+# ---- review of 0475dac (issue 184): B1 include wording, B2 unknown version, B3 boundary, multi-unit sentence ----
+
+@pytest.mark.parametrize(("version", "meaning"), [(20250317, OLD_MEANING), (20250318, NEW_MEANING)])
+def test_the_placeholder_meaning_switches_exactly_at_20250318(project, tools, version, meaning) -> None:
+    _set_tilde(project, version)
+    gaps = next(s for e in tools["check_symbol_fields"](str(project))["sheets"] for s in e["symbols"] if s["reference"] == "R34")["gaps"]
+    assert gaps == [{"field": "Datasheet", "problem": "placeholder", "value": "~", "meaning": meaning}]
+
+
+def test_an_unknown_version_claims_nothing_about_the_tilde() -> None:
+    from boardproof import sheet_editing
+
+    assert sheet_editing._cause("Datasheet", "~", "", None) == "elsewhere"
+    assert sheet_editing._cause("Datasheet", "~", "", 20231120) == "tilde"
+
+
+def test_an_unparsable_version_is_an_unknown_version_not_a_crash(project) -> None:
+    """In memory: the write layer refuses to save a sheet that kicad-cli cannot load, so the reader helpers are called on the parsed tree."""
+    from boardproof import field_check, sheet_editing
+
+    tree = write_layer.load(project)
+    assert sheet_editing._root_version(tree) == field_check._file_version(tree) == 20231120
+    write_layer.set_string(tree.find_children("version")[0], 0, "abc")
+    assert sheet_editing._root_version(tree) is None and field_check._file_version(tree) is None
+    tree.find_children("version")[0].children.clear()
+    assert sheet_editing._root_version(tree) is None
+
+
+def test_the_include_text_says_which_of_the_two_are_in_the_netlist() -> None:
+    import inspect
+
+    from mcp.server.mcpserver import MCPServer
+
+    from boardproof import field_check
+    from boardproof.toolsets import schematic as schematic_toolset
+
+    mcp = MCPServer("test")
+    schematic_toolset.build(mcp)
+    text = " ".join(next(t for t in mcp._tool_manager.list_tools() if t.name == "check_symbol_fields").description.split())  # type: ignore[attr-defined]
+    source = " ".join(inspect.getsource(field_check.check_symbol_fields).split())
+    assert "a dnp symbol is in the netlist, an off_board symbol is not in the netlist" in text
+    assert "components in the netlist" not in text and "components in the netlist" not in source
+    assert "an off_board symbol is not in the netlist" in source
+    for word in ("routed", "done", "complete", "finished", "clean", "verified", "ready", "connected", "passes"):
+        assert word not in text[text.index("include: a list"):].lower().replace(".", " ").replace(",", " ").split(), word
+
+
+def test_the_multi_unit_sentence_names_unit_1_and_the_empty_case(project, tools) -> None:
+    from mcp.server.mcpserver import MCPServer
+
+    from boardproof.toolsets import schematic as schematic_toolset
+
+    note = tools["check_symbol_fields"](str(project))["multi_unit_note"]
+    mcp = MCPServer("test")
+    schematic_toolset.build(mcp)
+    for text in (note, " ".join(next(t for t in mcp._tool_manager.list_tools() if t.name == "get_properties").description.split())):  # type: ignore[attr-defined]
+        assert "unit 1" in text and "empty" in text and "order of the symbols in the file" in text, text
