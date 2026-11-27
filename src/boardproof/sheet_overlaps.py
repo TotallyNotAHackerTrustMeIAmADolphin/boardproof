@@ -74,10 +74,10 @@ numbers behind it:
     pins, hidden numbers and names, empty and ``~`` names, names of a symbol whose offset is 0 and power
     symbols give none). A label on a pin whose text runs along the pin line over its number is one.
 
-Global and hierarchical label boxes are their shape and text (``_shape_label_box``, issue 225).
+Global and hierarchical label boxes are their shape and text (``readability._shape_label_box``, issue 225).
 
 Text boxes are ESTIMATES, because the stroke font's extent is not in the file: the same estimate as
-``schematic_readability`` (the sum of a measured per-character advance after KiCad markup is resolved, a local label above its anchor) and
+``schematic_readability`` (the sum of a measured per-character advance after KiCad markup is resolved, a local label placed by both stored justify words at the stored angle modulo 180, issue 266) and
 every finding that involves a text says ``estimated: true``. The box of a placed symbol's property text is put where
 KiCad draws it (issue 223, ``sheet_property_arrange.drawn_box``, the rule measured in issue 221): the stored angle is
 relative to the symbol, a turn of 90 or 180 degrees and a mirror swap the justify words as drawn. A near miss is not reported.
@@ -116,40 +116,6 @@ Box = tuple[float, float, float, float]
 
 
 # --------------------------------------------------------------------------- label shapes and pin texts (issue 225)
-
-# Global and hierarchical labels, measured with kicad-cli 10.0.7 sch export svg (font size s = 1.27; every figure scales with s).
-# Direction of the label from its anchor: the stored justify decides, the angle only by its axis (measured: left at 0, 90 and 270 and
-# right at 180 as add_labels writes them, and right at all four: at 0 and 180 left runs right and right runs left; at 90 and 270
-# left runs up and right runs down; left at 180 was not measured and follows the same rule). Global label: a frame 2 s high
-# from the anchor to the text length plus a tail per shape; hierarchical label: a marker 1 s long and s high at the anchor, the text
-# starts 1.15 s from the anchor and is s high.
-_GLOBAL_TAIL = {"input": 2.242, "output": 2.242, "bidirectional": 3.354, "tri_state": 3.354, "passive": 1.131}  # mm at s = 1.27
-_HIER_INSET = 1.15
-
-
-def _label_direction(angle: float, justify: str) -> tuple[int, int]:
-    a = round(angle) % 360
-    if a in (0, 180):
-        return (-1, 0) if justify == "right" else (1, 0)
-    return (0, 1) if justify == "right" else (0, -1)
-
-
-def _shape_label_box(node: Any, text: str, at: tuple[float, float, float], effects: Any) -> Box:
-    """The box of a global or hierarchical label: its shape (frame or arrow marker) and its text, as KiCad draws them."""
-    size = readability._font_size(effects)
-    s = size[1]
-    h, _v = readability._justify(effects)
-    length = readability._text_width(text, size)
-    if node.name == "global_label":
-        shape = next((str(c.values[0]) for c in node.children if not c.is_atom and c.name == "shape" and c.values), "bidirectional")
-        reach, half = length + _GLOBAL_TAIL.get(shape, _GLOBAL_TAIL["bidirectional"]) * s / 1.27, s
-    else:
-        reach, half = _HIER_INSET * s + length, s / 2
-    dx, dy = _label_direction(at[2], h)
-    x, y = at[0], at[1]
-    corners = [(x, y - half), (x + dx * reach, y + half)] if dx else [(x - half, y), (x + half, y + dy * reach)]
-    return (min(c[0] for c in corners), min(c[1] for c in corners), max(c[0] for c in corners), max(c[1] for c in corners))
-
 
 _NUMBER_GAP_MM = 0.36  # measured: a pin number sits this far from its pin line (above a horizontal pin, left of a vertical one)
 _DEFAULT_NAME_OFFSET = 0.508
@@ -326,7 +292,7 @@ def _read(root: Any) -> tuple[list[_Body], list[_Text], list[tuple[Any, tuple, t
         if node.name == "label":
             box = readability._text_box(text, (at[0], at[1], at[2] % 180.0), readability._font_size(effects), h, v)
         else:  # issue 225: a global or hierarchical label is its shape and its text, which KiCad places by other rules
-            box = _shape_label_box(node, text, at, effects)
+            box = readability._shape_label_box(node, text, at, effects)
         texts.append(_Text("label", node, None, node.name, text, (at[0], at[1]), box))
     for node in se._kids(root, "text"):
         text = node.get_string(0) or ""

@@ -463,6 +463,41 @@ def _text_box(text: str, at: tuple[float, float, float], size: Point, horizontal
     return box
 
 
+# Global and hierarchical labels, measured with kicad-cli 10.0.7 sch export svg (font size s = 1.27; every figure scales with s).
+# Direction of the label from its anchor: the stored justify decides, the angle only by its axis (measured: left at 0, 90 and 270 and
+# right at 180 as add_labels writes them, and right at all four: at 0 and 180 left runs right and right runs left; at 90 and 270
+# left runs up and right runs down; left at 180 was not measured and follows the same rule). Global label: a frame 2 s high
+# from the anchor to the text length plus a tail per shape; hierarchical label: a marker 1 s long and s high at the anchor, the text
+# starts 1.15 s from the anchor and is s high.
+_GLOBAL_TAIL = {"input": 2.242, "output": 2.242, "bidirectional": 3.354, "tri_state": 3.354, "passive": 1.131}  # mm at s = 1.27
+_HIER_INSET = 1.15
+
+
+def _label_direction(angle: float, justify: str) -> tuple[int, int]:
+    a = round(angle) % 360
+    if a in (0, 180):
+        return (-1, 0) if justify == "right" else (1, 0)
+    return (0, 1) if justify == "right" else (0, -1)
+
+
+def _shape_label_box(node: Any, text: str, at: tuple[float, float, float], effects: Any) -> Box:
+    """The box of a global or hierarchical label: its shape (frame or arrow marker) and its text, as KiCad draws them."""
+    size = _font_size(effects)
+    s = size[1]
+    h, _v = _justify(effects)
+    length = _text_width(text, size)
+    if node.name == "global_label":
+        shape_node = node.find("shape")
+        shape = str(_atoms(shape_node)[0]) if shape_node is not None and _atoms(shape_node) else "bidirectional"
+        reach, half = length + _GLOBAL_TAIL.get(shape, _GLOBAL_TAIL["bidirectional"]) * s / 1.27, s
+    else:
+        reach, half = _HIER_INSET * s + length, s / 2
+    dx, dy = _label_direction(at[2], h)
+    x, y = at[0], at[1]
+    corners = [(x, y - half), (x + dx * reach, y + half)] if dx else [(x - half, y), (x + half, y + dy * reach)]
+    return (min(c[0] for c in corners), min(c[1] for c in corners), max(c[0] for c in corners), max(c[1] for c in corners))
+
+
 @dataclass
 class _Sheet:
     name: str
@@ -565,8 +600,8 @@ def _read_sheet(root: Any, name: str) -> _Sheet:
                 # issue 271, as find_overlaps since issue 266: KiCad draws a local label with both stored justify words at the stored
                 # angle modulo 180 (no half-turn flip), measured with kicad-cli 10.0.7 (tests/test_find_overlaps_label_justify.py)
                 box = _text_box(text, (l_at[0], l_at[1], l_at[2] % 180.0), _font_size(effects), h, v)
-            else:  # global and hierarchical labels: not measured here, the earlier box stays
-                box = _text_box(text, l_at, _font_size(effects), "left" if h == "center" else h, "center", above=True)
+            else:  # issue 272: shape and text as find_overlaps boxes them (issue 225)
+                box = _shape_label_box(label, text, l_at, effects)
             sheet.texts.append(_Text("label", "", text, box, (l_at[0], l_at[1]), tag))
     for free in root.find_children("text"):
         text = _str(free)
