@@ -347,5 +347,5 @@ def test_set_text_point_must_be_finite_and_on_the_page(tools, shared, point):
 
 def test_the_move_labels_text_says_an_angle_alone_turns_the_label_in_place(tools):
     text = " ".join((tools["move_labels"].__doc__ or "").split())
-    assert "An item with `angle` and neither `to` nor `offset` only turns the label where it is (position unchanged, not snapped" in text
+    assert "An item with `angle` or `justify` and neither `to` nor `offset` only turns the label where it is (position unchanged, not snapped" in text
     assert "refused with invalid_spec and nothing is written" in text

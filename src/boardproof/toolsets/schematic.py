@@ -1089,6 +1089,49 @@ def _check_mirrors(content: str, mirrors: list[str], old_uuids: set[str]) -> Non
             {"missing": [w["reference"] for w in wrong], "unexpected": [], "tolerated": []}, None)
 
 
+_LABEL_TAG = {"label": "label", "global": "global_label", "hier": "hierarchical_label"}
+
+
+def _new_label_nodes(root: Any, tag: str, old_uuids: set[str]) -> list[Any]:
+    """The label nodes of ``tag`` this call added (uuid not in ``old_uuids``), in file order."""
+    return [n for n in root.children if not n.is_atom and n.name == tag and n.find_children("uuid")
+            and n.find_children("uuid")[0].get_string(0) not in old_uuids]
+
+
+def _label_justify_words(node: Any) -> list[str]:
+    return [str(a.value) for e in node.find_children("effects") for j in e.find_children("justify") for a in j.children]
+
+
+def _apply_label_justify(root: Any, justify: list[tuple[str, str, list[str], int]], old_uuids: set[str]) -> None:
+    """Issue 267: write the asked justify words into the raw ``(justify ..)`` of the labels this call added.
+    ``justify`` holds (kind, text, words, n) per spec that asked for one; n counts the specs of its kind before it (asking or not),
+    which is the place of its node among the new nodes of that kind's tag (kicad_tools' add_label takes no justify and stores
+    its own default)."""
+    from boardproof import sheet_editing
+
+    for kind, _text, words, k in justify:
+        nodes = _new_label_nodes(root, _LABEL_TAG[kind], old_uuids)
+        if k < len(nodes):
+            sheet_editing._set_justify(nodes[k], words)
+
+
+def _check_label_justify(content: str, justify: list[tuple[str, str, list[str], int]], old_uuids: set[str]) -> None:
+    """Self-check (decision 4): the text about to be written holds, in the raw node, the text and justify words each new label was asked for."""
+    root = write_layer.parse_string(content)
+    wrong: list[dict] = []
+    for kind, text, words, k in justify:
+        nodes = _new_label_nodes(root, _LABEL_TAG[kind], old_uuids)
+        node = nodes[k] if k < len(nodes) else None
+        actual = None if node is None else " ".join(_label_justify_words(node))
+        if node is None or node.get_string(0) != text or actual != " ".join(words):
+            wrong.append({"subject": text, "expected": " ".join(words), "actual": actual})
+    if wrong:
+        raise SchematicWriteNotVerified(
+            f"the justify of {len(wrong)} new label(s) did not survive into the text; the sheet was left unchanged",
+            [{"file": "sheet", "check": "label_justify", **w} for w in wrong],
+            {"missing": [w["subject"] for w in wrong], "unexpected": [], "tolerated": []}, None)
+
+
 def _hide_power_references(root: Any, old_uuids: set[str]) -> int:
     """Hide the Reference text of each symbol this call added whose Reference starts with ``#`` (a power symbol or a
     PWR_FLAG), as KiCad does when it places one (issue 202; measured: no ``#`` reference of the installed demo sheets is
@@ -1112,7 +1155,8 @@ def _write_schematic_utf8(
     sch: Any, path: Path, *, added_refs: set[str] = frozenset(), reattach: bool = False,
     mirrors: list[str] | None = None, old_uuids: set[str] = frozenset(),
     field_overrides: list[dict] | None = None, hide_power_references: bool = False, dry_run: bool = False,
-    report: dict | None = None,
+    report: dict | None = None, label_justify: list[tuple[str, str, list[str], int]] | None = None,
+    old_label_uuids: set[str] = frozenset(),
 ) -> dict | None:
     """Write a kicad_tools high-level ``Schematic`` to ``path`` as UTF-8.
 
@@ -1158,6 +1202,11 @@ def _write_schematic_utf8(
         _apply_mirrors(node, mirrors, set(old_uuids))
         content = write_layer.serialise(node) + chr(10)
         _check_mirrors(content, mirrors, set(old_uuids))
+    if label_justify:  # GitHub issue 267: kicad_tools' add_label has no justify parameter
+        node = write_layer.parse_string(content)
+        _apply_label_justify(node, label_justify, set(old_label_uuids))
+        content = write_layer.serialise(node) + chr(10)
+        _check_label_justify(content, label_justify, set(old_label_uuids))
     expected_fields: dict[str, dict[str, str]] | None = None
     deferred: Exception | None = None
     if field_overrides is not None:  # GitHub issue 162: take over every field of the library symbol, as KiCad does
@@ -1836,7 +1885,10 @@ def build(mcp: MCPServer) -> list[str]:
         power spec is refused as unproven_instance_data when the project's tree cannot prove where the sheet is used,
         and its result carries `instance_data` {reattached, reason, note} as add_symbols' does; labels, no-connects
         and the other kinds hold no instance data and do not depend on the tree), rotation,
-        shape (global/hier label direction), snap (optional bool, default
+        shape (global/hier label direction), justify (label, global and hier only: one or more of the words left, right, top, bottom, mirror, such as "right bottom",
+        never both left and right or both top and bottom, never empty; written, its words in KiCad order (left or right, then top or bottom, then mirror: "bottom right" is stored as "right bottom"), into the raw (justify ..) of
+        the label and read back from the text before the write, a mismatch refuses the call and writes nothing; without justify the
+        label keeps kicad_tools' default: "left bottom" for a local label, "left" for a global or hier label), snap (optional bool, default
         True -- see SNAP).
 
         SNAP (issue 86; behind it the bug of 2026-09-02: kicad_tools' own snap moved a label or
@@ -1887,6 +1939,21 @@ def build(mcp: MCPServer) -> list[str]:
         if (refused := _old_format_refusal(path)) is not None:
             return refused
         power_ids = [spec.get("text") for spec in specs if spec.get("kind") == "power"]
+        label_justify: list[tuple[str, str, list[str], int]] = []
+        for i, spec in enumerate(specs):
+            if "justify" not in spec:
+                continue
+            if spec.get("kind") not in ("label", "global", "hier"):
+                return _incomplete(f"specs[{i}].justify is for kind label, global or hier only; nothing was written")
+            try:
+                from boardproof import sheet_editing
+
+                words = sheet_editing._justify_words(spec["justify"], f"specs[{i}]", clears=False)
+                if not words:
+                    return _incomplete(f"specs[{i}].justify must hold at least one word; nothing was written")
+            except Exception as exc:  # noqa: BLE001 - SheetAuthoringError carries the reason
+                return _incomplete(f"{exc}; nothing was written")
+            label_justify.append((spec["kind"], spec.get("text", ""), words, sum(1 for o in specs[:i] if o.get("kind") == spec["kind"])))
         libs = symbol_libs.resolve_symbol_libraries(path, power_ids)
         if libs.problems:
             return _incomplete(libs.reason)
@@ -1899,6 +1966,8 @@ def build(mcp: MCPServer) -> list[str]:
             grid = float(getattr(sch, "grid", 1.27) or 1.27)
             next_power = _highest_power_number(path)
             before_uuids = pin_wiring.symbol_uuids(write_layer.load(path))
+            before_labels = {n.find_children("uuid")[0].get_string(0) for n in write_layer.load(path).children
+                             if not n.is_atom and n.name in _LABEL_TAG.values() and n.find_children("uuid")}
             placed = []
             snapped: list[dict] = []
             landed: list[dict] = []
@@ -1934,7 +2003,8 @@ def build(mcp: MCPServer) -> list[str]:
             stage: dict = {}
             notice = {} if dry_run else _layout_notice(path)
             instance_data = _write_schematic_utf8(sch, path, reattach=bool(power_ids), old_uuids=before_uuids,
-                                                  hide_power_references=bool(power_ids), dry_run=dry_run, report=stage)
+                                                  hide_power_references=bool(power_ids), dry_run=dry_run, report=stage,
+                                                  label_justify=label_justify, old_label_uuids=before_labels)
         except SchematicWriteNotVerified as exc:
             return _not_verified_result(exc)
         except InstanceDataUnproven as exc:
@@ -2678,9 +2748,13 @@ def build(mcp: MCPServer) -> list[str]:
 
         moves: a list of objects; each holds selector keys (all must match) and one of `to` [x, y]
         (absolute, mm; the selector must pick exactly one label) or `offset` [dx, dy] (relative, mm), and
-        optionally `angle` (0, 90, 180 or 270, the label's text direction). An item with `angle` and
+        optionally `angle` (0, 90, 180 or 270, the label's text direction) and `justify` (one or more of the words left, right, top, bottom, mirror, such as
+        "right bottom", never both left and right or both top and bottom, never empty; written, its words in KiCad order (left or right, then top or bottom, then mirror: "bottom right" is stored as "right bottom"), into the raw (justify ..) of the
+        label and read back before the write, a mismatch refuses the call and writes nothing; a move without justify keeps the stored
+        justify). An item with `angle` or `justify` and
         neither `to` nor `offset` only turns the label where it is (position unchanged, not snapped; the
-        result lists from equal to to). Anything else malformed (a wrong type, NaN, a selector key of the
+        result lists from equal to to). Example call, moves = [{"texts": ["VCC"], "offset": [0, 2.54], "angle": 180,
+        "justify": "right bottom"}]; the refusal of a move without to or offset names these keys. Anything else malformed (a wrong type, NaN, a selector key of the
         wrong type) is refused with invalid_spec and nothing is written. Selector keys: texts (exact
         label texts), uuids, pattern (shell pattern on the text), region [x1, y1, x2, y2], kind (label,
         global or hier). A label may be picked by one move only.
@@ -3049,7 +3123,12 @@ def build(mcp: MCPServer) -> list[str]:
         object with `offset` [dx, dy] (mm from the symbol's origin; works for any number of symbols, so one
         item can place the Reference of every R*) or `at` [x, y] (absolute, exactly one symbol), and
         optionally `angle` (0, 90, 180 or 270, as KiCad stores it for the text) and `justify` (words from
-        left, right, top, bottom, mirror, for example "left bottom"; "" removes it). A property the symbol
+        left, right, top, bottom, mirror, for example "left bottom"; "" removes it). "left" in a stored justify is the
+        text starting at the anchor and running right, but KiCad draws the stored words of a symbol swapped on some
+        turns: the stored words are drawn swapped (left runs left, right runs right) on a symbol turned 90 or 180 degrees, with or without
+        mirror_items axis x, and on a symbol turned 0 or 270 degrees with axis y; every other turn and mirror draws them as stored
+        (measured with kicad-cli sch export svg; the test is tests/test_label_justify.py), so choose the stored word
+        for the side you see. A property the symbol
         does not have is refused (property_not_found).
 
         arrange (instead of items; giving both is refused): arranges the Reference and Value of many symbols by a

@@ -1020,6 +1020,30 @@ def _check_move_args(snap: Any, grid: Any, move_wires: Any) -> None:
         raise SheetAuthoringError("invalid_spec", f"grid must be a positive, finite number of mm (at most {MAX_MM:g}), got {grid!r}")
 
 
+# A working call of move_labels, run by a test (issue 267); the registered description quotes it.
+MOVE_LABELS_EXAMPLE = '[{"texts": ["VCC"], "offset": [0, 2.54], "angle": 180, "justify": "right bottom"}]'
+
+
+def _raw_justify(node: SExp) -> list[str]:
+    return [str(a.value) for e in node.find_children("effects") for j in _kids(e, "justify") for a in j.children]
+
+
+def _check_label_justify(items: list[tuple[SExp, str]]) -> None:
+    """Self-check (issue 267): the raw (justify ..) of every moved label that asked for one holds exactly the asked words.
+    It reads the in-memory nodes just written, not a re-parse; the reload of the serialised file is checked by the write layer after it."""
+    wrong = [f"{_uuid(n)}: expected {want!r}, found {' '.join(_raw_justify(n))!r}" for n, want in items if " ".join(_raw_justify(n)) != want]
+    if wrong:
+        raise SheetAuthoringError("write_not_verified", "check label_justify: " + "; ".join(wrong[:10]) + "; nothing was written",
+                                  check="label_justify", problems=wrong[:MAX_LISTED])
+
+
+def _move_hint(kind: str) -> str:
+    if kind != "label":
+        return ""
+    return ("; a label move holds selector keys (texts, uuids, pattern, region, kind), exactly one of 'to' or 'offset' and optionally 'angle' and "
+            f"'justify' (an item with only angle or justify turns the label in place); example: {MOVE_LABELS_EXAMPLE}")
+
+
 def _plan_moves(kind: str, moves: Any, sheet: Sheet, snap: bool, grid: float) -> list[tuple[SExp, float, float, dict]]:
     """Per node: the node, its delta and a record of what was asked and snapped."""
     if not isinstance(moves, list) or not moves:
@@ -1031,8 +1055,13 @@ def _plan_moves(kind: str, moves: Any, sheet: Sheet, snap: bool, grid: float) ->
             raise SheetAuthoringError("invalid_spec", f"moves[{i}] must be an object")
         spec = dict(move)
         to, offset, angle = spec.pop("to", None), spec.pop("offset", None), spec.pop("angle", None)
-        if (to is None) == (offset is None) and not (kind == "label" and angle is not None and to is None and offset is None):
-            raise SheetAuthoringError("invalid_spec", f"moves[{i}] needs exactly one of 'to' (absolute [x, y]) or 'offset' (relative [dx, dy])")
+        justify = spec.pop("justify", None) if kind == "label" else None
+        turn_only = kind == "label" and (angle is not None or justify is not None) and to is None and offset is None
+        if (to is None) == (offset is None) and not turn_only:
+            raise SheetAuthoringError("invalid_spec", f"moves[{i}] needs exactly one of 'to' (absolute [x, y]) or 'offset' (relative [dx, dy]){_move_hint(kind)}")
+        if not spec or set(spec) - _SELECTOR_KEYS[kind]:  # the same words as above, not select()'s "selectors[0]" (issue 267 review)
+            raise SheetAuthoringError("invalid_spec", f"moves[{i}] must hold selector keys from {sorted(_SELECTOR_KEYS[kind])} and no other key "
+                                      f"(unknown: {sorted(set(spec) - _SELECTOR_KEYS[kind])}), got {move!r}; it also needs exactly one of 'to' or 'offset'{_move_hint(kind)}")
         if angle is not None and (kind != "label" or isinstance(angle, bool) or not isinstance(angle, (int, float)) or angle not in (0, 90, 180, 270)):
             raise SheetAuthoringError("invalid_spec", f"moves[{i}].angle is for labels only and must be 0, 90, 180 or 270")
         for name, val in (("to", to), ("offset", offset)):
@@ -1055,6 +1084,10 @@ def _plan_moves(kind: str, moves: Any, sheet: Sheet, snap: bool, grid: float) ->
             record = {"asked": _round_pt(*want), "snapped": [_r(got[0]), _r(got[1])] if snap and not _same(want, got) else None}
             if angle is not None:
                 record["angle"] = int(angle)
+            if justify is not None:
+                record["justify"] = " ".join(_justify_words(justify, f"moves[{i}]", clears=False))
+                if not record["justify"]:
+                    raise SheetAuthoringError("invalid_spec", f"moves[{i}].justify must hold at least one word")
             planned.append((node, got[0] - x, got[1] - y, record))
     return planned
 
@@ -1081,6 +1114,7 @@ def move_pipeline(kind: str, planner, path: str, root_sch: str | None, *, move_w
         outcome = Outcome(dangling_before=dangling(sheet), no_change=not planned)
         anchors: dict[tuple[float, float], tuple[float, float]] = {}
         listed = []
+        label_justify: list[tuple[SExp, str]] = []
         for node, dx, dy, record in planned:
             x, y, a = _at(node)
             moved_pins_before: list[dict] = pin_positions(root, node) if kind == "symbol" else []
@@ -1102,12 +1136,16 @@ def move_pipeline(kind: str, planner, path: str, root_sch: str | None, *, move_w
                 _set_at(node, x + dx, y + dy)
             if "angle" in record:
                 write_layer.set_number(node.find_children("at")[0], 2, record["angle"])
+            if "justify" in record:
+                _set_justify(node, record["justify"].split())
+                label_justify.append((node, record["justify"]))
             if kind == "symbol":
                 for prop in _kids(node, "property"):
                     px, py, _pa = _at(prop)
                     _set_at(prop, px + dx, py + dy)
                 entry["pins"] = pin_positions(root, node)
             listed.append(entry)
+        _check_label_justify(label_justify)
         followed: dict[str, list] = {"wires": [], "junctions": [], "labels": [], "no_connects": []}
         slanted = []
         if move_wires and anchors:
@@ -1163,9 +1201,10 @@ def move_pipeline(kind: str, planner, path: str, root_sch: str | None, *, move_w
 _JUSTIFY_WORDS = ("left", "right", "top", "bottom", "mirror")
 
 
-def _justify_words(value: Any, where: str) -> list[str]:
+def _justify_words(value: Any, where: str, *, clears: bool = True) -> list[str]:
+    """``clears``: whether '' is meaningful to the caller (property texts: it removes the justify; labels refuse it)."""
     if not isinstance(value, str):
-        raise SheetAuthoringError("invalid_spec", f"{where}.justify must be a string such as 'left bottom' ('' clears it)")
+        raise SheetAuthoringError("invalid_spec", f"{where}.justify must be a string such as 'left bottom'" + (" ('' clears it)" if clears else ""))
     words = value.split()
     if any(w not in _JUSTIFY_WORDS for w in words) or len(set(words)) != len(words):
         raise SheetAuthoringError("invalid_spec", f"{where}.justify words must be drawn once each from {list(_JUSTIFY_WORDS)}, got {value!r}")
